@@ -1,0 +1,79 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: ${NAME}
+spec: 
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: gpu-type
+            operator: In
+            values:
+            - 2080Ti 
+
+  containers:
+  - name: deeplearning-container
+    tty: true
+    image: docker.io/dockercse2019/deeplearning:v2
+    imagePullPolicy: Always
+
+    command: ${CMD}
+    args: ${ARGS}
+    lifecycle:
+      preStop:
+        exec:
+          command: ["/hooks/stop.sh"]
+    resources:
+      limits:
+        nvidia.com/gpu: ${NGPUS}
+        ${MEM_LIMIT}
+      requests:
+        nvidia.com/gpu: ${NGPUS}
+        ${MEM_REQ}
+
+    volumeMounts:
+    - name: ssh-secret-volume
+      mountPath: "/root/ssh_mount"
+    - name: dshm
+      mountPath: /dev/shm
+    - name: eccv20dataset
+      mountPath: /eccv20dataset
+    - name: viscompfs
+      mountPath: /viscompfs
+    - name: siggraphasia20dataset
+      mountPath: /siggraphasia20dataset
+    - name: examplevol
+      mountPath: /examplevol
+              
+  nodeSelector:
+    ${NODE_HOSTNAME}
+  restartPolicy: Never 
+
+  volumes:
+    - name: ssh-secret-volume
+      secret:
+        ${SSH_KEY_NAME}
+    - name: dshm
+      emptyDir: 
+        medium: Memory
+    - name: viscompfs
+      flexVolume:
+        driver: ceph.rook.io/rook
+        fsType: ceph
+        options:
+          fsName: nautilusfs
+          clusterNamespace: rook
+          path: /viscompfs
+          mountUser: viscompfs
+          mountSecret: ceph-fs-secret
+    - name: eccv20dataset
+      persistentVolumeClaim:
+          claimName: eccv20dataset
+    - name: siggraphasia20dataset 
+      persistentVolumeClaim:
+          claimName: siggraphasia20dataset 
+    - name: examplevol
+      persistentVolumeClaim: 
+          claimName: examplevol

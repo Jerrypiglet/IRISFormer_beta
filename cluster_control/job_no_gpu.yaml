@@ -1,0 +1,64 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${NAME}
+spec:
+  backoffLimit: 0
+
+  template:
+    spec:
+      containers:
+      - name: empty-container
+        tty: true
+        image: docker.io/ak3636/deeplearning:latest
+        imagePullPolicy: Always
+        
+        command: ${CMD}
+        args: ${ARGS}
+        lifecycle:
+          preStop:
+            exec:
+              command: ["/hooks/stop.sh"]
+        resources:
+          limits:
+            ${MEM_LIMIT}
+            cpu: ${CPU_REQ}
+          requests:
+            ${MEM_REQ}
+            cpu: ${CPU_REQ}
+        volumeMounts:
+        - name: ssh-secret-volume
+          mountPath: "/root/ssh_mount"
+        - name: dshm
+          mountPath: /dev/shm
+        - name: viscompfs
+          mountPath: /viscompfs
+        - name: eccv20dataset
+          mountPath: /eccv20dataset
+                  
+      nodeSelector:
+        ${NODE_HOSTNAME}
+      
+      ${TOLERATIONS}
+      restartPolicy: Never
+
+      volumes:
+        - name: ssh-secret-volume
+          secret:
+            ${SSH_KEY_NAME} 
+        - name: dshm
+          emptyDir: 
+            medium: Memory
+        - name: viscompfs
+          flexVolume:
+            driver: ceph.rook.io/rook
+            fsType: ceph
+            options:
+              fsName: nautilusfs
+              clusterNamespace: rook
+              path: /viscompfs
+              mountUser: viscompfs
+              mountSecret: ceph-fs-secret
+        - name: eccv20dataset
+          persistentVolumeClaim:
+          claimName: eccv20dataset 

@@ -1,0 +1,9 @@
+python2 deploy.py --ngpus 1 --name zhloptim0to1 --cpu 2 --meml 6G --memr 5G --repo git@github.com:lzqsd/empty.git --key siggraphasia20  python optimizeSG.py --rs 0 --re 1000
+python2 deploy.py --ngpus 1 --name zhloptim1to2 --cpu 2 --meml 6G --memr 5G --repo git@github.com:lzqsd/empty.git --key siggraphasia20  python optimizeSG.py --rs 1000 --re 2000
+python2 deploy.py --ngpus 1 --name zhloptim2to3 --cpu 2 --meml 6G --memr 5G --repo git@github.com:lzqsd/empty.git --key siggraphasia20  python optimizeSG.py --rs 2000 --re 3000
+python2 deploy.py --ngpus 1 --name zhloptim3to4 --cpu 2 --meml 6G --memr 5G --repo git@github.com:lzqsd/empty.git --key siggraphasia20  python optimizeSG.py --rs 3000 --re 4000
+python2 deploy.py --ngpus 1 --name zhloptim4to5 --cpu 2 --meml 6G --memr 5G --repo git@github.com:lzqsd/empty.git --key siggraphasia20  python optimizeSG.py --rs 4000 --re 5000
+python2 deploy.py --ngpus 1 --name zhloptim5to6 --cpu 2 --meml 6G --memr 5G --repo git@github.com:lzqsd/empty.git --key siggraphasia20  python optimizeSG.py --rs 5000 --re 6000
+python2 deploy.py --ngpus 1 --name zhloptim6to7 --cpu 2 --meml 6G --memr 5G --repo git@github.com:lzqsd/empty.git --key siggraphasia20  python optimizeSG.py --rs 6000 --re 7000
+python2 deploy.py --ngpus 1 --name zhloptim7to8 --cpu 2 --meml 6G --memr 5G --repo git@github.com:lzqsd/empty.git --key siggraphasia20  python optimizeSG.py --rs 7000 --re 8000
+python2 deploy.py --ngpus 1 --name zhloptim8to9 --cpu 2 --meml 6G --memr 5G --repo git@github.com:lzqsd/empty.git --key siggraphasia20  python optimizeSG.py --rs 8000 --re 10000

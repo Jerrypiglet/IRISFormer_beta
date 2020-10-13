@@ -1,0 +1,61 @@
+kind: Pod
+apiVersion: v1
+metadata:
+  name: ${NAME}
+spec:
+  containers:
+  - name: empty-container
+    image: docker.io/ak3636/deeplearning:latest
+    imagePullPolicy: Always
+    resources:
+      limits:
+        ${MEM_LIMIT}
+      requests:
+        ${MEM_REQ}
+      
+    command: ${CMD}
+    args: ${ARGS}
+    volumeMounts:
+    - name: ssh-secret-volume
+      mountPath: "/root/ssh_mount"      
+    - mountPath: /dev/shm
+      name: dshm
+    - name: viscompfs
+      mountPath: /viscompfs 
+    - name: eccv20dataset
+      mountPath: /eccv20dataset
+    - name: siggraphasia20dataset
+      mountPath: /siggraphasia20dataset
+    - name: examplevol
+      mountPath: /examplevol
+
+  restartPolicy: Never
+  nodeSelector:
+      ${NODE_HOSTNAME}
+
+  volumes:
+    - name: viscompfs
+      flexVolume:
+        driver: ceph.rook.io/rook
+        fsType: ceph
+        options:
+          fsName: nautilusfs
+          clusterNamespace: rook
+          path: /viscompfs
+          mountUser: viscompfs
+          mountSecret: ceph-fs-secret
+    - name: dshm
+      emptyDir: 
+        medium: Memory        
+    - name: ssh-secret-volume
+      secret:
+        ${SSH_KEY_NAME}  
+    - name: eccv20dataset
+      persistentVolumeClaim:
+          claimName: eccv20dataset 
+    - name: siggraphasia20dataset 
+      persistentVolumeClaim:
+          claimName: siggraphasia20dataset
+    - name: examplevol
+      persistentVolumeClaim: 
+          claimName: examplevol

@@ -1,0 +1,30 @@
+Docker is lightweight virtual machine which runs linux
+https://www.docker.com/
+
+
+Docker image containing tensorflow, pytorch for python 2 and python 3 is already created:  ak3636/deeplearning
+How to create a docker image.
+
+
+Docker is specified in Dockerfile
+Modify it to add or remove package
+
+Install docker on your machine:
+https://docs.docker.com/engine/installation/linux/docker-ce/ubuntu/
+
+
+To build docker image:
+sudo docker build . -t ak3636/deeplearning
+Where ak3636 is your user name and deeplearning is the name of the repo
+
+Then, push it to a remote repository, so the cluster can get
+For example
+sudo docker push ak3636/deeplearning
+
+To test, if it's working, run:
+sudo docker run -it  ak3636/deeplearning /bin/bash
+
+Note that nvidia GPU is not recognized locally
+To mount local dirs, use -v local_dir:docker_dir
+
+
