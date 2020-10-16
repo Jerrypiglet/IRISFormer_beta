@@ -16,6 +16,10 @@ import torch.nn.functional as F
 from torch.utils.tensorboard import SummaryWriter
 from torchsummary import summary
 
+from tqdm import tqdm
+import time
+from train_funcs import *
+
 parser = argparse.ArgumentParser()
 # The locationi of training set
 parser.add_argument('--dataRoot', default=None, help='path to input images')
@@ -33,7 +37,7 @@ parser.add_argument('--imHeight1', type=int, default=240, help='the height / wid
 parser.add_argument('--imWidth1', type=int, default=320, help='the height / width of the input image to network')
 
 parser.add_argument('--cuda', action='store_true', help='enables cuda')
-parser.add_argument('--deviceIds', type=int, nargs='+', default=[0, 1, 2], help='the gpus used for training network')
+parser.add_argument('--deviceIds', type=int, nargs='+', default=[0, 1], help='the gpus used for training network')
 # Fine tune the network
 parser.add_argument('--isFineTune', action='store_true', help='fine-tune the network')
 parser.add_argument('--epochIdFineTune', type=int, default = 0, help='the training of epoch of the loaded model')
@@ -47,7 +51,10 @@ parser.add_argument('--depthWeight', type=float, default=0.5, help='the weight f
 parser.add_argument('--cascadeLevel', type=int, default=0, help='the casacade level')
 
 # Rui
-parser.add_argument('--isMatMaskInput', action='store_true', help='using mask as additional input')
+parser.add_argument('--ifMatMapInput', action='store_true', help='using mask as additional input')
+parser.add_argument('--ifDataloaderOnly', action='store_true', help='benchmark dataloading overhead')
+parser.add_argument('--ifCluster', action='store_true', help='if using cluster')
+parser.add_argument('--eval_every_iter', type=int, default=2000, help='the casacade level')
 
 
 # The detail network setting
@@ -56,9 +63,9 @@ print(opt)
 
 opt.gpuId = opt.deviceIds[0]
 
-albeW, normW = opt.albedoWeight, opt.normalWeight
-rougW = opt.roughWeight
-deptW = opt.depthWeight
+opt.albeW, opt.normW = opt.albedoWeight, opt.normalWeight
+opt.rougW = opt.roughWeight
+opt.deptW = opt.depthWeight
 
 if opt.cascadeLevel == 0:
     opt.nepoch = opt.nepoch0
@@ -73,8 +80,11 @@ if opt.experiment is None:
     opt.experiment = 'check_cascade%d_w%d_h%d' % (opt.cascadeLevel,
             opt.imWidth, opt.imHeight )
 opt.experiment = 'logs/' + opt.experiment
+if opt.ifCluster:
+    opt.experiment = '/viscompfs/users/ruizhu/' + opt.experiment
+os.system('rm -rf {0}'.format(opt.experiment) )
 os.system('mkdir {0}'.format(opt.experiment) )
-os.system('cp *.py %s' % opt.experiment )
+os.system('cp -r train %s' % opt.experiment )
 
 opt.seed = 0
 print("Random Seed: ", opt.seed )
@@ -85,7 +95,7 @@ if torch.cuda.is_available() and not opt.cuda:
     print("WARNING: You have a CUDA device, so you should probably run with --cuda")
 
 # Initial Network
-encoder = models.encoder0(cascadeLevel = opt.cascadeLevel, in_channels = 3 if not opt.isMatMaskInput else 4)
+encoder = models.encoder0(cascadeLevel = opt.cascadeLevel, in_channels = 3 if not opt.ifMatMapInput else 4)
 albedoDecoder = models.decoder0(mode=0 )
 normalDecoder = models.decoder0(mode=1 )
 roughDecoder = models.decoder0(mode=2 )
@@ -111,39 +121,47 @@ if opt.isFineTune:
 else:
     opt.epochIdFineTune = -1
 #########################################
-encoder = nn.DataParallel(encoder, device_ids = opt.deviceIds )
-albedoDecoder = nn.DataParallel(albedoDecoder, device_ids = opt.deviceIds )
-normalDecoder = nn.DataParallel(normalDecoder, device_ids = opt.deviceIds )
-roughDecoder = nn.DataParallel(roughDecoder, device_ids = opt.deviceIds )
-depthDecoder = nn.DataParallel(depthDecoder, device_ids = opt.deviceIds )
+model = {}
+model['encoder'] = nn.DataParallel(encoder, device_ids = opt.deviceIds )
+model['albedoDecoder'] = nn.DataParallel(albedoDecoder, device_ids = opt.deviceIds )
+model['normalDecoder'] = nn.DataParallel(normalDecoder, device_ids = opt.deviceIds )
+model['roughDecoder'] = nn.DataParallel(roughDecoder, device_ids = opt.deviceIds )
+model['depthDecoder'] = nn.DataParallel(depthDecoder, device_ids = opt.deviceIds )
 
 ##############  ######################
 # Send things into GPU
 if opt.cuda:
-    encoder = encoder.cuda(opt.gpuId )
-    albedoDecoder = albedoDecoder.cuda()
-    normalDecoder = normalDecoder.cuda()
-    roughDecoder = roughDecoder.cuda()
-    depthDecoder = depthDecoder.cuda()
+    model['encoder'] = model['encoder'].cuda(opt.gpuId )
+    model['albedoDecoder'] = model['albedoDecoder'].cuda()
+    model['normalDecoder'] = model['normalDecoder'].cuda()
+    model['roughDecoder'] = model['roughDecoder'].cuda()
+    model['depthDecoder'] = model['depthDecoder'].cuda()
 ####################################
 
 
 ####################################
 # Optimizer
-opEncoder = optim.Adam(encoder.parameters(), lr=1e-4 * lr_scale, betas=(0.5, 0.999) )
-opAlbedo = optim.Adam(albedoDecoder.parameters(), lr=1e-4 * lr_scale, betas=(0.5, 0.999) )
-opNormal = optim.Adam(normalDecoder.parameters(), lr=1e-4 * lr_scale, betas=(0.5, 0.999) )
-opRough = optim.Adam(roughDecoder.parameters(), lr=1e-4 * lr_scale, betas=(0.5, 0.999) )
-opDepth = optim.Adam(depthDecoder.parameters(), lr=1e-4 * lr_scale, betas=(0.5, 0.999) )
+optimizer = {}
+optimizer['opEncoder'] = optim.Adam(model['encoder'].parameters(), lr=1e-4 * lr_scale, betas=(0.5, 0.999) )
+optimizer['opAlbedo'] = optim.Adam(model['albedoDecoder'].parameters(), lr=1e-4 * lr_scale, betas=(0.5, 0.999) )
+optimizer['opNormal'] = optim.Adam(model['normalDecoder'].parameters(), lr=1e-4 * lr_scale, betas=(0.5, 0.999) )
+optimizer['opRough'] = optim.Adam(model['roughDecoder'].parameters(), lr=1e-4 * lr_scale, betas=(0.5, 0.999) )
+optimizer['opDepth'] = optim.Adam(model['depthDecoder'].parameters(), lr=1e-4 * lr_scale, betas=(0.5, 0.999) )
 #####################################
 
 
 ####################################
-brdfDataset = dataLoader.BatchLoader( opt.dataRoot,
+brdfDatasetTrain = dataLoader.BatchLoader( opt.dataRoot,
         imWidth = opt.imWidth, imHeight = opt.imHeight,
-        cascadeLevel = opt.cascadeLevel )
-brdfLoader = DataLoader(brdfDataset, batch_size = opt.batchSize,
-        num_workers = 8, shuffle = True )
+        cascadeLevel = opt.cascadeLevel, split = 'train')
+brdfLoaderTrain = DataLoader(brdfDatasetTrain, batch_size = opt.batchSize,
+        num_workers = 16, shuffle = True, pin_memory=True)
+
+brdfDatasetVal = dataLoader.BatchLoader( opt.dataRoot,
+        imWidth = opt.imWidth, imHeight = opt.imHeight,
+        cascadeLevel = opt.cascadeLevel, split = 'val')
+brdfLoaderVal = DataLoader(brdfDatasetVal, batch_size = opt.batchSize,
+        num_workers = 8, shuffle = False, pin_memory=True)
 
 writer = SummaryWriter(log_dir=opt.experiment, flush_secs=10) # relative path
 
@@ -154,184 +172,54 @@ normalErrsNpList = np.ones( [1, 1], dtype = np.float32 )
 roughErrsNpList= np.ones( [1, 1], dtype = np.float32 )
 depthErrsNpList = np.ones( [1, 1], dtype = np.float32 )
 
+ts_iter_end_start_list = []
+ts_iter_start_end_list = []
+
 for epoch in list(range(opt.epochIdFineTune+1, opt.nepoch) ):
     trainingLog = open('{0}/trainingLog_{1}.txt'.format(opt.experiment, epoch), 'w')
-    for i, dataBatch in enumerate(brdfLoader):
+    ts_epoch_start = time.time()
+    # ts = ts_epoch_start
+    # ts_iter_start = ts
+    ts_iter_end = ts_epoch_start
+
+    for i, dataBatch in tqdm(enumerate(brdfLoaderTrain)):
+        if j % opt.eval_every_iter == 0:
+            val_epoch(brdfLoaderVal, model, optimizer, writer, opt, j)
+            ts_iter_end = time.time()
+
         j += 1
-        # Load data from cpu to gpu
-        albedo_cpu = dataBatch['albedo']
-        albedoBatch = Variable(albedo_cpu ).cuda()
+        ts_iter_start = time.time()
+        if j > 5:
+            ts_iter_end_start_list.append(ts_iter_start - ts_iter_end)
 
-        normal_cpu = dataBatch['normal']
-        normalBatch = Variable(normal_cpu ).cuda()
+        if opt.ifDataloaderOnly:
+            continue
 
-        rough_cpu = dataBatch['rough']
-        roughBatch = Variable(rough_cpu ).cuda()
+        
+        inputBatch, inputDict, preBatchDict = get_inputBatch(dataBatch, opt)
 
-        depth_cpu = dataBatch['depth']
-        depthBatch = Variable(depth_cpu ).cuda()
-
-        mask_cpu = dataBatch['mask'].permute(0, 3, 1, 2) # [b, 3, h, w]
-        maskBatch = Variable(mask_cpu ).cuda()
-
-        segArea_cpu = dataBatch['segArea']
-        segEnv_cpu = dataBatch['segEnv']
-        segObj_cpu = dataBatch['segObj']
-
-        seg_cpu = torch.cat([segArea_cpu, segEnv_cpu, segObj_cpu], dim=1 )
-        segBatch = Variable(seg_cpu ).cuda()
-
-        segBRDFBatch = segBatch[:, 2:3, :, :]
-        segAllBatch = segBatch[:, 0:1, :, :]  + segBatch[:, 2:3, :, :]
-
-        # Load the image from cpu to gpu
-        im_cpu = (dataBatch['im'] )
-        imBatch = Variable(im_cpu ).cuda()
-
-
-        if opt.cascadeLevel > 0:
-            albedoPre_cpu = dataBatch['albedoPre']
-            albedoPreBatch = Variable(albedoPre_cpu ).cuda()
-
-            normalPre_cpu = dataBatch['normalPre']
-            normalPreBatch = Variable(normalPre_cpu ).cuda()
-
-            roughPre_cpu = dataBatch['roughPre']
-            roughPreBatch = Variable(roughPre_cpu ).cuda()
-
-            depthPre_cpu = dataBatch['depthPre']
-            depthPreBatch = Variable(depthPre_cpu ).cuda()
-
-            diffusePre_cpu = dataBatch['diffusePre']
-            diffusePreBatch = Variable(diffusePre_cpu ).cuda()
-
-            specularPre_cpu = dataBatch['specularPre']
-            specularPreBatch = Variable(specularPre_cpu ).cuda()
-
-            if albedoPreBatch.size(2) < opt.imHeight or albedoPreBatch.size(3) < opt.imWidth:
-                albedoPreBatch = F.interpolate(albedoPreBatch, [opt.imHeight, opt.imWidth ], mode='bilinear')
-            if normalPreBatch.size(2) < opt.imHeight or normalPreBatch.size(3) < opt.imWidth:
-                normalPreBatch = F.interpolate(normalPreBatch, [opt.imHeight, opt.imWidth ], mode='bilinear')
-            if roughPreBatch.size(2) < opt.imHeight or roughPreBatch.size(3) < opt.imWidth:
-                roughPreBatch = F.interpolate(roughPreBatch, [opt.imHeight, opt.imWidth ], mode='bilinear')
-            if depthPreBatch.size(2) < opt.imHeight or depthPreBatch.size(3) < opt.imWidth:
-                depthPreBatch = F.interpolate(depthPreBatch, [opt.imHeight, opt.imWidth ], mode='bilinear')
-
-            # Regress the diffusePred and specular Pred
-            envRow, envCol = diffusePreBatch.size(2), diffusePreBatch.size(3)
-            imBatchSmall = F.adaptive_avg_pool2d(imBatch, (envRow, envCol) )
-            diffusePreBatch, specularPreBatch = models.LSregressDiffSpec(
-                    diffusePreBatch, specularPreBatch, imBatchSmall,
-                    diffusePreBatch, specularPreBatch )
-
-            if diffusePreBatch.size(2) < opt.imHeight or diffusePreBatch.size(3) < opt.imWidth:
-                diffusePreBatch = F.interpolate(diffusePreBatch, [opt.imHeight, opt.imWidth ], mode='bilinear')
-            if specularPreBatch.size(2) < opt.imHeight or specularPreBatch.size(3) < opt.imWidth:
-                specularPreBatch = F.interpolate(specularPreBatch, [opt.imHeight, opt.imWidth ], mode='bilinear')
-
-            renderedImBatch = diffusePreBatch + specularPreBatch
-
-
-        # Clear the gradient in optimizer
-        opEncoder.zero_grad()
-        opAlbedo.zero_grad()
-        opNormal.zero_grad()
-        opRough.zero_grad()
-        opDepth.zero_grad()
-
-        ########################################################
-        # Build the cascade network architecture #
-        albedoPreds = []
-        normalPreds = []
-        roughPreds = []
-        depthPreds = []
-
-        if opt.cascadeLevel == 0:
-            if opt.isMatMaskInput:
-                matMaskBatch = maskBatch[:, 0:1, :, :] / 1078.
-                inputBatch = torch.cat([imBatch, matMaskBatch], dim=1)
-            else:
-                inputBatch = imBatch
-        elif opt.cascadeLevel > 0:
-            inputBatch = torch.cat([imBatch, albedoPreBatch,
-                normalPreBatch, roughPreBatch, depthPreBatch,
-                diffusePreBatch, specularPreBatch], dim=1)
-
-        # Initial Prediction
-        x1, x2, x3, x4, x5, x6 = encoder(inputBatch )
-        albedoPred = 0.5 * (albedoDecoder(imBatch, x1, x2, x3, x4, x5, x6) + 1)
-        normalPred = normalDecoder(imBatch, x1, x2, x3, x4, x5, x6)
-        roughPred = roughDecoder(imBatch, x1, x2, x3, x4, x5, x6)
-        depthPred = 0.5 * (depthDecoder(imBatch, x1, x2, x3, x4, x5, x6 ) + 1)
-
-        albedoBatch = segBRDFBatch * albedoBatch
-        albedoPred = models.LSregress(albedoPred * segBRDFBatch.expand_as(albedoPred ),
-                albedoBatch * segBRDFBatch.expand_as(albedoBatch), albedoPred )
-        albedoPred = torch.clamp(albedoPred, 0, 1)
-
-        depthPred = models.LSregress(depthPred *  segAllBatch.expand_as(depthPred),
-                depthBatch * segAllBatch.expand_as(depthBatch), depthPred )
-
-        albedoPreds.append(albedoPred )
-        normalPreds.append(normalPred )
-        roughPreds.append(roughPred )
-        depthPreds.append(depthPred )
-
-        ########################################################
-
-        # Compute the error
-        albedoErrs = []
-        normalErrs = []
-        roughErrs = []
-        depthErrs = []
-
-        pixelObjNum = (torch.sum(segBRDFBatch ).cpu().data).item()
-        pixelAllNum = (torch.sum(segAllBatch ).cpu().data).item()
-        for n in range(0, len(albedoPreds) ):
-            albedoErrs.append( torch.sum( (albedoPreds[n] - albedoBatch)
-                * (albedoPreds[n] - albedoBatch) * segBRDFBatch.expand_as(albedoBatch ) ) / pixelObjNum / 3.0 )
-        for n in range(0, len(normalPreds) ):
-            normalErrs.append( torch.sum( (normalPreds[n] - normalBatch)
-                * (normalPreds[n] - normalBatch) * segAllBatch.expand_as(normalBatch) ) / pixelAllNum / 3.0)
-        for n in range(0, len(roughPreds) ):
-            roughErrs.append( torch.sum( (roughPreds[n] - roughBatch)
-                * (roughPreds[n] - roughBatch) * segBRDFBatch ) / pixelObjNum )
-        for n in range(0, len(depthPreds ) ):
-            depthErrs.append( torch.sum( (torch.log(depthPreds[n]+1) - torch.log(depthBatch+1) )
-                * ( torch.log(depthPreds[n]+1) - torch.log(depthBatch+1) ) * segAllBatch.expand_as(depthBatch ) ) / pixelAllNum )
-
-        # Back propagate the gradients
-        totalErr = 4 * albeW * albedoErrs[-1] + normW * normalErrs[-1] \
-                + rougW *roughErrs[-1] + deptW * depthErrs[-1]
-        totalErr.backward()
-
-        # Update the network parameter
-        opEncoder.step()
-        opAlbedo.step()
-        opNormal.step()
-        opRough.step()
-        opDepth.step()
+        errors = train_step(inputBatch, inputDict, preBatchDict, optimizer, model, opt)
 
         # Output training error
-        utils.writeErrToScreen('albedo', albedoErrs, epoch, j )
-        utils.writeErrToScreen('normal', normalErrs, epoch, j )
-        utils.writeErrToScreen('rough', roughErrs, epoch, j )
-        utils.writeErrToScreen('depth', depthErrs, epoch, j )
+        utils.writeErrToScreen('albedo', errors['albedoErrs'], epoch, j )
+        utils.writeErrToScreen('normal', errors['normalErrs'], epoch, j )
+        utils.writeErrToScreen('rough', errors['roughErrs'], epoch, j )
+        utils.writeErrToScreen('depth', errors['depthErrs'], epoch, j )
         
-        writer.add_scalar('loss_train/loss_albedo', albedoErrs[0].item(), j)
-        writer.add_scalar('loss_train/loss_normal', normalErrs[0].item(), j)
-        writer.add_scalar('loss_train/loss_rough', roughErrs[0].item(), j)
-        writer.add_scalar('loss_train/loss_depth', depthErrs[0].item(), j)
+        writer.add_scalar('loss_train/loss_albedo', errors['albedoErrs'][0].item(), j)
+        writer.add_scalar('loss_train/loss_normal', errors['normalErrs'][0].item(), j)
+        writer.add_scalar('loss_train/loss_rough', errors['roughErrs'][0].item(), j)
+        writer.add_scalar('loss_train/loss_depth', errors['depthErrs'][0].item(), j)
 
-        utils.writeErrToFile('albedo', albedoErrs, trainingLog, epoch, j )
-        utils.writeErrToFile('normal', normalErrs, trainingLog, epoch, j )
-        utils.writeErrToFile('rough', roughErrs, trainingLog, epoch, j )
-        utils.writeErrToFile('depth', depthErrs, trainingLog, epoch, j )
+        utils.writeErrToFile('albedo', errors['albedoErrs'], trainingLog, epoch, j )
+        utils.writeErrToFile('normal', errors['normalErrs'], trainingLog, epoch, j )
+        utils.writeErrToFile('rough', errors['roughErrs'], trainingLog, epoch, j )
+        utils.writeErrToFile('depth', errors['depthErrs'], trainingLog, epoch, j )
 
-        albedoErrsNpList = np.concatenate( [albedoErrsNpList, utils.turnErrorIntoNumpy(albedoErrs)], axis=0)
-        normalErrsNpList = np.concatenate( [normalErrsNpList, utils.turnErrorIntoNumpy(normalErrs)], axis=0)
-        roughErrsNpList = np.concatenate( [roughErrsNpList, utils.turnErrorIntoNumpy(roughErrs)], axis=0)
-        depthErrsNpList = np.concatenate( [depthErrsNpList, utils.turnErrorIntoNumpy(depthErrs)], axis=0)
+        albedoErrsNpList = np.concatenate( [albedoErrsNpList, utils.turnErrorIntoNumpy(errors['albedoErrs'])], axis=0)
+        normalErrsNpList = np.concatenate( [normalErrsNpList, utils.turnErrorIntoNumpy(errors['normalErrs'])], axis=0)
+        roughErrsNpList = np.concatenate( [roughErrsNpList, utils.turnErrorIntoNumpy(errors['roughErrs'])], axis=0)
+        depthErrsNpList = np.concatenate( [depthErrsNpList, utils.turnErrorIntoNumpy(errors['depthErrs'])], axis=0)
 
         if j < 1000:
             utils.writeNpErrToScreen('albedoAccu', np.mean(albedoErrsNpList[1:j+1, :], axis=0), epoch, j)
@@ -355,56 +243,67 @@ for epoch in list(range(opt.epochIdFineTune+1, opt.nepoch) ):
             utils.writeNpErrToFile('depthAccu', np.mean(depthErrsNpList[j-999:j+1, :], axis=0), trainingLog, epoch, j)
 
 
-        if j == 1 or j% 2000 == 0:
-            # Save the ground truth and the input
-            vutils.save_image(( (albedoBatch ) ** (1.0/2.2) ).data,
-                    '{0}/{1}_albedoGt.png'.format(opt.experiment, j) )
-            vutils.save_image( (0.5*(normalBatch + 1) ).data,
-                    '{0}/{1}_normalGt.png'.format(opt.experiment, j) )
-            vutils.save_image( (0.5*(roughBatch + 1) ).data,
-                    '{0}/{1}_roughGt.png'.format(opt.experiment, j) )
-            vutils.save_image( ( (imBatch)**(1.0/2.2) ).data,
-                    '{0}/{1}_im.png'.format(opt.experiment, j) )
-            depthOut = 1 / torch.clamp(depthBatch + 1, 1e-6, 10) * segAllBatch.expand_as(depthBatch)
-            vutils.save_image( ( depthOut*segAllBatch.expand_as(depthBatch) ).data,
-                    '{0}/{1}_depthGt.png'.format(opt.experiment, j) )
+        # if j == 1 or j% 2000 == 0:
+        #     # Save the ground truth and the input
+        #     vutils.save_image(( (inputDict['albedoBatch'] ) ** (1.0/2.2) ).data,
+        #             '{0}/{1}_albedoGt.png'.format(opt.experiment, j) )
+        #     vutils.save_image( (0.5*(inputDict['normalBatch'] + 1) ).data,
+        #             '{0}/{1}_normalGt.png'.format(opt.experiment, j) )
+        #     vutils.save_image( (0.5*(inputDict['roughBatch'] + 1) ).data,
+        #             '{0}/{1}_roughGt.png'.format(opt.experiment, j) )
+        #     vutils.save_image( ( (inputDict['imBatch'])**(1.0/2.2) ).data,
+        #             '{0}/{1}_im.png'.format(opt.experiment, j) )
+        #     depthOut = 1 / torch.clamp(inputDict['depthBatch'] + 1, 1e-6, 10) * inputDict['segAllBatch'].expand_as(inputDict['depthBatch'])
+        #     vutils.save_image( ( depthOut*inputDict['segAllBatch'].expand_as(inputDict['depthBatch']) ).data,
+        #             '{0}/{1}_depthGt.png'.format(opt.experiment, j) )
 
-            if opt.cascadeLevel > 0:
-                vutils.save_image( ( (diffusePreBatch)**(1.0/2.2) ).data,
-                        '{0}/{1}_diffusePre.png'.format(opt.experiment, j) )
-                vutils.save_image( ( (specularPreBatch)**(1.0/2.2) ).data,
-                        '{0}/{1}_specularPre.png'.format(opt.experiment, j) )
-                vutils.save_image( ( (renderedImBatch)**(1.0/2.2) ).data,
-                        '{0}/{1}_renderedImage.png'.format(opt.experiment, j) )
+        #     if opt.cascadeLevel > 0:
+        #         vutils.save_image( ( (preBatchDict['diffusePreBatch'])**(1.0/2.2) ).data,
+        #                 '{0}/{1}_diffusePre.png'.format(opt.experiment, j) )
+        #         vutils.save_image( ( (preBatchDict['specularPreBatch'])**(1.0/2.2) ).data,
+        #                 '{0}/{1}_specularPre.png'.format(opt.experiment, j) )
+        #         vutils.save_image( ( (preBatchDict['renderedImBatch'])**(1.0/2.2) ).data,
+        #                 '{0}/{1}_renderedImage.png'.format(opt.experiment, j) )
 
-            # Save the predicted results
-            for n in range(0, len(albedoPreds) ):
-                vutils.save_image( ( (albedoPreds[n] ) ** (1.0/2.2) ).data,
-                        '{0}/{1}_albedoPred_{2}.png'.format(opt.experiment, j, n) )
-            for n in range(0, len(normalPreds) ):
-                vutils.save_image( ( 0.5*(normalPreds[n] + 1) ).data,
-                        '{0}/{1}_normalPred_{2}.png'.format(opt.experiment, j, n) )
-            for n in range(0, len(roughPreds) ):
-                vutils.save_image( ( 0.5*(roughPreds[n] + 1) ).data,
-                        '{0}/{1}_roughPred_{2}.png'.format(opt.experiment, j, n) )
-            for n in range(0, len(depthPreds) ):
-                depthOut = 1 / torch.clamp(depthPreds[n] + 1, 1e-6, 10) * segAllBatch.expand_as(depthPreds[n])
-                vutils.save_image( ( depthOut * segAllBatch.expand_as(depthPreds[n]) ).data,
-                        '{0}/{1}_depthPred_{2}.png'.format(opt.experiment, j, n) )
+        #     # Save the predicted results
+        #     for n in range(0, len(preBatchDict['albedoPreds']) ):
+        #         vutils.save_image( ( (preBatchDict['albedoPreds'][n] ) ** (1.0/2.2) ).data,
+        #                 '{0}/{1}_albedoPred_{2}.png'.format(opt.experiment, j, n) )
+        #     for n in range(0, len(preBatchDict['normalPreds']) ):
+        #         vutils.save_image( ( 0.5*(preBatchDict['normalPreds'][n] + 1) ).data,
+        #                 '{0}/{1}_normalPred_{2}.png'.format(opt.experiment, j, n) )
+        #     for n in range(0, len(preBatchDict['roughPreds']) ):
+        #         vutils.save_image( ( 0.5*(preBatchDict['roughPreds'][n] + 1) ).data,
+        #                 '{0}/{1}_roughPred_{2}.png'.format(opt.experiment, j, n) )
+        #     for n in range(0, len(preBatchDict['depthPreds']) ):
+        #         depthOut = 1 / torch.clamp(preBatchDict['depthPreds'][n] + 1, 1e-6, 10) * inputDict['segAllBatch'].expand_as(preBatchDict['depthPreds'][n])
+        #         vutils.save_image( ( depthOut * inputDict['segAllBatch'].expand_as(preBatchDict['depthPreds'][n]) ).data,
+        #                 '{0}/{1}_depthPred_{2}.png'.format(opt.experiment, j, n) )
+
+        ts_iter_end = time.time()
+        if j > 5:
+            ts_iter_start_end_list.append(ts_iter_end - ts_iter_start)
+            # if j % 10 == 0:
+            print('Rolling end-to-start %.2f, Rolling start-to-end %.2f'%(sum(ts_iter_end_start_list)/len(ts_iter_end_start_list), sum(ts_iter_start_end_list)/len(ts_iter_start_end_list)))
+            # print(ts_iter_end_start_list, ts_iter_start_end_list)
+
+        writer.add_scalar('training/epoch', epoch, j)
+
+
 
     trainingLog.close()
 
     # Update the training rate
     if (epoch + 1) % 10 == 0:
-        for param_group in opEncoder.param_groups:
+        for param_group in optimizer['opEncoder'].param_groups:
             param_group['lr'] /= 2
-        for param_group in opAlbedo.param_groups:
+        for param_group in optimizer['opAlbedo'].param_groups:
             param_group['lr'] /= 2
-        for param_group in opNormal.param_groups:
+        for param_group in optimizer['opNormal'].param_groups:
             param_group['lr'] /= 2
-        for param_group in opRough.param_groups:
+        for param_group in optimizer['opRough'].param_groups:
             param_group['lr'] /= 2
-        for param_group in opDepth.param_groups:
+        for param_group in optimizer['opDepth'].param_groups:
             param_group['lr'] /= 2
     # Save the error record
     np.save('{0}/albedoError_{1}.npy'.format(opt.experiment, epoch), albedoErrsNpList )
@@ -413,8 +312,8 @@ for epoch in list(range(opt.epochIdFineTune+1, opt.nepoch) ):
     np.save('{0}/depthError_{1}.npy'.format(opt.experiment, epoch), depthErrsNpList )
 
     # save the models
-    torch.save(encoder.module, '{0}/encoder{1}_{2}.pth'.format(opt.experiment, opt.cascadeLevel, epoch) )
-    torch.save(albedoDecoder.module, '{0}/albedo{1}_{2}.pth'.format(opt.experiment, opt.cascadeLevel, epoch) )
-    torch.save(normalDecoder.module, '{0}/normal{1}_{2}.pth'.format(opt.experiment, opt.cascadeLevel, epoch) )
-    torch.save(roughDecoder.module, '{0}/rough{1}_{2}.pth'.format(opt.experiment, opt.cascadeLevel, epoch) )
-    torch.save(depthDecoder.module, '{0}/depth{1}_{2}.pth'.format(opt.experiment, opt.cascadeLevel, epoch) )
+    torch.save(model['encoder'].module, '{0}/encoder{1}_{2}.pth'.format(opt.experiment, opt.cascadeLevel, epoch) )
+    torch.save(model['albedoDecoder'].module, '{0}/albedo{1}_{2}.pth'.format(opt.experiment, opt.cascadeLevel, epoch) )
+    torch.save(model['normalDecoder'].module, '{0}/normal{1}_{2}.pth'.format(opt.experiment, opt.cascadeLevel, epoch) )
+    torch.save(model['roughDecoder'].module, '{0}/rough{1}_{2}.pth'.format(opt.experiment, opt.cascadeLevel, epoch) )
+    torch.save(model['depthDecoder'].module, '{0}/depth{1}_{2}.pth'.format(opt.experiment, opt.cascadeLevel, epoch) )

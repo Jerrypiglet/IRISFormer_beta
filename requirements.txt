@@ -9,3 +9,5 @@ scikit-image
 tqdm
 tensorboard
 torchsummary
+statistics
+pyyaml

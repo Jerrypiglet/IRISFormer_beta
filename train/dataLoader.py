@@ -17,7 +17,7 @@ class BatchLoader(Dataset):
         'mainDiffLight_xml', 'mainDiffLight_xml1', 
         'mainDiffMat_xml', 'mainDiffMat_xml1'], 
             imHeight = 240, imWidth = 320, 
-            phase='TRAIN', rseed = None, cascadeLevel = 0,
+            phase='TRAIN', split='train', rseed = None, cascadeLevel = 0,
             isLight = False, isAllLight = False,
             envHeight = 8, envWidth = 16, envRow = 120, envCol = 160, 
             SGNum = 12 ):
@@ -28,11 +28,25 @@ class BatchLoader(Dataset):
             self.sceneFile = osp.join(dataRoot, 'test.txt') 
         else:
             print('Unrecognized phase for data loader')
-            assert(False ) 
+            assert(False )
+
+        self.split = split
+        assert self.split in ['train', 'val', 'test']
+
         
         with open(self.sceneFile, 'r') as fIn:
             sceneList = fIn.readlines() 
         sceneList = [x.strip() for x in sceneList]
+
+        if phase.upper() == 'TRAIN':
+            num_scenes = len(sceneList)
+            train_count = int(num_scenes * 0.95)
+            val_count = num_scenes - train_count
+            if self.split == 'train':
+                sceneList = sceneList[:-val_count]
+            if self.split == 'val':
+                sceneList = sceneList[-val_count:]
+        print('Scene num for split %s: %d; total scenes: %d'%(self.split, len(sceneList), num_scenes))
 
         self.imHeight = imHeight
         self.imWidth = imWidth
@@ -152,6 +166,7 @@ class BatchLoader(Dataset):
 
         # Read obj mask
         mask = self.loadBinary(self.maskList[self.perm[ind] ], channels = 3, dtype=np.int32, if_resize=True).squeeze() # [h, w, 3]
+        mat_aggre_map = self.get_map_aggre_map(mask)[:, :, np.newaxis]
 
         if self.isLight == True:
             envmaps, envmapsInd = self.loadEnvmap(self.envList[self.perm[ind] ] )
@@ -194,12 +209,13 @@ class BatchLoader(Dataset):
                 'rough': rough,
                 'depth': depth,
                 'mask': mask, 
+                'mat_aggre_map': mat_aggre_map, 
                 'maskPath': self.maskList[self.perm[ind] ], 
                 'segArea': segArea,
                 'segEnv': segEnv,
                 'segObj': segObj,
                 'im': im,
-                'name': self.imList[self.perm[ind] ]
+                'imPath': self.imList[self.perm[ind] ]
                 }
 
         if self.isLight:
@@ -220,6 +236,28 @@ class BatchLoader(Dataset):
 
         return batchDict
 
+    def get_map_aggre_map(self, objMask):
+        cad_map = objMask[:, :, 0]
+        mat_idx_map = objMask[:, :, 1]
+
+        mat_aggre_map = np.zeros_like(cad_map)
+        cad_ids = np.unique(cad_map)
+        num_mats = 1
+        for cad_id in cad_ids:
+            cad_mask = cad_map == cad_id
+            mat_index_map_cad = mat_idx_map[cad_mask]
+            mat_idxes = np.unique(mat_index_map_cad)
+
+            # mat_aggre_map[cad_mask] = mat_idx_map[cad_mask] + num_mats
+            # num_mats = num_mats + max(mat_idxs)
+            cad_single_map = np.zeros_like(cad_map)
+            cad_single_map[cad_mask] = mat_idx_map[cad_mask]
+            for i, mat_idx in enumerate(mat_idxes):
+        #         mat_single_map = np.zeros_like(cad_map)
+                mat_aggre_map[cad_single_map==mat_idx] = num_mats
+                num_mats += 1
+
+        return mat_aggre_map
 
     def loadImage(self, imName, isGama = False):
         if not(osp.isfile(imName ) ):

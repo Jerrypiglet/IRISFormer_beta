@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: z-torch-job-tb-gpu
+  name: z-job-syncsum
   # namespace: ucsd-haosulab
   labels:
     user: rui  # Specify your name
@@ -12,17 +12,13 @@ spec:
       containers:
       - name: gpu-container-rui1
         # image: pytorch/pytorch:1.2-cuda10.0-cudnn7-runtime  # docker image
-        image: localhost:30081/jerrypiglet/deeplearningconda38
-        # image: docker.io/ak3636/deeplearning:latest
+        image: localhost:30081/jerrypiglet/deeplearningconda38s3
         imagePullPolicy: IfNotPresent
         command:
         - "sh"
         - "-c"
         args:
-        # - ". /root/miniconda2/etc/profile.d/conda.sh && conda activate /viscompfs/users/ruizhu/envs/semanticInverse"
-        # - ". /root/miniconda3/etc/profile.d/conda.sh && alias python=/root/miniconda3/bin/python && which python && tensorboard --logdir / --port 6008"
-        - ". /root/miniconda3/etc/profile.d/conda.sh && cd /viscompfs/users/ruizhu/semanticInverse && which python && /root/miniconda3/bin/python train/trainBRDF.py --cuda --dataRoot /siggraphasia20dataset/code/Routine/DatasetCreation/ --cascadeLevel 0 --experiment train_BRDF --deviceIds 0 1"
-        # -  "tensorboard --logdir / --port 6008"  # specify the directory to watch
+        - ". /root/miniconda3/etc/profile.d/conda.sh && cd /viscompfs/users/ruizhu/semanticInverse && which python && rclone copy /viscompfs/users/ruizhu/logs s3mm1:logs"  # specify the directory to watch
         # - "python /opt/repo/${my_script}.py"
         # - "pip install scipy & pip show scipy & pip show numpy"
         # - 'pip install jupyterlab'
@@ -34,21 +30,23 @@ spec:
         resources:
           requests:
             cpu: "1"
-            memory: "20Gi"
-            nvidia.com/gpu: 2
+            memory: "5Gi"
           limits:
-            cpu: "4"
-            memory: "50Gi"
-            nvidia.com/gpu: 2
+            cpu: "8"
+            memory: "30Gi"
         volumeMounts:
+          # - name: cephfs
+          #   mountPath: /cephfs
           - name: dshm
             mountPath: /dev/shm 
           - name: viscompfs
             mountPath: /viscompfs
-          - name: eccv20dataset
-            mountPath: /eccv20dataset
+          # - name: eccv20dataset
+          #   mountPath: /eccv20dataset
           - name: siggraphasia20dataset
             mountPath: /siggraphasia20dataset
+          - name: ruidata
+            mountPath: /ruidata
       volumes:
       - name: dshm  # shared memory
         emptyDir:
@@ -63,11 +61,17 @@ spec:
             path: /viscompfs
             mountUser: viscompfs
             mountSecret: ceph-fs-secret
-      - name: eccv20dataset
-        persistentVolumeClaim:
-            claimName: eccv20dataset 
+      # - name: eccv20dataset
+      #   persistentVolumeClaim:
+      #       claimName: eccv20dataset 
       - name: siggraphasia20dataset
         persistentVolumeClaim:
             claimName: siggraphasia20dataset
+      - name: ruidata
+        persistentVolumeClaim:
+            claimName: ruidata
+      # - name: cephfs
+      #   persistentVolumeClaim:
+      #     claimName: haosulab-cephfs
       restartPolicy: Never
   backoffLimit: 2
