@@ -49,6 +49,7 @@ def parse_args():
     create_parser.add_argument('--deploy_s3', type=str, help='deploy s3 container', default='s3mm1:train')
     create_parser.add_argument('--deploy_tar', type=str, help='deploy to target path', default='/viscompfs/users/ruizhu/train')
     create_parser.add_argument('--python_path', type=str, help='python path in pod', default='/root/miniconda3/bin/python')
+    create_parser.add_argument('--pip_path', type=str, help='python path in pod', default='/root/miniconda3/bin/pip')
     create_parser.add_argument('-v', '--verbose', action='store_true', help='Verbose')
     create_parser.add_argument('-r', '--num-replicas', type=int, help='Number of replicas')
     create_parser.add_argument('-n', '--namespace', type=str, help='namespace')
@@ -124,7 +125,8 @@ def create(args):
     command_str = command_str.replace('python', args.python_path)
     if args.deploy:
         args.deploy_tar += '-%s'%datetime_str
-        command_str = 'rclone copy %s %s && cd %s && '%(args.deploy_s3, args.deploy_tar, args.deploy_tar) + command_str
+        command_str = 'rclone copy %s %s && cd %s && pip install -r requirements.txt && '%(args.deploy_s3, args.deploy_tar, args.deploy_tar) + command_str
+        command_str = command_str.replace('pip', args.pip_path)
         
     yaml_content['spec']['template']['spec']['containers'][0]['args'][0] += command_str
     yaml_content['metadata']['name'] += datetime_str

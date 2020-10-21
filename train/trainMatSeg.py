@@ -5,6 +5,9 @@ import torch.optim as optim
 import argparse
 import random
 import os
+os.system('touch models/__init__.py')
+os.system('touch utils/__init__.py')
+print('started.')
 import models
 import torchvision.utils as vutils
 import utils
@@ -23,7 +26,7 @@ from utils.utils_vis import vis_index_map
 import torchvision.transforms as T
 
 from models.baseline_same import Baseline as UNet
-import yaml
+# import yaml
 import os, inspect
 pwdpath = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 from utils.config import cfg
@@ -40,8 +43,8 @@ parser.add_argument('--experiment', default=None, help='the path to store sample
 parser.add_argument('--nepoch0', type=int, default=14, help='the number of epochs for training')
 parser.add_argument('--nepoch1', type=int, default=10, help='the number of epochs for training')
 
-parser.add_argument('--batchSize0', type=int, default=16, help='input batch size')
-parser.add_argument('--batchSize1', type=int, default=16, help='input batch size')
+parser.add_argument('--batchSize0', type=int, default=16, help='input batch size; ALL GPUs')
+parser.add_argument('--batchSize1', type=int, default=16, help='input batch size; ALL GPUs')
 
 parser.add_argument('--imHeight0', type=int, default=240, help='the height / width of the input image to model')
 parser.add_argument('--imWidth0', type=int, default=320, help='the height / width of the input image to model')
@@ -103,7 +106,10 @@ elif opt.cascadeLevel == 1:
 if opt.experiment is None:
     opt.experiment = 'check_cascade%d_w%d_h%d' % (opt.cascadeLevel,
             opt.imWidth, opt.imHeight )
-opt.experiment = 'logs/' + get_datetime() + opt.experiment
+if opt.ifCluster:
+    opt.experiment = 'logs/' + opt.experiment
+else:
+    opt.experiment = 'logs/' + get_datetime() + opt.experiment
 if opt.ifCluster:
     opt.experiment = '/viscompfs/users/ruizhu/' + opt.experiment
 os.system('rm -rf {0}'.format(opt.experiment) )
@@ -182,7 +188,7 @@ opt.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # build model
 model = UNet(cfg.model)
-if not (opt.resume == 'None'):
+if not (opt.resume == 'NoCkpt'):
     model_dict = torch.load(opt.resume, map_location=lambda storage, loc: storage)
     model.load_state_dict(model_dict)
 
@@ -210,13 +216,17 @@ brdfDatasetTrain = openrooms( opt.dataRoot, transforms, opt,
         imWidth = opt.imWidth, imHeight = opt.imHeight,
         cascadeLevel = opt.cascadeLevel, split = 'train')
 brdfLoaderTrain = DataLoader(brdfDatasetTrain, batch_size = opt.batchSize,
-        num_workers = 8, shuffle = True, pin_memory=True)
+        num_workers = 16, shuffle = True, pin_memory=True)
 
-brdfDatasetVal = openrooms( opt.dataRoot, transforms, opt, 
-        imWidth = opt.imWidth, imHeight = opt.imHeight,
-        cascadeLevel = opt.cascadeLevel, split = 'val')
+if 'mini' in opt.dataRoot:
+    print('=====!!!!===== mini: brdfDatasetVal = brdfDatasetTrain')
+    brdfDatasetVal = brdfDatasetTrain
+else:
+    brdfDatasetVal = openrooms( opt.dataRoot, transforms, opt, 
+            imWidth = opt.imWidth, imHeight = opt.imHeight,
+            cascadeLevel = opt.cascadeLevel, split = 'val')
 brdfLoaderVal = DataLoader(brdfDatasetVal, batch_size = opt.batchSize,
-        num_workers = 4, shuffle = False, pin_memory=True)
+        num_workers = 16, shuffle = False, pin_memory=True)
 
 writer = SummaryWriter(log_dir=opt.experiment, flush_secs=10) # relative path
 
@@ -245,9 +255,11 @@ for epoch in list(range(opt.epochIdFineTune+1, opt.nepoch) ):
     ts_iter_end = ts_epoch_start
 
     for i, data_batch in tqdm(enumerate(brdfLoaderTrain)):
-        if tid % opt.eval_every_iter == 0:
+        if opt.eval_every_iter != -1 and tid % opt.eval_every_iter == 0:
             val_epoch_mat_seg(brdfLoaderVal, model, bin_mean_shift, writer, opt, tid)
+            model.train(not cfg.model.fix_bn)
             ts_iter_end = time.time()
+            
             # break
 
         # num_mat_masks_MAX = max(np.max(input_dict['num_mat_masks_batch'].numpy()), num_mat_masks_MAX)
@@ -297,10 +309,13 @@ for epoch in list(range(opt.epochIdFineTune+1, opt.nepoch) ):
         losses_push.update(loss_dict['loss_push'].item())
         losses_binary.update(loss_dict['loss_binary'].item())
 
-        writer.add_scalar('losses_train/loss_all', loss_dict['loss'].item(), tid)
-        writer.add_scalar('losses_train/loss_pull', loss_dict['loss_pull'].item(), tid)
-        writer.add_scalar('losses_train/loss_push', loss_dict['loss_push'].item(), tid)
-        writer.add_scalar('losses_train/loss_binary', loss_dict['loss_binary'].item(), tid)
+        writer.add_scalar('loss_train/loss_all', loss_dict['loss'].item(), tid)
+        writer.add_scalar('loss_train/loss_pull', loss_dict['loss_pull'].item(), tid)
+        writer.add_scalar('loss_train/loss_push', loss_dict['loss_push'].item(), tid)
+        writer.add_scalar('loss_train/loss_binary', loss_dict['loss_binary'].item(), tid)
+        writer.add_scalar('training/epoch', epoch, tid)
+
+        print('Epoch %d - Tid %d - loss_all %.3f = loss_pull %.3f + loss_push %.3f + loss_binary %.3f' % (epoch, tid, loss_dict['loss'].item(), loss_dict['loss_pull'].item(), loss_dict['loss_push'].item(), loss_dict['loss_binary'].item()))
 
         # End of iteration
         ts_iter_end = time.time()
@@ -310,9 +325,7 @@ for epoch in list(range(opt.epochIdFineTune+1, opt.nepoch) ):
                 print('Rolling end-to-start %.2f, Rolling start-to-end %.2f'%(sum(ts_iter_end_start_list)/len(ts_iter_end_start_list), sum(ts_iter_start_end_list)/len(ts_iter_start_end_list)))
             # print(ts_iter_end_start_list, ts_iter_start_end_list)
 
-        print('Epoch %d - Tid %d - loss_all %.3f = loss_pull %.3f + loss_push %.3f + loss_binary %.3f' % (epoch, tid, loss_dict['loss_all'].item(), loss_dict['loss_pull'].item(), loss_dict['loss_push'].item(), loss_dict['loss_binary'].item()))
 
-        writer.add_scalar('training/epoch', epoch, tid)
 
         # break
 
@@ -571,4 +584,4 @@ for epoch in list(range(opt.epochIdFineTune+1, opt.nepoch) ):
     # torch.save(roughDecoder.module, '{0}/rough{1}_{2}.pth'.format(opt.experiment, opt.cascadeLevel, epoch) )
     # torch.save(depthDecoder.module, '{0}/depth{1}_{2}.pth'.format(opt.experiment, opt.cascadeLevel, epoch) )
 
-print('num_mat_masks_MAX', num_mat_masks_MAX)
+print('num_mat_masks_MAX', num_mat_masks_MAX) 

@@ -163,12 +163,13 @@ def val_epoch_mat_seg(brdfLoaderVal, model, bin_mean_shift, writer, opt, tid):
 
                 writer.add_text('VAL_im_path/%d'%sample_idx, input_dict['im_paths'][sample_idx], tid)
 
+                if j > 12:
+                    break
 
 
-
-    writer.add_scalar('losses_eval/loss_all', losses.avg, tid)
-    writer.add_scalar('losses_eval/loss_pull', losses_pull.avg, tid)
-    writer.add_scalar('losses_eval/loss_push', losses_push.avg, tid)
-    writer.add_scalar('losses_eval/loss_binary', losses_binary.avg, tid)
+    writer.add_scalar('loss_eval/loss_all', losses.avg, tid)
+    writer.add_scalar('loss_eval/loss_pull', losses_pull.avg, tid)
+    writer.add_scalar('loss_eval/loss_push', losses_push.avg, tid)
+    writer.add_scalar('loss_eval/loss_binary', losses_binary.avg, tid)
 
 
