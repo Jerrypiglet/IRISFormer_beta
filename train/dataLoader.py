@@ -136,6 +136,7 @@ class BatchLoader(Dataset):
         segArea = np.logical_and(seg > 0.49, seg < 0.51 ).astype(np.float32 )
         segEnv = (seg < 0.1).astype(np.float32 )
         segObj = (seg > 0.9) 
+
         
         if self.isLight:
             segObj = segObj.squeeze()
@@ -215,6 +216,7 @@ class BatchLoader(Dataset):
                 'segEnv': segEnv,
                 'segObj': segObj,
                 'im': im,
+                'object_type_seg': seg, 
                 'imPath': self.imList[self.perm[ind] ]
                 }
 

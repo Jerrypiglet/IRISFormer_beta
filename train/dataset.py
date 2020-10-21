@@ -4,23 +4,24 @@ import os.path as osp
 from PIL import Image
 import random
 import struct
-from torch.utils.data import Dataset
+from torch.utils import data
 import scipy.ndimage as ndimage
 import cv2
 from skimage.measure import block_reduce 
 import h5py
 import scipy.ndimage as ndimage
+import torch
 
 
-class BatchLoader(Dataset):
-    def __init__(self, dataRoot, dirs = ['main_xml', 'main_xml1',
+class openrooms(data.Dataset):
+    def __init__(self, dataRoot, transform, opt, dirs = ['main_xml', 'main_xml1',
         'mainDiffLight_xml', 'mainDiffLight_xml1', 
         'mainDiffMat_xml', 'mainDiffMat_xml1'], 
             imHeight = 240, imWidth = 320, 
-            phase='TRAIN', rseed = None, cascadeLevel = 0,
+            phase='TRAIN', split='train', rseed = None, cascadeLevel = 0,
             isLight = False, isAllLight = False,
             envHeight = 8, envWidth = 16, envRow = 120, envCol = 160, 
-            SGNum = 12 ):
+            SGNum = 12):
         
         if phase.upper() == 'TRAIN':
             self.sceneFile = osp.join(dataRoot, 'train.txt')
@@ -28,11 +29,26 @@ class BatchLoader(Dataset):
             self.sceneFile = osp.join(dataRoot, 'test.txt') 
         else:
             print('Unrecognized phase for data loader')
-            assert(False ) 
+            assert(False )
+
+        self.split = split
+        assert self.split in ['train', 'val', 'test']
+        self.opt = opt
+
         
         with open(self.sceneFile, 'r') as fIn:
             sceneList = fIn.readlines() 
         sceneList = [x.strip() for x in sceneList]
+
+        if phase.upper() == 'TRAIN':
+            num_scenes = len(sceneList)
+            train_count = int(num_scenes * 0.95)
+            val_count = num_scenes - train_count
+            if self.split == 'train':
+                sceneList = sceneList[:-val_count]
+            if self.split == 'val':
+                sceneList = sceneList[-val_count:]
+        print('Scene num for split %s: %d; total scenes: %d'%(self.split, len(sceneList), num_scenes))
 
         self.imHeight = imHeight
         self.imWidth = imWidth
@@ -47,7 +63,9 @@ class BatchLoader(Dataset):
         self.envWidth = envWidth 
         self.envHeight = envHeight
         self.SGNum = SGNum
-        
+
+        self.transform = transform
+
         shapeList = []
         for d in dirs:
             shapeList = shapeList + [osp.join(dataRoot, d, x) for x in sceneList ]
@@ -82,7 +100,10 @@ class BatchLoader(Dataset):
         self.depthList = [x.replace('im_', 'imdepth_').replace('hdr', 'dat') for x in self.imList ]
         self.depthList = [x.replace('DiffLight', '') for x in self.depthList ]
         self.depthList = [x.replace('DiffMat', '') for x in self.depthList ]
-        
+
+        self.maskList = [x.replace('im_', 'immatPart_').replace('hdr', 'dat') for x in self.imList ]
+        # self.maskList = [x.replace('DiffLight', '').replace('DiffMat', '') for x in self.maskList ]
+
         self.segList = [x.replace('im_', 'immask_').replace('hdr', 'png') for x in self.imList ]
         self.segList = [x.replace('DiffMat', '') for x in self.segList ]
 
@@ -119,6 +140,8 @@ class BatchLoader(Dataset):
         segArea = np.logical_and(seg > 0.49, seg < 0.51 ).astype(np.float32 )
         segEnv = (seg < 0.1).astype(np.float32 )
         segObj = (seg > 0.9) 
+
+        # print(segArea.shape, segEnv.shape, segObj.shape)
         
         if self.isLight:
             segObj = segObj.squeeze()
@@ -128,10 +151,22 @@ class BatchLoader(Dataset):
 
         segObj = segObj.astype(np.float32 )
 
+        # print(segObj.shape)
+
+
         # Read Image
         im = self.loadHdr(self.imList[self.perm[ind] ] )
         # Random scale the image
         im, scale = self.scaleHdr(im, seg)
+
+        if self.transform is not None:
+            im_not_hdr = np.clip(im**(1.0/2.2), 0., 1.)
+            im_uint8 = (255. * im_not_hdr).transpose(1, 2, 0).astype(np.uint8)
+            # print('-', im_uint8.dtype, im_uint8.shape, np.amax(im_uint8), np.amin(im_uint8), np.median(im_uint8))
+            image = Image.fromarray(im_uint8)
+            image_transformed = self.transform(image)
+            # print('----', image_transformed.dtype, torch.max(image_transformed), torch.min(image_transformed), torch.median(image_transformed))
+
 
         # Read albedo
         albedo = self.loadImage(self.albedoList[self.perm[ind] ], isGama = False)
@@ -146,6 +181,30 @@ class BatchLoader(Dataset):
 
         # Read depth
         depth = self.loadBinary(self.depthList[self.perm[ind] ])
+
+        # >>>> Rui: Read obj mask
+        mask = self.loadBinary(self.maskList[self.perm[ind] ], channels = 3, dtype=np.int32, if_resize=True).squeeze() # [h, w, 3]
+        mat_aggre_map, num_mat_masks = self.get_map_aggre_map(mask) # 0 for invalid region
+        mat_aggre_map = mat_aggre_map[:, :, np.newaxis]
+
+        mat_aggre_map_reindex = np.zeros_like(mat_aggre_map)
+        mat_aggre_map_reindex[mat_aggre_map==0] = self.opt.invalid_index
+        mat_aggre_map_reindex[mat_aggre_map!=0] = mat_aggre_map[mat_aggre_map!=0] - 1
+
+
+        # >>>> Rui: Convert to Plane-paper compatible formats
+        h, w, _ = mat_aggre_map.shape
+        gt_segmentation = mat_aggre_map
+        segmentation = np.zeros([50, h, w], dtype=np.uint8)
+        for i in range(num_mat_masks+1):
+            if i == 0:
+                # deal with backgroud
+                seg = gt_segmentation == 0
+                segmentation[num_mat_masks, :, :] = seg.reshape(h, w)
+            else:
+                seg = gt_segmentation == i
+                segmentation[i-1, :, :] = seg.reshape(h, w)
+        # <<<<
 
         if self.isLight == True:
             envmaps, envmapsInd = self.loadEnvmap(self.envList[self.perm[ind] ] )
@@ -181,18 +240,28 @@ class BatchLoader(Dataset):
             specularPre = self.loadH5(self.specularPreList[self.perm[ind] ] )
             specularPre = specularPre / max(specularPre.max(), 1e-10)
 
-
-
-        batchDict = {'albedo': albedo,
-                'normal': normal,
-                'rough': rough,
-                'depth': depth,
-                'segArea': segArea,
-                'segEnv': segEnv,
-                'segObj': segObj,
-                'im': im,
-                'name': self.imList[self.perm[ind] ]
+        batchDict = {
+                'albedo': torch.from_numpy(albedo),
+                'normal': torch.from_numpy(normal),
+                'rough': torch.from_numpy(rough),
+                'depth': torch.from_numpy(depth),
+                'mask': torch.from_numpy(mask), 
+                'maskPath': self.maskList[self.perm[ind] ], 
+                'segArea': torch.from_numpy(segArea),
+                'segEnv': torch.from_numpy(segEnv),
+                'segObj': torch.from_numpy(segObj),
+                'im': torch.from_numpy(im),
+                'object_type_seg': torch.from_numpy(seg), 
+                'imPath': self.imList[self.perm[ind] ], 
+                'mat_aggre_map': torch.from_numpy(mat_aggre_map), 
+                'mat_aggre_map_reindex': torch.from_numpy(mat_aggre_map_reindex), # gt_seg
+                'num_mat_masks': num_mat_masks,  
+                'mat_notlight_mask': torch.from_numpy(mat_aggre_map!=0).float(),
+                'instance': torch.ByteTensor(segmentation), 
+                'semantic': 1 - torch.FloatTensor(segmentation[num_mat_masks, :, :]).unsqueeze(0),
                 }
+        if self.transform is not None:
+            batchDict.update({'image_transformed': image_transformed, 'im_not_hdr': im_not_hdr})
 
         if self.isLight:
             batchDict['envmaps'] = envmaps
@@ -212,6 +281,35 @@ class BatchLoader(Dataset):
 
         return batchDict
 
+    def get_map_aggre_map(self, objMask):
+        cad_map = objMask[:, :, 0]
+        mat_idx_map = objMask[:, :, 1]        
+        obj_idx_map = objMask[:, :, 2] # 3rd channel: object INDEX map
+
+        mat_aggre_map = np.zeros_like(cad_map)
+        cad_ids = np.unique(cad_map)
+        num_mats = 1
+        for cad_id in cad_ids:
+            cad_mask = cad_map == cad_id
+            mat_index_map_cad = mat_idx_map[cad_mask]
+            mat_idxes = np.unique(mat_index_map_cad)
+
+            obj_idx_map_cad = obj_idx_map[cad_mask]
+            if_light = list(np.unique(obj_idx_map_cad))==[0]
+            if if_light:
+                mat_aggre_map[cad_mask] = 0
+                continue
+
+            # mat_aggre_map[cad_mask] = mat_idx_map[cad_mask] + num_mats
+            # num_mats = num_mats + max(mat_idxs)
+            cad_single_map = np.zeros_like(cad_map)
+            cad_single_map[cad_mask] = mat_idx_map[cad_mask]
+            for i, mat_idx in enumerate(mat_idxes):
+        #         mat_single_map = np.zeros_like(cad_map)
+                mat_aggre_map[cad_single_map==mat_idx] = num_mats
+                num_mats += 1
+
+        return mat_aggre_map, num_mats-1
 
     def loadImage(self, imName, isGama = False):
         if not(osp.isfile(imName ) ):
@@ -256,7 +354,8 @@ class BatchLoader(Dataset):
         hdr = scale * hdr
         return np.clip(hdr, 0, 1), scale 
 
-    def loadBinary(self, imName ):
+    def loadBinary(self, imName, channels = 1, dtype=np.float32, if_resize=True):
+        assert dtype in [np.float32, np.int32], 'Invalid binary type outside (np.float32, np.int32)!'
         if not(osp.isfile(imName ) ):
             print(imName )
             assert(False )
@@ -265,10 +364,22 @@ class BatchLoader(Dataset):
             height = struct.unpack('i', hBuffer)[0]
             wBuffer = fIn.read(4)
             width = struct.unpack('i', wBuffer)[0]
-            dBuffer = fIn.read(4 * width * height )
-            depth = np.asarray(struct.unpack('f' * height * width, dBuffer), dtype=np.float32 )
-            depth = depth.reshape([height, width] )
-            depth = cv2.resize(depth, (self.imWidth, self.imHeight), interpolation=cv2.INTER_AREA )
+            dBuffer = fIn.read(4 * channels * width * height )
+            if dtype == np.float32:
+                decode_char = 'f'
+            elif dtype == np.int32:
+                decode_char = 'i'
+            depth = np.asarray(struct.unpack(decode_char * channels * height * width, dBuffer), dtype=dtype)
+            depth = depth.reshape([height, width, channels] )
+            if if_resize:
+                # print(self.imWidth, self.imHeight, width, height)
+                if dtype == np.float32:
+                    depth = cv2.resize(depth, (self.imWidth, self.imHeight), interpolation=cv2.INTER_AREA )
+                elif dtype == np.int32:
+                    depth = cv2.resize(depth.astype(np.float32), (self.imWidth, self.imHeight), interpolation=cv2.INTER_NEAREST)
+                    depth = depth.astype(np.int32)
+
+            depth = np.squeeze(depth)
 
         return depth[np.newaxis, :, :]
 

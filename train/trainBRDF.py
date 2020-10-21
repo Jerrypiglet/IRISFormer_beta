@@ -18,7 +18,7 @@ from torchsummary import summary
 
 from tqdm import tqdm
 import time
-from train_funcs import *
+from train_funcs import train_step
 
 parser = argparse.ArgumentParser()
 # The locationi of training set
@@ -45,7 +45,7 @@ parser.add_argument('--epochIdFineTune', type=int, default = 0, help='the traini
 parser.add_argument('--albedoWeight', type=float, default=1.5, help='the weight for the diffuse component')
 parser.add_argument('--normalWeight', type=float, default=1.0, help='the weight for the diffuse component')
 parser.add_argument('--roughWeight', type=float, default=0.5, help='the weight for the roughness component')
-parser.add_argument('--depthWeight', type=float, default=0.5, help='the weight for depth component')
+parser.add_argument('--depthWeight', type=float, default=0.5, help='the weight for depth component')   
 
 # Cascae Level
 parser.add_argument('--cascadeLevel', type=int, default=0, help='the casacade level')
@@ -243,42 +243,42 @@ for epoch in list(range(opt.epochIdFineTune+1, opt.nepoch) ):
             utils.writeNpErrToFile('depthAccu', np.mean(depthErrsNpList[j-999:j+1, :], axis=0), trainingLog, epoch, j)
 
 
-        # if j == 1 or j% 2000 == 0:
-        #     # Save the ground truth and the input
-        #     vutils.save_image(( (inputDict['albedoBatch'] ) ** (1.0/2.2) ).data,
-        #             '{0}/{1}_albedoGt.png'.format(opt.experiment, j) )
-        #     vutils.save_image( (0.5*(inputDict['normalBatch'] + 1) ).data,
-        #             '{0}/{1}_normalGt.png'.format(opt.experiment, j) )
-        #     vutils.save_image( (0.5*(inputDict['roughBatch'] + 1) ).data,
-        #             '{0}/{1}_roughGt.png'.format(opt.experiment, j) )
-        #     vutils.save_image( ( (inputDict['imBatch'])**(1.0/2.2) ).data,
-        #             '{0}/{1}_im.png'.format(opt.experiment, j) )
-        #     depthOut = 1 / torch.clamp(inputDict['depthBatch'] + 1, 1e-6, 10) * inputDict['segAllBatch'].expand_as(inputDict['depthBatch'])
-        #     vutils.save_image( ( depthOut*inputDict['segAllBatch'].expand_as(inputDict['depthBatch']) ).data,
-        #             '{0}/{1}_depthGt.png'.format(opt.experiment, j) )
+        if j == 1 or j% 2000 == 0:
+            # Save the ground truth and the input
+            vutils.save_image(( (inputDict['albedoBatch'] ) ** (1.0/2.2) ).data,
+                    '{0}/{1}_albedoGt.png'.format(opt.experiment, j) )
+            vutils.save_image( (0.5*(inputDict['normalBatch'] + 1) ).data,
+                    '{0}/{1}_normalGt.png'.format(opt.experiment, j) )
+            vutils.save_image( (0.5*(inputDict['roughBatch'] + 1) ).data,
+                    '{0}/{1}_roughGt.png'.format(opt.experiment, j) )
+            vutils.save_image( ( (inputDict['imBatch'])**(1.0/2.2) ).data,
+                    '{0}/{1}_im.png'.format(opt.experiment, j) )
+            depthOut = 1 / torch.clamp(inputDict['depthBatch'] + 1, 1e-6, 10) * inputDict['segAllBatch'].expand_as(inputDict['depthBatch'])
+            vutils.save_image( ( depthOut*inputDict['segAllBatch'].expand_as(inputDict['depthBatch']) ).data,
+                    '{0}/{1}_depthGt.png'.format(opt.experiment, j) )
 
-        #     if opt.cascadeLevel > 0:
-        #         vutils.save_image( ( (preBatchDict['diffusePreBatch'])**(1.0/2.2) ).data,
-        #                 '{0}/{1}_diffusePre.png'.format(opt.experiment, j) )
-        #         vutils.save_image( ( (preBatchDict['specularPreBatch'])**(1.0/2.2) ).data,
-        #                 '{0}/{1}_specularPre.png'.format(opt.experiment, j) )
-        #         vutils.save_image( ( (preBatchDict['renderedImBatch'])**(1.0/2.2) ).data,
-        #                 '{0}/{1}_renderedImage.png'.format(opt.experiment, j) )
+            if opt.cascadeLevel > 0:
+                vutils.save_image( ( (preBatchDict['diffusePreBatch'])**(1.0/2.2) ).data,
+                        '{0}/{1}_diffusePre.png'.format(opt.experiment, j) )
+                vutils.save_image( ( (preBatchDict['specularPreBatch'])**(1.0/2.2) ).data,
+                        '{0}/{1}_specularPre.png'.format(opt.experiment, j) )
+                vutils.save_image( ( (preBatchDict['renderedImBatch'])**(1.0/2.2) ).data,
+                        '{0}/{1}_renderedImage.png'.format(opt.experiment, j) )
 
-        #     # Save the predicted results
-        #     for n in range(0, len(preBatchDict['albedoPreds']) ):
-        #         vutils.save_image( ( (preBatchDict['albedoPreds'][n] ) ** (1.0/2.2) ).data,
-        #                 '{0}/{1}_albedoPred_{2}.png'.format(opt.experiment, j, n) )
-        #     for n in range(0, len(preBatchDict['normalPreds']) ):
-        #         vutils.save_image( ( 0.5*(preBatchDict['normalPreds'][n] + 1) ).data,
-        #                 '{0}/{1}_normalPred_{2}.png'.format(opt.experiment, j, n) )
-        #     for n in range(0, len(preBatchDict['roughPreds']) ):
-        #         vutils.save_image( ( 0.5*(preBatchDict['roughPreds'][n] + 1) ).data,
-        #                 '{0}/{1}_roughPred_{2}.png'.format(opt.experiment, j, n) )
-        #     for n in range(0, len(preBatchDict['depthPreds']) ):
-        #         depthOut = 1 / torch.clamp(preBatchDict['depthPreds'][n] + 1, 1e-6, 10) * inputDict['segAllBatch'].expand_as(preBatchDict['depthPreds'][n])
-        #         vutils.save_image( ( depthOut * inputDict['segAllBatch'].expand_as(preBatchDict['depthPreds'][n]) ).data,
-        #                 '{0}/{1}_depthPred_{2}.png'.format(opt.experiment, j, n) )
+            # Save the predicted results
+            for n in range(0, len(preBatchDict['albedoPreds']) ):
+                vutils.save_image( ( (preBatchDict['albedoPreds'][n] ) ** (1.0/2.2) ).data,
+                        '{0}/{1}_albedoPred_{2}.png'.format(opt.experiment, j, n) )
+            for n in range(0, len(preBatchDict['normalPreds']) ):
+                vutils.save_image( ( 0.5*(preBatchDict['normalPreds'][n] + 1) ).data,
+                        '{0}/{1}_normalPred_{2}.png'.format(opt.experiment, j, n) )
+            for n in range(0, len(preBatchDict['roughPreds']) ):
+                vutils.save_image( ( 0.5*(preBatchDict['roughPreds'][n] + 1) ).data,
+                        '{0}/{1}_roughPred_{2}.png'.format(opt.experiment, j, n) )
+            for n in range(0, len(preBatchDict['depthPreds']) ):
+                depthOut = 1 / torch.clamp(preBatchDict['depthPreds'][n] + 1, 1e-6, 10) * inputDict['segAllBatch'].expand_as(preBatchDict['depthPreds'][n])
+                vutils.save_image( ( depthOut * inputDict['segAllBatch'].expand_as(preBatchDict['depthPreds'][n]) ).data,
+                        '{0}/{1}_depthPred_{2}.png'.format(opt.experiment, j, n) )
 
         ts_iter_end = time.time()
         if j > 5:

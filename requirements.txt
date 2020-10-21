@@ -11,3 +11,4 @@ tensorboard
 torchsummary
 statistics
 pyyaml
+yacs
