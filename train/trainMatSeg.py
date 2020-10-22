@@ -27,6 +27,7 @@ import torch.distributed as dist
 import apex
 from apex.parallel import DistributedDataParallel as DDP
 from apex import amp
+import nvidia_smi
 
 from torch.utils.tensorboard import SummaryWriter
 from torchsummary import summary
@@ -45,23 +46,26 @@ from utils.logger import setup_logger, Logger, printer
 from utils.global_paths import SUMMARY_PATH, SUMMARY_VIS_PATH, CKPT_PATH
 from utils.utils_misc import *
 from utils.utils_dataloader import make_data_loader
-from utils.utils_training import reduce_loss_dict
+from utils.utils_training import reduce_loss_dict, check_save, print_gpu_usage
+from utils.checkpointer import DetectronCheckpointer
+from torch.optim.lr_scheduler import MultiStepLR, ReduceLROnPlateau, StepLR
+
 
 parser = argparse.ArgumentParser()
 # The locationi of training set
 parser.add_argument('--data_root', default=None, help='path to input images')
 parser.add_argument('--task_name', type=str, default='tmp', help='task name (e.g. N1: disp ref)')
 # The basic training setting
-parser.add_argument('--nepoch0', type=int, default=14, help='the number of epochs for training')
-parser.add_argument('--nepoch1', type=int, default=10, help='the number of epochs for training')
+# parser.add_argument('--nepoch0', type=int, default=14, help='the number of epochs for training')
+# parser.add_argument('--nepoch1', type=int, default=10, help='the number of epochs for training')
 
 # parser.add_argument('--batchSize0', type=int, default=16, help='input batch size; ALL GPUs')
 # parser.add_argument('--batchSize1', type=int, default=16, help='input batch size; ALL GPUs')
 
-parser.add_argument('--imHeight0', type=int, default=240, help='the height / width of the input image to model')
-parser.add_argument('--imWidth0', type=int, default=320, help='the height / width of the input image to model')
-parser.add_argument('--imHeight1', type=int, default=240, help='the height / width of the input image to model')
-parser.add_argument('--imWidth1', type=int, default=320, help='the height / width of the input image to model')
+# parser.add_argument('--imHeight0', type=int, default=240, help='the height / width of the input image to model')
+# parser.add_argument('--imWidth0', type=int, default=320, help='the height / width of the input image to model')
+# parser.add_argument('--imHeight1', type=int, default=240, help='the height / width of the input image to model')
+# parser.add_argument('--imWidth1', type=int, default=320, help='the height / width of the input image to model')
 
 # parser.add_argument('--cuda', action='store_true', help='enables cuda')
 # parser.add_argument('--deviceIds', type=int, nargs='+', default=[0, 1], help='the gpus used for training model')
@@ -89,9 +93,15 @@ parser.add_argument('--ifMatMapInput', action='store_true', help='using mask as 
 parser.add_argument('--ifDataloaderOnly', action='store_true', help='benchmark dataloading overhead')
 parser.add_argument('--if_cluster', action='store_true', help='if using cluster')
 parser.add_argument('--if_hdr', action='store_true', help='if using hdr images')
-parser.add_argument('--eval_every_iter', type=int, default=2000, help='the casacade level')
+parser.add_argument('--eval_every_iter', type=int, default=2000, help='')
+parser.add_argument('--save_every_iter', type=int, default=2000, help='')
 parser.add_argument('--invalid_index', type=int, default = 255, help='index for invalid aread (e.g. windows, lights)')
+
+# Pre-training
 parser.add_argument('--resume', type=str, help='resume training; can be full path (e.g. tmp/checkpoint0.pth.tar) or taskname (e.g. tmp); [to continue the current task, use: resume]', default='NoCkpt')
+parser.add_argument('--reset_scheduler', action='store_true', help='')
+parser.add_argument('--reset_lr', action='store_true', help='')
+
 parser.add_argument(
     "--config-file",
     default=os.path.join(pwdpath, "configs/config.yaml"),
@@ -134,6 +144,8 @@ if opt.distributed:
 opt.device = 'cuda'
 opt.rank = get_rank()
 opt.is_master = opt.rank == 0
+nvidia_smi.nvmlInit()
+handle = nvidia_smi.nvmlDeviceGetHandleByIndex(opt.rank)
 opt.pwdpath = pwdpath
 # <<<< DISTRIBUTED TRAINING
 
@@ -144,7 +156,7 @@ if opt.if_cluster:
     SUMMARY_PATH = opt.home_path / SUMMARY_PATH
     SUMMARY_VIS_PATH = opt.home_path / SUMMARY_VIS_PATH
 if not opt.if_cluster:
-    opt.task_name = get_datetime() + opt.task_name
+    opt.task_name = get_datetime() + '-' + opt.task_name
 opt.summary_path_task = SUMMARY_PATH / opt.task_name
 opt.checkpoints_path_task = CKPT_PATH / opt.task_name
 opt.summary_vis_path_task = SUMMARY_VIS_PATH / opt.task_name
@@ -207,22 +219,111 @@ if opt.is_master:
     print(green('=====>Summary writing to %s'%opt.summary_path_task))
 else:
     writer = None
-
 # <<<< SUMMARY WRITERS
 
+# >>>> MODEL AND OPTIMIZER
+# build model
+model = UNet(cfg.model)
+# if not (opt.resume == 'NoCkpt'):
+#     model_dict = torch.load(opt.resume, map_location=lambda storage, loc: storage)
+#     model.load_state_dict(model_dict)
+if opt.distributed: # https://github.com/dougsouza/pytorch-sync-batchnorm-example # export NCCL_LL_THRESHOLD=0
+    # model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+    model = apex.parallel.convert_syncbn_model(model)
+model.to(opt.device)
 
-opt.albeW, opt.normW = opt.albedoWeight, opt.normalWeight
-opt.rougW = opt.roughWeight
-opt.deptW = opt.depthWeight
+# set up optimizers
+optimizer = get_optimizer(model.parameters(), cfg.solver)
+# Initialize mixed-precision training
+use_mixed_precision = cfg.model.DTYPE == "float16"
+amp_opt_level = 'O1' if use_mixed_precision else 'O0'
+model, optimizer = amp.initialize(model, optimizer, opt_level=amp_opt_level)
+model = DDP(model)
 
-if opt.cascadeLevel == 0:
-    opt.nepoch = opt.nepoch0
-    # opt.batchSize = opt.batchSize0
-    opt.imHeight, opt.imWidth = opt.imHeight0, opt.imWidth0
-elif opt.cascadeLevel == 1:
-    opt.nepoch = opt.nepoch1
-    opt.batchSize = opt.batchSize1
-    opt.imHeight, opt.imWidth = opt.imHeight1, opt.imWidth1
+logger.info(red('Optimizer: '+type(optimizer).__name__))
+scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=50, cooldown=0, verbose=True, threshold_mode='rel', threshold=0.01)
+
+# <<<< MODEL AND OPTIMIZER
+
+# >>>> DATASET
+transforms = T.Compose([
+        T.ToTensor(),
+        T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
+    ])
+brdf_dataset_train = openrooms( opt.data_root, transforms, opt, 
+        imWidth = opt.cfg.DATA.IM_WIDTH, imHeight = opt.cfg.DATA.IM_HEIGHT,
+        cascadeLevel = opt.cascadeLevel, split = 'train')
+# brdfLoaderTrain = DataLoader(brdf_dataset_train, batch_size = opt.batchSize,
+#         num_workers = 16, shuffle = True, pin_memory=True)
+brdf_loader_train = make_data_loader(
+    opt,
+    brdf_dataset_train,
+    is_train=True,
+    start_iter=0,
+    logger=logger,
+    # collate_fn=my_collate_seq_dataset if opt.if_padding else my_collate_seq_dataset_noPadding,
+)
+
+if 'mini' in opt.data_root:
+    print('=====!!!!===== mini: brdf_dataset_val = brdf_dataset_train')
+    brdf_dataset_val = brdf_dataset_train
+else:
+    brdf_dataset_val = openrooms( opt.data_root, transforms, opt, 
+            imWidth = opt.cfg.DATA.IM_WIDTH, imHeight = opt.cfg.DATA.IM_HEIGHT,
+            cascadeLevel = opt.cascadeLevel, split = 'val')
+# brdfLoaderVal = DataLoader(brdf_dataset_val, batch_size = opt.batchSize,
+        # num_workers = 16, shuffle = False, pin_memory=True)
+brdf_loader_val = make_data_loader(
+    opt,
+    brdf_dataset_val,
+    is_train=False,
+    start_iter=0,
+    logger=logger,
+    # collate_fn=my_collate_seq_dataset if opt.if_padding else my_collate_seq_dataset_noPadding,
+    if_distributed_override=opt.cfg.dataset.if_val_dist
+)
+# <<<< DATASET
+
+# >>>> CHECKPOINTING
+save_to_disk = opt.is_master
+checkpointer = DetectronCheckpointer(
+    opt, model, optimizer, scheduler, CKPT_PATH, opt.checkpoints_path_task, save_to_disk, logger=logger, if_reset_scheduler=opt.reset_scheduler
+)
+tid_start = 0
+epoch_start = 0
+if opt.resume != 'NoCkpt':
+    if opt.resume == 'resume':
+        opt.resume = opt.task_name
+    replace_kws = []
+    replace_with_kws = []
+    # if opt.task_split == 'train':
+    #     replace_kws = ['hourglass_model.seq_L2.1', 'hourglass_model.seq_L2.3', 'hourglass_model.disp_res_pred_layer_L2']
+    #     replace_with_kws = ['hourglass_model.seq.1', 'hourglass_model.seq.3', 'hourglass_model.disp_res_pred_layer']
+    checkpoint_restored, _, _ = checkpointer.load(task_name=opt.resume, replace_kws=replace_kws, replace_with_kws=replace_with_kws)
+    if 'iteration' in checkpoint_restored:
+        tid_start = checkpoint_restored['iteration']
+    if 'epoch' in checkpoint_restored:
+        epoch_start = checkpoint_restored['epoch']
+    print(checkpoint_restored.keys())
+    logger.info(colored('Restoring from epoch %d - iter %d'%(epoch_start, tid_start), 'white', 'on_blue'))
+# <<<< CHECKPOINTING
+
+if opt.reset_lr:
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = opt.cfg.solver.lr
+
+# opt.albeW, opt.normW = opt.albedoWeight, opt.normalWeight
+# opt.rougW = opt.roughWeight
+# opt.deptW = opt.depthWeight
+
+# if opt.cascadeLevel == 0:
+#     opt.nepoch = opt.nepoch0
+#     opt.batchSize = opt.batchSize0
+#     opt.imHeight, opt.imWidth = opt.imHeight0, opt.imWidth0
+# elif opt.cascadeLevel == 1:
+#     opt.nepoch = opt.nepoch1
+#     opt.batchSize = opt.batchSize1
+#     opt.imHeight, opt.imWidth = opt.imHeight1, opt.imWidth1
 
 # if opt.experiment is None:
 #     opt.experiment = 'check_cascade%d_w%d_h%d' % (opt.cascadeLevel,
@@ -295,65 +396,10 @@ elif opt.cascadeLevel == 1:
 
 # ----------------- Rui from Plane paper 
 
-# build model
-model = UNet(cfg.model)
-if not (opt.resume == 'NoCkpt'):
-    model_dict = torch.load(opt.resume, map_location=lambda storage, loc: storage)
-    model.load_state_dict(model_dict)
-if opt.distributed: # https://github.com/dougsouza/pytorch-sync-batchnorm-example # export NCCL_LL_THRESHOLD=0
-    # model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-    model = apex.parallel.convert_syncbn_model(model)
-model.to(opt.device)
-
-# set up optimizers
-optimizer = get_optimizer(model.parameters(), cfg.solver)
-# Initialize mixed-precision training
-use_mixed_precision = cfg.model.DTYPE == "float16"
-amp_opt_level = 'O1' if use_mixed_precision else 'O0'
-model, optimizer = amp.initialize(model, optimizer, opt_level=amp_opt_level)
-model = DDP(model)
 
 bin_mean_shift = Bin_Mean_Shift(device=opt.device, invalid_index=opt.invalid_index)
 
-####################################
-transforms = T.Compose([
-        T.ToTensor(),
-        T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
-brdf_dataset_train = openrooms( opt.data_root, transforms, opt, 
-        imWidth = opt.imWidth, imHeight = opt.imHeight,
-        cascadeLevel = opt.cascadeLevel, split = 'train')
-# brdfLoaderTrain = DataLoader(brdf_dataset_train, batch_size = opt.batchSize,
-#         num_workers = 16, shuffle = True, pin_memory=True)
-brdf_loader_train = make_data_loader(
-    opt,
-    brdf_dataset_train,
-    is_train=True,
-    start_iter=0,
-    logger=logger,
-    # collate_fn=my_collate_seq_dataset if opt.if_padding else my_collate_seq_dataset_noPadding,
-)
-
-if 'mini' in opt.data_root:
-    print('=====!!!!===== mini: brdf_dataset_val = brdf_dataset_train')
-    brdf_dataset_val = brdf_dataset_train
-else:
-    brdf_dataset_val = openrooms( opt.data_root, transforms, opt, 
-            imWidth = opt.imWidth, imHeight = opt.imHeight,
-            cascadeLevel = opt.cascadeLevel, split = 'val')
-# brdfLoaderVal = DataLoader(brdf_dataset_val, batch_size = opt.batchSize,
-        # num_workers = 16, shuffle = False, pin_memory=True)
-brdf_loader_val = make_data_loader(
-    opt,
-    brdf_dataset_val,
-    is_train=False,
-    start_iter=0,
-    logger=logger,
-    # collate_fn=my_collate_seq_dataset if opt.if_padding else my_collate_seq_dataset_noPadding,
-    if_distributed_override=opt.cfg.dataset.if_val_dist
-)
-
-tid = 0
+tid = tid_start
 albedoErrsNpList = np.ones( [1, 1], dtype = np.float32 )
 normalErrsNpList = np.ones( [1, 1], dtype = np.float32 )
 roughErrsNpList= np.ones( [1, 1], dtype = np.float32 )
@@ -364,27 +410,44 @@ ts_iter_start_end_list = []
 num_mat_masks_MAX = 0
 
 model.train(not cfg.model.fix_bn)
+print('=======1', opt.rank)
+synchronize()
+print('=======2', opt.rank)
 
-for epoch in list(range(opt.epochIdFineTune+1, opt.nepoch) ):
+# for epoch in list(range(opt.epochIdFineTune+1, opt.cfg.solver.max_epoch)):
+for epoch_0 in list(range(opt.cfg.solver.max_epoch)):
+    epoch = epoch_0 + epoch_start
     # trainingLog = open('{0}/trainingLog_{1}.txt'.format(opt.experiment, epoch), 'w')
 
     losses = AverageMeter()
     losses_pull = AverageMeter()
     losses_push = AverageMeter()
     losses_binary = AverageMeter()
+    epochs_saved = []
 
     ts_epoch_start = time.time()
     # ts = ts_epoch_start
     # ts_iter_start = ts
     ts_iter_end = ts_epoch_start
+    
+    print('=======3', opt.rank)
+    synchronize()
 
     for i, data_batch in tqdm(enumerate(brdf_loader_train)):
-        if opt.eval_every_iter != -1 and tid % opt.eval_every_iter == 0:
+        
+        # Evaluation for an epoch
+        if opt.eval_every_iter != -1 and (tid - tid_start) % opt.eval_every_iter == 0:
             val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid}
             val_epoch_mat_seg(brdf_loader_val, model, bin_mean_shift, val_params)
             model.train(not cfg.model.fix_bn)
             ts_iter_end = time.time()
             
+        synchronize()
+
+        # Save checkpoint
+        if opt.save_every_iter != -1 and (tid - tid_start) % opt.save_every_iter == 0:
+            check_save(opt, tid, tid, epoch, checkpointer, epochs_saved, opt.checkpoints_path_task, logger)
+
         synchronize()
 
         tid += 1
@@ -398,8 +461,8 @@ for epoch in list(range(opt.epochIdFineTune+1, opt.nepoch) ):
         # ======= Load data from cpu to gpu
         input_dict = get_input_dict_mat_seg(data_batch, opt)
 
-        if tid % 1000 == 0 and opt.is_master:
-            for sample_idx in tqdm(range(opt.cfg.dataset.batch_size)):
+        if (tid - tid_start) % 1000 == 0 and opt.is_master:
+            for sample_idx in tqdm(range(data_batch['im_not_hdr'].shape[0])):
                 # im_single = im_cpu[sample_idx].numpy().squeeze().transpose(1, 2, 0)
                 # im_single = im_single**(1.0/2.2)
                 im_single = data_batch['im_not_hdr'][sample_idx].numpy().squeeze().transpose(1, 2, 0)
@@ -443,12 +506,15 @@ for epoch in list(range(opt.epochIdFineTune+1, opt.nepoch) ):
             logger.info('Epoch %d - Tid %d - loss_all %.3f = loss_pull %.3f + loss_push %.3f + loss_binary %.3f' % \
                 (epoch, tid, loss_dict_reduced['loss_all'].item(), loss_dict_reduced['loss_pull'].item(), loss_dict_reduced['loss_push'].item(), loss_dict_reduced['loss_binary'].item()))
 
-        # End of iteration
+        # End of iteration logging
         ts_iter_end = time.time()
-        if tid > 5:
+        if opt.is_master and (tid - tid_start) > 5:
             ts_iter_start_end_list.append(ts_iter_end - ts_iter_start)
-            if tid % 20 == 0:
+            if (tid - tid_start) % 20 == 0:
                 logger.info('Rolling end-to-start %.2f, Rolling start-to-end %.2f'%(sum(ts_iter_end_start_list)/len(ts_iter_end_start_list), sum(ts_iter_start_end_list)/len(ts_iter_start_end_list)))
+            if opt.is_master and tid % 100 == 0:
+                print_gpu_usage(handle, logger)
+
             # print(ts_iter_end_start_list, ts_iter_start_end_list)
 
 

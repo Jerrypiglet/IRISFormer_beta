@@ -14,6 +14,7 @@ import logging
 import os
 from tqdm import tqdm
 from utils.comm import get_world_size
+import nvidia_smi
 
 
 
@@ -158,3 +159,60 @@ def cycle(iterable):
             yield next(iterator)
         except StopIteration:
             iterator = iter(iterable)
+
+def print_gpu_usage(handle, logger):
+    # print GPU usage
+    mem_res = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
+    usage_str = f'mem: {mem_res.used / (1024**2)} (GiB) - '
+    usage_percent_str = f'{100 * (mem_res.used / mem_res.total):.3f}%'
+    logger.info(green(usage_str + usage_percent_str))
+    # print(f'mem: {mem_res.used / (1024**2)} (GiB)') # usage in GiB
+    # print(f'mem: {100 * (mem_res.used / mem_res.total):.3f}%') # percentage usage
+
+
+def clean_up_checkpoints(checkpoint_folder, leave_N, start_with='checkpoint_', logger=None):
+    # checkpoint_folder = '/home/ruizhu/Documents/Projects/adobe_rui_camera-calibration-redux/checkpoint/test'
+    # list_checkpoints = glob.glob(checkpoint_folder+'/checkpoint*.pth.tar')
+    list_checkpoints = list(filter(os.path.isfile, glob.glob(str(checkpoint_folder)+'/%s*.*'%start_with)))
+    list_checkpoints.sort(key=lambda x: os.path.getmtime(x), reverse=True)
+    # print([ntpath.basename(filename) for filename in list_checkpoints])
+
+
+    last_checkpoint_file = os.path.join(checkpoint_folder, "last_checkpoint")
+    try:
+        with open(last_checkpoint_file, "r") as f:
+            last_saved = f.read()
+            last_saved = last_saved.strip()
+    except IOError:
+        last_saved = None
+        pass
+
+    if logger is None:
+        logger = logging.getLogger('clean_up_checkpoints')
+
+    if len(list_checkpoints) > leave_N:
+        for checkpoint_path in list_checkpoints[leave_N:]:
+            # last_saved = '/home/ruizhu/Documents/Projects/adobe_rui_camera-calibration-redux/checkpoint/tmp2/checkpointer_epoch0010_iter0000100.pth'
+            # print(ntpath.basename(last_saved), ntpath.basename(checkpoint_path), last_saved)
+            if last_saved is not None and ntpath.basename(last_saved) == ntpath.basename(checkpoint_path):
+                logger.info(magenta('Skipping latest at '+last_saved))
+                continue
+            os.system('rm %s'%checkpoint_path)
+            logger.info(white_blue('removed checkpoint at '+checkpoint_path))
+
+def check_save(opt, tid, epoch_save, epoch_total, checkpointer, epochs_saved, checkpoints_folder, logger=None, is_better=False):
+    arguments = {"iteration": tid, 'epoch': epoch_total,}
+    # if rank == 0 and epoch != 0 and (epoch < opt.save_every_epoch or epoch % opt.save_every_epoch == 0) and epoch not in epochs_saved:
+    # if opt.is_master and (epoch_save < opt.save_every_epoch or epoch_save % opt.save_every_epoch == 0) and epoch_save not in epochs_saved:
+    if opt.is_master and epoch_save not in epochs_saved:
+
+        saved_filename = checkpointer.save('checkpointer_epoch%04d_iter%07d'%(epoch_total, tid), **arguments)
+        if opt.cfg.TRAINING.MAX_CKPT_KEEP != -1:
+            clean_up_checkpoints(checkpoints_folder, leave_N=opt.cfg.TRAINING.MAX_CKPT_KEEP, start_with='checkpointer_', logger=logger)
+
+        epochs_saved.append(epoch_save)
+    
+    if opt.is_master and is_better:
+        ckpt_filepath = 'best_checkpointer_epoch%04d_iter%07d'%(epoch_total, tid)
+        saved_filename = checkpointer.save(ckpt_filepath, **arguments)
+        logger.info(green('Saved BEST checkpoint to '+saved_filename))

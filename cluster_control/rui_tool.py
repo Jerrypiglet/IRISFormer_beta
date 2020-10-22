@@ -140,7 +140,7 @@ def create(args):
     command_str = command_str.replace('python', args.python_path)
     if args.deploy:
         args.deploy_tar += '-%s'%datetime_str
-        command_str = 'rclone copy %s %s && cd %s && pip install -r requirements.txt && '%(args.deploy_s3, args.deploy_tar, args.deploy_tar) + command_str
+        command_str = 'rclone copy %s %s && cd %s && '%(args.deploy_s3, args.deploy_tar, args.deploy_tar) + command_str
         command_str = command_str.replace('pip', args.pip_path)
         
     yaml_content['spec']['template']['spec']['containers'][0]['args'][0] += command_str

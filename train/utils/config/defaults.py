@@ -33,12 +33,21 @@ _C.dataset.batch_size = 16
 _C.dataset.num_workers = 8
 _C.dataset.if_val_dist = True
 
+_C.DATA = CN()
+_C.DATA.IM_HEIGHT = 192
+_C.DATA.IM_WIDTH = 256
+
+
 _C.solver = CN()
 _C.solver.method = 'adam'
 _C.solver.lr = 0.0001
 _C.solver.weight_decay = 0.00001
 _C.solver.max_iter = 1000000000
+_C.solver.max_epoch = 1000000000
 _C.solver.ims_per_batch = 16
+
+_C.TRAINING = CN()
+_C.TRAINING.MAX_CKPT_KEEP = 10
 
 _C.test = CN()
 _C.test.ims_per_batch = 16
