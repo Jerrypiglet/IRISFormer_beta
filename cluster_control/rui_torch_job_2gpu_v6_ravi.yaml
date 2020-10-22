@@ -21,7 +21,7 @@ spec:
         args:
         # - ". /root/miniconda2/etc/profile.d/conda.sh && conda activate /viscompfs/users/ruizhu/envs/semanticInverse"
         # - ". /root/miniconda3/etc/profile.d/conda.sh && alias python=/root/miniconda3/bin/python && which python && tensorboard --logdir / --port 6008"
-        - "which python && . /root/miniconda3/etc/profile.d/conda.sh && cd /viscompfs/users/ruizhu/semanticInverse && which python && "
+        - "which python && . /root/miniconda3/etc/profile.d/conda.sh && cd /viscompfs/users/ruizhu/semanticInverse && conda activate /viscompfs/users/ruizhu/envs/semanticInverse && which python && "
         # -  "tensorboard --logdir / --port 6008"  # specify the directory to watch
         # - "python /opt/repo/${my_script}.py"
         # - "pip install scipy & pip show scipy & pip show numpy"

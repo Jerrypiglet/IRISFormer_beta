@@ -31,6 +31,7 @@ class openrooms(data.Dataset):
             print('Unrecognized phase for data loader')
             assert(False )
 
+        self.dataset_name = 'openrooms-' + dataRoot
         self.split = split
         assert self.split in ['train', 'val', 'test']
         self.opt = opt

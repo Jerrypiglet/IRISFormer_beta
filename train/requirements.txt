@@ -5,10 +5,12 @@ psutil
 h5py
 matplotlib
 scipy
-scikit-image
+scikit-image==0.16.2
 tqdm
 tensorboard
 torchsummary
 statistics
 pyyaml
 yacs
+pathlib
+termcolor

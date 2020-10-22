@@ -6,3 +6,6 @@ logs/
 notebooks/.ipynb_checkpoints/
 cluster_control/tasks/
 archive/
+pretrained/
+Summary_vis/
+Checkpoint/

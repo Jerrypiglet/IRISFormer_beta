@@ -48,8 +48,8 @@ def parse_args():
     create_parser.add_argument('--deploy_src', type=str, help='deploy to target path', default='~/Documents/Projects/semanticInverse/train/')
     create_parser.add_argument('--deploy_s3', type=str, help='deploy s3 container', default='s3mm1:train')
     create_parser.add_argument('--deploy_tar', type=str, help='deploy to target path', default='/viscompfs/users/ruizhu/train')
-    create_parser.add_argument('--python_path', type=str, help='python path in pod', default='/root/miniconda3/bin/python')
-    create_parser.add_argument('--pip_path', type=str, help='python path in pod', default='/root/miniconda3/bin/pip')
+    create_parser.add_argument('--python_path', type=str, help='python path in pod', default='/viscompfs/users/ruizhu/envs/semanticInverse/bin/python')
+    create_parser.add_argument('--pip_path', type=str, help='python path in pod', default='/viscompfs/users/ruizhu/envs/semanticInverse/bin/pip')
     create_parser.add_argument('-v', '--verbose', action='store_true', help='Verbose')
     create_parser.add_argument('-r', '--num-replicas', type=int, help='Number of replicas')
     create_parser.add_argument('-n', '--namespace', type=str, help='namespace')
@@ -88,6 +88,20 @@ def run_command(command, namespace=None):
         ret = ret.decode()
     return ret
 
+def run_command_generic(command):
+    #This command could have multiple commands separated by a new line \n
+    # some_command = "export PATH=$PATH://server.sample.mo/app/bin \n customupload abc.txt"
+
+    p = subprocess.Popen(command, stdout=subprocess.PIPE, shell=True)
+
+    (output, err) = p.communicate()  
+
+    #This makes the wait possible
+    p_status = p.wait()
+
+    #This will give you the output of the command being executed
+    print("Command output: " + output.decode('utf-8'))
+
 def get_pods(pattern, namespace=None):
     command = 'kubectl get pods -o custom-columns=:.metadata.name,:.status.succeeded'
     if namespace is not None:
@@ -111,7 +125,8 @@ def create_job_from_yaml(yaml_filename):
 
 def deploy_to_s3(args):
     deploy_command = 'rclone sync %s %s'%(args.deploy_src, args.deploy_s3)
-    os.system(deploy_command)
+    # os.system(deploy_command)
+    run_command_generic(deploy_command)
     print('>>>>>>>>>>>> deployed with: %s'%deploy_command)
 
 def create(args):

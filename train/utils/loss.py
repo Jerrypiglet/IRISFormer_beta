@@ -64,7 +64,8 @@ def hinge_embedding_loss(embedding, num_planes, segmentation, device, t_pull=0.5
     pull_loss /= int(num_planes)
 
     if num_planes == 1:
-        return pull_loss, pull_loss, torch.zeros(1).to(device)
+        assert pull_loss.shape[0]==1
+        return pull_loss[0], pull_loss[0], torch.zeros(1).to(device)[0]
 
     # inter-plane loss
     centers = torch.cat(centers, dim=0)
@@ -81,7 +82,8 @@ def hinge_embedding_loss(embedding, num_planes, segmentation, device, t_pull=0.5
     push_loss = torch.mean(pair_distance).view(-1)
 
     loss = pull_loss + push_loss
-    return loss, pull_loss, push_loss
+    assert loss.shape[0]==1 and push_loss.shape[0]==1 and pull_loss.shape[0]==1
+    return loss[0], pull_loss[0], push_loss[0]
 
 
 def surface_normal_loss(prediction, surface_normal, valid_region):
