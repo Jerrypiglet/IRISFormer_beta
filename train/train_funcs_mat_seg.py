@@ -5,13 +5,14 @@ import models
 import torch.nn.functional as F
 from tqdm import tqdm
 import statistics
+import time
 import torchvision.utils as vutils
 from utils.loss import hinge_embedding_loss, surface_normal_loss, parameter_loss, \
     class_balanced_cross_entropy_loss
 from utils.match_segmentation import MatchSegmentation
 from utils.misc import AverageMeter
 from utils.utils_vis import vis_index_map, reindex_output_map
-from utils.utils_training import reduce_loss_dict
+from utils.utils_training import reduce_loss_dict, time_meters_to_string
 from utils.utils_misc import *
 
 def get_input_dict_mat_seg(data_batch, opt):
@@ -39,9 +40,13 @@ def get_input_dict_mat_seg(data_batch, opt):
 
     return input_dict
 
-def forward_mat_seg(input_dict, model, opt):
+def forward_mat_seg(input_dict, model, opt, time_meters):
     # logit, embedding, _, _, param = model(input_dict['im_batch'])
+
     logit, embedding = model(input_dict['im_batch'])
+    time_meters['forward'].update(time.time() - time_meters['ts'])
+    time_meters['ts'] = time.time()
+
 
     # ======= Calculate loss
     loss_dict = {}
@@ -59,6 +64,9 @@ def forward_mat_seg(input_dict, model, opt):
         loss_binary_list.append(_loss_binary)
 
         # print('------', i, _loss_all, _loss_pull, _loss_push, _loss_binary)
+
+    time_meters['loss'].update(time.time() - time_meters['ts'])
+    time_meters['ts'] = time.time()
 
     loss_dict['loss_all'] = torch.mean(torch.stack(loss_all_list))
     loss_dict['loss_pull'] = torch.mean(torch.stack(loss_pull_list))
@@ -88,16 +96,29 @@ def val_epoch_mat_seg(brdfLoaderVal, model, bin_mean_shift, params_mis):
     losses_push = AverageMeter()
     losses_binary = AverageMeter()
 
+    time_meters = {}
+    time_meters['data_to_gpu'] = AverageMeter()
+    time_meters['forward'] = AverageMeter()
+    time_meters['loss'] = AverageMeter()
+    time_meters['backward'] = AverageMeter()    
+
+
+
     match_segmentatin = MatchSegmentation()
 
     with torch.no_grad():
         for i, data_batch in tqdm(enumerate(brdfLoaderVal)):
+            ts_iter_start = time.time()
+
             input_dict = get_input_dict_mat_seg(data_batch, opt)
+            time_meters['data_to_gpu'].update(time.time() - ts_iter_start)
+            time_meters['ts'] = time.time()
 
             # ======= Forward
-            output_dict, loss_dict = forward_mat_seg(input_dict, model, opt)
+            time_meters['ts'] = time.time()
+            output_dict, loss_dict = forward_mat_seg(input_dict, model, opt, time_meters)
             loss_dict_reduced = reduce_loss_dict(loss_dict, mark=tid, logger=logger) # **average** over multi GPUs
-
+            time_meters['ts'] = time.time()
             # loss = loss_dict['loss_all']
             
             # ======= update loss
@@ -178,5 +199,7 @@ def val_epoch_mat_seg(brdfLoaderVal, model, bin_mean_shift, params_mis):
         writer.add_scalar('loss_eval/loss_pull', losses_pull.avg, tid)
         writer.add_scalar('loss_eval/loss_push', losses_push.avg, tid)
         writer.add_scalar('loss_eval/loss_binary', losses_binary.avg, tid)
+        logger.info('Evaluation timings: ' + time_meters_to_string(time_meters))
+
 
 

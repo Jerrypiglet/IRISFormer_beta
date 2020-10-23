@@ -15,7 +15,7 @@ test:
 
 dataset:
   root_dir: /new_disk2/yuzh/PlaneNetData/
-  batch_size: 16
+  # batch_size: 16
   num_workers: 8
   if_val_dist: True
 

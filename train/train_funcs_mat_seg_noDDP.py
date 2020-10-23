@@ -1,0 +1,174 @@
+import torch
+from torch.autograd import Variable
+import models
+import torch.nn.functional as F
+from tqdm import tqdm
+import statistics
+import torchvision.utils as vutils
+from utils.loss import hinge_embedding_loss, surface_normal_loss, parameter_loss, \
+    class_balanced_cross_entropy_loss
+from utils.match_segmentation import MatchSegmentation
+from utils.misc import AverageMeter
+from utils.utils_vis import vis_index_map, reindex_output_map
+import numpy as np
+
+def get_input_dict_mat_seg(data_batch, opt):
+    input_dict = {}
+
+    input_dict['im_paths'] = data_batch['imPath']
+    if opt.if_hdr:
+        im_cpu = data_batch['im']
+    else:
+        im_cpu = data_batch['image_transformed']
+    input_dict['im_batch'] = im_cpu.to(opt.device)
+    # print('-', im_cpu.dtype, im_cpu.shape, torch.max(im_cpu), torch.min(im_cpu), torch.median(im_cpu))
+
+    input_dict['num_mat_masks_batch'] = data_batch['num_mat_masks'].int()
+
+    input_dict['mat_aggre_map_cpu'] = data_batch['mat_aggre_map'].permute(0, 3, 1, 2) # [b, 1, h, w]
+    input_dict['mat_aggre_map_batch'] = Variable(input_dict['mat_aggre_map_cpu'] ).to(opt.device)
+    input_dict['mat_notlight_mask_cpu'] = input_dict['mat_aggre_map_cpu']!=0
+
+    input_dict['mat_aggre_map_reindex_cpu'] = data_batch['mat_aggre_map_reindex'].permute(0, 3, 1, 2) # [b, 1, h, w]
+    input_dict['mat_aggre_map_reindex_batch'] = Variable(input_dict['mat_aggre_map_reindex_cpu'] ).to(opt.device)
+    
+    input_dict['instance'] = data_batch['instance'].to(opt.device)
+    input_dict['semantic'] = data_batch['semantic'].to(opt.device)
+
+    return input_dict
+
+def forward_mat_seg(input_dict, model, opt):
+    # logit, embedding, _, _, param = model(input_dict['im_batch'])
+    logit, embedding = model(input_dict['im_batch'])
+
+    # ======= Calculate loss
+    loss_dict = {}
+    loss, loss_pull, loss_push, loss_binary = 0., 0., 0., 0.
+    batch_size = input_dict['im_batch'].size(0)
+    for i in range(batch_size):
+        _loss, _loss_pull, _loss_push = hinge_embedding_loss(embedding[i:i+1], input_dict['num_mat_masks_batch'][i:i+1],
+                                                                input_dict['instance'][i:i+1], opt.device)
+
+        _loss_binary = class_balanced_cross_entropy_loss(logit[i], input_dict['semantic'][i]) * 0.
+        _loss += _loss_binary
+        loss += _loss
+        loss_pull += _loss_pull
+        loss_push += _loss_push
+        loss_binary += _loss_binary
+
+
+    loss_dict['loss'] = loss / batch_size
+    loss_dict['loss_pull'] = loss_pull / batch_size
+    loss_dict['loss_push'] = loss_push / batch_size
+    loss_dict['loss_binary'] = loss_binary / batch_size
+
+    #  # meah shift
+    # gt_seg = input_dict['mat_aggre_map_reindex_batch']
+    # # print(gt_seg.dtype)
+    # segmentations, sample_segmentations, centers, sample_probs, sample_gt_segs = \
+    #     bin_mean_shift(logit, embedding, gt_seg)
+    # # print(segmentations[0].shape, sample_segmentations[0].shape, centers[0].shape, sample_probs[0].shape, sample_gt_segs[0].shape)
+
+    output_dict = {'logit': logit, 'embedding': embedding}
+
+    return output_dict, loss_dict
+
+def val_epoch_mat_seg(brdfLoaderVal, model, bin_mean_shift, writer, opt, tid):
+    print('===Evaluating for %d batches'%len(brdfLoaderVal))
+
+    model.eval()
+
+    losses = AverageMeter()
+    losses_pull = AverageMeter()
+    losses_push = AverageMeter()
+    losses_binary = AverageMeter()
+
+    match_segmentatin = MatchSegmentation()
+
+
+    for i, data_batch in tqdm(enumerate(brdfLoaderVal)):
+        input_dict = get_input_dict_mat_seg(data_batch, opt)
+
+        # ======= Forward
+        output_dict, loss_dict = forward_mat_seg(input_dict, model, opt)
+        loss = loss_dict['loss']
+        
+        # ======= update loss
+        losses.update(loss_dict['loss'].item())
+        losses_pull.update(loss_dict['loss_pull'].item())
+        losses_push.update(loss_dict['loss_push'].item())
+        losses_binary.update(loss_dict['loss_binary'].item())
+
+        # ======= visualize clusters
+        if i == 0:
+
+            b, c, h, w = output_dict['logit'].size()
+
+            for j, (logit_single, embedding_single) in enumerate(zip(output_dict['logit'].detach(), output_dict['embedding'].detach())):
+                sample_idx = j
+
+                # prob_single = torch.sigmoid(logit_single)
+                prob_single = input_dict['mat_notlight_mask_cpu'][j].to(opt.device).float()
+                # fast mean shift
+                segmentation, sampled_segmentation = bin_mean_shift.test_forward(
+                    prob_single, embedding_single, mask_threshold=0.1)
+                
+                # since GT plane segmentation is somewhat noise, the boundary of plane in GT is not well aligned, 
+                # we thus use avg_pool_2d to smooth the segmentation results
+                b = segmentation.t().view(1, -1, h, w)
+                pooling_b = torch.nn.functional.avg_pool2d(b, (7, 7), stride=1, padding=(3, 3))
+                b = pooling_b.view(-1, h*w).t()
+                segmentation = b
+
+                # greedy match of predict segmentation and ground truth segmentation using cross entropy
+                # to better visualization
+                gt_plane_num = input_dict['num_mat_masks_batch'][j]
+                matching = match_segmentatin(segmentation, prob_single.view(-1, 1), input_dict['instance'][j], gt_plane_num)
+
+                # return cluster results
+                predict_segmentation = segmentation.cpu().numpy().argmax(axis=1)
+
+                # reindexing to matching gt segmentation for better visualization
+                matching = matching.cpu().numpy().reshape(-1)
+                used = set([])
+                max_index = max(matching) + 1
+                for i, a in zip(range(len(matching)), matching):
+                    if a in used:
+                        matching[i] = max_index
+                        max_index += 1
+                    else:
+                        used.add(a)
+                predict_segmentation = matching[predict_segmentation]
+
+                # mask out non planar region
+                predict_segmentation[prob_single.cpu().numpy().reshape(-1) <= 0.1] = opt.invalid_index
+                predict_segmentation = predict_segmentation.reshape(h, w)
+
+                # ===== vis
+                im_single = data_batch['im_not_hdr'][sample_idx].numpy().squeeze().transpose(1, 2, 0)
+
+                writer.add_image('VAL_im/%d'%sample_idx, im_single, tid, dataformats='HWC')
+
+                mat_aggre_map_single = input_dict['mat_aggre_map_cpu'][sample_idx].numpy().squeeze()
+                matAggreMap_single_vis = vis_index_map(mat_aggre_map_single)
+                writer.add_image('VAL_mat_aggre_map_GT/%d'%sample_idx, matAggreMap_single_vis, tid, dataformats='HWC')
+
+                mat_aggre_map_single = reindex_output_map(predict_segmentation.squeeze(), opt.invalid_index)
+                matAggreMap_single_vis = vis_index_map(mat_aggre_map_single)
+                writer.add_image('VAL_mat_aggre_map_PRED/%d'%sample_idx, matAggreMap_single_vis, tid, dataformats='HWC')
+
+
+                mat_notlight_mask_single = input_dict['mat_notlight_mask_cpu'][sample_idx].numpy().squeeze()
+                writer.add_image('VAL_mat_notlight_mask_GT/%d'%sample_idx, mat_notlight_mask_single, tid, dataformats='HW')
+
+                writer.add_text('VAL_im_path/%d'%sample_idx, input_dict['im_paths'][sample_idx], tid)
+
+                if j > 12:
+                    break
+
+
+    writer.add_scalar('loss_eval/loss_all', losses.avg, tid)
+    writer.add_scalar('loss_eval/loss_pull', losses_pull.avg, tid)
+    writer.add_scalar('loss_eval/loss_push', losses_push.avg, tid)
+    writer.add_scalar('loss_eval/loss_binary', losses_binary.avg, tid)
+

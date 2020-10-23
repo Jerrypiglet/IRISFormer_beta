@@ -11,7 +11,6 @@ from skimage.measure import block_reduce
 import h5py
 import scipy.ndimage as ndimage
 import torch
-from tqdm import tqdm
 
 
 class openrooms(data.Dataset):
@@ -32,7 +31,6 @@ class openrooms(data.Dataset):
             print('Unrecognized phase for data loader')
             assert(False )
 
-        self.dataset_name = 'openrooms-' + dataRoot
         self.split = split
         assert self.split in ['train', 'val', 'test']
         self.opt = opt
@@ -50,8 +48,6 @@ class openrooms(data.Dataset):
                 sceneList = sceneList[:-val_count]
             if self.split == 'val':
                 sceneList = sceneList[-val_count:]
-        # if 'mini' in self.dataset_name:
-        #     sceneList *= 1
         print('Scene num for split %s: %d; total scenes: %d'%(self.split, len(sceneList), num_scenes))
 
         self.imHeight = imHeight
@@ -77,8 +73,7 @@ class openrooms(data.Dataset):
         print('Shape Num: %d' % len(shapeList ) )
 
         self.imList = []
-        print('Gathering shapes...')
-        for shape in tqdm(shapeList):
+        for shape in shapeList:
             imNames = sorted(glob.glob(osp.join(shape, 'im_*.hdr') ) )
             self.imList = self.imList + imNames
 
@@ -160,20 +155,13 @@ class openrooms(data.Dataset):
 
 
         # Read Image
-        hdr_file = self.imList[self.perm[ind] ]
-        # if self.opt.if_hdr:
-        im = self.loadHdr(hdr_file)
+        im = self.loadHdr(self.imList[self.perm[ind] ] )
         # Random scale the image
         im, scale = self.scaleHdr(im, seg)
 
-        if not self.opt.if_hdr:
-            assert self.transform is not None
-            # sdr_file = self.imList[self.perm[ind] ].replace('.hdr', 'sdr')
-            # im_uint8 = np.load(sdr_file+'.npy')
+        if self.transform is not None:
             im_not_hdr = np.clip(im**(1.0/2.2), 0., 1.)
             im_uint8 = (255. * im_not_hdr).transpose(1, 2, 0).astype(np.uint8)
-            # np.save(sdr_file, im_uint8)
-            # print(self.imList[self.perm[ind] ])
             # print('-', im_uint8.dtype, im_uint8.shape, np.amax(im_uint8), np.amin(im_uint8), np.median(im_uint8))
             image = Image.fromarray(im_uint8)
             image_transformed = self.transform(image)
@@ -348,8 +336,6 @@ class openrooms(data.Dataset):
             print(imName )
             assert(False )
         im = cv2.imread(imName, -1)
-        # print(imName, im.shape, im.dtype)
-
         if im is None:
             print(imName )
             assert(False )
@@ -407,7 +393,6 @@ class openrooms(data.Dataset):
 
 
     def loadEnvmap(self, envName ):
-        print('>>>>loadEnvmap', envName)
         if not osp.isfile(envName ):
             env = np.zeros( [3, self.envRow, self.envCol,
                 self.envHeight, self.envWidth], dtype = np.float32 )

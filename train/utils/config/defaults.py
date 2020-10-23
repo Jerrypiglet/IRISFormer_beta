@@ -29,9 +29,10 @@ _C.model.fix_bn = False
 
 _C.dataset = CN()
 _C.dataset.root_dir = '/new_disk2/yuzh/PlaneNetData/'
-_C.dataset.batch_size = 16
+# _C.dataset.batch_size = 16
 _C.dataset.num_workers = 8
 _C.dataset.if_val_dist = True
+_C.dataset.if_hdr = False
 
 _C.DATA = CN()
 _C.DATA.IM_HEIGHT = 192
@@ -42,8 +43,8 @@ _C.solver = CN()
 _C.solver.method = 'adam'
 _C.solver.lr = 0.0001
 _C.solver.weight_decay = 0.00001
-_C.solver.max_iter = 1000000000
-_C.solver.max_epoch = 1000000000
+_C.solver.max_iter = 10000000
+_C.solver.max_epoch = 1000
 _C.solver.ims_per_batch = 16
 
 _C.TRAINING = CN()
