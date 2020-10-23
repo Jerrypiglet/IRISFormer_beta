@@ -170,10 +170,10 @@ def print_gpu_usage(handle, logger):
     # print(f'mem: {100 * (mem_res.used / mem_res.total):.3f}%') # percentage usage
 
 def time_meters_to_string(time_meters):
-    for key in time_meters:
-        if key != 'ts':
-            meter = time_meters[key]
-            print(key, meter.avg)
+    # for key in time_meters:
+    #     if key != 'ts':
+    #         meter = time_meters[key]
+    #         print(key, meter.avg)
     return ', '.join(['%s - %.2f'%(key, time_meters[key].avg) for key in time_meters if key != 'ts'])
 
 def clean_up_checkpoints(checkpoint_folder, leave_N, start_with='checkpoint_', logger=None):

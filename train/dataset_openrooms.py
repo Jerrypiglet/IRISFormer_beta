@@ -50,8 +50,8 @@ class openrooms(data.Dataset):
                 sceneList = sceneList[:-val_count]
             if self.split == 'val':
                 sceneList = sceneList[-val_count:]
-        # if 'mini' in self.dataset_name:
-        #     sceneList *= 1
+        if 'mini' in self.dataset_name:
+            sceneList *= 10
         print('Scene num for split %s: %d; total scenes: %d'%(self.split, len(sceneList), num_scenes))
 
         self.imHeight = imHeight

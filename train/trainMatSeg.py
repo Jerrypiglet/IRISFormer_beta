@@ -13,7 +13,6 @@ os.system('touch %s/models/__init__.py'%pwdpath)
 os.system('touch %s/utils/__init__.py'%pwdpath)
 print('started.' + pwdpath)
 
-import models
 import torchvision.utils as vutils
 import utils
 from dataset_openrooms import openrooms
@@ -33,7 +32,8 @@ from torch.utils.tensorboard import SummaryWriter
 from torchsummary import summary
 
 
-from models.baseline_same import Baseline as UNet
+# from models.baseline_same import Baseline as UNet
+from models.model_mat_seg_brdf import MatSeg_BRDF
 from train_funcs import *
 from utils.utils_vis import vis_index_map
 from utils.config import cfg
@@ -223,7 +223,8 @@ else:
 
 # >>>> MODEL AND OPTIMIZER
 # build model
-model = UNet(cfg.model)
+model = MatSeg_BRDF(opt)
+print('====cfg.MODEL_SEG', cfg.MODEL_SEG)
 # if not (opt.resume == 'NoCkpt'):
 #     model_dict = torch.load(opt.resume, map_location=lambda storage, loc: storage)
 #     model.load_state_dict(model_dict)
@@ -233,10 +234,10 @@ if opt.distributed: # https://github.com/dougsouza/pytorch-sync-batchnorm-exampl
 model.to(opt.device)
 
 # set up optimizers
-optimizer = get_optimizer(model.parameters(), cfg.solver)
+optimizer = get_optimizer(model.parameters(), cfg.SOLVER)
 # Initialize mixed-precision training
 if opt.distributed:
-    use_mixed_precision = cfg.model.DTYPE == "float16"
+    use_mixed_precision = cfg.MODEL_SEG.DTYPE == "float16"
     amp_opt_level = 'O1' if use_mixed_precision else 'O0'
     model, optimizer = amp.initialize(model, optimizer, opt_level=amp_opt_level)
     model = DDP(model)
@@ -252,9 +253,9 @@ transforms = T.Compose([
         T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
 brdf_dataset_train = openrooms( opt.data_root, transforms, opt, 
-        imWidth = opt.cfg.DATA.IM_WIDTH, imHeight = opt.cfg.DATA.IM_HEIGHT,
+        imWidth = opt.cfg.DATA.im_width, imHeight = opt.cfg.DATA.im_height,
         cascadeLevel = opt.cascadeLevel, split = 'train')
-# brdf_loader_train = DataLoader(brdf_dataset_train, batch_size = cfg.solver.ims_per_batch,
+# brdf_loader_train = DataLoader(brdf_dataset_train, batch_size = cfg.SOLVER.ims_per_batch,
 #         num_workers = 16, shuffle = True, pin_memory=True)
 brdf_loader_train = make_data_loader(
     opt,
@@ -270,7 +271,7 @@ if 'mini' in opt.data_root:
     brdf_dataset_val = brdf_dataset_train
 else:
     brdf_dataset_val = openrooms( opt.data_root, transforms, opt, 
-            imWidth = opt.cfg.DATA.IM_WIDTH, imHeight = opt.cfg.DATA.IM_HEIGHT,
+            imWidth = opt.cfg.DATA.im_width, imHeight = opt.cfg.DATA.im_height,
             cascadeLevel = opt.cascadeLevel, split = 'val')
 # brdfLoaderVal = DataLoader(brdf_dataset_val, batch_size = opt.batchSize,
         # num_workers = 16, shuffle = False, pin_memory=True)
@@ -281,7 +282,7 @@ brdf_loader_val = make_data_loader(
     start_iter=0,
     logger=logger,
     # collate_fn=my_collate_seq_dataset if opt.if_padding else my_collate_seq_dataset_noPadding,
-    if_distributed_override=opt.cfg.dataset.if_val_dist and opt.distributed
+    if_distributed_override=opt.cfg.DATASET.if_val_dist and opt.distributed
 )
 # <<<< DATASET
 
@@ -311,18 +312,18 @@ if opt.resume != 'NoCkpt':
 
 if opt.reset_lr:
     for param_group in optimizer.param_groups:
-        param_group['lr'] = opt.cfg.solver.lr
+        param_group['lr'] = opt.cfg.SOLVER.lr
 
-# opt.albeW, opt.normW = opt.albedoWeight, opt.normalWeight
-# opt.rougW = opt.roughWeight
-# opt.deptW = opt.depthWeight
+# opt.albeW, opt.normW = MODEL_BRDF.albedoWeight, MODEL_BRDF.normalWeight
+# opt.rougW = MODEL_BRDF.roughWeight
+# opt.deptW = MODEL_BRDF.depthWeight
 
 # if opt.cascadeLevel == 0:
-#     opt.nepoch = opt.nepoch0
+#     opt.nepoch = opt.cfg.SOLVER.max_epoch
 #     opt.batchSize = opt.batchSize0
 #     opt.imHeight, opt.imWidth = opt.imHeight0, opt.imWidth0
 # elif opt.cascadeLevel == 1:
-#     opt.nepoch = opt.nepoch1
+#     opt.nepoch = opt.cfg.SOLVER.max_epoch
 #     opt.batchSize = opt.batchSize1
 #     opt.imHeight, opt.imWidth = opt.imHeight1, opt.imWidth1
 
@@ -340,12 +341,12 @@ if opt.reset_lr:
 # os.system('mkdir {0}'.format(opt.experiment) )
 # os.system('cp -r train %s' % opt.experiment )
 
-# # Initial model
-# encoder = models.encoder0(cascadeLevel = opt.cascadeLevel, in_channels = 3 if not opt.ifMatMapInput else 4)
-# albedoDecoder = models.decoder0(mode=0 )
-# normalDecoder = models.decoder0(mode=1 )
-# roughDecoder = models.decoder0(mode=2 )
-# depthDecoder = models.decoder0(mode=4 )
+# Initial model
+# encoder = models_brdf.encoder0(cascadeLevel = opt.cascadeLevel, in_channels = 3 if not opt.ifMatMapInput else 4)
+# albedoDecoder = models_brdf.decoder0(mode=0 )
+# normalDecoder = models_brdf.decoder0(mode=1 )
+# roughDecoder = models_brdf.decoder0(mode=2 )
+# depthDecoder = models_brdf.decoder0(mode=4 )
 # ####################################################################
 
 
@@ -410,14 +411,14 @@ ts_iter_end_start_list = []
 ts_iter_start_end_list = []
 num_mat_masks_MAX = 0
 
-model.train(not cfg.model.fix_bn)
+model.train(not cfg.MODEL_SEG.fix_bn)
 print('=======1', opt.rank)
 synchronize()
 print('=======2', opt.rank)
 
-# for epoch in list(range(opt.epochIdFineTune+1, opt.cfg.solver.max_epoch)):
+# for epoch in list(range(opt.epochIdFineTune+1, opt.cfg.SOLVER.max_epoch)):
 # for epoch_0 in list(range(1, 2) ):
-for epoch_0 in list(range(opt.cfg.solver.max_epoch)):
+for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
     epoch = epoch_0 + epoch_start
     # trainingLog = open('{0}/trainingLog_{1}.txt'.format(opt.experiment, epoch), 'w')
 
@@ -448,7 +449,7 @@ for epoch_0 in list(range(opt.cfg.solver.max_epoch)):
         if opt.eval_every_iter != -1 and (tid - tid_start) % opt.eval_every_iter == 0:
             val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid}
             val_epoch_mat_seg(brdf_loader_val, model, bin_mean_shift, val_params)
-            model.train(not cfg.model.fix_bn)
+            model.train(not cfg.MODEL_SEG.fix_bn)
             reset_tictoc = True
             
         synchronize()
@@ -530,8 +531,8 @@ for epoch_0 in list(range(opt.cfg.solver.max_epoch)):
         if opt.is_master and (tid - tid_start) > 5:
             ts_iter_start_end_list.append(ts_iter_end - ts_iter_start)
             if (tid - tid_start) % 10 == 0:
-                logger.info('Rolling end-to-start %.2f, Rolling start-to-end %.2f'%(sum(ts_iter_end_start_list)/len(ts_iter_end_start_list), sum(ts_iter_start_end_list)/len(ts_iter_start_end_list)))
-                logger.info('Training timings: ' + time_meters_to_string(time_meters))
+                logger.info(green('Rolling end-to-start %.2f, Rolling start-to-end %.2f'%(sum(ts_iter_end_start_list)/len(ts_iter_end_start_list), sum(ts_iter_start_end_list)/len(ts_iter_start_end_list))))
+                logger.info(green('Training timings: ' + time_meters_to_string(time_meters)))
             if opt.is_master and tid % 100 == 0:
                 print_gpu_usage(handle, logger)
 
@@ -601,7 +602,7 @@ for epoch_0 in list(range(opt.cfg.solver.max_epoch)):
     #         # Regress the diffusePred and specular Pred
     #         envRow, envCol = diffusePreBatch.size(2), diffusePreBatch.size(3)
     #         im_batchSmall = F.adaptive_avg_pool2d(im_batch, (envRow, envCol) )
-    #         diffusePreBatch, specularPreBatch = models.LSregressDiffSpec(
+    #         diffusePreBatch, specularPreBatch = models_brdf.LSregressDiffSpec(
     #                 diffusePreBatch, specularPreBatch, im_batchSmall,
     #                 diffusePreBatch, specularPreBatch )
 
@@ -645,11 +646,11 @@ for epoch_0 in list(range(opt.cfg.solver.max_epoch)):
     #     depthPred = 0.5 * (depthDecoder(im_batch, x1, x2, x3, x4, x5, x6 ) + 1)
 
     #     albedoBatch = segBRDFBatch * albedoBatch
-    #     albedoPred = models.LSregress(albedoPred * segBRDFBatch.expand_as(albedoPred ),
+    #     albedoPred = models_brdf.LSregress(albedoPred * segBRDFBatch.expand_as(albedoPred ),
     #             albedoBatch * segBRDFBatch.expand_as(albedoBatch), albedoPred )
     #     albedoPred = torch.clamp(albedoPred, 0, 1)
 
-    #     depthPred = models.LSregress(depthPred *  segAllBatch.expand_as(depthPred),
+    #     depthPred = models_brdf.LSregress(depthPred *  segAllBatch.expand_as(depthPred),
     #             depthBatch * segAllBatch.expand_as(depthBatch), depthPred )
 
     #     albedoPreds.append(albedoPred )

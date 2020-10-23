@@ -19,42 +19,48 @@ from yacs.config import CfgNode as CN
 
 _C = CN()
 
-_C.model = CN()
-_C.model.DTYPE = "float32"
-_C.model.arch = 'resnet101'
-_C.model.pretrained = True
-_C.model.embed_dims = 2
-_C.model.fix_bn = False
+_C.MODEL_SEG = CN()
+_C.MODEL_SEG.DTYPE = "float32"
+_C.MODEL_SEG.arch = 'resnet101'
+_C.MODEL_SEG.pretrained = True
+_C.MODEL_SEG.embed_dims = 2
+_C.MODEL_SEG.fix_bn = False
+
+_C.MODEL_BRDF = CN()
+_C.MODEL_BRDF.albedoWeight = 1.5
+_C.MODEL_BRDF.normalWeight = 1.0
+_C.MODEL_BRDF.roughWeight = 0.5
+_C.MODEL_BRDF.depthWeight = 0.5
 
 
-_C.dataset = CN()
-_C.dataset.root_dir = '/new_disk2/yuzh/PlaneNetData/'
-# _C.dataset.batch_size = 16
-_C.dataset.num_workers = 8
-_C.dataset.if_val_dist = True
-_C.dataset.if_hdr = False
+_C.DATASET = CN()
+_C.DATASET.root_dir = '/new_disk2/yuzh/PlaneNetData/'
+# _C.DATASET.batch_size = 16
+_C.DATASET.num_workers = 8
+_C.DATASET.if_val_dist = True
+_C.DATASET.if_hdr = False
 
 _C.DATA = CN()
-_C.DATA.IM_HEIGHT = 192
-_C.DATA.IM_WIDTH = 256
+_C.DATA.im_height = 192
+_C.DATA.im_width = 256
 
 
-_C.solver = CN()
-_C.solver.method = 'adam'
-_C.solver.lr = 0.0001
-_C.solver.weight_decay = 0.00001
-_C.solver.max_iter = 10000000
-_C.solver.max_epoch = 1000
-_C.solver.ims_per_batch = 16
+_C.SOLVER = CN()
+_C.SOLVER.method = 'adam'
+_C.SOLVER.lr = 0.0001
+_C.SOLVER.weight_decay = 0.00001
+_C.SOLVER.max_iter = 10000000
+_C.SOLVER.max_epoch = 1000
+_C.SOLVER.ims_per_batch = 16
 
 _C.TRAINING = CN()
 _C.TRAINING.MAX_CKPT_KEEP = 10
 
-_C.test = CN()
-_C.test.ims_per_batch = 16
+_C.TEST = CN()
+_C.TEST.ims_per_batch = 16
 
 _C.seed = 123
 # _C.num_gpus = 1
-_C.num_epochs = 100
+# _C.num_epochs = 100
 _C.resume_dir = None
 _C.print_interval = 10

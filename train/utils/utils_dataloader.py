@@ -41,11 +41,11 @@ def make_data_loader(opt, dataset, is_train=True, start_iter=0, is_for_period=Fa
         # ), "SOLVER.IMS_PER_BATCH ({}) must be divisible by the number of GPUs ({}) used.".format(
         #     images_per_batch, num_gpus)
         # images_per_gpu = images_per_batch // num_gpus if batch_size_override==-1 else batch_size_override
-        images_per_gpu = cfg.solver.ims_per_batch
+        images_per_gpu = cfg.SOLVER.ims_per_batch
         shuffle = True
-        num_iters = cfg.solver.max_iter
+        num_iters = cfg.SOLVER.max_iter
         drop_last = False
-        num_workers = cfg.dataset.num_workers
+        num_workers = cfg.DATASET.num_workers
         # num_workers = 4
     else:
         # images_per_batch = cfg.TEST.IMS_PER_BATCH
@@ -54,14 +54,14 @@ def make_data_loader(opt, dataset, is_train=True, start_iter=0, is_for_period=Fa
         # ), "TEST.IMS_PER_BATCH ({}) must be divisible by the number of GPUs ({}) used.".format(
         #     images_per_batch, num_gpus)
         # images_per_gpu = images_per_batch // num_gpus if batch_size_override==-1 else batch_size_override
-        images_per_gpu = cfg.test.ims_per_batch
+        images_per_gpu = cfg.TEST.ims_per_batch
         # shuffle = False if not is_distributed else True
         shuffle = False
         num_iters = None
         start_iter = 0
         drop_last = False
-        # num_workers = 0 if opt.AML else cfg.dataset.num_workers
-        num_workers = cfg.dataset.num_workers
+        # num_workers = 0 if opt.AML else cfg.DATASET.num_workers
+        num_workers = cfg.DATASET.num_workers
 
     if override_shuffle is not None:
         shuffle = override_shuffle

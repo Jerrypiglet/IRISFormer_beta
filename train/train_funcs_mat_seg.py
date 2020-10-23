@@ -43,7 +43,7 @@ def get_input_dict_mat_seg(data_batch, opt):
 def forward_mat_seg(input_dict, model, opt, time_meters):
     # logit, embedding, _, _, param = model(input_dict['im_batch'])
 
-    logit, embedding = model(input_dict['im_batch'])
+    logit, embedding = model(input_dict)
     time_meters['forward'].update(time.time() - time_meters['ts'])
     time_meters['ts'] = time.time()
 
