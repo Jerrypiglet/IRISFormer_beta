@@ -6,7 +6,7 @@ from tqdm import tqdm
 import statistics
 import torchvision.utils as vutils
 
-def get_inputBatch(dataBatch, opt):
+def get_input_dict_brdf(dataBatch, opt):
     inputDict = {}
     # Load data from cpu to gpu
     albedo_cpu = dataBatch['albedo']

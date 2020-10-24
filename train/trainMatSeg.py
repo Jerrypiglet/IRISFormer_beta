@@ -34,12 +34,13 @@ from torchsummary import summary
 
 # from models.baseline_same import Baseline as UNet
 from models.model_mat_seg_brdf import MatSeg_BRDF
-from train_funcs import *
 from utils.utils_vis import vis_index_map
 from utils.config import cfg
 from utils.comm import synchronize, get_rank
 from utils.misc import AverageMeter, get_optimizer, get_datetime
 from utils.bin_mean_shift import Bin_Mean_Shift
+
+from train_funcs import get_input_dict_brdf, train_step
 from train_funcs_mat_seg import get_input_dict_mat_seg, forward_mat_seg, val_epoch_mat_seg
 
 from utils.logger import setup_logger, Logger, printer
@@ -539,6 +540,10 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
             # print(ts_iter_end_start_list, ts_iter_start_end_list)
 
 
+        ############# BRDF tmp
+        input_batch_brdf, input_dict_brdf, pre_batch_dict_brdf = get_input_dict_brdf(data_batch, opt)
+        x1, x2, x3, x4, x5, x6 = model['BRDF_Net']['encoder'](input_batch_brdf)
+        albedoPred = 0.5 * (model['BRDF_Net']['albedoDecoder'](input_dict_brdf['imBatch'], x1, x2, x3, x4, x5, x6) + 1)
 
         # break
 
