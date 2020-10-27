@@ -4,3 +4,6 @@
 [submodule "third-parties/pacnet"]
 	path = third-parties/pacnet
 	url = https://github.com/NVlabs/pacnet.git
+[submodule "train/third-parties/pacnet"]
+	path = train/third-parties/pacnet
+	url = https://github.com/NVlabs/pacnet.git

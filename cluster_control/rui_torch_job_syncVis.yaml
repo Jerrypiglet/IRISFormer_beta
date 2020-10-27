@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: z-torch-job-gpu
+  name: z-job-syncvis
   # namespace: ucsd-haosulab
   labels:
     user: rui  # Specify your name
@@ -13,16 +13,12 @@ spec:
       - name: gpu-container-rui1
         # image: pytorch/pytorch:1.2-cuda10.0-cudnn7-runtime  # docker image
         image: localhost:30081/jerrypiglet/deeplearningconda38s3
-        # image: docker.io/ak3636/deeplearning:latest
         imagePullPolicy: IfNotPresent
         command:
         - "sh"
         - "-c"
         args:
-        # - ". /root/miniconda2/etc/profile.d/conda.sh && conda activate /viscompfs/users/ruizhu/envs/semanticInverse"
-        # - ". /root/miniconda3/etc/profile.d/conda.sh && alias python=/root/miniconda3/bin/python && which python && tensorboard --logdir / --port 6008"
-        - "which python && . /root/miniconda3/etc/profile.d/conda.sh && cd /viscompfs/users/ruizhu/semanticInverse && conda activate /viscompfs/users/ruizhu/envs/semanticInverse && which python && "
-        # -  "tensorboard --logdir / --port 6008"  # specify the directory to watch
+        - ". /root/miniconda3/etc/profile.d/conda.sh && cd /viscompfs/users/ruizhu/semanticInverse && which python && rclone copy /viscompfs/users/ruizhu/Summary_vis s3mm1:vis"  # specify the directory to watch
         # - "python /opt/repo/${my_script}.py"
         # - "pip install scipy & pip show scipy & pip show numpy"
         # - 'pip install jupyterlab'
@@ -33,14 +29,14 @@ spec:
         # - '. /root/anaconda3/etc/profile.d/conda.sh && ln -s /cephfs/ruizhu/data / && ln -s /cephfs/ruizhu/Documents /home/ruizhu/ && ln -s /cephfs/ruizhu/newfoundland / && conda activate /cephfs/ruizhu/conda/yannick_docker_py37 && cd /home/ruizhu/Documents/Projects/adobe_rui_camera-calibration-redux && CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launch --master_port 5326 --nproc_per_node=4 train_combine_v3_RCNNOnly_bbox.py --num_layers 5 --pointnet_camH --pointnet_camH_refine --pointnet_personH_refine --accu_model --task_name 0128-0204_pod_BASELINEv4_L5_NEWDataV5_SmallerPersonBins-refine_personHinput_camHhigh5_DETACHinput_plateau750_cascadeL5-V0INPUT-SmallerPERSONBins1-190_lr1e-5_w360-10_human175STD15W05 --config-file maskrcnn/coco_config_small_synBN1108.yaml --weight_SUN360=10. SOLVER.IMS_PER_BATCH 16 TEST.IMS_PER_BATCH 16 SOLVER.PERSON_WEIGHT 0.05 SOLVER.BASE_LR 1e-5 MODEL.HUMAN.STD 0.15 MODEL.RCNN_WEIGHT_BACKBONE 1109-0141-mm1_SUN360RCNN-HorizonPitchRollVfovNET_myDistNarrowerLarge1105_bs16on4_le1e-5_indeptClsHeads_synBNApex_valBS1_yannickTransformAug MODEL.RCNN_WEIGHT_CLS_HEAD 1109-0141-mm1_SUN360RCNN-HorizonPitchRollVfovNET_myDistNarrowerLarge1105_bs16on4_le1e-5_indeptClsHeads_synBNApex_valBS1_yannickTransformAug MODEL.LOSS.VT_LOSS_CLAMP 1.'
         resources:
           requests:
-            cpu: "4"
-            memory: "10Gi"
-            nvidia.com/gpu: '#GPUS'
+            cpu: "1"
+            memory: "5Gi"
           limits:
-            cpu: "32"
-            memory: "200Gi"
-            nvidia.com/gpu: '#GPUS'
+            cpu: "8"
+            memory: "30Gi"
         volumeMounts:
+          # - name: cephfs
+          #   mountPath: /cephfs
           - name: dshm
             mountPath: /dev/shm 
           - name: viscompfs
@@ -74,5 +70,8 @@ spec:
       - name: ruidata
         persistentVolumeClaim:
             claimName: ruidata
+      # - name: cephfs
+      #   persistentVolumeClaim:
+      #     claimName: haosulab-cephfs
       restartPolicy: Never
   backoffLimit: 2

@@ -12,6 +12,9 @@ from pathlib import Path
 os.system('touch %s/models/__init__.py'%pwdpath)
 os.system('touch %s/utils/__init__.py'%pwdpath)
 print('started.' + pwdpath)
+PACNET_PATH = Path(pwdpath) / 'third-parties' / 'pacnet'
+sys.path.insert(0, str(PACNET_PATH))
+print(sys.path)
 
 import torchvision.utils as vutils
 import utils
@@ -40,8 +43,7 @@ from utils.comm import synchronize, get_rank
 from utils.misc import AverageMeter, get_optimizer, get_datetime
 from utils.bin_mean_shift import Bin_Mean_Shift
 
-from train_funcs_brdf import get_input_dict_brdf, train_step
-from train_funcs_mat_seg import get_input_dict_mat_seg, forward_mat_seg, val_epoch_mat_seg
+from train_funcs_joint import get_input_dict_mat_seg_joint, val_epoch_joint, forward_joint
 
 from utils.logger import setup_logger, Logger, printer
 from utils.global_paths import SUMMARY_PATH, SUMMARY_VIS_PATH, CKPT_PATH
@@ -224,7 +226,7 @@ else:
 
 # >>>> MODEL AND OPTIMIZER
 # build model
-model = MatSeg_BRDF(opt)
+model = MatSeg_BRDF(opt, logger)
 print('====cfg.MODEL_SEG', cfg.MODEL_SEG)
 # if not (opt.resume == 'NoCkpt'):
 #     model_dict = torch.load(opt.resume, map_location=lambda storage, loc: storage)
@@ -233,6 +235,7 @@ if opt.distributed: # https://github.com/dougsouza/pytorch-sync-batchnorm-exampl
     # model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
     model = apex.parallel.convert_syncbn_model(model)
 model.to(opt.device)
+model.print_net()
 
 # set up optimizers
 optimizer = get_optimizer(model.parameters(), cfg.SOLVER)
@@ -423,10 +426,10 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
     epoch = epoch_0 + epoch_start
     # trainingLog = open('{0}/trainingLog_{1}.txt'.format(opt.experiment, epoch), 'w')
 
-    losses = AverageMeter()
-    losses_pull = AverageMeter()
-    losses_push = AverageMeter()
-    losses_binary = AverageMeter()
+    # losses = AverageMeter()
+    # losses_pull = AverageMeter()
+    # losses_push = AverageMeter()
+    # losses_binary = AverageMeter()
 
     time_meters = {}
     time_meters['data_to_gpu'] = AverageMeter()
@@ -449,7 +452,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         # Evaluation for an epoch
         if opt.eval_every_iter != -1 and (tid - tid_start) % opt.eval_every_iter == 0:
             val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid}
-            val_epoch_mat_seg(brdf_loader_val, model, bin_mean_shift, val_params)
+            val_epoch_joint(brdf_loader_val, model, bin_mean_shift, val_params)
             model.train(not cfg.MODEL_SEG.fix_bn)
             reset_tictoc = True
             
@@ -473,10 +476,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
             continue
 
         # ======= Load data from cpu to gpu
-        input_dict_mat_seg = get_input_dict_mat_seg(data_batch, opt)
-        input_batch_brdf, input_dict_brdf, pre_batch_dict_brdf = get_input_dict_brdf(data_batch, opt)
-        input_dict = {**input_dict_mat_seg, **input_dict_brdf}
-        input_dict.update({'input_batch_brdf': input_batch_brdf, 'pre_batch_dict_brdf': pre_batch_dict_brdf})
+        input_dict = get_input_dict_mat_seg_joint(data_batch, opt)
 
         time_meters['data_to_gpu'].update(time.time() - ts_iter_start)
         time_meters['ts'] = time.time()
@@ -500,36 +500,37 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         # time_meters['ts'] = time.time()
 
         # ======= Forward
-        output_dict, loss_dict = forward_mat_seg(input_dict, model, opt, time_meters)
+        optimizer.zero_grad()
+        output_dict, loss_dict = forward_joint(input_dict, model, opt, time_meters)
         
         # print('=======loss_dict', loss_dict)
         loss_dict_reduced = reduce_loss_dict(loss_dict, mark=tid, logger=logger) # **average** over multi GPUs
         time_meters['ts'] = time.time()
 
         # ======= Backward
-        optimizer.zero_grad()
-        loss = loss_dict['loss_all']
+        loss = loss_dict['loss_brdf-ALL'] + loss_dict['loss_mat_seg-ALL']
         loss.backward()
         optimizer.step()
         time_meters['backward'].update(time.time() - time_meters['ts'])
         time_meters['ts'] = time.time()
 
 
-        # ======= update loss
-        losses.update(loss_dict_reduced['loss_all'].item())
-        losses_pull.update(loss_dict_reduced['loss_pull'].item())
-        losses_push.update(loss_dict_reduced['loss_push'].item())
-        losses_binary.update(loss_dict_reduced['loss_binary'].item())
+        # # ======= update loss
+        # losses.update(loss_dict_reduced['loss_all'].item())
+        # losses_pull.update(loss_dict_reduced['loss_pull'].item())
+        # losses_push.update(loss_dict_reduced['loss_push'].item())
+        # losses_binary.update(loss_dict_reduced['loss_binary'].item())
 
         if opt.is_master:
-            writer.add_scalar('loss_train/loss_all', loss_dict_reduced['loss_all'].item(), tid)
-            writer.add_scalar('loss_train/loss_pull', loss_dict_reduced['loss_pull'].item(), tid)
-            writer.add_scalar('loss_train/loss_push', loss_dict_reduced['loss_push'].item(), tid)
-            writer.add_scalar('loss_train/loss_binary', loss_dict_reduced['loss_binary'].item(), tid)
+            for loss_key in loss_dict_reduced:
+                # print(loss_key, loss_dict_reduced[loss_key].item())
+                writer.add_scalar('loss_train/%s'%loss_key, loss_dict_reduced[loss_key].item(), tid)
             writer.add_scalar('training/epoch', epoch, tid)
 
-            logger.info('Epoch %d - Tid %d - loss_all %.3f = loss_pull %.3f + loss_push %.3f + loss_binary %.3f' % \
-                (epoch, tid, loss_dict_reduced['loss_all'].item(), loss_dict_reduced['loss_pull'].item(), loss_dict_reduced['loss_push'].item(), loss_dict_reduced['loss_binary'].item()))
+            logger.info('Epoch %d - Tid %d - loss_mat_seg-ALL %.3f = loss_pull %.3f + loss_push %.3f + loss_binary %.3f' % \
+                (epoch, tid, loss_dict_reduced['loss_mat_seg-ALL'].item(), loss_dict_reduced['loss_mat_seg-pull'].item(), loss_dict_reduced['loss_mat_seg-push'].item(), loss_dict_reduced['loss_mat_seg-binary'].item()))
+            logger.info('Epoch %d - Tid %d - loss_brdf-ALL %.3f' % \
+                (epoch, tid, loss_dict_reduced['loss_brdf-ALL'].item()))
 
         # End of iteration logging
         ts_iter_end = time.time()

@@ -101,8 +101,72 @@ def get_input_dict_brdf(dataBatch, opt):
 
     return inputBatch, inputDict, preBatchDict
 
+# def forward_brdf(input_dict, model):
+#     output_dict = model(input_dict)
+    # return output_dict
+
+def process_brdf(input_dict, output_dict, loss_dict, opt, time_meters):
+    albedoPreds = []
+    normalPreds = []
+    roughPreds = []
+    depthPreds = []
+
+    albedoPred, normalPred, roughPred, depthPred = output_dict['albedoPred'], output_dict['normalPred'], output_dict['roughPred'], output_dict['depthPred']
+
+    albedoPreds.append(albedoPred )
+    normalPreds.append(normalPred )
+    roughPreds.append(roughPred )
+    depthPreds.append(depthPred )
     
-def train_step(inputBatch, inputDict, preBatchDict, optimizer, model, opt, if_train=True):
+
+    ########################################################
+    opt.albeW, opt.normW, opt.rougW, opt.deptW = opt.cfg.MODEL_BRDF.albedoWeight, opt.cfg.MODEL_BRDF.normalWeight, opt.cfg.MODEL_BRDF.roughWeight, opt.cfg.MODEL_BRDF.depthWeight
+
+    # Compute the error
+    loss_dict['loss_brdf-albedo'] = []
+    loss_dict['loss_brdf-normal'] = []
+    loss_dict['loss_brdf-rough'] = []
+    loss_dict['loss_brdf-depth'] = []
+
+    pixelObjNum = (torch.sum(input_dict['segBRDFBatch'] ).cpu().data).item()
+    pixelAllNum = (torch.sum(input_dict['segAllBatch'] ).cpu().data).item()
+    for n in range(0, len(albedoPreds) ):
+       loss_dict['loss_brdf-albedo'].append( torch.sum( (albedoPreds[n] - input_dict['albedoBatch'])
+            * (albedoPreds[n] - input_dict['albedoBatch']) * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch'] ) ) / pixelObjNum / 3.0 )
+    for n in range(0, len(normalPreds) ):
+        loss_dict['loss_brdf-normal'].append( torch.sum( (normalPreds[n] - input_dict['normalBatch'])
+            * (normalPreds[n] - input_dict['normalBatch']) * input_dict['segAllBatch'].expand_as(input_dict['normalBatch']) ) / pixelAllNum / 3.0)
+    for n in range(0, len(roughPreds) ):
+        loss_dict['loss_brdf-rough'].append( torch.sum( (roughPreds[n] - input_dict['roughBatch'])
+            * (roughPreds[n] - input_dict['roughBatch']) * input_dict['segBRDFBatch'] ) / pixelObjNum )
+    for n in range(0, len(depthPreds ) ):
+        loss_dict['loss_brdf-depth'].append( torch.sum( (torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) )
+            * ( torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum )
+
+    # Back propagate the gradients
+    loss_dict['loss_brdf-ALL'] = 4 * opt.albeW * loss_dict['loss_brdf-albedo'][-1] + opt.normW * loss_dict['loss_brdf-normal'][-1] \
+            + opt.rougW * loss_dict['loss_brdf-rough'][-1] + opt.deptW * loss_dict['loss_brdf-depth'][-1]
+        
+    output_dict.update({'mat_seg-albedoPreds': albedoPreds, 'mat_seg-normalPreds': normalPreds, 'mat_seg-roughPreds': roughPreds, 'mat_seg-depthPreds': depthPreds})
+
+    loss_dict['loss_brdf-albedo'] = loss_dict['loss_brdf-albedo'][-1]
+    loss_dict['loss_brdf-normal'] = loss_dict['loss_brdf-normal'][-1]
+    loss_dict['loss_brdf-rough'] = loss_dict['loss_brdf-rough'][-1]
+    loss_dict['loss_brdf-depth'] = loss_dict['loss_brdf-depth'][-1]
+
+    output_dict['albedoPreds'] = albedoPreds
+    output_dict['normalPreds'] = normalPreds
+    output_dict['roughPreds'] = roughPreds
+    output_dict['depthPreds'] = depthPreds
+
+    return output_dict, loss_dict
+
+
+
+
+    
+
+def train_step(inputDict, output_dict, preBatchDict, optimizer, opt, if_train=True):
     if if_train:
         # Clear the gradient in optimizer
         optimizer['opEncoder'].zero_grad()
@@ -118,20 +182,21 @@ def train_step(inputBatch, inputDict, preBatchDict, optimizer, model, opt, if_tr
     roughPreds = []
     depthPreds = []
 
-    # Initial Prediction
-    x1, x2, x3, x4, x5, x6 = model['encoder'](inputBatch)
-    albedoPred = 0.5 * (model['albedoDecoder'](inputDict['imBatch'], x1, x2, x3, x4, x5, x6) + 1)
-    normalPred = model['normalDecoder'](inputDict['imBatch'], x1, x2, x3, x4, x5, x6)
-    roughPred = model['roughDecoder'](inputDict['imBatch'], x1, x2, x3, x4, x5, x6)
-    depthPred = 0.5 * (model['depthDecoder'](inputDict['imBatch'], x1, x2, x3, x4, x5, x6 ) + 1)
+    albedoPred, normalPred, roughPred, depthPred = output_dict['albedoPred'], output_dict['normalPred'], output_dict['roughPred'], output_dict['depthPred']
+    # # Initial Prediction
+    # x1, x2, x3, x4, x5, x6 = model['encoder'](inputBatch)
+    # albedoPred = 0.5 * (model['albedoDecoder'](inputDict['imBatch'], x1, x2, x3, x4, x5, x6) + 1)
+    # normalPred = model['normalDecoder'](inputDict['imBatch'], x1, x2, x3, x4, x5, x6)
+    # roughPred = model['roughDecoder'](inputDict['imBatch'], x1, x2, x3, x4, x5, x6)
+    # depthPred = 0.5 * (model['depthDecoder'](inputDict['imBatch'], x1, x2, x3, x4, x5, x6 ) + 1)
 
-    inputDict['albedoBatch'] = inputDict['segBRDFBatch'] * inputDict['albedoBatch']
-    albedoPred = models.LSregress(albedoPred * inputDict['segBRDFBatch'].expand_as(albedoPred ),
-            inputDict['albedoBatch'] * inputDict['segBRDFBatch'].expand_as(inputDict['albedoBatch']), albedoPred )
-    albedoPred = torch.clamp(albedoPred, 0, 1)
+    # inputDict['albedoBatch'] = inputDict['segBRDFBatch'] * inputDict['albedoBatch']
+    # albedoPred = models.LSregress(albedoPred * inputDict['segBRDFBatch'].expand_as(albedoPred ),
+    #         inputDict['albedoBatch'] * inputDict['segBRDFBatch'].expand_as(inputDict['albedoBatch']), albedoPred )
+    # albedoPred = torch.clamp(albedoPred, 0, 1)
 
-    depthPred = models.LSregress(depthPred *  inputDict['segAllBatch'].expand_as(depthPred),
-            inputDict['depthBatch'] * inputDict['segAllBatch'].expand_as(inputDict['depthBatch']), depthPred )
+    # depthPred = models.LSregress(depthPred *  inputDict['segAllBatch'].expand_as(depthPred),
+    #         inputDict['depthBatch'] * inputDict['segAllBatch'].expand_as(inputDict['depthBatch']), depthPred )
 
     albedoPreds.append(albedoPred )
     normalPreds.append(normalPred )
@@ -146,6 +211,7 @@ def train_step(inputBatch, inputDict, preBatchDict, optimizer, model, opt, if_tr
     errors['normalErrs'] = []
     errors['roughErrs'] = []
     errors['depthErrs'] = []
+    opt.albeW, opt.normW, opt.rougW, opt.deptW = opt.cfg.MODEL_BRDF.albedoWeight, opt.cfg.MODEL_BRDF.normalWeight, opt.cfg.MODEL_BRDF.roughWeight, opt.cfg.MODEL_BRDF.depthWeight
 
     pixelObjNum = (torch.sum(inputDict['segBRDFBatch'] ).cpu().data).item()
     pixelAllNum = (torch.sum(inputDict['segAllBatch'] ).cpu().data).item()
@@ -180,7 +246,7 @@ def train_step(inputBatch, inputDict, preBatchDict, optimizer, model, opt, if_tr
 
     return errors
 
-def val_epoch(brdfLoaderVal, model, optimizer, writer, opt, tid):
+def val_epoch_brdf(brdfLoaderVal, model, optimizer, writer, opt, tid):
     print('===Evaluating for %d batches'%len(brdfLoaderVal))
 
     for key in model:

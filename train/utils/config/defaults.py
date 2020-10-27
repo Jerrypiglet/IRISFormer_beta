@@ -25,6 +25,8 @@ _C.MODEL_SEG.arch = 'resnet101'
 _C.MODEL_SEG.pretrained = True
 _C.MODEL_SEG.embed_dims = 2
 _C.MODEL_SEG.fix_bn = False
+_C.MODEL_SEG.if_guide = False
+_C.MODEL_SEG.guide_channels = 32
 
 _C.MODEL_BRDF = CN()
 _C.MODEL_BRDF.albedoWeight = 1.5

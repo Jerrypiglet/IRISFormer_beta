@@ -50,6 +50,7 @@ def parse_args():
     create_parser.add_argument('--deploy_tar', type=str, help='deploy to target path', default='/viscompfs/users/ruizhu/train')
     create_parser.add_argument('--python_path', type=str, help='python path in pod', default='/viscompfs/users/ruizhu/envs/semanticInverse/bin/python')
     create_parser.add_argument('--pip_path', type=str, help='python path in pod', default='/viscompfs/users/ruizhu/envs/semanticInverse/bin/pip')
+    create_parser.add_argument('--gpus', type=int, help='nubmer of GPUs', default=2)    
     create_parser.add_argument('-v', '--verbose', action='store_true', help='Verbose')
     create_parser.add_argument('-r', '--num-replicas', type=int, help='Number of replicas')
     create_parser.add_argument('-n', '--namespace', type=str, help='namespace')
@@ -58,7 +59,37 @@ def parse_args():
 
     args = parser.parse_args()
     return args
+
+
+def iterate_dict(input_dict, var_replace_list=None):
+    if not isinstance(input_dict, dict):
+        if isinstance(input_dict, list):
+            return [iterate_dict(x, var_replace_list=var_replace_list) for x in input_dict]
+        else:
+            # return input_dict
+            if var_replace_list is not None:
+                for var in var_replace_list:
+                    # print('------', input_dict, var)
+                    if input_dict == var:
+                        # print('======', input_dict, var, var_replace_list[var])
+                        return var_replace_list[var]
+            # print('======', input_dict)
+            return input_dict
     
+    new_dict = {}
+    for key in input_dict:
+        new_dict.update({key: iterate_dict(input_dict[key], var_replace_list=var_replace_list)})
+
+    return new_dict
+
+def replace_vars(args):
+    var_mapping = {'gpus': '#GPUS'}
+    var_replace_list = {}
+    for var in args:
+        if var in var_mapping:
+            var_replace_list.update({var_mapping[var]: args[var]})
+    return var_replace_list
+
 def get_datetime():
     # today = date.today()
     now = datetime.now()
@@ -137,6 +168,11 @@ def create(args):
     print(command_str)
 
     yaml_content = load_yaml(args.file)
+    var_replace_list = replace_vars(vars(args))
+    yaml_content = iterate_dict(yaml_content, var_replace_list=var_replace_list)
+    print('------------ yaml_content:')
+    print(yaml_content)
+
     command_str = command_str.replace('python', args.python_path)
     if args.deploy:
         args.deploy_tar += '-%s'%datetime_str
