@@ -40,7 +40,7 @@ from utils.comm import synchronize, get_rank
 from utils.misc import AverageMeter, get_optimizer, get_datetime
 from utils.bin_mean_shift import Bin_Mean_Shift
 
-from train_funcs import get_input_dict_brdf, train_step
+from train_funcs_brdf import get_input_dict_brdf, train_step
 from train_funcs_mat_seg import get_input_dict_mat_seg, forward_mat_seg, val_epoch_mat_seg
 
 from utils.logger import setup_logger, Logger, printer
@@ -473,27 +473,31 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
             continue
 
         # ======= Load data from cpu to gpu
-        input_dict = get_input_dict_mat_seg(data_batch, opt)
+        input_dict_mat_seg = get_input_dict_mat_seg(data_batch, opt)
+        input_batch_brdf, input_dict_brdf, pre_batch_dict_brdf = get_input_dict_brdf(data_batch, opt)
+        input_dict = {**input_dict_mat_seg, **input_dict_brdf}
+        input_dict.update({'input_batch_brdf': input_batch_brdf, 'pre_batch_dict_brdf': pre_batch_dict_brdf})
+
         time_meters['data_to_gpu'].update(time.time() - ts_iter_start)
         time_meters['ts'] = time.time()
 
-        if (tid - tid_start) % 2000 == 0 and opt.is_master:
-            for sample_idx in tqdm(range(data_batch['im_not_hdr'].shape[0])):
-                # im_single = im_cpu[sample_idx].numpy().squeeze().transpose(1, 2, 0)
-                # im_single = im_single**(1.0/2.2)
-                im_single = data_batch['im_not_hdr'][sample_idx].numpy().squeeze().transpose(1, 2, 0)
+        # if (tid - tid_start) % 2000 == 0 and opt.is_master:
+        #     for sample_idx in tqdm(range(data_batch['im_not_hdr'].shape[0])):
+        #         # im_single = im_cpu[sample_idx].numpy().squeeze().transpose(1, 2, 0)
+        #         # im_single = im_single**(1.0/2.2)
+        #         im_single = data_batch['im_not_hdr'][sample_idx].numpy().squeeze().transpose(1, 2, 0)
 
-                writer.add_image('TRAIN_im/%d'%sample_idx, im_single, tid, dataformats='HWC')
+        #         writer.add_image('TRAIN_im/%d'%sample_idx, im_single, tid, dataformats='HWC')
 
-                mat_aggre_map_single = input_dict['mat_aggre_map_cpu'][sample_idx].numpy().squeeze()
-                matAggreMap_single_vis = vis_index_map(mat_aggre_map_single)
-                writer.add_image('TRAIN_mat_aggre_map/%d'%sample_idx, matAggreMap_single_vis, tid, dataformats='HWC')
+        #         mat_aggre_map_single = input_dict['mat_aggre_map_cpu'][sample_idx].numpy().squeeze()
+        #         matAggreMap_single_vis = vis_index_map(mat_aggre_map_single)
+        #         writer.add_image('TRAIN_mat_aggre_map/%d'%sample_idx, matAggreMap_single_vis, tid, dataformats='HWC')
 
-                mat_notlight_mask_single = input_dict['mat_notlight_mask_cpu'][sample_idx].numpy().squeeze()
-                writer.add_image('TRAIN_mat_notlight_mask/%d'%sample_idx, mat_notlight_mask_single, tid, dataformats='HW')
+        #         mat_notlight_mask_single = input_dict['mat_notlight_mask_cpu'][sample_idx].numpy().squeeze()
+        #         writer.add_image('TRAIN_mat_notlight_mask/%d'%sample_idx, mat_notlight_mask_single, tid, dataformats='HW')
 
-                writer.add_text('TRAIN_im_path/%d'%sample_idx, input_dict['im_paths'][sample_idx], tid)
-        time_meters['ts'] = time.time()
+        #         writer.add_text('TRAIN_im_path/%d'%sample_idx, input_dict['im_paths'][sample_idx], tid)
+        # time_meters['ts'] = time.time()
 
         # ======= Forward
         output_dict, loss_dict = forward_mat_seg(input_dict, model, opt, time_meters)
@@ -539,11 +543,6 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
 
             # print(ts_iter_end_start_list, ts_iter_start_end_list)
 
-
-        ############# BRDF tmp
-        input_batch_brdf, input_dict_brdf, pre_batch_dict_brdf = get_input_dict_brdf(data_batch, opt)
-        x1, x2, x3, x4, x5, x6 = model['BRDF_Net']['encoder'](input_batch_brdf)
-        albedoPred = 0.5 * (model['BRDF_Net']['albedoDecoder'](input_dict_brdf['imBatch'], x1, x2, x3, x4, x5, x6) + 1)
 
         # break
 
