@@ -241,7 +241,7 @@ def delete(args, pattern=None, delete_all=False, answer=None):
 def sync(args):
     option = args.option
     assert option in ['sum', 'vis', 'ckpt'], 'Sync options must be in (sum, vis, ckpt)!'
-    option_to_pattern_dict = {'sum': 'z-torch-job-syncsum', 'vis': 'z-torch-job-syncvis', 'ckpt': 'z-torch-job-syncckpt'}
+    option_to_pattern_dict = {'sum': 'z-torch-job-syncsum', 'vis': 'z-job-syncvis', 'ckpt': 'z-torch-job-syncckpt'}
     option_to_yaml_dict = {'sum': 'rui_torch_job_syncSum.yaml', 'vis': 'rui_torch_job_syncVis.yaml', 'ckpt': 'rui_torch_job_syncCkpt.yaml'}
 
     pattern = option_to_pattern_dict[option]

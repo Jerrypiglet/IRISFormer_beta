@@ -40,7 +40,7 @@ _C.DATASET.root_dir = '/new_disk2/yuzh/PlaneNetData/'
 # _C.DATASET.batch_size = 16
 _C.DATASET.num_workers = 8
 _C.DATASET.if_val_dist = True
-_C.DATASET.if_hdr = False
+# _C.DATASET.if_hdr = False
 
 _C.DATA = CN()
 _C.DATA.im_height = 192

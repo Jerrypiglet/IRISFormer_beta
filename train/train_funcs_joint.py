@@ -10,7 +10,6 @@ import torchvision.utils as vutils
 from utils.loss import hinge_embedding_loss, surface_normal_loss, parameter_loss, \
     class_balanced_cross_entropy_loss
 from utils.match_segmentation import MatchSegmentation
-from utils.misc import AverageMeter
 from utils.utils_vis import vis_index_map, reindex_output_map
 from utils.utils_training import reduce_loss_dict, time_meters_to_string
 from utils.utils_misc import *
@@ -18,7 +17,7 @@ import torchvision.utils as vutils
 
 from train_funcs_mat_seg import get_input_dict_mat_seg, process_mat_seg
 from train_funcs_brdf import get_input_dict_brdf, process_brdf
-
+from utils.comm import synchronize
 
 
 def get_input_dict_mat_seg_joint(data_batch, opt):
@@ -35,10 +34,10 @@ def forward_joint(input_dict, model, opt, time_meters):
     output_dict, loss_dict = process_brdf(input_dict, output_dict, loss_dict, opt, time_meters)
     return output_dict, loss_dict
 
-def val_epoch_joint(brdfLoaderVal, model, bin_mean_shift, params_mis):
+def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
     writer, logger, opt, tid = params_mis['writer'], params_mis['logger'], params_mis['opt'], params_mis['tid']
-    logger.info(red('===Evaluating for %d batches'%len(brdfLoaderVal)))
+    logger.info(red('===Evaluating for %d batches'%len(brdf_loader_val)))
 
     model.eval()
 
@@ -54,18 +53,12 @@ def val_epoch_joint(brdfLoaderVal, model, bin_mean_shift, params_mis):
         'loss_brdf-ALL', 
     ]
     loss_meters = {loss_key: AverageMeter() for loss_key in loss_keys}
-
-    time_meters = {}
-    time_meters['data_to_gpu'] = AverageMeter()
-    time_meters['forward'] = AverageMeter()
-    time_meters['loss'] = AverageMeter()
-    time_meters['backward'] = AverageMeter()    
-
+    time_meters = get_time_meters()
 
     match_segmentatin = MatchSegmentation()
 
     with torch.no_grad():
-        for batch_id, data_batch in tqdm(enumerate(brdfLoaderVal)):
+        for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
             ts_iter_start = time.time()
 
             input_dict = get_input_dict_mat_seg_joint(data_batch, opt)
@@ -85,16 +78,69 @@ def val_epoch_joint(brdfLoaderVal, model, bin_mean_shift, params_mis):
             for loss_key in loss_dict_reduced:
                 loss_meters[loss_key].update(loss_dict_reduced[loss_key].item())
 
+
+    if opt.is_master:
+        for loss_key in loss_dict_reduced:
+            writer.add_scalar('loss_val/%s'%loss_key, loss_meters[loss_key].avg, tid)
+
+        logger.info(red('Evaluation timings: ' + time_meters_to_string(time_meters)))
+
+
+
+def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
+
+    writer, logger, opt, tid = params_mis['writer'], params_mis['logger'], params_mis['opt'], params_mis['tid']
+    logger.info(red('===Visualizing for %d batches on rank %d'%(len(brdf_loader_val), opt.rank)))
+
+    model.eval()
+
+    num_val_vis = 0
+    num_val_vis_MAX = 16
+
+    match_segmentatin = MatchSegmentation()
+    time_meters = get_time_meters()
+
+    im_paths_list = []
+
+    albedoBatch_list = []
+    normalBatch_list = []
+    roughBatch_list = []
+    depthBatch_list = []
+    imBatch_list = []
+    segAllBatch_list = []
+
+    diffusePreBatch_list = []
+    specularPreBatch_list = []
+    renderedImBatch_list = []
+    
+    albedoPreds_list = []
+    normalPreds_list = []
+    roughPreds_list = []
+    depthPreds_list = []
+
+
+    with torch.no_grad():
+        for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
+
+            if num_val_vis >= num_val_vis_MAX:
+                break
+
+            input_dict = get_input_dict_mat_seg_joint(data_batch, opt)
+
+            # ======= Forward
+            output_dict, loss_dict = forward_joint(input_dict, model, opt, time_meters)
+
             # ======= visualize clusters for mat-seg
-            if batch_id == 0 and opt.is_master:
+            b, c, h, w = output_dict['logit'].size()
 
-                b, c, h, w = output_dict['logit'].size()
+            for sample_idx, (logit_single, embedding_single) in enumerate(zip(output_dict['logit'].detach(), output_dict['embedding'].detach())):
 
-                for j, (logit_single, embedding_single) in enumerate(zip(output_dict['logit'].detach(), output_dict['embedding'].detach())):
-                    sample_idx = j
-
+                if num_val_vis > num_val_vis_MAX:
+                    break
+                
+                if opt.is_master:
                     # prob_single = torch.sigmoid(logit_single)
-                    prob_single = input_dict['mat_notlight_mask_cpu'][j].to(opt.device).float()
+                    prob_single = input_dict['mat_notlight_mask_cpu'][sample_idx].to(opt.device).float()
                     # fast mean shift
                     segmentation, sampled_segmentation = bin_mean_shift.test_forward(
                         prob_single, embedding_single, mask_threshold=0.1)
@@ -108,8 +154,8 @@ def val_epoch_joint(brdfLoaderVal, model, bin_mean_shift, params_mis):
 
                     # greedy match of predict segmentation and ground truth segmentation using cross entropy
                     # to better visualization
-                    gt_plane_num = input_dict['num_mat_masks_batch'][j]
-                    matching = match_segmentatin(segmentation, prob_single.view(-1, 1), input_dict['instance'][j], gt_plane_num)
+                    gt_plane_num = input_dict['num_mat_masks_batch'][sample_idx]
+                    matching = match_segmentatin(segmentation, prob_single.view(-1, 1), input_dict['instance'][sample_idx], gt_plane_num)
 
                     # return cluster results
                     predict_segmentation = segmentation.cpu().numpy().argmax(axis=1)
@@ -133,70 +179,118 @@ def val_epoch_joint(brdfLoaderVal, model, bin_mean_shift, params_mis):
                     # ===== vis
                     im_single = data_batch['im_not_hdr'][sample_idx].numpy().squeeze().transpose(1, 2, 0)
 
-                    writer.add_image('VAL_im/%d'%sample_idx, im_single, tid, dataformats='HWC')
+                    writer.add_image('VAL_im/%d'%num_val_vis, im_single, tid, dataformats='HWC')
 
                     mat_aggre_map_single = input_dict['mat_aggre_map_cpu'][sample_idx].numpy().squeeze()
                     matAggreMap_single_vis = vis_index_map(mat_aggre_map_single)
-                    writer.add_image('VAL_mat_aggre_map_GT/%d'%sample_idx, matAggreMap_single_vis, tid, dataformats='HWC')
+                    writer.add_image('VAL_mat_aggre_map_GT/%d'%num_val_vis, matAggreMap_single_vis, tid, dataformats='HWC')
 
                     mat_aggre_map_single = reindex_output_map(predict_segmentation.squeeze(), opt.invalid_index)
                     matAggreMap_single_vis = vis_index_map(mat_aggre_map_single)
-                    writer.add_image('VAL_mat_aggre_map_PRED/%d'%sample_idx, matAggreMap_single_vis, tid, dataformats='HWC')
+                    writer.add_image('VAL_mat_aggre_map_PRED/%d'%num_val_vis, matAggreMap_single_vis, tid, dataformats='HWC')
 
 
                     mat_notlight_mask_single = input_dict['mat_notlight_mask_cpu'][sample_idx].numpy().squeeze()
-                    writer.add_image('VAL_mat_notlight_mask_GT/%d'%sample_idx, mat_notlight_mask_single, tid, dataformats='HW')
+                    writer.add_image('VAL_mat_notlight_mask_GT/%d'%num_val_vis, mat_notlight_mask_single, tid, dataformats='HW')
 
-                    writer.add_text('VAL_im_path/%d'%sample_idx, input_dict['im_paths'][sample_idx], tid)
+                    writer.add_text('VAL_im_path/%d'%num_val_vis, input_dict['im_paths'][sample_idx], tid)
 
-                    if j > 12:
-                        break
+                num_val_vis += 1
 
             # ======= visualize clusters for mat-seg
             # print(((input_dict['albedoBatch'] ) ** (1.0/2.2) ).data.shape) # [b, 3, h, w]
-            if batch_id == 0 and opt.is_master:
-                print('Saving to ', '{0}/{1}_albedoGt.png'.format(opt.summary_vis_path_task, tid))
-                # Save the ground truth and the input
-                vutils.save_image(( (input_dict['albedoBatch'] ) ** (1.0/2.2) ).data,
-                        '{0}/{1}_albedoGt.png'.format(opt.summary_vis_path_task, tid) )
-                vutils.save_image( (0.5*(input_dict['normalBatch'] + 1) ).data,
-                        '{0}/{1}_normalGt.png'.format(opt.summary_vis_path_task, tid) )
-                vutils.save_image( (0.5*(input_dict['roughBatch'] + 1) ).data,
-                        '{0}/{1}_roughGt.png'.format(opt.summary_vis_path_task, tid) )
-                vutils.save_image( ( (input_dict['imBatch'])**(1.0/2.2) ).data,
-                        '{0}/{1}_im.png'.format(opt.summary_vis_path_task, tid) )
-                depthOut = 1 / torch.clamp(input_dict['depthBatch'] + 1, 1e-6, 10) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'])
-                vutils.save_image( ( depthOut*input_dict['segAllBatch'].expand_as(input_dict['depthBatch']) ).data,
-                        '{0}/{1}_depthGt.png'.format(opt.summary_vis_path_task, tid) )
+            if opt.is_master:
+                im_paths_list.append(input_dict['im_paths'])
+                # print(input_dict['im_paths'])
+
+                albedoBatch_list.append(input_dict['albedoBatch'])
+                normalBatch_list.append(input_dict['normalBatch'])
+                roughBatch_list.append(input_dict['roughBatch'])
+                depthBatch_list.append(input_dict['depthBatch'])
+                imBatch_list.append(input_dict['imBatch'])
+                segAllBatch_list.append(input_dict['segAllBatch'])
 
                 if opt.cascadeLevel > 0:
-                    vutils.save_image( ( (input_dict['pre_batch_dict_brdf']['diffusePreBatch'])**(1.0/2.2) ).data,
-                            '{0}/{1}_diffusePre.png'.format(opt.summary_vis_path_task, tid) )
-                    vutils.save_image( ( (input_dict['pre_batch_dict_brdf']['specularPreBatch'])**(1.0/2.2) ).data,
-                            '{0}/{1}_specularPre.png'.format(opt.summary_vis_path_task, tid) )
-                    vutils.save_image( ( (input_dict['pre_batch_dict_brdf']['renderedImBatch'])**(1.0/2.2) ).data,
-                            '{0}/{1}_renderedImage.png'.format(opt.summary_vis_path_task, tid) )
+                    diffusePreBatch_list.append(input_dict['pre_batch_dict_brdf']['diffusePreBatch'])
+                    specularPreBatch_list.append(input_dict['pre_batch_dict_brdf']['specularPreBatch'])
+                    renderedImBatch_list.append(input_dict['pre_batch_dict_brdf']['renderedImBatch'])
+                n = 0
+                albedoPreds_list.append(output_dict['albedoPreds'][n])
+                normalPreds_list.append(output_dict['normalPreds'][n])
+                roughPreds_list.append(output_dict['roughPreds'][n])
+                depthPreds_list.append(output_dict['depthPreds'][n])
 
-                # Save the predicted results
-                for n in range(0, len(output_dict['albedoPreds']) ):
-                    vutils.save_image( ( (output_dict['albedoPreds'][n] ) ** (1.0/2.2) ).data,
-                            '{0}/{1}_albedoPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
-                for n in range(0, len(output_dict['normalPreds']) ):
-                    vutils.save_image( ( 0.5*(output_dict['normalPreds'][n] + 1) ).data,
-                            '{0}/{1}_normalPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
-                for n in range(0, len(output_dict['roughPreds']) ):
-                    vutils.save_image( ( 0.5*(output_dict['roughPreds'][n] + 1) ).data,
-                            '{0}/{1}_roughPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
-                for n in range(0, len(output_dict['depthPreds']) ):
-                    depthOut = 1 / torch.clamp(output_dict['depthPreds'][n] + 1, 1e-6, 10) * input_dict['segAllBatch'].expand_as(output_dict['depthPreds'][n])
-                    vutils.save_image( ( depthOut * input_dict['segAllBatch'].expand_as(output_dict['depthPreds'][n]) ).data,
-                            '{0}/{1}_depthPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
 
+
+    synchronize()
 
     if opt.is_master:
-        for loss_key in loss_dict_reduced:
-            writer.add_scalar('loss_val/%s'%loss_key, loss_meters[loss_key].avg, tid)
+        im_paths_list = flatten_list(im_paths_list)[:num_val_vis_MAX]
+        print(im_paths_list)
 
-        logger.info('Evaluation timings: ' + time_meters_to_string(time_meters))
+        albedoBatch_vis = torch.cat(albedoBatch_list)[:num_val_vis_MAX]
+        normalBatch_vis = torch.cat(normalBatch_list)[:num_val_vis_MAX]
+        roughBatch_vis = torch.cat(roughBatch_list)[:num_val_vis_MAX]
+        depthBatch_vis = torch.cat(depthBatch_list)[:num_val_vis_MAX]
+        imBatch_vis = torch.cat(imBatch_list)[:num_val_vis_MAX]
+        segAllBatch_vis = torch.cat(segAllBatch_list)[:num_val_vis_MAX]
 
+        if opt.cascadeLevel > 0:
+            diffusePreBatch_vis = torch.cat(diffusePreBatch_list)[:num_val_vis_MAX]
+            specularPreBatch_vis = torch.cat(specularPreBatch_list)[:num_val_vis_MAX]
+            renderedImBatch_vis = torch.cat(renderedImBatch_list)[:num_val_vis_MAX]
+
+        albedoPreds_vis = torch.cat(albedoPreds_list)[:num_val_vis_MAX]
+        normalPreds_vis = torch.cat(normalPreds_list)[:num_val_vis_MAX]
+        roughPreds_vis = torch.cat(roughPreds_list)[:num_val_vis_MAX]
+        depthPreds_vis = torch.cat(depthPreds_list)[:num_val_vis_MAX]
+
+        print('Saving to ', '{0}/{1}_albedoGt.png'.format(opt.summary_vis_path_task, tid))
+        # Save the ground truth and the input
+        vutils.save_image(( (albedoBatch_vis ) ** (1.0/2.2) ).data,
+                '{0}/{1}_albedoGt.png'.format(opt.summary_vis_path_task, tid) )
+        vutils.save_image( (0.5*(normalBatch_vis + 1) ).data,
+                '{0}/{1}_normalGt.png'.format(opt.summary_vis_path_task, tid) )
+        vutils.save_image( (0.5*(roughBatch_vis + 1) ).data,
+                '{0}/{1}_roughGt.png'.format(opt.summary_vis_path_task, tid) )
+        vutils.save_image( ( (imBatch_vis)**(1.0/2.2) ).data,
+                '{0}/{1}_im.png'.format(opt.summary_vis_path_task, tid) )
+        depthOut = 1 / torch.clamp(depthBatch_vis + 1, 1e-6, 10) * segAllBatch_vis.expand_as(depthBatch_vis)
+        vutils.save_image( ( depthOut*segAllBatch_vis.expand_as(depthBatch_vis) ).data,
+                '{0}/{1}_depthGt.png'.format(opt.summary_vis_path_task, tid) )
+
+        if opt.cascadeLevel > 0:
+            vutils.save_image( ( (diffusePreBatch_vis)**(1.0/2.2) ).data,
+                    '{0}/{1}_diffusePre.png'.format(opt.summary_vis_path_task, tid) )
+            vutils.save_image( ( (specularPreBatch_vis)**(1.0/2.2) ).data,
+                    '{0}/{1}_specularPre.png'.format(opt.summary_vis_path_task, tid) )
+            vutils.save_image( ( (renderedImBatch_vis)**(1.0/2.2) ).data,
+                    '{0}/{1}_renderedImage.png'.format(opt.summary_vis_path_task, tid) )
+
+        # Save the predicted results
+        # for n in range(0, len(output_dict['albedoPreds']) ):
+        #     vutils.save_image( ( (output_dict['albedoPreds'][n] ) ** (1.0/2.2) ).data,
+        #             '{0}/{1}_albedoPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
+        # for n in range(0, len(output_dict['normalPreds']) ):
+        #     vutils.save_image( ( 0.5*(output_dict['normalPreds'][n] + 1) ).data,
+        #             '{0}/{1}_normalPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
+        # for n in range(0, len(output_dict['roughPreds']) ):
+        #     vutils.save_image( ( 0.5*(output_dict['roughPreds'][n] + 1) ).data,
+        #             '{0}/{1}_roughPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
+        # for n in range(0, len(output_dict['depthPreds']) ):
+        #     depthOut = 1 / torch.clamp(output_dict['depthPreds'][n] + 1, 1e-6, 10) * segAllBatch_vis.expand_as(output_dict['depthPreds'][n])
+        #     vutils.save_image( ( depthOut * segAllBatch_vis.expand_as(output_dict['depthPreds'][n]) ).data,
+        #             '{0}/{1}_depthPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
+        vutils.save_image( ( (albedoPreds_vis ) ** (1.0/2.2) ).data,
+                '{0}/{1}_albedoPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
+        vutils.save_image( ( 0.5*(normalPreds_vis + 1) ).data,
+                '{0}/{1}_normalPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
+        vutils.save_image( ( 0.5*(roughPreds_vis + 1) ).data,
+                '{0}/{1}_roughPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
+        depthOut = 1 / torch.clamp(depthPreds_vis + 1, 1e-6, 10) * segAllBatch_vis.expand_as(depthPreds_vis)
+        vutils.save_image( ( depthOut * segAllBatch_vis.expand_as(depthPreds_vis) ).data,
+                '{0}/{1}_depthPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
+
+
+        logger.info(red('Evaluation VIS timings: ' + time_meters_to_string(time_meters)))
 

@@ -10,7 +10,6 @@ import torchvision.utils as vutils
 from utils.loss import hinge_embedding_loss, surface_normal_loss, parameter_loss, \
     class_balanced_cross_entropy_loss
 from utils.match_segmentation import MatchSegmentation
-from utils.misc import AverageMeter
 from utils.utils_vis import vis_index_map, reindex_output_map
 from utils.utils_training import reduce_loss_dict, time_meters_to_string
 from utils.utils_misc import *
@@ -19,7 +18,7 @@ def get_input_dict_mat_seg(data_batch, opt):
     input_dict = {}
 
     input_dict['im_paths'] = data_batch['imPath']
-    if opt.if_hdr:
+    if opt.if_hdr_input_mat_seg:
         im_cpu = data_batch['im']
     else:
         im_cpu = data_batch['image_transformed']
@@ -210,7 +209,7 @@ def get_input_dict_mat_seg_combine(data_batch, opt):
 def val_epoch_combine(brdfLoaderVal, model, bin_mean_shift, params_mis):
 
     writer, logger, opt, tid = params_mis['writer'], params_mis['logger'], params_mis['opt'], params_mis['tid']
-    logger.info(red('===Evaluating for %d batches'%len(brdfLoaderVal)))
+    logger.info(red('===Visualizing for %d batches'%len(brdfLoaderVal)))
 
     model.eval()
 

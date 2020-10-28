@@ -166,18 +166,18 @@ class openrooms(data.Dataset):
         # Random scale the image
         im, scale = self.scaleHdr(im, seg)
 
-        if not self.opt.if_hdr:
-            assert self.transform is not None
-            # sdr_file = self.imList[self.perm[ind] ].replace('.hdr', 'sdr')
-            # im_uint8 = np.load(sdr_file+'.npy')
-            im_not_hdr = np.clip(im**(1.0/2.2), 0., 1.)
-            im_uint8 = (255. * im_not_hdr).transpose(1, 2, 0).astype(np.uint8)
-            # np.save(sdr_file, im_uint8)
-            # print(self.imList[self.perm[ind] ])
-            # print('-', im_uint8.dtype, im_uint8.shape, np.amax(im_uint8), np.amin(im_uint8), np.median(im_uint8))
-            image = Image.fromarray(im_uint8)
-            image_transformed = self.transform(image)
-            # print('----', image_transformed.dtype, torch.max(image_transformed), torch.min(image_transformed), torch.median(image_transformed))
+        # if not self.opt.if_hdr_input_mat_seg:
+        assert self.transform is not None
+        # sdr_file = self.imList[self.perm[ind] ].replace('.hdr', 'sdr')
+        # im_uint8 = np.load(sdr_file+'.npy')
+        im_not_hdr = np.clip(im**(1.0/2.2), 0., 1.)
+        im_uint8 = (255. * im_not_hdr).transpose(1, 2, 0).astype(np.uint8)
+        # np.save(sdr_file, im_uint8)
+        # print(self.imList[self.perm[ind] ])
+        # print('-', im_uint8.dtype, im_uint8.shape, np.amax(im_uint8), np.amin(im_uint8), np.median(im_uint8))
+        image = Image.fromarray(im_uint8)
+        image_transformed = self.transform(image)
+        # print('----', image_transformed.dtype, torch.max(image_transformed), torch.min(image_transformed), torch.median(image_transformed))
 
 
         # Read albedo
@@ -272,8 +272,8 @@ class openrooms(data.Dataset):
                 'instance': torch.ByteTensor(segmentation), 
                 'semantic': 1 - torch.FloatTensor(segmentation[num_mat_masks, :, :]).unsqueeze(0),
                 }
-        if self.transform is not None:
-            batchDict.update({'image_transformed': image_transformed, 'im_not_hdr': im_not_hdr})
+        # if self.transform is not None and not self.opt.if_hdr:
+        batchDict.update({'image_transformed': image_transformed, 'im_not_hdr': im_not_hdr})
 
         if self.isLight:
             batchDict['envmaps'] = envmaps

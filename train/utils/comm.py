@@ -45,7 +45,7 @@ def synchronize():
     dist.barrier()
 
 
-def all_gather(data):
+def all_gather(data, if_cat_at_0 = False, if_same_device = True):
     """
     Run all_gather on arbitrary picklable data (not necessarily tensors)
     Args:
@@ -85,6 +85,14 @@ def all_gather(data):
         buffer = tensor.cpu().numpy().tobytes()[:size]
         data_list.append(pickle.loads(buffer))
 
+    if if_same_device and torch.is_tensor(data_list[0]):
+        if data_list[0].is_cuda:
+            device = data_list[0].get_device()
+            data_list = [x.cuda(device) for x in data_list]
+
+    if if_cat_at_0:
+        return torch.cat(data_list)
+
     return data_list
 
 
@@ -116,3 +124,39 @@ def reduce_dict(input_dict, average=True):
             values /= world_size
         reduced_dict = {k: v for k, v in zip(names, values)}
     return reduced_dict
+
+
+def _accumulate_predictions_from_multiple_gpus(predictions_per_gpu, return_dict=False, only_gather=False):
+    if _dict_to_list is None:
+        return
+    if get_world_size()==1:
+        return predictions_per_gpu
+    all_predictions = all_gather(predictions_per_gpu)
+    if only_gather:
+        return all_predictions
+    if not is_main_process():
+        return
+    # merge the list of dicts
+    predictions = {}
+    for p in all_predictions:
+        predictions.update(p)
+
+    if return_dict:
+        return predictions
+
+    return _dict_to_list(predictions)
+
+def _dict_to_list(predictions):
+    if predictions is None:
+        return
+    # convert a dict where the key is the index in a list
+    image_ids = list(sorted(predictions.keys()))
+    # if len(image_ids) != image_ids[-1] + 1:
+    #     logger = logging.getLogger("maskrcnn_benchmark.inference")
+    #     logger.warning(
+    #         "Number of images that were gathered from multiple processes is not "
+    #         "a contiguous set. Some images might be missing from the evaluation"
+    #     )
+    # convert to a list
+    predictions = [predictions[i] for i in image_ids]
+    return predictions

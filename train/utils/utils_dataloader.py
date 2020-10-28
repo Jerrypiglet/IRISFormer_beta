@@ -29,11 +29,12 @@ def make_batch_data_sampler(
         )
     return batch_sampler
 
-def make_data_loader(opt, dataset, is_train=True, start_iter=0, is_for_period=False, logger=None, override_shuffle=None, collate_fn=None, batch_size_override=-1, if_distributed_override=True):
+def make_data_loader(opt, dataset, is_train=True, start_iter=0, is_for_period=False, logger=None, override_shuffle=None, collate_fn=None, batch_size_override=-1, workers=-1, pin_memory = True, if_distributed_override=True):
     cfg = opt.cfg
     num_gpus = opt.num_gpus
     # print('==============', cfg.TEST.IMS_PER_BATCH, num_gpus, '=====')
     is_distributed=opt.distributed and if_distributed_override
+    num_workers = cfg.DATASET.num_workers if workers==-1 else workers
     if is_train:
         # images_per_batch = cfg.SOLVER.IMS_PER_BATCH
         # assert (
@@ -45,7 +46,7 @@ def make_data_loader(opt, dataset, is_train=True, start_iter=0, is_for_period=Fa
         shuffle = True
         num_iters = cfg.SOLVER.max_iter
         drop_last = False
-        num_workers = cfg.DATASET.num_workers
+        # num_workers = num_workers
         # num_workers = 4
     else:
         # images_per_batch = cfg.TEST.IMS_PER_BATCH
@@ -61,11 +62,11 @@ def make_data_loader(opt, dataset, is_train=True, start_iter=0, is_for_period=Fa
         start_iter = 0
         drop_last = False
         # num_workers = 0 if opt.AML else cfg.DATASET.num_workers
-        num_workers = cfg.DATASET.num_workers
+        # num_workers = num_workers
 
     if override_shuffle is not None:
         shuffle = override_shuffle
-    sampler = make_data_sampler(dataset, shuffle, opt, distributed=is_distributed)
+    sampler = make_data_sampler(dataset, shuffle, opt, distributed=is_distributed, if_distributed_override=if_distributed_override)
     batch_sampler = make_batch_data_sampler(
         dataset, sampler, images_per_gpu, None, start_iter, drop_last=drop_last
     )
@@ -76,7 +77,7 @@ def make_data_loader(opt, dataset, is_train=True, start_iter=0, is_for_period=Fa
         num_workers=num_workers,
         batch_sampler=batch_sampler,
         collate_fn=collate_fn,
-        pin_memory=True,
+        pin_memory=pin_memory,
     )
     logger.info(white_blue('[utils_dataloader] %s-%s with bs %d*%d: len(dataset) %d, len(sampler) %d, len(batch_sampler) %d, len(data_loader) %d, is_train %s, is_distributed %s:' % \
                 (dataset.dataset_name, dataset.split, images_per_gpu, num_gpus, len(dataset), len(sampler), len(batch_sampler), len(data_loader), is_train, is_distributed)))
