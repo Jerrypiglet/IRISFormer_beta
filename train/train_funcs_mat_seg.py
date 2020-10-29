@@ -41,9 +41,6 @@ def get_input_dict_mat_seg(data_batch, opt):
 
 def process_mat_seg(input_dict, output_dict, loss_dict, opt, time_meters):
     logit, embedding = output_dict['logit'], output_dict['embedding']
-    time_meters['forward'].update(time.time() - time_meters['ts'])
-    time_meters['ts'] = time.time()
-
 
     # ======= Calculate loss
     loss_all_list, loss_pull_list, loss_push_list, loss_binary_list = [], [], [], []
@@ -61,8 +58,6 @@ def process_mat_seg(input_dict, output_dict, loss_dict, opt, time_meters):
 
         # print('------', i, _loss_all, _loss_pull, _loss_push, _loss_binary)
 
-    time_meters['loss'].update(time.time() - time_meters['ts'])
-    time_meters['ts'] = time.time()
 
     loss_dict['loss_mat_seg-ALL'] = torch.mean(torch.stack(loss_all_list))
     loss_dict['loss_mat_seg-pull'] = torch.mean(torch.stack(loss_pull_list))
@@ -77,6 +72,7 @@ def process_mat_seg(input_dict, output_dict, loss_dict, opt, time_meters):
     # # print(segmentations[0].shape, sample_segmentations[0].shape, centers[0].shape, sample_probs[0].shape, sample_gt_segs[0].shape)
 
     output_dict.update({'mat_seg-logit': logit, 'mat_seg-embedding': embedding})
+
 
     return output_dict, loss_dict
 

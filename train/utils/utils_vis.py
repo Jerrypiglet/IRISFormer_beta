@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib.pyplot as plt
 import colorsys
 
 def _get_colors(num_colors):
@@ -32,4 +33,21 @@ def reindex_output_map(index_map, invalid_index):
 
     return index_map_reindex
 
-
+def vis_disp_colormap(disp_array, file=None, normalize=True):
+    # disp_array = cv2.applyColorMap(disp_array, cv2.COLORMAP_JET)
+    # disp_array = cv2.applyColorMap(disp_array, get_mpl_colormap('jet'))
+    cm = plt.get_cmap('jet')
+    # disp_array = disp_array[:, :, :3]
+    if normalize:
+        disp_array = disp_array/(1e-6+np.amax(disp_array))
+    else:
+        disp_array = np.clip(disp_array, 0., 1.)
+    disp_array = (cm(disp_array)[:, :, :3] * 255).astype(np.uint8)
+    
+    # print('+++++', np.amax(disp_array), np.amin(disp_array))
+    if file is not None:
+        from PIL import Image, ImageFont, ImageDraw
+        disp_Image = Image.fromarray(disp_array)
+        disp_Image.save(file)
+    else:
+        return disp_array

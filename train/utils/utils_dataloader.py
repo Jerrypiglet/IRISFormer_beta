@@ -36,7 +36,7 @@ def make_data_loader(opt, dataset, is_train=True, start_iter=0, is_for_period=Fa
     is_distributed=opt.distributed and if_distributed_override
     num_workers = cfg.DATASET.num_workers if workers==-1 else workers
     if is_train:
-        # images_per_batch = cfg.SOLVER.IMS_PER_BATCH
+        # images_per_batch = cfg.SOLVER.IMS_PER_BATCH`
         # assert (
         #     images_per_batch % num_gpus == 0
         # ), "SOLVER.IMS_PER_BATCH ({}) must be divisible by the number of GPUs ({}) used.".format(

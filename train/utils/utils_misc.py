@@ -169,13 +169,13 @@ class AverageMeter(object):
         self.count += n
         self.avg = self.sum / self.count
         
-def get_time_meters():
-    time_meters = {}
-    time_meters['data_to_gpu'] = AverageMeter()
-    time_meters['forward'] = AverageMeter()
-    time_meters['loss'] = AverageMeter()
-    time_meters['backward'] = AverageMeter()    
-    time_meters['ts'] = 0
+# def get_time_meters():
+#     time_meters = {}
+#     time_meters['data_to_gpu'] = AverageMeter()
+#     time_meters['forward'] = AverageMeter()
+#     time_meters['loss'] = AverageMeter()
+#     time_meters['backward'] = AverageMeter()    
+#     time_meters['ts'] = 0
 
-    return time_meters    
+#     return time_meters    
 

@@ -30,7 +30,6 @@ import apex
 from apex.parallel import DistributedDataParallel as DDP
 from apex import amp
 import nvidia_smi
-
 from torch.utils.tensorboard import SummaryWriter
 from torchsummary import summary
 
@@ -43,7 +42,7 @@ from utils.comm import synchronize, get_rank
 from utils.utils_training import get_optimizer
 from utils.bin_mean_shift import Bin_Mean_Shift
 
-from train_funcs_joint import get_input_dict_mat_seg_joint, val_epoch_joint, vis_val_epoch_joint, forward_joint
+from train_funcs_joint import get_input_dict_mat_seg_joint, val_epoch_joint, vis_val_epoch_joint, forward_joint, get_time_meters_joint
 
 from utils.logger import setup_logger, Logger, printer
 from utils.global_paths import SUMMARY_PATH, SUMMARY_VIS_PATH, CKPT_PATH
@@ -321,6 +320,7 @@ if opt.resume != 'NoCkpt':
     replace_kws = []
     replace_with_kws = []
     # if opt.task_split == 'train':
+    # if 'train_POD_matseg_DDP' in opt.resume:
     #     replace_kws = ['hourglass_model.seq_L2.1', 'hourglass_model.seq_L2.3', 'hourglass_model.disp_res_pred_layer_L2']
     #     replace_with_kws = ['hourglass_model.seq.1', 'hourglass_model.seq.3', 'hourglass_model.disp_res_pred_layer']
     checkpoint_restored, _, _ = checkpointer.load(task_name=opt.resume, replace_kws=replace_kws, replace_with_kws=replace_with_kws)
@@ -366,11 +366,8 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
     # losses_push = AverageMeter()
     # losses_binary = AverageMeter()
 
-    time_meters = {}
-    time_meters['data_to_gpu'] = AverageMeter()
-    time_meters['forward'] = AverageMeter()
-    time_meters['loss'] = AverageMeter()
-    time_meters['backward'] = AverageMeter()    
+    time_meters = get_time_meters_joint()
+
 
     epochs_saved = []
 
@@ -389,6 +386,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
             val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid}
             if opt.if_vis:
                 vis_val_epoch_joint(brdf_loader_val_vis, model, bin_mean_shift, val_params)
+                synchronize()                
             if opt.if_val:
                 val_epoch_joint(brdf_loader_val, model, bin_mean_shift, val_params)
             model.train(not cfg.MODEL_SEG.fix_bn)
@@ -487,6 +485,8 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
             if opt.is_master and tid % 100 == 0:
                 usage_ratio = print_gpu_usage(handle, logger)
                 writer.add_scalar('training/GPU_usage_ratio', usage_ratio, tid)
+                writer.add_scalar('training/batch_size_per_gpu', len(data_batch['imPath']), tid)
+                writer.add_scalar('training/gpus', opt.num_gpus, tid)
 
 
             # print(ts_iter_end_start_list, ts_iter_start_end_list)
