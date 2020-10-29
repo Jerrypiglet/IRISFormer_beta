@@ -18,7 +18,7 @@ spec:
         - "sh"
         - "-c"
         args:
-        - ". /root/miniconda3/etc/profile.d/conda.sh && cd /viscompfs/users/ruizhu/semanticInverse && which python && rclone copy /viscompfs/users/ruizhu/Summary_vis s3mm1:vis"  # specify the directory to watch
+        - ". /root/miniconda3/etc/profile.d/conda.sh && cd /viscompfs/users/ruizhu/semanticInverse && which python && rclone copy /viscompfs/users/ruizhu/Summary_vis s3mm1:vis_semanticInverse"  # specify the directory to watch
         # - "python /opt/repo/${my_script}.py"
         # - "pip install scipy & pip show scipy & pip show numpy"
         # - 'pip install jupyterlab'

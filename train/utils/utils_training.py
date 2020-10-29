@@ -185,6 +185,7 @@ def print_gpu_usage(handle, logger):
     logger.info(green(usage_str + usage_percent_str))
     # print(f'mem: {mem_res.used / (1024**2)} (GiB)') # usage in GiB
     # print(f'mem: {100 * (mem_res.used / mem_res.total):.3f}%') # percentage usage
+    return mem_res.used / mem_res.total
 
 def time_meters_to_string(time_meters):
     # for key in time_meters:

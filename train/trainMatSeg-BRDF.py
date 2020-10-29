@@ -74,6 +74,8 @@ parser.add_argument('--task_name', type=str, default='tmp', help='task name (e.g
 # parser.add_argument('--deviceIds', type=int, nargs='+', default=[0, 1], help='the gpus used for training model')
 # Fine tune the model
 parser.add_argument('--isFineTune', action='store_true', help='fine-tune the model')
+parser.add_argument("--if_val", type=str2bool, nargs='?', const=True, default=True)
+parser.add_argument("--if_vis", type=str2bool, nargs='?', const=True, default=True)
 parser.add_argument('--epochIdFineTune', type=int, default = 0, help='the training of epoch of the loaded model')
 # The training weight
 parser.add_argument('--albedoWeight', type=float, default=1.5, help='the weight for the diffuse component')
@@ -385,8 +387,10 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         # Evaluation for an epoch```
         if opt.eval_every_iter != -1 and (tid - tid_start) % opt.eval_every_iter == 0:
             val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid}
-            vis_val_epoch_joint(brdf_loader_val_vis, model, bin_mean_shift, val_params)
-            val_epoch_joint(brdf_loader_val, model, bin_mean_shift, val_params)
+            if opt.if_vis:
+                vis_val_epoch_joint(brdf_loader_val_vis, model, bin_mean_shift, val_params)
+            if opt.if_val:
+                val_epoch_joint(brdf_loader_val, model, bin_mean_shift, val_params)
             model.train(not cfg.MODEL_SEG.fix_bn)
             reset_tictoc = True
             
@@ -442,7 +446,11 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         time_meters['ts'] = time.time()
 
         # ======= Backward
-        loss = loss_dict['loss_brdf-ALL'] + loss_dict['loss_mat_seg-ALL']
+        loss = 0.
+        if opt.cfg.MODEL_SEG.enable:
+            loss += loss_dict['loss_mat_seg-ALL']
+        if opt.cfg.MODEL_BRDF.enable:
+            loss += loss_dict['loss_brdf-ALL']
         loss.backward()
         optimizer.step()
         time_meters['backward'].update(time.time() - time_meters['ts'])
@@ -461,10 +469,13 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
                 writer.add_scalar('loss_train/%s'%loss_key, loss_dict_reduced[loss_key].item(), tid)
             writer.add_scalar('training/epoch', epoch, tid)
 
-            logger.info('Epoch %d - Tid %d - loss_mat_seg-ALL %.3f = loss_pull %.3f + loss_push %.3f + loss_binary %.3f' % \
-                (epoch, tid, loss_dict_reduced['loss_mat_seg-ALL'].item(), loss_dict_reduced['loss_mat_seg-pull'].item(), loss_dict_reduced['loss_mat_seg-push'].item(), loss_dict_reduced['loss_mat_seg-binary'].item()))
-            logger.info('Epoch %d - Tid %d - loss_brdf-ALL %.3f' % \
-                (epoch, tid, loss_dict_reduced['loss_brdf-ALL'].item()))
+            if opt.cfg.MODEL_SEG.enable:
+                logger.info('Epoch %d - Tid %d - loss_mat_seg-ALL %.3f = loss_pull %.3f + loss_push %.3f + loss_binary %.3f' % \
+                    (epoch, tid, loss_dict_reduced['loss_mat_seg-ALL'].item(), loss_dict_reduced['loss_mat_seg-pull'].item(), loss_dict_reduced['loss_mat_seg-push'].item(), loss_dict_reduced['loss_mat_seg-binary'].item()))
+                    
+            if opt.cfg.MODEL_BRDF.enable:
+                logger.info('Epoch %d - Tid %d - loss_brdf-ALL %.3f' % \
+                    (epoch, tid, loss_dict_reduced['loss_brdf-ALL'].item()))
 
         # End of iteration logging
         ts_iter_end = time.time()
@@ -474,6 +485,8 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
                 logger.info(green('Rolling end-to-start %.2f, Rolling start-to-end %.2f'%(sum(ts_iter_end_start_list)/len(ts_iter_end_start_list), sum(ts_iter_start_end_list)/len(ts_iter_start_end_list))))
                 logger.info(green('Training timings: ' + time_meters_to_string(time_meters)))
             if opt.is_master and tid % 100 == 0:
-                print_gpu_usage(handle, logger)
+                usage_ratio = print_gpu_usage(handle, logger)
+                writer.add_scalar('training/GPU_usage_ratio', usage_ratio, tid)
+
 
             # print(ts_iter_end_start_list, ts_iter_start_end_list)

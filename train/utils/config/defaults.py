@@ -20,6 +20,7 @@ from yacs.config import CfgNode as CN
 _C = CN()
 
 _C.MODEL_SEG = CN()
+_C.MODEL_SEG.enable = True
 _C.MODEL_SEG.DTYPE = "float32"
 _C.MODEL_SEG.arch = 'resnet101'
 _C.MODEL_SEG.pretrained = True
@@ -29,11 +30,11 @@ _C.MODEL_SEG.if_guide = False
 _C.MODEL_SEG.guide_channels = 32
 
 _C.MODEL_BRDF = CN()
+_C.MODEL_BRDF.enable = True
 _C.MODEL_BRDF.albedoWeight = 1.5
 _C.MODEL_BRDF.normalWeight = 1.0
 _C.MODEL_BRDF.roughWeight = 0.5
 _C.MODEL_BRDF.depthWeight = 0.5
-
 
 _C.DATASET = CN()
 _C.DATASET.root_dir = '/new_disk2/yuzh/PlaneNetData/'

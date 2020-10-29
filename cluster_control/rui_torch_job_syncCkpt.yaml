@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: z-job-syncsum
+  name: z-job-syncckpt
   # namespace: ucsd-haosulab
   labels:
     user: rui  # Specify your name
@@ -18,7 +18,7 @@ spec:
         - "sh"
         - "-c"
         args:
-        - ". /root/miniconda3/etc/profile.d/conda.sh && cd /viscompfs/users/ruizhu/semanticInverse && which python && rclone copy /viscompfs/users/ruizhu/logs s3mm1:logs_semanticInverse"  # specify the directory to watch
+        - ". /root/miniconda3/etc/profile.d/conda.sh && cd /viscompfs/users/ruizhu/semanticInverse && which python && rclone copy /viscompfs/users/ruizhu/Checkpoint s3mm1:checkpoints_semanticInverse"  # specify the directory to watch
         # - "python /opt/repo/${my_script}.py"
         # - "pip install scipy & pip show scipy & pip show numpy"
         # - 'pip install jupyterlab'
