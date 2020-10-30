@@ -33,7 +33,7 @@ spec:
         resources:
           requests:
             cpu: "1"
-            memory: "5Gi"
+            memory: "1Gi"
             nvidia.com/gpu: 0
           limits:
             cpu: "8"

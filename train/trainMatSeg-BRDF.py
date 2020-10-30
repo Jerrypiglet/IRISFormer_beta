@@ -9,8 +9,9 @@ import time
 import os, sys, inspect
 pwdpath = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
 from pathlib import Path
-os.system('touch %s/models/__init__.py'%pwdpath)
+os.system('touch %s/models_def/__init__.py'%pwdpath)
 os.system('touch %s/utils/__init__.py'%pwdpath)
+os.system('touch %s/__init__.py'%pwdpath)
 print('started.' + pwdpath)
 PACNET_PATH = Path(pwdpath) / 'third-parties' / 'pacnet'
 sys.path.insert(0, str(PACNET_PATH))
@@ -34,12 +35,12 @@ from torch.utils.tensorboard import SummaryWriter
 from torchsummary import summary
 
 
-# from models.baseline_same import Baseline as UNet
-from models.model_mat_seg_brdf import MatSeg_BRDF
+# from models_def.baseline_same import Baseline as UNet
+from models_def.model_mat_seg_brdf import MatSeg_BRDF
 from utils.utils_vis import vis_index_map
 from utils.config import cfg
 from utils.comm import synchronize, get_rank
-from utils.utils_training import get_optimizer
+from utils.utils_training import get_optimizer, freeze_bn_in_module
 from utils.bin_mean_shift import Bin_Mean_Shift
 
 from train_funcs_joint import get_input_dict_mat_seg_joint, val_epoch_joint, vis_val_epoch_joint, forward_joint, get_time_meters_joint
@@ -143,7 +144,7 @@ if opt.distributed:
     process_group = torch.distributed.init_process_group(
         backend="nccl", init_method="env://"
     )
-    synchronize()
+    # synchronize()
 # device = torch.device("cuda" if torch.cuda.is_available() and not opt.cpu else "cpu")
 opt.device = 'cuda'
 opt.rank = get_rank()
@@ -237,6 +238,11 @@ if opt.distributed: # https://github.com/dougsouza/pytorch-sync-batchnorm-exampl
     model = apex.parallel.convert_syncbn_model(model)
 model.to(opt.device)
 model.print_net()
+if opt.cfg.MODEL_BRDF.pre_trained:
+    model.load_pretrained_brdf()
+if opt.cfg.MODEL_SEG.freeze:
+    model.turn_off_names(['UNet'])
+    model.freeze_bn_UNet()
 
 # set up optimizers
 optimizer = get_optimizer(model.parameters(), cfg.SOLVER)

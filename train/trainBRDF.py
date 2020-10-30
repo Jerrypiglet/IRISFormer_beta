@@ -142,7 +142,7 @@ if opt.cuda:
 ####################################
 # Optimizer
 optimizer = {}
-optimizer['opEncoder'] = optim.Adam(model['encoder'].parameters(), lr=1e-4 * lr_scale, betas=(0.5, 0.999) )
+optimizer['opEncoder'] = optim.Adam(model['encoder'].parameters(), lr=1e-4 * ``lr_scale``, betas=(0.5, 0.999) )
 optimizer['opAlbedo'] = optim.Adam(model['albedoDecoder'].parameters(), lr=1e-4 * lr_scale, betas=(0.5, 0.999) )
 optimizer['opNormal'] = optim.Adam(model['normalDecoder'].parameters(), lr=1e-4 * lr_scale, betas=(0.5, 0.999) )
 optimizer['opRough'] = optim.Adam(model['roughDecoder'].parameters(), lr=1e-4 * lr_scale, betas=(0.5, 0.999) )

@@ -1,8 +1,8 @@
 import shutil
 
 import torch
-
 torch_version = torch.__version__
+import apex
 import torch.distributed as dist
 import numpy as np
 import os, sys
@@ -240,3 +240,26 @@ def check_save(opt, tid, epoch_save, epoch_total, checkpointer, epochs_saved, ch
         ckpt_filepath = 'best_checkpointer_epoch%04d_iter%07d'%(epoch_total, tid)
         saved_filename = checkpointer.save(ckpt_filepath, **arguments)
         logger.info(green('Saved BEST checkpoint to '+saved_filename))
+
+def freeze_bn_in_module(module):
+    mod = module
+    if isinstance(module, torch.nn.modules.instancenorm._InstanceNorm):
+        return module
+    if isinstance(module, torch.nn.modules.batchnorm._BatchNorm) or isinstance(module, apex.parallel.optimized_sync_batchnorm.SyncBatchNorm):
+        # print('--convert_syncbn_model_hvd converting...', module)
+        mod.eval()
+        # print(mod)
+        # mod.weight.requires_grad = False
+        # mod.bias.requires_grad = False
+        # mod = SyncBatchNorm(module.num_features, module.eps, module.momentum, module.affine, module.track_running_stats)
+        # mod.running_mean = module.running_mean
+        # mod.running_var = module.running_var
+        # if module.affine:
+        #     mod.weight.data = module.weight.data.clone().detach()
+        #     mod.bias.data = module.bias.data.clone().detach()
+    for name, child in module.named_children():
+        freeze_bn_in_module(child)
+        # mod.add_module(name, convert_syncbn_model_hvd(child))
+    # # TODO(jie) should I delete model explicitly?
+    # del module
+    # return mod

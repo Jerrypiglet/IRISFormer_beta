@@ -1,8 +1,10 @@
 __pycache__/
 models
+models_ckpt
 data/
 results/
 logs/
+logs_cluster/
 notebooks/.ipynb_checkpoints/
 cluster_control/tasks/
 archive/
