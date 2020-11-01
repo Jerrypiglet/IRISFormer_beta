@@ -81,6 +81,8 @@ class openrooms(data.Dataset):
         for shape in tqdm(shapeList):
             imNames = sorted(glob.glob(osp.join(shape, 'im_*.hdr') ) )
             self.imList = self.imList + imNames
+        self.imList = sorted(self.imList)
+        # print('---------self.imList', self.imList[:10])
 
         if isAllLight:
             self.imList = [x for x in self.imList if
@@ -133,7 +135,8 @@ class openrooms(data.Dataset):
         self.perm = list(range(self.count ) )
 
         if rseed is not None:
-            random.seed(0)
+            random.seed(rseed)
+        print('++++++++perm', self.count)
         random.shuffle(self.perm )
 
     def __len__(self):
@@ -162,15 +165,15 @@ class openrooms(data.Dataset):
         # Read Image
         hdr_file = self.imList[self.perm[ind] ]
         # if self.opt.if_hdr:
-        im = self.loadHdr(hdr_file)
+        im_ori = self.loadHdr(hdr_file)
         # Random scale the image
-        im, scale = self.scaleHdr(im, seg)
+        im, scale = self.scaleHdr(im_ori, seg)
 
         # if not self.opt.if_hdr_input_mat_seg:
         assert self.transform is not None
         # sdr_file = self.imList[self.perm[ind] ].replace('.hdr', 'sdr')
         # im_uint8 = np.load(sdr_file+'.npy')
-        im_not_hdr = np.clip(im**(1.0/2.2), 0., 1.)
+        im_not_hdr = np.clip(im_ori**(1.0/2.2), 0., 1.)
         im_uint8 = (255. * im_not_hdr).transpose(1, 2, 0).astype(np.uint8)
         # np.save(sdr_file, im_uint8)
         # print(self.imList[self.perm[ind] ])
@@ -361,9 +364,9 @@ class openrooms(data.Dataset):
     def scaleHdr(self, hdr, seg):
         intensityArr = (hdr * seg).flatten()
         intensityArr.sort()
-        if self.phase.upper() == 'TRAIN':
+        if self.phase.upper() == 'TRAIN' and self.split == 'train':
             scale = (0.95 - 0.1 * np.random.random() )  / np.clip(intensityArr[int(0.95 * self.imWidth * self.imHeight * 3) ], 0.1, None)
-        elif self.phase.upper() == 'TEST':
+        else:
             scale = (0.95 - 0.05)  / np.clip(intensityArr[int(0.95 * self.imWidth * self.imHeight * 3) ], 0.1, None)
         hdr = scale * hdr
         return np.clip(hdr, 0, 1), scale 

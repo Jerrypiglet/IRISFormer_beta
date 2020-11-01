@@ -83,11 +83,11 @@ class MatSeg_BRDF(nn.Module):
         self.logger.info(magenta('---> ALL %d params; %d trainable'%(len(list(self.named_parameters())), count_grads)))
         return count_grads
 
-    def load_pretrained_brdf(self):
+    def load_pretrained_brdf(self, pretrained_brdf_name='check_cascade0_w320_h240'):
         if self.opt.if_cluster:
-            pretrained_path = '/viscompfs/users/ruizhu/models_ckpt/check_cascade0_w320_h240'
+            pretrained_path = '/viscompfs/users/ruizhu/models_ckpt/' + pretrained_brdf_name
         else:
-            pretrained_path = '/home/ruizhu/Documents/Projects/semanticInverse/models_ckpt/check_cascade0_w320_h240'
+            pretrained_path = '/home/ruizhu/Documents/Projects/semanticInverse/models_ckpt/' + pretrained_brdf_name
         self.logger.info(magenta('Loading pretrained BRDF model from %s'%pretrained_path))
         cascadeLevel = 0
         epochIdFineTune = 13

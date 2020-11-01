@@ -58,6 +58,7 @@ parser = argparse.ArgumentParser()
 # The locationi of training set
 parser.add_argument('--data_root', default=None, help='path to input images')
 parser.add_argument('--task_name', type=str, default='tmp', help='task name (e.g. N1: disp ref)')
+parser.add_argument('--task_split', type=str, default='train', help='train, val, test', choices={"train", "val", "test"})
 # The basic training setting
 # parser.add_argument('--nepoch0', type=int, default=14, help='the number of epochs for training')
 # parser.add_argument('--nepoch1', type=int, default=10, help='the number of epochs for training')
@@ -176,7 +177,7 @@ if opt.is_master:
             root_folder.mkdir(exist_ok=True)
     if os.path.isdir(opt.summary_path_task):
         if opt.task_name not in ['tmp'] and opt.resume == 'NoCkpt':
-            if 'pod' in opt.task_name:            
+            if 'POD' in opt.task_name:            
                 if_delete = 'y'
             else:
                 if_delete = input(colored('Summary path %s already exists. Delete? [y/n] '%opt.summary_path_task, 'white', 'on_blue'))
@@ -238,14 +239,17 @@ if opt.distributed: # https://github.com/dougsouza/pytorch-sync-batchnorm-exampl
     model = apex.parallel.convert_syncbn_model(model)
 model.to(opt.device)
 model.print_net()
-if opt.cfg.MODEL_BRDF.pre_trained:
-    model.load_pretrained_brdf()
-if opt.cfg.MODEL_SEG.freeze:
+if opt.cfg.MODEL_BRDF.load_pretrained_pth:
+    # print(opt.cfg.MODEL_BRDF.pre_trained_Zhengqin, '================----')
+    model.load_pretrained_brdf(opt.cfg.MODEL_BRDF.pretrained_pth_name)
+if opt.cfg.MODEL_SEG.if_freeze:
+    # print(opt.cfg.MODEL_SEG.if_freeze, dtype(opt.cfg.MODEL_SEG.if_freeze), '================')
     model.turn_off_names(['UNet'])
     model.freeze_bn_UNet()
 
 # set up optimizers
-optimizer = get_optimizer(model.parameters(), cfg.SOLVER)
+# optimizer = get_optimizer(model.parameters(), cfg.SOLVER)
+optimizer = optim.Adam(model.parameters(), lr=1e-4, betas=(0.5, 0.999) )
 # Initialize mixed-precision training
 if opt.distributed:
     use_mixed_precision = cfg.MODEL_SEG.DTYPE == "float16"
@@ -361,6 +365,8 @@ print('=======1', opt.rank)
 synchronize()
 print('=======2', opt.rank)
 
+# if task_split
+
 # for epoch in list(range(opt.epochIdFineTune+1, opt.cfg.SOLVER.max_epoch)):
 # for epoch_0 in list(range(1, 2) ):
 for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
@@ -382,7 +388,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
     # ts_iter_start = ts
     ts_iter_end = ts_epoch_start
     
-    print('=======3', opt.rank)
+    print('=======3', opt.rank, not cfg.MODEL_SEG.fix_bn)
     synchronize()
 
     for i, data_batch in enumerate(brdf_loader_train):

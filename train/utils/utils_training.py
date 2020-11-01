@@ -24,6 +24,7 @@ def get_optimizer(parameters, cfg):
     elif cfg.method == 'adam':
         optimizer = torch.optim.Adam(filter(lambda p: p.requires_grad, parameters),
                                      lr=cfg.lr, weight_decay=cfg.weight_decay)
+
     elif cfg.method == 'rmsprop':
         optimizer = torch.optim.RMSprop(filter(lambda p: p.requires_grad, parameters),
                                         lr=cfg.lr, weight_decay=cfg.weight_decay)

@@ -16,7 +16,7 @@ TEST:
 DATASET:
   root_dir: /new_disk2/yuzh/PlaneNetData/
   # batch_size: 16
-  num_workers: 8
+  num_workers: 16
   if_val_dist: True
 
 MODEL_SEG:
@@ -24,3 +24,7 @@ MODEL_SEG:
   pretrained: True
   embed_dims: 2
   fix_bn: False
+  if_freeze: False
+
+MODEL_BRDF:
+  load_pretrained_pth: False

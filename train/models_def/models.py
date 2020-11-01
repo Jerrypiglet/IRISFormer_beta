@@ -85,14 +85,14 @@ def LSregressDiffSpec(diff, spec, imOrig, diffOrig, specOrig ):
 
 
 class encoder0(nn.Module ):
-    def __init__(self, cascadeLevel = 0, isSeg = False):
+    def __init__(self, cascadeLevel = 0, isSeg = False, in_channels = 3):
         super(encoder0, self).__init__()
         self.isSeg = isSeg
         self.cascadeLevel = cascadeLevel
 
         self.pad1 = nn.ReplicationPad2d(1)
         if self.cascadeLevel == 0:
-            self.conv1 = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=4, stride=2, bias =True )
+            self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=64, kernel_size=4, stride=2, bias =True )
         else:
             self.conv1 = nn.Conv2d(in_channels=17, out_channels = 64, kernel_size =4, stride =2, bias = True )
 

@@ -185,6 +185,8 @@ def train_step(input_dict, output_dict, preBatchDict, optimizer, opt, if_train=T
     roughPreds = []
     depthPreds = []
 
+    print(output_dict.keys())
+
     albedoPred, normalPred, roughPred, depthPred = output_dict['albedoPred'], output_dict['normalPred'], output_dict['roughPred'], output_dict['depthPred']
     # # Initial Prediction
     # x1, x2, x3, x4, x5, x6 = model['encoder'](inputBatch)
@@ -258,7 +260,7 @@ def val_epoch_brdf(brdfLoaderVal, model, optimizer, writer, opt, tid):
     loss_dict = {'loss_albedo': [], 'loss_normal': [], 'loss_rough': [], 'loss_depth': []}
     for i, data_batch in tqdm(enumerate(brdfLoaderVal)):
         
-        inputBatch, input_dict, preBatchDict = get_inputBatch(data_batch, opt)
+        inputBatch, input_dict, preBatchDict = get_input_dict_brdf(data_batch, opt)
 
         errors = train_step(inputBatch, input_dict, preBatchDict, optimizer, model, opt)
         loss_dict['loss_albedo'].append(errors['albedoErrs'][0].item())
@@ -314,3 +316,5 @@ def val_epoch_brdf(brdfLoaderVal, model, optimizer, writer, opt, tid):
         model[key].train()
 
     print('===Evaluating finished.')
+
+

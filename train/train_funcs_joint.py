@@ -172,6 +172,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 break
 
             input_dict = get_input_dict_mat_seg_joint(data_batch, opt)
+            if batch_id == 0:
+                print(input_dict['im_paths'])
 
             # ======= Forward
             output_dict, loss_dict = forward_joint(input_dict, model, opt, time_meters)

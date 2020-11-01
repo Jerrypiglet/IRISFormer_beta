@@ -17,7 +17,7 @@ class BatchLoader(Dataset):
         'mainDiffLight_xml', 'mainDiffLight_xml1', 
         'mainDiffMat_xml', 'mainDiffMat_xml1'], 
             imHeight = 240, imWidth = 320, 
-            phase='TRAIN', split='train', rseed = None, cascadeLevel = 0,
+            phase='TRAIN', split='train', rseed = 0, cascadeLevel = 0,
             isLight = False, isAllLight = False,
             envHeight = 8, envWidth = 16, envRow = 120, envCol = 160, 
             SGNum = 12 ):
@@ -46,7 +46,7 @@ class BatchLoader(Dataset):
                 sceneList = sceneList[:-val_count]
             if self.split == 'val':
                 sceneList = sceneList[-val_count:]
-        print('Scene num for split %s: %d; total scenes: %d'%(self.split, len(sceneList), num_scenes))
+        print('====== Scene num for split %s: %d; total scenes: %d'%(self.split, len(sceneList), num_scenes))
 
         self.imHeight = imHeight
         self.imWidth = imWidth
@@ -82,7 +82,7 @@ class BatchLoader(Dataset):
                             'imenv_').replace('.hdr', '_%d.h5' %
                                 (self.cascadeLevel - 1 )  ) ) ]
 
-
+        self.imList = sorted(self.imList)
         print('Image Num: %d' % len(self.imList ) )
 
         # BRDF parameter
@@ -123,8 +123,9 @@ class BatchLoader(Dataset):
         self.count = len(self.albedoList )
         self.perm = list(range(self.count ) )
 
-        if rseed is not None:
-            random.seed(0)
+        # if rseed is not None:
+        #     random.seed(rseed)
+        print('++++++++perm', self.count)
         random.shuffle(self.perm )
 
     def __len__(self):
@@ -297,9 +298,11 @@ class BatchLoader(Dataset):
     def scaleHdr(self, hdr, seg):
         intensityArr = (hdr * seg).flatten()
         intensityArr.sort()
-        if self.phase.upper() == 'TRAIN':
+        # if self.phase.upper() == 'TRAIN':
+        if self.phase.upper() == 'TRAIN' and self.split == 'train':
             scale = (0.95 - 0.1 * np.random.random() )  / np.clip(intensityArr[int(0.95 * self.imWidth * self.imHeight * 3) ], 0.1, None)
-        elif self.phase.upper() == 'TEST':
+        # elif self.phase.upper() == 'TEST':
+        else:
             scale = (0.95 - 0.05)  / np.clip(intensityArr[int(0.95 * self.imWidth * self.imHeight * 3) ], 0.1, None)
         hdr = scale * hdr
         return np.clip(hdr, 0, 1), scale 
