@@ -54,7 +54,7 @@ parser.add_argument('--cascadeLevel', type=int, default=0, help='the casacade le
 parser.add_argument('--ifMatMapInput', action='store_true', help='using mask as additional input')
 parser.add_argument('--ifDataloaderOnly', action='store_true', help='benchmark dataloading overhead')
 parser.add_argument('--ifCluster', action='store_true', help='if using cluster')
-parser.add_argument('--eval_every_iter', type=int, default=2000, help='the casacade level')
+parser.add_argument('--eval_every_iter', type=int, default=1000, help='the casacade level')
 
 
 # The detail network setting

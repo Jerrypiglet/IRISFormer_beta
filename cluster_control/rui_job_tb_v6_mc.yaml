@@ -19,7 +19,7 @@ spec:
         - "sh"
         - "-c"
         args:
-        - ". /root/miniconda3/etc/profile.d/conda.sh && cd /viscompfs/users/ruizhu/semanticInverse && which python && which tensorboard && ls /viscompfs/users/ruizhu/logs/ && /root/miniconda3/bin/tensorboard --logdir /viscompfs/users/ruizhu/logs --port 6008"
+        - ". /root/miniconda3/etc/profile.d/conda.sh && cd /ruidata && which python && which tensorboard && ls /ruidata && /root/miniconda3/bin/tensorboard --logdir ruidata --port 6008"
         # - ". /root/miniconda3/etc/profile.d/conda.sh && cd /viscompfs/users/ruizhu/semanticInverse && which python && ls /viscompfs/users/ruizhu/logs/ && cp -r /siggraphasia20dataset/code/Routine/DatasetCreation/ /ruidata/siggraphasia20dataset/code/Routine/"
         # -  "tensorboard --logdir / --port 6008"  # specify the directory to watch
         # - "python /opt/repo/${my_script}.py"
