@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import colorsys
+from PIL import Image
 
 def _get_colors(num_colors):
     colors=[]
@@ -51,3 +52,9 @@ def vis_disp_colormap(disp_array, file=None, normalize=True):
         disp_Image.save(file)
     else:
         return disp_array
+
+def colorize(gray, palette):
+    # gray: numpy array of the label and 1*3N size list palette
+    color = Image.fromarray(gray.astype(np.uint8)).convert('P')
+    color.putpalette(palette)
+    return color

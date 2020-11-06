@@ -125,7 +125,7 @@ class BatchLoader(Dataset):
 
         # if rseed is not None:
         #     random.seed(rseed)
-        print('++++++++perm', self.count)
+        # print('++++++++perm', self.count)
         random.shuffle(self.perm )
 
     def __len__(self):

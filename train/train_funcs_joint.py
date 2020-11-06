@@ -16,6 +16,7 @@ from utils.utils_misc import *
 import torchvision.utils as vutils
 
 from train_funcs_mat_seg import get_input_dict_mat_seg, process_mat_seg
+from train_funcs_semseg import get_input_dict_semseg, process_semseg
 from train_funcs_brdf import get_input_dict_brdf, process_brdf
 from utils.comm import synchronize
 
@@ -26,26 +27,35 @@ def get_time_meters_joint():
     time_meters['forward'] = AverageMeter()
     time_meters['loss_brdf'] = AverageMeter()
     time_meters['loss_mat_seg'] = AverageMeter()
+    time_meters['loss_semseg'] = AverageMeter()
     time_meters['backward'] = AverageMeter()    
     return time_meters
 
 
-def get_input_dict_mat_seg_joint(data_batch, opt):
+def get_input_dict_joint(data_batch, opt):
+    input_dict = {}
     if opt.cfg.MODEL_SEG.enable:
         input_dict_mat_seg = get_input_dict_mat_seg(data_batch, opt)
     else:
         input_dict_mat_seg = {}
-    
+    input_dict.update(input_dict_mat_seg)
+
+    if opt.cfg.MODEL_SEMSEG.enable:
+        input_dict_semseg = get_input_dict_semseg(data_batch, opt)
+    else:
+        input_dict_semseg = {}
+    input_dict.update(input_dict_semseg)
+
     if opt.cfg.MODEL_BRDF.enable:
         input_batch_brdf, input_dict_brdf, pre_batch_dict_brdf = get_input_dict_brdf(data_batch, opt)
     else:
         input_dict_brdf = {}    
+    input_dict.update(input_dict_brdf)
 
-    input_dict = {**input_dict_mat_seg, **input_dict_brdf}
-    
     if opt.cfg.MODEL_BRDF.enable:
         input_dict.update({'input_batch_brdf': input_batch_brdf, 'pre_batch_dict_brdf': pre_batch_dict_brdf})
     
+    # input_dict = {**input_dict_mat_seg, **input_dict_brdf}
     return input_dict
 
 def forward_joint(input_dict, model, opt, time_meters):
@@ -63,6 +73,11 @@ def forward_joint(input_dict, model, opt, time_meters):
     if opt.cfg.MODEL_BRDF.enable:
         output_dict, loss_dict = process_brdf(input_dict, output_dict, loss_dict, opt, time_meters)
         time_meters['loss_brdf'].update(time.time() - time_meters['ts'])
+        time_meters['ts'] = time.time()
+
+    if opt.cfg.MODEL_SEMSEG.enable:
+        output_dict, loss_dict = process_semseg(input_dict, output_dict, loss_dict, opt, time_meters)
+        time_meters['loss_semseg'].update(time.time() - time_meters['ts'])
         time_meters['ts'] = time.time()
     
     return output_dict, loss_dict
@@ -100,7 +115,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
             ts_iter_start = time.time()
 
-            input_dict = get_input_dict_mat_seg_joint(data_batch, opt)
+            input_dict = get_input_dict_joint(data_batch, opt)
 
             time_meters['data_to_gpu'].update(time.time() - ts_iter_start)
             time_meters['ts'] = time.time()
@@ -136,6 +151,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     model.eval()
 
     num_val_mat_seg_vis = 0
+    num_val_im_vis = 0
+    num_val_semseg_vis = 0
     num_val_brdf_vis = 0
     num_val_vis_MAX = 16
 
@@ -171,7 +188,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             if num_val_brdf_vis >= num_val_vis_MAX or num_val_mat_seg_vis >= num_val_vis_MAX:
                 break
 
-            input_dict = get_input_dict_mat_seg_joint(data_batch, opt)
+            input_dict = get_input_dict_joint(data_batch, opt)
             if batch_id == 0:
                 print(input_dict['im_paths'])
 
@@ -179,11 +196,44 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             output_dict, loss_dict = forward_joint(input_dict, model, opt, time_meters)
 
             synchronize()
+            
+            # ======= Vis imagges
 
+            for sample_idx, im_single in enumerate(data_batch['im_not_hdr']):
+
+                if num_val_im_vis >= num_val_vis_MAX:
+                    break
+
+                im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
+                # im_path = os.path.join('./tmp/', 'im_%d-%d_color.png'%(tid, im_index))
+                # color_path = os.path.join('./tmp/', 'im_%d-%d_semseg.png'%(tid, im_index))
+                # cv2.imwrite(im_path, im_single * 255.)
+                # semseg_color.save(color_path)
+                if opt.is_master:
+                    writer.add_image('VAL_im/%d'%num_val_im_vis, im_single, tid, dataformats='HWC')
+                num_val_im_vis += 1
+
+
+            # ======= visualize clusters for semseg
+            if opt.cfg.MODEL_SEMSEG.enable:
+                for sample_idx, semseg_color in enumerate(output_dict['semseg_color_list']):
+
+                    if num_val_semseg_vis >= num_val_vis_MAX:
+                        break
+
+                    # im_path = os.path.join('./tmp/', 'im_%d-%d_color.png'%(tid, im_index))
+                    # color_path = os.path.join('./tmp/', 'im_%d-%d_semseg.png'%(tid, im_index))
+                    # cv2.imwrite(im_path, im_single * 255.)
+                    # semseg_color.save(color_path)
+                    if opt.is_master:
+                        # print(np.array(semseg_color.convert('RGB')).shape, '+++++++')
+                        writer.add_image('VAL_semseg-PRED/%d'%num_val_semseg_vis, np.array(semseg_color.convert('RGB')), tid, dataformats='HWC')
+                    num_val_semseg_vis += 1
+
+                
             # ======= visualize clusters for mat-seg
             if opt.cfg.MODEL_SEG.enable:
                 b, c, h, w = output_dict['logit'].size()
-
                 for sample_idx, (logit_single, embedding_single) in enumerate(zip(output_dict['logit'].detach(), output_dict['embedding'].detach())):
 
                     if num_val_mat_seg_vis >= num_val_vis_MAX:
@@ -227,7 +277,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     predict_segmentation = predict_segmentation.reshape(h, w)
 
                     # ===== vis
-                    im_single = data_batch['im_not_hdr'][sample_idx].numpy().squeeze().transpose(1, 2, 0)
+                    # im_single = data_batch['im_not_hdr'][sample_idx].numpy().squeeze().transpose(1, 2, 0)
 
 
                     mat_aggre_map_GT_single = input_dict['mat_aggre_map_cpu'][sample_idx].numpy().squeeze()
@@ -241,7 +291,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
 
                     if opt.is_master:
-                        writer.add_image('VAL_im/%d'%num_val_mat_seg_vis, im_single, tid, dataformats='HWC')
+                        # writer.add_image('VAL_im/%d'%num_val_mat_seg_vis, im_single, tid, dataformats='HWC')
 
                         writer.add_image('VAL_mat_seg-aggre_map_GT/%d'%num_val_mat_seg_vis, matAggreMap_GT_single_vis, tid, dataformats='HWC')
 

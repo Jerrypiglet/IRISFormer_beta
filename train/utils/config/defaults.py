@@ -19,14 +19,15 @@ from yacs.config import CfgNode as CN
 
 _C = CN()
 
+_C.DTYPE = "float32"
+
 _C.MODEL_SEG = CN()
 _C.MODEL_SEG.enable = True
-_C.MODEL_SEG.DTYPE = "float32"
 _C.MODEL_SEG.arch = 'resnet101'
 _C.MODEL_SEG.pretrained = True
 _C.MODEL_SEG.if_freeze = False
-_C.MODEL_SEG.embed_dims = 2
 _C.MODEL_SEG.fix_bn = False
+_C.MODEL_SEG.embed_dims = 2
 _C.MODEL_SEG.if_guide = False
 _C.MODEL_SEG.guide_channels = 32
 
@@ -38,6 +39,19 @@ _C.MODEL_BRDF.albedoWeight = 1.5
 _C.MODEL_BRDF.normalWeight = 1.0
 _C.MODEL_BRDF.roughWeight = 0.5
 _C.MODEL_BRDF.depthWeight = 0.5
+_C.MODEL_BRDF.if_debug_arch = False
+
+_C.MODEL_SEMSEG = CN()
+_C.MODEL_SEMSEG.enable = True
+_C.MODEL_SEMSEG.config_file = 'configs/ade20k/ade20k_pspnet50.yaml'
+_C.MODEL_SEMSEG.if_freeze = False
+_C.MODEL_SEMSEG.fix_bn = False
+_C.MODEL_SEMSEG.if_guide = False
+_C.MODEL_SEMSEG.load_pretrained_pth = True
+_C.MODEL_SEMSEG.pretrained_pth_name = ''
+
+
+# _C.MODEL_SEMSEG.configs = ()
 
 _C.DATASET = CN()
 _C.DATASET.root_dir = '/new_disk2/yuzh/PlaneNetData/'

@@ -34,11 +34,11 @@ spec:
         resources:
           requests:
             cpu: "5"
-            memory: "15Gi"
+            memory: "10Gi"
             nvidia.com/gpu: '#GPUS'
           limits:
-            cpu: "32"
-            memory: "200Gi"
+            cpu: "10"
+            memory: "50Gi"
             nvidia.com/gpu: '#GPUS'
         volumeMounts:
           - name: dshm
@@ -75,4 +75,18 @@ spec:
         persistentVolumeClaim:
             claimName: ruidata
       restartPolicy: Never
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: nautilus.io/group
+                operator: In
+                values:
+                - haosu
+              - key: gpu-type
+                operator: In
+                values:
+                - 1080Ti
+                - 2080Ti
   backoffLimit: 2

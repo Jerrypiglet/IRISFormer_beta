@@ -37,6 +37,9 @@ class openrooms(data.Dataset):
         assert self.split in ['train', 'val', 'test']
         self.opt = opt
 
+        if self.opt.cfg.MODEL_SEMSEG.enable:
+            self.semseg_path = self.opt.semseg_configs.semseg_path_cluster if opt.if_cluster else self.opt.semseg_configs.semseg_path_local
+            self.semseg_colors = np.loadtxt(self.semseg_path + opt.semseg_configs.colors_path).astype('uint8')
         
         with open(self.sceneFile, 'r') as fIn:
             sceneList = fIn.readlines() 
@@ -136,7 +139,7 @@ class openrooms(data.Dataset):
 
         if rseed is not None:
             random.seed(rseed)
-        print('++++++++perm', self.count)
+        # print('++++++++perm', self.count)
         random.shuffle(self.perm )
 
     def __len__(self):
@@ -276,7 +279,7 @@ class openrooms(data.Dataset):
                 'semantic': 1 - torch.FloatTensor(segmentation[num_mat_masks, :, :]).unsqueeze(0),
                 }
         # if self.transform is not None and not self.opt.if_hdr:
-        batchDict.update({'image_transformed': image_transformed, 'im_not_hdr': im_not_hdr})
+        batchDict.update({'image_transformed': image_transformed, 'im_not_hdr': im_not_hdr, 'im_uint8': im_uint8})
 
         if self.isLight:
             batchDict['envmaps'] = envmaps
