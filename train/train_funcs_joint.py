@@ -183,7 +183,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     with torch.no_grad():
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
 
-            print(batch_id)
+            # print(batch_id)
 
             if num_val_brdf_vis >= num_val_vis_MAX or num_val_mat_seg_vis >= num_val_vis_MAX:
                 break

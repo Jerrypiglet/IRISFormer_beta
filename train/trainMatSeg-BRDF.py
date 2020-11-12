@@ -43,7 +43,7 @@ from utils.comm import synchronize, get_rank
 from utils.utils_training import get_optimizer, freeze_bn_in_module
 from utils.bin_mean_shift import Bin_Mean_Shift
 
-from train_funcs_joint import get_input_dict_mat_seg_joint, val_epoch_joint, vis_val_epoch_joint, forward_joint, get_time_meters_joint
+from train_funcs_joint import get_input_dict_joint, val_epoch_joint, vis_val_epoch_joint, forward_joint, get_time_meters_joint
 
 from utils.logger import setup_logger, Logger, printer
 from utils.global_paths import SUMMARY_PATH, SUMMARY_VIS_PATH, CKPT_PATH
@@ -252,7 +252,7 @@ if opt.cfg.MODEL_SEG.if_freeze:
 optimizer = optim.Adam(model.parameters(), lr=1e-4, betas=(0.5, 0.999) )
 # Initialize mixed-precision training
 if opt.distributed:
-    use_mixed_precision = cfg.MODEL_SEG.DTYPE == "float16"
+    use_mixed_precision = cfg.DTYPE == "float16"
     amp_opt_level = 'O1' if use_mixed_precision else 'O0'
     model, optimizer = amp.initialize(model, optimizer, opt_level=amp_opt_level)
     model = DDP(model)
@@ -424,7 +424,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
             continue
 
         # ======= Load data from cpu to gpu
-        input_dict = get_input_dict_mat_seg_joint(data_batch, opt)
+        input_dict = get_input_dict_joint(data_batch, opt)
 
         time_meters['data_to_gpu'].update(time.time() - ts_iter_start)
         time_meters['ts'] = time.time()

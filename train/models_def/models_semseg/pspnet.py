@@ -122,6 +122,7 @@ class PSPNet(nn.Module):
             feat_dict.update({'x5_ppm': x})
             # print('pspnet x5_ppm', x.shape) # torch.Size([2, 4096, 60, 60]) ppm
         x = self.cls(x)
+        # print('++++++x cls', x.shape) # ++++++x cls torch.Size([5, 150, 25, 33])
         if self.zoom_factor != 1:
             x = F.interpolate(x, size=(h, w), mode='bilinear', align_corners=True)
 
