@@ -134,7 +134,7 @@ class encoder0(nn.Module):
 
 
 class decoder0(nn.Module):
-    def __init__(self, opt, mode=0):
+    def __init__(self, opt, mode=-1, out_channel=3):
         super(decoder0, self).__init__()
         self.opt = opt
         self.mode = mode
@@ -165,7 +165,7 @@ class decoder0(nn.Module):
         self.dgn6 = nn.GroupNorm(num_groups=4, num_channels=64)
 
         self.dpadFinal = nn.ReplicationPad2d(1)
-        self.dconvFinal = nn.Conv2d(in_channels=64, out_channels=3, kernel_size = 3, stride=1, bias=True)
+        self.dconvFinal = nn.Conv2d(in_channels=64, out_channels=out_channel, kernel_size = 3, stride=1, bias=True)
 
     def get_conv(self, name, in_channels, out_channels, kernel_size, stride, bias, padding):
         if (self.if_mat_seg_guide and name in self.if_mat_seg_guide_layers) or (self.if_semseg_guide and name in self.if_semseg_guide_layers):
@@ -269,6 +269,8 @@ class decoder0(nn.Module):
         elif self.mode == 4:
             x_orig = torch.mean(x_orig, dim=1).unsqueeze(1)
             x_out = torch.clamp(1.01 * torch.tanh(x_orig), -1, 1)
+        else:
+            x_out = x_orig
         return x_out
 
 

@@ -41,6 +41,14 @@ _C.MODEL_BRDF.roughWeight = 0.5
 _C.MODEL_BRDF.depthWeight = 0.5
 _C.MODEL_BRDF.if_debug_arch = False
 
+_C.MODEL_BRDF.enable_semseg_decoder = False
+_C.MODEL_BRDF.semseg_ignore_label = 0
+_C.MODEL_BRDF.semseg_classes = 44
+_C.MODEL_BRDF.semseg_colors_path = 'data/openrooms_colors.txt'
+_C.MODEL_BRDF.semseg_names_path = 'data/openrooms_names.txt'
+
+
+
 _C.MODEL_SEMSEG = CN()
 _C.MODEL_SEMSEG.enable = True
 _C.MODEL_SEMSEG.config_file = 'configs/ade20k/ade20k_pspnet50.yaml'
@@ -61,8 +69,8 @@ _C.DATASET.if_val_dist = True
 # _C.DATASET.if_hdr = False
 
 _C.DATA = CN()
-_C.DATA.im_height = 192
-_C.DATA.im_width = 256
+_C.DATA.im_height = 240
+_C.DATA.im_width = 320
 
 
 _C.SOLVER = CN()

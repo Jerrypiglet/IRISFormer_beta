@@ -10,7 +10,7 @@ import torchvision.utils as vutils
 from utils.loss import hinge_embedding_loss, surface_normal_loss, parameter_loss, \
     class_balanced_cross_entropy_loss
 from utils.match_segmentation import MatchSegmentation
-from utils.utils_vis import vis_index_map, reindex_output_map, vis_disp_colormap
+from utils.utils_vis import vis_index_map, reindex_output_map, vis_disp_colormap, colorize
 from utils.utils_training import reduce_loss_dict, time_meters_to_string
 from utils.utils_misc import *
 import torchvision.utils as vutils
@@ -107,6 +107,8 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             'loss_brdf-depth', 
             'loss_brdf-ALL', 
         ]
+        if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
+            loss_keys += ['loss_brdf-semseg']
         
     loss_meters = {loss_key: AverageMeter() for loss_key in loss_keys}
     time_meters = get_time_meters_joint()
@@ -132,7 +134,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             for loss_key in loss_dict_reduced:
                 loss_meters[loss_key].update(loss_dict_reduced[loss_key].item())
             
-            print(batch_id)
+            # print(batch_id)
 
             synchronize()
 
@@ -198,12 +200,14 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             synchronize()
             
             # ======= Vis imagges
+            if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
+                colors = np.loadtxt(os.path.join(opt.pwdpath, opt.cfg.MODEL_BRDF.semseg_colors_path)).astype('uint8')
+                semseg_pred = output_dict['semsegPred'].cpu().numpy()
+                semseg_label = input_dict['semseg_label'].cpu().numpy()
 
             for sample_idx, im_single in enumerate(data_batch['im_not_hdr']):
-
                 if num_val_im_vis >= num_val_vis_MAX:
                     break
-
                 im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
                 # im_path = os.path.join('./tmp/', 'im_%d-%d_color.png'%(tid, im_index))
                 # color_path = os.path.join('./tmp/', 'im_%d-%d_semseg.png'%(tid, im_index))
@@ -211,9 +215,20 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 # semseg_color.save(color_path)
                 if opt.is_master:
                     writer.add_image('VAL_im/%d'%num_val_im_vis, im_single, tid, dataformats='HWC')
+
+                # ======= Vis BRDF-semseg
+                if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
+                    gray_GT = np.uint8(semseg_label[sample_idx])
+                    color_GT = np.array(colorize(gray_GT, colors).convert('RGB'))
+                    prediction = np.argmax(semseg_pred[sample_idx], 0)
+                    gray_pred = np.uint8(prediction)
+                    color_pred = np.array(colorize(gray_pred, colors).convert('RGB'))
+                    if opt.is_master:
+                        writer.add_image('VAL_brdf-semseg_GT/%d'%num_val_im_vis, color_GT, tid, dataformats='HWC')
+                        writer.add_image('VAL_brdf-semseg_PRED/%d'%num_val_im_vis, color_pred, tid, dataformats='HWC')
+
                 num_val_im_vis += 1
-
-
+            
             # ======= visualize clusters for semseg
             if opt.cfg.MODEL_SEMSEG.enable:
                 for sample_idx, semseg_color in enumerate(output_dict['semseg_color_list']):

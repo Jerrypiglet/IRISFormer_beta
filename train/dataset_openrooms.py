@@ -12,6 +12,8 @@ import h5py
 import scipy.ndimage as ndimage
 import torch
 from tqdm import tqdm
+import torchvision.transforms as T
+import PIL
 
 
 class openrooms(data.Dataset):
@@ -72,6 +74,12 @@ class openrooms(data.Dataset):
         self.SGNum = SGNum
 
         self.transform = transform
+
+        # if self.opt.cfg.MODEL_BRDF.enable_semseg_decoder:
+        #     self.transform_semseg_label = T.Compose([
+        #         T.Resize((self.imHeight, self.imWidth), interpolation=PIL.Image.NEAREST), 
+        #         T.ToTensor()
+        #     ])
 
         shapeList = []
         for d in dirs:
@@ -176,7 +184,7 @@ class openrooms(data.Dataset):
         assert self.transform is not None
         # sdr_file = self.imList[self.perm[ind] ].replace('.hdr', 'sdr')
         # im_uint8 = np.load(sdr_file+'.npy')
-        im_not_hdr = np.clip(im_ori**(1.0/2.2), 0., 1.)
+        im_not_hdr = np.clip(im**(1.0/2.2), 0., 1.)
         im_uint8 = (255. * im_not_hdr).transpose(1, 2, 0).astype(np.uint8)
         # np.save(sdr_file, im_uint8)
         # print(self.imList[self.perm[ind] ])
@@ -296,6 +304,16 @@ class openrooms(data.Dataset):
 
             batchDict['diffusePre'] = diffusePre
             batchDict['specularPre'] = specularPre
+            
+        if self.opt.cfg.MODEL_BRDF.enable_semseg_decoder:
+            semseg_label_path = hdr_file.replace('im_', 'imsemLabel_').replace('.hdr', '.npy')
+            semseg_label = np.load(semseg_label_path)
+            # if np.amax(label) > 42:
+            #     print(np.amax(label), np.amin(label))
+            semseg_label += 1 # to make 0 as unlabelled, 1 as environment
+            # semseg_label = self.transform_semseg_label(semseg_label)
+            semseg_label = cv2.resize(semseg_label, (self.imWidth, self.imHeight), interpolation=cv2.INTER_NEAREST)
+            batchDict.update({'semseg_label': torch.from_numpy(semseg_label).long()})
 
         return batchDict
 

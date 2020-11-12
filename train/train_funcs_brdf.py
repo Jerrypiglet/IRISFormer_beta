@@ -13,55 +13,58 @@ def get_input_dict_brdf(data_batch, opt):
 
     # Load data from cpu to gpu
     albedo_cpu = data_batch['albedo']
-    input_dict['albedoBatch'] = Variable(albedo_cpu ).cuda()
+    input_dict['albedoBatch'] = Variable(albedo_cpu ).cuda(non_blocking=True)
 
     normal_cpu = data_batch['normal']
-    input_dict['normalBatch'] = Variable(normal_cpu ).cuda()
+    input_dict['normalBatch'] = Variable(normal_cpu ).cuda(non_blocking=True)
 
     rough_cpu = data_batch['rough']
-    input_dict['roughBatch'] = Variable(rough_cpu ).cuda()
+    input_dict['roughBatch'] = Variable(rough_cpu ).cuda(non_blocking=True)
 
     depth_cpu = data_batch['depth']
-    input_dict['depthBatch'] = Variable(depth_cpu ).cuda()
+    input_dict['depthBatch'] = Variable(depth_cpu ).cuda(non_blocking=True)
 
     mask_cpu = data_batch['mask'].permute(0, 3, 1, 2) # [b, 3, h, w]
-    input_dict['maskBatch'] = Variable(mask_cpu ).cuda()
+    input_dict['maskBatch'] = Variable(mask_cpu ).cuda(non_blocking=True)
 
     matAggreMap_cpu = data_batch['mat_aggre_map'].permute(0, 3, 1, 2) # [b, 1, h, w]
-    input_dict['matAggreMapBatch'] = Variable(matAggreMap_cpu ).cuda()
+    input_dict['matAggreMapBatch'] = Variable(matAggreMap_cpu ).cuda(non_blocking=True)
 
     segArea_cpu = data_batch['segArea']
     segEnv_cpu = data_batch['segEnv']
     segObj_cpu = data_batch['segObj']
 
     seg_cpu = torch.cat([segArea_cpu, segEnv_cpu, segObj_cpu], dim=1 )
-    segBatch = Variable(seg_cpu ).cuda()
+    segBatch = Variable(seg_cpu ).cuda(non_blocking=True)
 
     input_dict['segBRDFBatch'] = segBatch[:, 2:3, :, :]
     input_dict['segAllBatch'] = segBatch[:, 0:1, :, :]  + segBatch[:, 2:3, :, :]
 
     # Load the image from cpu to gpu
     im_cpu = (data_batch['im'] )
-    input_dict['imBatch'] = Variable(im_cpu ).cuda()
+    input_dict['imBatch'] = Variable(im_cpu ).cuda(non_blocking=True)
+
+    if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
+        input_dict['semseg_label'] = data_batch['semseg_label'].cuda(non_blocking=True)
 
     if opt.cascadeLevel > 0:
         albedoPre_cpu = data_batch['albedoPre']
-        albedoPreBatch = Variable(albedoPre_cpu ).cuda()
+        albedoPreBatch = Variable(albedoPre_cpu ).cuda(non_blocking=True)
 
         normalPre_cpu = data_batch['normalPre']
-        normalPreBatch = Variable(normalPre_cpu ).cuda()
+        normalPreBatch = Variable(normalPre_cpu ).cuda(non_blocking=True)
 
         roughPre_cpu = data_batch['roughPre']
-        roughPreBatch = Variable(roughPre_cpu ).cuda()
+        roughPreBatch = Variable(roughPre_cpu ).cuda(non_blocking=True)
 
         depthPre_cpu = data_batch['depthPre']
-        depthPreBatch = Variable(depthPre_cpu ).cuda()
+        depthPreBatch = Variable(depthPre_cpu ).cuda(non_blocking=True)
 
         diffusePre_cpu = data_batch['diffusePre']
-        diffusePreBatch = Variable(diffusePre_cpu ).cuda()
+        diffusePreBatch = Variable(diffusePre_cpu ).cuda(non_blocking=True)
 
         specularPre_cpu = data_batch['specularPre']
-        specularPreBatch = Variable(specularPre_cpu ).cuda()
+        specularPreBatch = Variable(specularPre_cpu ).cuda(non_blocking=True)
 
         if albedoPreBatch.size(2) < opt.imHeight or albedoPreBatch.size(3) < opt.imWidth:
             albedoPreBatch = F.interpolate(albedoPreBatch, [opt.imHeight, opt.imWidth ], mode='bilinear')
@@ -162,6 +165,12 @@ def process_brdf(input_dict, output_dict, loss_dict, opt, time_meters):
     output_dict['roughPreds'] = roughPreds
     output_dict['depthPreds'] = depthPreds
 
+    if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
+        semsegPred = output_dict['semsegPred']
+        semsegLabel = input_dict['semseg_label']
+        loss_dict['loss_brdf-semseg'] = opt.semseg_criterion(semsegPred, semsegLabel)
+        output_dict['semsegPred'] = semsegPred
+
     return output_dict, loss_dict
 
 
@@ -185,7 +194,7 @@ def train_step(input_dict, output_dict, preBatchDict, optimizer, opt, if_train=T
     roughPreds = []
     depthPreds = []
 
-    print(output_dict.keys())
+    # print(output_dict.keys())
 
     albedoPred, normalPred, roughPred, depthPred = output_dict['albedoPred'], output_dict['normalPred'], output_dict['roughPred'], output_dict['depthPred']
     # # Initial Prediction
