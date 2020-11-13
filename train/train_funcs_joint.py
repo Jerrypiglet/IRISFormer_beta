@@ -13,7 +13,9 @@ from utils.match_segmentation import MatchSegmentation
 from utils.utils_vis import vis_index_map, reindex_output_map, vis_disp_colormap, colorize
 from utils.utils_training import reduce_loss_dict, time_meters_to_string
 from utils.utils_misc import *
+from utils.utils_semseg import intersectionAndUnionGPU
 import torchvision.utils as vutils
+import torch.distributed as dist
 
 from train_funcs_mat_seg import get_input_dict_mat_seg, process_mat_seg
 from train_funcs_semseg import get_input_dict_semseg, process_semseg
@@ -30,6 +32,13 @@ def get_time_meters_joint():
     time_meters['loss_semseg'] = AverageMeter()
     time_meters['backward'] = AverageMeter()    
     return time_meters
+
+def get_semseg_meters():
+    intersection_meter = AverageMeter()
+    union_meter = AverageMeter()
+    target_meter = AverageMeter()
+    semseg_meters = {'intersection_meter': intersection_meter, 'union_meter': union_meter, 'target_meter': target_meter}
+    return semseg_meters
 
 
 def get_input_dict_joint(data_batch, opt):
@@ -112,6 +121,8 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         
     loss_meters = {loss_key: AverageMeter() for loss_key in loss_keys}
     time_meters = get_time_meters_joint()
+    if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
+        semseg_meters = get_semseg_meters()
 
     with torch.no_grad():
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
@@ -133,14 +144,43 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             # ======= update loss
             for loss_key in loss_dict_reduced:
                 loss_meters[loss_key].update(loss_dict_reduced[loss_key].item())
-            
-            # print(batch_id)
+
+            # ======= Metering
+            if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
+                output = output_dict['semsegPred'].max(1)[1]
+                target = input_dict['semseg_label']
+                intersection, union, target = intersectionAndUnionGPU(output, target, opt.cfg.MODEL_BRDF.semseg_classes, opt.cfg.MODEL_BRDF.semseg_ignore_label)
+                # if args.multiprocessing_distributed:
+                dist.all_reduce(intersection), dist.all_reduce(union), dist.all_reduce(target)
+                intersection, union, target = intersection.cpu().numpy(), union.cpu().numpy(), target.cpu().numpy()
+                semseg_meters['intersection_meter'].update(intersection), semseg_meters['union_meter'].update(union), semseg_meters['target_meter'].update(target)
+                # accuracy = sum(semseg_meters['intersection_meter'].val) / (sum(semseg_meters['target_meter'].val) + 1e-10)
+
+            print(batch_id)
 
             synchronize()
+    # ======= Metering
+    if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
+        iou_class = semseg_meters['intersection_meter'].sum / (semseg_meters['union_meter'].sum + 1e-10)
+        accuracy_class = semseg_meters['intersection_meter'].sum / (semseg_meters['target_meter'].sum + 1e-10)
+        mIoU = np.mean(iou_class)
+        mAcc = np.mean(accuracy_class)
+        allAcc = sum(semseg_meters['intersection_meter'].sum) / (sum(semseg_meters['target_meter'].sum) + 1e-10)
+        if opt.is_master:
+            logger.info('Val result: mIoU/mAcc/allAcc {:.4f}/{:.4f}/{:.4f}.'.format(mIoU, mAcc, allAcc))
+            for i in range(opt.cfg.MODEL_BRDF.semseg_classes):
+                logger.info('Class_{} Result: iou/accuracy {:.4f}/{:.4f}.'.format(i, iou_class[i], accuracy_class[i]))
+
+
 
     if opt.is_master:
         for loss_key in loss_dict_reduced:
             writer.add_scalar('loss_val/%s'%loss_key, loss_meters[loss_key].avg, tid)
+        if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
+            writer.add_scalar('VAL/mIoU_val', mIoU, tid)
+            writer.add_scalar('VAL/mAcc_val', mIoU, tid)
+            writer.add_scalar('VAL/allAcc_val', mIoU, tid)
+
 
         logger.info(red('Evaluation timings: ' + time_meters_to_string(time_meters)))
 

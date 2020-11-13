@@ -43,7 +43,7 @@ _C.MODEL_BRDF.if_debug_arch = False
 
 _C.MODEL_BRDF.enable_semseg_decoder = False
 _C.MODEL_BRDF.semseg_ignore_label = 0
-_C.MODEL_BRDF.semseg_classes = 44
+_C.MODEL_BRDF.semseg_classes = 46
 _C.MODEL_BRDF.semseg_colors_path = 'data/openrooms_colors.txt'
 _C.MODEL_BRDF.semseg_names_path = 'data/openrooms_names.txt'
 

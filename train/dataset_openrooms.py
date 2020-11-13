@@ -50,6 +50,7 @@ class openrooms(data.Dataset):
         if phase.upper() == 'TRAIN':
             num_scenes = len(sceneList)
             train_count = int(num_scenes * 0.95)
+            # train_count = int(num_scenes * 0.995)
             val_count = num_scenes - train_count
             if self.split == 'train':
                 sceneList = sceneList[:-val_count]
@@ -306,11 +307,12 @@ class openrooms(data.Dataset):
             batchDict['specularPre'] = specularPre
             
         if self.opt.cfg.MODEL_BRDF.enable_semseg_decoder:
-            semseg_label_path = hdr_file.replace('im_', 'imsemLabel_').replace('.hdr', '.npy')
+            semseg_label_path = self.depthList[self.perm[ind] ].replace('imdepth_', 'imsemLabel2_').replace('.dat', '.npy')
             semseg_label = np.load(semseg_label_path)
+            semseg_label[semseg_label==0] = 31
             # if np.amax(label) > 42:
             #     print(np.amax(label), np.amin(label))
-            semseg_label += 1 # to make 0 as unlabelled, 1 as environment
+            # semseg_label += 1 # to make 0 as unlabelled, 1 as environment
             # semseg_label = self.transform_semseg_label(semseg_label)
             semseg_label = cv2.resize(semseg_label, (self.imWidth, self.imHeight), interpolation=cv2.INTER_NEAREST)
             batchDict.update({'semseg_label': torch.from_numpy(semseg_label).long()})
