@@ -150,8 +150,8 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 output = output_dict['semsegPred'].max(1)[1]
                 target = input_dict['semseg_label']
                 intersection, union, target = intersectionAndUnionGPU(output, target, opt.cfg.MODEL_BRDF.semseg_classes, opt.cfg.MODEL_BRDF.semseg_ignore_label)
-                # if args.multiprocessing_distributed:
-                dist.all_reduce(intersection), dist.all_reduce(union), dist.all_reduce(target)
+                if opt.distributed:
+                    dist.all_reduce(intersection), dist.all_reduce(union), dist.all_reduce(target)
                 intersection, union, target = intersection.cpu().numpy(), union.cpu().numpy(), target.cpu().numpy()
                 semseg_meters['intersection_meter'].update(intersection), semseg_meters['union_meter'].update(union), semseg_meters['target_meter'].update(target)
                 # accuracy = sum(semseg_meters['intersection_meter'].val) / (sum(semseg_meters['target_meter'].val) + 1e-10)
@@ -159,6 +159,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             print(batch_id)
 
             synchronize()
+            
     # ======= Metering
     if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
         iou_class = semseg_meters['intersection_meter'].sum / (semseg_meters['union_meter'].sum + 1e-10)

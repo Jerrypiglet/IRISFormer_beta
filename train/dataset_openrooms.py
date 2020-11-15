@@ -47,8 +47,8 @@ class openrooms(data.Dataset):
             sceneList = fIn.readlines() 
         sceneList = [x.strip() for x in sceneList]
 
+        num_scenes = len(sceneList)
         if phase.upper() == 'TRAIN':
-            num_scenes = len(sceneList)
             train_count = int(num_scenes * 0.95)
             # train_count = int(num_scenes * 0.995)
             val_count = num_scenes - train_count
@@ -56,6 +56,7 @@ class openrooms(data.Dataset):
                 sceneList = sceneList[:-val_count]
             if self.split == 'val':
                 sceneList = sceneList[-val_count:]
+    
         if 'mini' in self.dataset_name:
             sceneList *= 10
         print('Scene num for split %s: %d; total scenes: %d'%(self.split, len(sceneList), num_scenes))
@@ -307,7 +308,7 @@ class openrooms(data.Dataset):
             batchDict['specularPre'] = specularPre
             
         if self.opt.cfg.MODEL_BRDF.enable_semseg_decoder:
-            semseg_label_path = self.depthList[self.perm[ind] ].replace('imdepth_', 'imsemLabel2_').replace('.dat', '.npy')
+            semseg_label_path = self.depthList[self.perm[ind] ].replace('imdepth_', 'imsemLabel_').replace('.dat', '.npy')
             semseg_label = np.load(semseg_label_path)
             semseg_label[semseg_label==0] = 31
             # if np.amax(label) > 42:
