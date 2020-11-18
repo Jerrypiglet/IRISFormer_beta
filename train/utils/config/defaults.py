@@ -60,10 +60,11 @@ _C.MODEL_BRDF.semseg_classes = 46
 
 _C.MODEL_SEMSEG = CN()
 _C.MODEL_SEMSEG.enable = True
+_C.MODEL_SEMSEG.semseg_path = ''
 _C.MODEL_SEMSEG.semseg_path_local = '/home/ruizhu/Documents/Projects/semseg'
 _C.MODEL_SEMSEG.semseg_path_cluster = '/viscompfs/users/ruizhu/semseg/'
 _C.MODEL_SEMSEG.config_file = 'configs/openrooms/openrooms_pspnet50.yaml'
-_C.MODEL_SEMSEG.semseg_colors = 'data/openrooms/openrooms_colors.txt'
+# _C.MODEL_SEMSEG.semseg_colors = 'data/openrooms/openrooms_colors.txt'
 _C.MODEL_SEMSEG.if_freeze = False
 _C.MODEL_SEMSEG.fix_bn = False
 _C.MODEL_SEMSEG.if_guide = False
@@ -74,7 +75,12 @@ _C.MODEL_SEMSEG.pretrained_pth = 'exp/openrooms/pspnet50V3_2gpu_100k/model/train
 # _C.MODEL_SEMSEG.configs = ()
 
 _C.DATASET = CN()
-_C.DATASET.root_dir = ''
+_C.DATASET.dataset_name = 'openrooms'
+_C.DATASET.dataset_path = ''
+_C.DATASET.dataset_path_local = 'dataset/openrooms'
+_C.DATASET.dataset_path_cluster = '/siggraphasia20dataset/code/Routine/DatasetCreation/'
+_C.DATASET.dataset_list = 'data/openrooms/list'
+
 # _C.DATASET.batch_size = 16
 _C.DATASET.num_workers = 8
 _C.DATASET.if_val_dist = True

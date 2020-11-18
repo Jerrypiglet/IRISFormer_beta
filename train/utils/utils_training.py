@@ -183,7 +183,7 @@ def print_gpu_usage(handle, logger):
     mem_res = nvidia_smi.nvmlDeviceGetMemoryInfo(handle)
     usage_str = f'mem: {mem_res.used / (1024**2)} (GiB) - '
     usage_percent_str = f'{100 * (mem_res.used / mem_res.total):.3f}%'
-    logger.info(green(usage_str + usage_percent_str))
+    logger.info(red(usage_str + usage_percent_str))
     # print(f'mem: {mem_res.used / (1024**2)} (GiB)') # usage in GiB
     # print(f'mem: {100 * (mem_res.used / mem_res.total):.3f}%') # percentage usage
     return mem_res.used / mem_res.total

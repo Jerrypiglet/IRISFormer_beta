@@ -392,7 +392,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
     if opt.cfg.MODEL_BRDF.enable:
         im_paths_list = flatten_list(im_paths_list)
-        print(im_paths_list)
+        # print(im_paths_list)
 
         albedoBatch_vis = torch.cat(albedoBatch_list)
         normalBatch_vis = torch.cat(normalBatch_list)

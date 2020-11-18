@@ -202,8 +202,8 @@ class BilateralLayer(nn.Module):
         self.bs_params_arr[3] = self.bs_params['cg_maxiter']
 
         if isCuda:
-            self.grid_params_arr = self.grid_params_arr.cuda(gpuId )
-            self.bs_params_arr = self.bs_params_arr.cuda(gpuId )
+            self.grid_params_arr = self.grid_params_arr.cuda()
+            self.bs_params_arr = self.bs_params_arr.cuda()
 
         self.grid_params_arr.requires_grad = False
         self.bs_params_arr.requires_grad = False

@@ -19,7 +19,8 @@ print(sys.path)
 
 import torchvision.utils as vutils
 import utils
-from dataset_openrooms import openrooms
+# from dataset_openrooms import openrooms
+from dataset_openroomsV2 import openrooms
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
@@ -39,6 +40,7 @@ import cv2
 # from models_def.baseline_same import Baseline as UNet
 from models_def.model_semseg_brdf import SemSeg_BRDF
 from utils.utils_vis import vis_index_map
+print('++++++++++++++++++++++++++')
 from utils.config import cfg
 from utils.comm import synchronize, get_rank
 from utils.utils_training import get_optimizer, freeze_bn_in_module
@@ -55,6 +57,7 @@ from utils.checkpointer import DetectronCheckpointer
 from torch.optim.lr_scheduler import MultiStepLR, ReduceLROnPlateau, StepLR
 
 import utils.utils_config as utils_config
+from utils.utils_envs import set_up_envs
 
 
 parser = argparse.ArgumentParser()
@@ -69,10 +72,10 @@ parser.add_argument('--task_split', type=str, default='train', help='train, val,
 # parser.add_argument('--batchSize0', type=int, default=16, help='input batch size; ALL GPUs')
 # parser.add_argument('--batchSize1', type=int, default=16, help='input batch size; ALL GPUs')
 
-# parser.add_argument('--imHeight0', type=int, default=240, help='the height / width of the input image to model')
-# parser.add_argument('--imWidth0', type=int, default=320, help='the height / width of the input image to model')
-# parser.add_argument('--imHeight1', type=int, default=240, help='the height / width of the input image to model')
-# parser.add_argument('--imWidth1', type=int, default=320, help='the height / width of the input image to model')
+# parser.add_argument('--im_height0', type=int, default=240, help='the height / width of the input image to model')
+# parser.add_argument('--im_width0', type=int, default=320, help='the height / width of the input image to model')
+# parser.add_argument('--im_height1', type=int, default=240, help='the height / width of the input image to model')
+# parser.add_argument('--im_width1', type=int, default=320, help='the height / width of the input image to model')
 
 # parser.add_argument('--cuda', action='store_true', help='enables cuda')
 # parser.add_argument('--deviceIds', type=int, nargs='+', default=[0, 1], help='the gpus used for training model')
@@ -130,15 +133,15 @@ parser.add_argument(
 
 # The detail model setting
 opt = parser.parse_args()
-print(opt)
+# print(opt)
 os.environ['MASETER_PORT'] = str(nextPort(int(opt.master_port)))
 cfg.merge_from_file(opt.config_file)
 cfg.merge_from_list(opt.params)
 
-
-cfg.freeze()
 opt.cfg = cfg
-print(opt.cfg)
+# print(opt.cfg)
+set_up_envs(opt)
+opt.cfg.freeze()
 
 semseg_configs = utils_config.load_cfg_from_cfg_file(os.path.join(pwdpath, cfg.MODEL_SEMSEG.config_file))
 semseg_configs = utils_config.merge_cfg_from_list(semseg_configs, opt.params)
@@ -175,7 +178,7 @@ if opt.if_cluster:
     SUMMARY_VIS_PATH = opt.home_path / SUMMARY_VIS_PATH
 if not opt.if_cluster:
     opt.task_name = get_datetime() + '-' + opt.task_name
-    print(opt.cfg)
+    # print(opt.cfg)
     opt.root = opt.cfg.PATH.root_local
 else:
     opt.root = opt.cfg.PATH.root_cluster
@@ -185,7 +188,7 @@ opt.summary_vis_path_task = SUMMARY_VIS_PATH / opt.task_name
 opt.summary_vis_path_task_py = opt.summary_vis_path_task / 'py_files'
 
 save_folders = [opt.summary_path_task, opt.summary_vis_path_task, opt.summary_vis_path_task_py, opt.checkpoints_path_task, ]
-print('====%d/%d', opt.rank, opt.num_gpus, opt.checkpoints_path_task)
+print('====%d/%d'%(opt.rank, opt.num_gpus), opt.checkpoints_path_task)
 
 if opt.is_master:
     for root_folder in [SUMMARY_PATH, CKPT_PATH, SUMMARY_VIS_PATH]:
@@ -286,8 +289,8 @@ transforms = T.Compose([
         T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
     ])
 brdf_dataset_train = openrooms( opt.data_root, transforms, opt, 
-        imWidth = opt.cfg.DATA.im_width, imHeight = opt.cfg.DATA.im_height,
-        cascadeLevel = opt.cascadeLevel, split = 'train')
+        # im_width = opt.cfg.DATA.im_width, im_height = opt.cfg.DATA.im_height,
+        cascadeLevel = opt.cascadeLevel, split = 'train', logger=logger)
 # brdf_loader_train = DataLoader(brdf_dataset_train, batch_size = cfg.SOLVER.ims_per_batch,
 #         num_workers = 16, shuffle = True, pin_memory=True)
 brdf_loader_train = make_data_loader(
@@ -307,11 +310,11 @@ if 'mini' in opt.data_root:
     brdf_dataset_val_vis = brdf_dataset_train
 else:
     brdf_dataset_val = openrooms( opt.data_root, transforms, opt, 
-            imWidth = opt.cfg.DATA.im_width, imHeight = opt.cfg.DATA.im_height,
-            cascadeLevel = opt.cascadeLevel, split = 'val', load_first = 100)
+            # im_width = opt.cfg.DATA.im_width, im_height = opt.cfg.DATA.im_height,
+            cascadeLevel = opt.cascadeLevel, split = 'val', logger=logger)
     brdf_dataset_val_vis = openrooms( opt.data_root, transforms, opt, 
-            imWidth = opt.cfg.DATA.im_width, imHeight = opt.cfg.DATA.im_height,
-            cascadeLevel = opt.cascadeLevel, split = 'val', load_first = 20)
+            # im_width = opt.cfg.DATA.im_width, im_height = opt.cfg.DATA.im_height,
+            cascadeLevel = opt.cascadeLevel, split = 'val', load_first = 20, logger=logger)
 # brdfLoaderVal = DataLoader(brdf_dataset_val, batch_size = opt.batchSize,
         # num_workers = 16, shuffle = False, pin_memory=True)
 brdf_loader_val = make_data_loader(
