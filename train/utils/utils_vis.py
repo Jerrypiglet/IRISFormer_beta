@@ -40,6 +40,7 @@ def vis_disp_colormap(disp_array, file=None, normalize=True):
     cm = plt.get_cmap('jet')
     # disp_array = disp_array[:, :, :3]
     if normalize:
+        disp_array -= np.amin(disp_array)
         disp_array = disp_array/(1e-6+np.amax(disp_array))
     else:
         disp_array = np.clip(disp_array, 0., 1.)

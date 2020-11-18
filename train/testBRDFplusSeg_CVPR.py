@@ -20,6 +20,7 @@ print(sys.path)
 import torchvision.utils as vutils
 import utils
 from dataset_openrooms import openrooms
+from dataset_openrooms_real import openrooms_real
 import torch.nn as nn
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
@@ -110,6 +111,10 @@ parser.add_argument('--invalid_index', type=int, default = 255, help='index for 
 parser.add_argument('--resume', type=str, help='resume training; can be full path (e.g. tmp/checkpoint0.pth.tar) or taskname (e.g. tmp); [to continue the current task, use: resume]', default='NoCkpt')
 parser.add_argument('--reset_scheduler', action='store_true', help='')
 parser.add_argument('--reset_lr', action='store_true', help='')
+
+parser.add_argument('--test_real', action='store_true', help='')
+parser.add_argument("--real_list", type=str, default='')
+
 
 parser.add_argument(
     "--config-file",
@@ -295,17 +300,41 @@ transforms = T.Compose([
 if opt.cfg.MODEL_SEMSEG.enable:
     opt.semseg_colors = brdf_dataset_train.semseg_colors
 
-if 'mini' in opt.data_root:
-    print('=====!!!!===== mini: brdf_dataset_val = brdf_dataset_train')
-    brdf_dataset_val = brdf_dataset_train
-    brdf_dataset_val_vis = brdf_dataset_train
-else:
+# if 'mini' in opt.data_root:
+#     print('=====!!!!===== mini: brdf_dataset_val = brdf_dataset_train')
+#     brdf_dataset_val = brdf_dataset_train
+#     brdf_dataset_val_vis = brdf_dataset_train
+# else:
+    # brdf_dataset_val = openrooms( opt.data_root, transforms, opt, 
+    #         imWidth = opt.cfg.DATA.im_width, imHeight = opt.cfg.DATA.im_height,
+    #         cascadeLevel = opt.cascadeLevel, split = 'test', phase = 'TEST')
+    # brdf_dataset_val_vis = openrooms( opt.data_root, transforms, opt, 
+    #         imWidth = opt.cfg.DATA.im_width, imHeight = opt.cfg.DATA.im_height,
+    #         cascadeLevel = opt.cascadeLevel, split = 'test', phase = 'TEST')
+
+if opt.test_real:
+    brdf_dataset_val = openrooms_real( opt.data_root, transforms, opt, opt.real_list, 
+            imWidth = opt.cfg.DATA.im_width, imHeight = opt.cfg.DATA.im_height,)
+    brdf_dataset_val_vis = openrooms_real( opt.data_root, transforms, opt, opt.real_list, 
+            imWidth = opt.cfg.DATA.im_width, imHeight = opt.cfg.DATA.im_height,)
+else:    
+    # brdf_dataset_val = openrooms( opt.data_root, transforms, opt, 
+    #         imWidth = opt.cfg.DATA.im_width, imHeight = opt.cfg.DATA.im_height,
+    #         cascadeLevel = opt.cascadeLevel, split = 'val')
+    # brdf_dataset_val_vis = openrooms( opt.data_root, transforms, opt, 
+    #         imWidth = opt.cfg.DATA.im_width, imHeight = opt.cfg.DATA.im_height,
+    #         cascadeLevel = opt.cascadeLevel, split = 'val')
+
     brdf_dataset_val = openrooms( opt.data_root, transforms, opt, 
             imWidth = opt.cfg.DATA.im_width, imHeight = opt.cfg.DATA.im_height,
             cascadeLevel = opt.cascadeLevel, split = 'test', phase = 'TEST')
     brdf_dataset_val_vis = openrooms( opt.data_root, transforms, opt, 
             imWidth = opt.cfg.DATA.im_width, imHeight = opt.cfg.DATA.im_height,
             cascadeLevel = opt.cascadeLevel, split = 'test', phase = 'TEST')
+
+
+
+
 # brdfLoaderVal = DataLoader(brdf_dataset_val, batch_size = opt.batchSize,
         # num_workers = 16, shuffle = False, pin_memory=True)
 brdf_loader_val = make_data_loader(
@@ -387,7 +416,7 @@ val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid}
 if opt.if_vis:
     vis_val_epoch_joint(brdf_loader_val_vis, model, bin_mean_shift, val_params)
     synchronize()                
-if opt.if_val:
+if opt.if_val and not opt.test_real:
     val_epoch_joint(brdf_loader_val, model, bin_mean_shift, val_params)
 
 

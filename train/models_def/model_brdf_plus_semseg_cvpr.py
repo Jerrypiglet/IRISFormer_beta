@@ -46,7 +46,9 @@ class BRDFplusSemSeg(nn.Module):
                 }
             )
         if self.cfg.MODEL_BRDF.enable_semseg_decoder:
-            self.BRDF_Net.update({'semsegDecoder': models_brdf.decoder0(opt, mode=-1, out_channel=self.cfg.MODEL_BRDF.semseg_classes)})
+            self.BRDF_Net.update({'semsegDecoder': models_brdf.decoder0(opt, mode=-1, out_channel=self.cfg.MODEL_BRDF.semseg_classes, if_PPM=self.cfg.MODEL_BRDF.semseg_PPM)})
+            # self.BRDF_Net.update({'semsegDecoder': models_brdf.decoder0(opt, mode=-1, out_channel=self.cfg.MODEL_BRDF.semseg_classes, \
+                # in_C=[1024, 1024, 512, 512, 256, 192], out_C=[512, 256, 256, 128, 128, 128], group_C=[32, 16, 16, 8, 8, 8], if_PPM=self.cfg.MODEL_BRDF.semseg_PPM)})
         # self.guide_net = guideNet(opt)
 
     # def forward_mat_seg(self, input_dict):
@@ -94,7 +96,9 @@ class BRDFplusSemSeg(nn.Module):
         normalPred = self.BRDF_Net['normalDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_guide=input_dict_guide)
         roughPred = self.BRDF_Net['roughDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_guide=input_dict_guide)
         depthPred = 0.5 * (self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_guide=input_dict_guide) + 1)
+        # print(torch.min(depthPred), torch.max(depthPred), torch.mean(depthPred), torch.median(depthPred))
 
+        # if not self.opt.test_real:
         input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
         albedoPred = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
                 input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)

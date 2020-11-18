@@ -156,10 +156,10 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 semseg_meters['intersection_meter'].update(intersection), semseg_meters['union_meter'].update(union), semseg_meters['target_meter'].update(target)
                 # accuracy = sum(semseg_meters['intersection_meter'].val) / (sum(semseg_meters['target_meter'].val) + 1e-10)
 
-            print(batch_id)
+            # print(batch_id)
 
-            synchronize()
-            
+            # synchronize()
+
     # ======= Metering
     if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
         iou_class = semseg_meters['intersection_meter'].sum / (semseg_meters['union_meter'].sum + 1e-10)
@@ -197,7 +197,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     num_val_im_vis = 0
     num_val_semseg_vis = 0
     num_val_brdf_vis = 0
-    num_val_vis_MAX = 16
+    # num_val_vis_MAX = 100
 
     time_meters = get_time_meters_joint()
 
@@ -228,8 +228,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
             # print(batch_id)
 
-            if num_val_brdf_vis >= num_val_vis_MAX or num_val_mat_seg_vis >= num_val_vis_MAX:
-                break
+            # if num_val_brdf_vis >= num_val_vis_MAX or num_val_mat_seg_vis >= num_val_vis_MAX:
+            #     break
 
             input_dict = get_input_dict_joint(data_batch, opt)
             if batch_id == 0:
@@ -247,8 +247,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 semseg_label = input_dict['semseg_label'].cpu().numpy()
 
             for sample_idx, im_single in enumerate(data_batch['im_not_hdr']):
-                if num_val_im_vis >= num_val_vis_MAX:
-                    break
+                # if num_val_im_vis >= num_val_vis_MAX:
+                #     break
                 im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
                 # im_path = os.path.join('./tmp/', 'im_%d-%d_color.png'%(tid, im_index))
                 # color_path = os.path.join('./tmp/', 'im_%d-%d_semseg.png'%(tid, im_index))
@@ -274,8 +274,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             if opt.cfg.MODEL_SEMSEG.enable:
                 for sample_idx, semseg_color in enumerate(output_dict['semseg_color_list']):
 
-                    if num_val_semseg_vis >= num_val_vis_MAX:
-                        break
+                    # if num_val_semseg_vis >= num_val_vis_MAX:
+                    #     break
 
                     # im_path = os.path.join('./tmp/', 'im_%d-%d_color.png'%(tid, im_index))
                     # color_path = os.path.join('./tmp/', 'im_%d-%d_semseg.png'%(tid, im_index))
@@ -292,8 +292,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 b, c, h, w = output_dict['logit'].size()
                 for sample_idx, (logit_single, embedding_single) in enumerate(zip(output_dict['logit'].detach(), output_dict['embedding'].detach())):
 
-                    if num_val_mat_seg_vis >= num_val_vis_MAX:
-                        break
+                    # if num_val_mat_seg_vis >= num_val_vis_MAX:
+                    #     break
                     
                     # prob_single = torch.sigmoid(logit_single)
                     prob_single = input_dict['mat_notlight_mask_cpu'][sample_idx].to(opt.device).float()
@@ -391,25 +391,25 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     synchronize()
 
     if opt.cfg.MODEL_BRDF.enable:
-        im_paths_list = flatten_list(im_paths_list)[:num_val_vis_MAX]
+        im_paths_list = flatten_list(im_paths_list)
         print(im_paths_list)
 
-        albedoBatch_vis = torch.cat(albedoBatch_list)[:num_val_vis_MAX]
-        normalBatch_vis = torch.cat(normalBatch_list)[:num_val_vis_MAX]
-        roughBatch_vis = torch.cat(roughBatch_list)[:num_val_vis_MAX]
-        depthBatch_vis = torch.cat(depthBatch_list)[:num_val_vis_MAX]
-        imBatch_vis = torch.cat(imBatch_list)[:num_val_vis_MAX]
-        segAllBatch_vis = torch.cat(segAllBatch_list)[:num_val_vis_MAX]
+        albedoBatch_vis = torch.cat(albedoBatch_list)
+        normalBatch_vis = torch.cat(normalBatch_list)
+        roughBatch_vis = torch.cat(roughBatch_list)
+        depthBatch_vis = torch.cat(depthBatch_list)
+        imBatch_vis = torch.cat(imBatch_list)
+        segAllBatch_vis = torch.cat(segAllBatch_list)
 
         if opt.cascadeLevel > 0:
-            diffusePreBatch_vis = torch.cat(diffusePreBatch_list)[:num_val_vis_MAX]
-            specularPreBatch_vis = torch.cat(specularPreBatch_list)[:num_val_vis_MAX]
-            renderedImBatch_vis = torch.cat(renderedImBatch_list)[:num_val_vis_MAX]
+            diffusePreBatch_vis = torch.cat(diffusePreBatch_list)
+            specularPreBatch_vis = torch.cat(specularPreBatch_list)
+            renderedImBatch_vis = torch.cat(renderedImBatch_list)
 
-        albedoPreds_vis = torch.cat(albedoPreds_list)[:num_val_vis_MAX]
-        normalPreds_vis = torch.cat(normalPreds_list)[:num_val_vis_MAX]
-        roughPreds_vis = torch.cat(roughPreds_list)[:num_val_vis_MAX]
-        depthPreds_vis = torch.cat(depthPreds_list)[:num_val_vis_MAX]
+        albedoPreds_vis = torch.cat(albedoPreds_list)
+        normalPreds_vis = torch.cat(normalPreds_list)
+        roughPreds_vis = torch.cat(roughPreds_list)
+        depthPreds_vis = torch.cat(depthPreds_list)
 
         if opt.is_master:
             print('Saving to ', '{0}/{1}_albedoGt.png'.format(opt.summary_vis_path_task, tid))
@@ -424,16 +424,17 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             depthOut = 1 / torch.clamp(depthBatch_vis + 1, 1e-6, 10) * segAllBatch_vis.expand_as(depthBatch_vis)
             depth_gt_batch_vis_sdr = ( depthOut*segAllBatch_vis.expand_as(depthBatch_vis) ).data
 
-            vutils.save_image(im_batch_vis_sdr,
-                    '{0}/{1}_im.png'.format(opt.summary_vis_path_task, tid) )
-            vutils.save_image(albedo_gt_batch_vis_sdr,
-                    '{0}/{1}_albedoGt.png'.format(opt.summary_vis_path_task, tid) )
-            vutils.save_image(normal_gt_batch_vis_sdr,
-                    '{0}/{1}_normalGt.png'.format(opt.summary_vis_path_task, tid) )
-            vutils.save_image(rough_gt_batch_vis_sdr,
-                    '{0}/{1}_roughGt.png'.format(opt.summary_vis_path_task, tid) )
-            vutils.save_image(depth_gt_batch_vis_sdr,
-                    '{0}/{1}_depthGt.png'.format(opt.summary_vis_path_task, tid) )
+            if not opt.test_real:
+                vutils.save_image(im_batch_vis_sdr,
+                        '{0}/{1}_im.png'.format(opt.summary_vis_path_task, tid) )
+                vutils.save_image(albedo_gt_batch_vis_sdr,
+                        '{0}/{1}_albedoGt.png'.format(opt.summary_vis_path_task, tid) )
+                vutils.save_image(normal_gt_batch_vis_sdr,
+                        '{0}/{1}_normalGt.png'.format(opt.summary_vis_path_task, tid) )
+                vutils.save_image(rough_gt_batch_vis_sdr,
+                        '{0}/{1}_roughGt.png'.format(opt.summary_vis_path_task, tid) )
+                vutils.save_image(depth_gt_batch_vis_sdr,
+                        '{0}/{1}_depthGt.png'.format(opt.summary_vis_path_task, tid) )
 
             albedo_gt_batch_vis_sdr_numpy = albedo_gt_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
             normal_gt_batch_vis_sdr_numpy = normal_gt_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
@@ -441,11 +442,12 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             depth_gt_batch_vis_sdr_numpy = depth_gt_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
             # print('++++', rough_gt_batch_vis_sdr_numpy.shape, depth_gt_batch_vis_sdr_numpy.shape, albedo_gt_batch_vis_sdr_numpy.shape, albedo_gt_batch_vis_sdr_numpy.dtype)
             # print(np.amax(albedo_gt_batch_vis_sdr_numpy), np.amin(albedo_gt_batch_vis_sdr_numpy), np.mean(albedo_gt_batch_vis_sdr_numpy))
-            for image_idx in range(albedo_gt_batch_vis_sdr.shape[0]):
-                writer.add_image('VAL_brdf-albedo_GT/%d'%image_idx, albedo_gt_batch_vis_sdr_numpy[image_idx], tid, dataformats='HWC')
-                writer.add_image('VAL_brdf-normal_GT/%d'%image_idx, normal_gt_batch_vis_sdr_numpy[image_idx], tid, dataformats='HWC')
-                writer.add_image('VAL_brdf-rough_GT/%d'%image_idx, rough_gt_batch_vis_sdr_numpy[image_idx], tid, dataformats='HWC')
-                writer.add_image('VAL_brdf-depth_GT/%d'%image_idx, vis_disp_colormap(depth_gt_batch_vis_sdr_numpy[image_idx].squeeze()), tid, dataformats='HWC')
+            if not opt.test_real:
+                for image_idx in range(albedo_gt_batch_vis_sdr.shape[0]):
+                    writer.add_image('VAL_brdf-albedo_GT/%d'%image_idx, albedo_gt_batch_vis_sdr_numpy[image_idx], tid, dataformats='HWC')
+                    writer.add_image('VAL_brdf-normal_GT/%d'%image_idx, normal_gt_batch_vis_sdr_numpy[image_idx], tid, dataformats='HWC')
+                    writer.add_image('VAL_brdf-rough_GT/%d'%image_idx, rough_gt_batch_vis_sdr_numpy[image_idx], tid, dataformats='HWC')
+                    writer.add_image('VAL_brdf-depth_GT/%d'%image_idx, vis_disp_colormap(depth_gt_batch_vis_sdr_numpy[image_idx].squeeze()), tid, dataformats='HWC')
 
             if opt.cascadeLevel > 0:
                 vutils.save_image( ( (diffusePreBatch_vis)**(1.0/2.2) ).data,
@@ -474,6 +476,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             albedo_pred_batch_vis_sdr = ( (albedoPreds_vis ) ** (1.0/2.2) ).data
             normal_pred_batch_vis_sdr = ( 0.5*(normalPreds_vis + 1) ).data
             rough_pred_batch_vis_sdr = ( 0.5*(roughPreds_vis + 1) ).data
+            # print(torch.min(1 / torch.clamp(depthPreds_vis + 1, 1e-6, 10)), torch.max(1 / torch.clamp(depthPreds_vis + 1, 1e-6, 10)), torch.mean(1 / torch.clamp(depthPreds_vis + 1, 1e-6, 10)), torch.median(1 / torch.clamp(depthPreds_vis + 1, 1e-6, 10)))
+
             depthOut = 1 / torch.clamp(depthPreds_vis + 1, 1e-6, 10) * segAllBatch_vis.expand_as(depthPreds_vis)
             depth_pred_batch_vis_sdr = ( depthOut * segAllBatch_vis.expand_as(depthPreds_vis) ).data
 

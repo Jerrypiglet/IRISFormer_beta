@@ -14,6 +14,7 @@ import torch
 from tqdm import tqdm
 import torchvision.transforms as T
 import PIL
+import os
 
 
 class openrooms(data.Dataset):
@@ -24,7 +25,8 @@ class openrooms(data.Dataset):
             phase='TRAIN', split='train', rseed = None, cascadeLevel = 0,
             isLight = False, isAllLight = False,
             envHeight = 8, envWidth = 16, envRow = 120, envCol = 160, 
-            SGNum = 12):
+            SGNum = 12, 
+            load_first = -1):
         
         if phase.upper() == 'TRAIN':
             self.sceneFile = osp.join(dataRoot, 'train.txt')
@@ -40,8 +42,10 @@ class openrooms(data.Dataset):
         self.opt = opt
 
         if self.opt.cfg.MODEL_SEMSEG.enable:
-            self.semseg_path = self.opt.semseg_configs.semseg_path_cluster if opt.if_cluster else self.opt.semseg_configs.semseg_path_local
-            self.semseg_colors = np.loadtxt(self.semseg_path + opt.semseg_configs.colors_path).astype('uint8')
+            self.semseg_path = self.opt.cfg.MODEL_SEMSEG.semseg_path_cluster if opt.if_cluster else self.opt.cfg.MODEL_SEMSEG.semseg_path_local
+            self.semseg_colors = np.loadtxt(os.path.join(self.opt.root, self.opt.cfg.PATH.semseg_colors)).astype('uint8')
+            # self.semseg_colors = np.loadtxt(os.path.join('dataopt.semseg_configs.colors_path)).astype('uint8')
+            # self.semseg_colors = np.loadtxt(os.path.join(self.semseg_path, opt.semseg_configs.colors_path)).astype('uint8')
         
         with open(self.sceneFile, 'r') as fIn:
             sceneList = fIn.readlines() 
@@ -151,6 +155,9 @@ class openrooms(data.Dataset):
             random.seed(rseed)
         # print('++++++++perm', self.count)
         random.shuffle(self.perm )
+
+        if load_first != -1:
+            self.perm = self.perm[:load_first]
 
     def __len__(self):
         return len(self.perm )
@@ -274,6 +281,7 @@ class openrooms(data.Dataset):
                 'rough': torch.from_numpy(rough),
                 'depth': torch.from_numpy(depth),
                 'mask': torch.from_numpy(mask), 
+
                 'maskPath': self.maskList[self.perm[ind] ], 
                 'segArea': torch.from_numpy(segArea),
                 'segEnv': torch.from_numpy(segEnv),
@@ -288,6 +296,8 @@ class openrooms(data.Dataset):
                 'instance': torch.ByteTensor(segmentation), 
                 'semantic': 1 - torch.FloatTensor(segmentation[num_mat_masks, :, :]).unsqueeze(0),
                 }
+        # print(albedo.shape, normal.shape, rough.shape, depth.shape, mask.shape)
+        # print(segArea.shape, im.shape, seg.shape, mat_aggre_map.shape, segmentation.shape, (1 - torch.FloatTensor(segmentation[num_mat_masks, :, :]).unsqueeze(0)).shape)
         # if self.transform is not None and not self.opt.if_hdr:
         batchDict.update({'image_transformed': image_transformed, 'im_not_hdr': im_not_hdr, 'im_uint8': im_uint8})
 

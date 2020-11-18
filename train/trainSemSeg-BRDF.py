@@ -111,6 +111,9 @@ parser.add_argument('--resume', type=str, help='resume training; can be full pat
 parser.add_argument('--reset_scheduler', action='store_true', help='')
 parser.add_argument('--reset_lr', action='store_true', help='')
 
+# to get rid of
+parser.add_argument('--test_real', action='store_true', help='')
+
 parser.add_argument(
     "--config-file",
     default=os.path.join(pwdpath, "configs/config.yaml"),
@@ -172,6 +175,10 @@ if opt.if_cluster:
     SUMMARY_VIS_PATH = opt.home_path / SUMMARY_VIS_PATH
 if not opt.if_cluster:
     opt.task_name = get_datetime() + '-' + opt.task_name
+    print(opt.cfg)
+    opt.root = opt.cfg.PATH.root_local
+else:
+    opt.root = opt.cfg.PATH.root_cluster
 opt.summary_path_task = SUMMARY_PATH / opt.task_name
 opt.checkpoints_path_task = CKPT_PATH / opt.task_name
 opt.summary_vis_path_task = SUMMARY_VIS_PATH / opt.task_name
@@ -252,7 +259,7 @@ model.print_net()
 if opt.cfg.MODEL_BRDF.load_pretrained_pth:
     # print(opt.cfg.MODEL_BRDF.pre_trained_Zhengqin, '================----')
     model.load_pretrained_brdf(opt.cfg.MODEL_BRDF.pretrained_pth_name)
-if opt.cfg.MODEL_SEMSEG.if_freeze:
+if opt.cfg.MODEL_SEMSEG.enable and opt.cfg.MODEL_SEMSEG.if_freeze:
     # print(opt.cfg.MODEL_SEMSEG.if_freeze, dtype(opt.cfg.MODEL_SEMSEG.if_freeze), '================')
     model.turn_off_names(['UNet'])
     model.freeze_bn_semantics()
@@ -301,10 +308,10 @@ if 'mini' in opt.data_root:
 else:
     brdf_dataset_val = openrooms( opt.data_root, transforms, opt, 
             imWidth = opt.cfg.DATA.im_width, imHeight = opt.cfg.DATA.im_height,
-            cascadeLevel = opt.cascadeLevel, split = 'val')
+            cascadeLevel = opt.cascadeLevel, split = 'val', load_first = 100)
     brdf_dataset_val_vis = openrooms( opt.data_root, transforms, opt, 
             imWidth = opt.cfg.DATA.im_width, imHeight = opt.cfg.DATA.im_height,
-            cascadeLevel = opt.cascadeLevel, split = 'val')
+            cascadeLevel = opt.cascadeLevel, split = 'val', load_first = 20)
 # brdfLoaderVal = DataLoader(brdf_dataset_val, batch_size = opt.batchSize,
         # num_workers = 16, shuffle = False, pin_memory=True)
 brdf_loader_val = make_data_loader(
@@ -319,7 +326,7 @@ brdf_loader_val = make_data_loader(
 )
 brdf_loader_val_vis = make_data_loader(
     opt,
-    brdf_dataset_val,
+    brdf_dataset_val_vis,
     is_train=False,
     start_iter=0,
     logger=logger,

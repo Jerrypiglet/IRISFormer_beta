@@ -21,6 +21,16 @@ _C = CN()
 
 _C.DTYPE = "float32"
 
+_C.PATH = CN()
+_C.PATH.root = ''
+_C.PATH.root_local = '/home/ruizhu/Documents/Projects/semanticInverse/train'
+_C.PATH.root_cluster = '.'
+_C.PATH.semseg_colors_path = 'data/openrooms/openrooms_colors.txt'
+_C.PATH.semseg_names_path = 'data/openrooms/openrooms_names.txt'
+# _C.DATA.semseg_colors_path = 'data/openrooms/openrooms_colors.txt'
+# _C.DATA.semseg_names_path = 'data/openrooms/openrooms_names.txt'
+
+
 _C.MODEL_SEG = CN()
 _C.MODEL_SEG.enable = True
 _C.MODEL_SEG.arch = 'resnet101'
@@ -42,27 +52,29 @@ _C.MODEL_BRDF.depthWeight = 0.5
 _C.MODEL_BRDF.if_debug_arch = False
 
 _C.MODEL_BRDF.enable_semseg_decoder = False
+_C.MODEL_BRDF.semseg_PPM = False
 _C.MODEL_BRDF.semseg_ignore_label = 0
 _C.MODEL_BRDF.semseg_classes = 46
-_C.MODEL_BRDF.semseg_colors_path = 'data/openrooms_colors.txt'
-_C.MODEL_BRDF.semseg_names_path = 'data/openrooms_names.txt'
 
 
 
 _C.MODEL_SEMSEG = CN()
 _C.MODEL_SEMSEG.enable = True
-_C.MODEL_SEMSEG.config_file = 'configs/ade20k/ade20k_pspnet50.yaml'
+_C.MODEL_SEMSEG.semseg_path_local = '/home/ruizhu/Documents/Projects/semseg'
+_C.MODEL_SEMSEG.semseg_path_cluster = '/viscompfs/users/ruizhu/semseg/'
+_C.MODEL_SEMSEG.config_file = 'configs/openrooms/openrooms_pspnet50.yaml'
+_C.MODEL_SEMSEG.semseg_colors = 'data/openrooms/openrooms_colors.txt'
 _C.MODEL_SEMSEG.if_freeze = False
 _C.MODEL_SEMSEG.fix_bn = False
 _C.MODEL_SEMSEG.if_guide = False
 _C.MODEL_SEMSEG.load_pretrained_pth = True
-_C.MODEL_SEMSEG.pretrained_pth_name = ''
+_C.MODEL_SEMSEG.pretrained_pth = 'exp/openrooms/pspnet50V3_2gpu_100k/model/train_epoch_23_tid_147000.pth'
 
 
 # _C.MODEL_SEMSEG.configs = ()
 
 _C.DATASET = CN()
-_C.DATASET.root_dir = '/new_disk2/yuzh/PlaneNetData/'
+_C.DATASET.root_dir = ''
 # _C.DATASET.batch_size = 16
 _C.DATASET.num_workers = 8
 _C.DATASET.if_val_dist = True

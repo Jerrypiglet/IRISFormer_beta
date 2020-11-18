@@ -3,6 +3,7 @@ kind: Job
 metadata:
   name: z-job-tb
   # namespace: ucsd-haosulab
+  namespace: "#NAMESPACE"
   labels:
     user: rui  # Specify your name
 spec:
@@ -32,22 +33,22 @@ spec:
         # - '. /root/anaconda3/etc/profile.d/conda.sh && ln -s /cephfs/ruizhu/data / && ln -s /cephfs/ruizhu/Documents /home/ruizhu/ && ln -s /cephfs/ruizhu/newfoundland / && conda activate /cephfs/ruizhu/conda/yannick_docker_py37 && cd /home/ruizhu/Documents/Projects/adobe_rui_camera-calibration-redux && CUDA_VISIBLE_DEVICES=0,1,2,3 python -m torch.distributed.launch --master_port 5326 --nproc_per_node=4 train_combine_v3_RCNNOnly_bbox.py --num_layers 5 --pointnet_camH --pointnet_camH_refine --pointnet_personH_refine --accu_model --task_name 0128-0204_pod_BASELINEv4_L5_NEWDataV5_SmallerPersonBins-refine_personHinput_camHhigh5_DETACHinput_plateau750_cascadeL5-V0INPUT-SmallerPERSONBins1-190_lr1e-5_w360-10_human175STD15W05 --config-file maskrcnn/coco_config_small_synBN1108.yaml --weight_SUN360=10. SOLVER.IMS_PER_BATCH 16 TEST.IMS_PER_BATCH 16 SOLVER.PERSON_WEIGHT 0.05 SOLVER.BASE_LR 1e-5 MODEL.HUMAN.STD 0.15 MODEL.RCNN_WEIGHT_BACKBONE 1109-0141-mm1_SUN360RCNN-HorizonPitchRollVfovNET_myDistNarrowerLarge1105_bs16on4_le1e-5_indeptClsHeads_synBNApex_valBS1_yannickTransformAug MODEL.RCNN_WEIGHT_CLS_HEAD 1109-0141-mm1_SUN360RCNN-HorizonPitchRollVfovNET_myDistNarrowerLarge1105_bs16on4_le1e-5_indeptClsHeads_synBNApex_valBS1_yannickTransformAug MODEL.LOSS.VT_LOSS_CLAMP 1.'
         resources:
           requests:
-            cpu: "1"
-            memory: "1Gi"
+            cpu: "#CPUR" #"1"
+            memory: "#MEMRGi" #"10Gi"
             nvidia.com/gpu: 0
           limits:
-            cpu: "8"
-            memory: "50Gi"
+            cpu: "#CPUL " #"8"
+            memory: "#MEMLGi" #"50Gi"
             nvidia.com/gpu: 0
         volumeMounts:
           - name: dshm
             mountPath: /dev/shm 
           - name: viscompfs
             mountPath: /viscompfs
-          # - name: eccv20dataset
-          #   mountPath: /eccv20dataset
-          # - name: siggraphasia20dataset
-          #   mountPath: /siggraphasia20dataset
+          - name: eccv20dataset
+            mountPath: /eccv20dataset
+          - name: siggraphasia20dataset
+            mountPath: /siggraphasia20dataset
           - name: ruidata
             mountPath: /ruidata
       volumes:
@@ -64,12 +65,12 @@ spec:
             path: /viscompfs
             mountUser: viscompfs
             mountSecret: ceph-fs-secret
-      # - name: eccv20dataset
-      #   persistentVolumeClaim:
-      #       claimName: eccv20dataset 
-      # - name: siggraphasia20dataset
-      #   persistentVolumeClaim:
-      #       claimName: siggraphasia20dataset
+      - name: eccv20dataset
+        persistentVolumeClaim:
+            claimName: eccv20dataset 
+      - name: siggraphasia20dataset
+        persistentVolumeClaim:
+            claimName: siggraphasia20dataset
       - name: ruidata
         persistentVolumeClaim:
             claimName: ruidata

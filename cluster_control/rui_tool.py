@@ -35,9 +35,15 @@ def parse_args():
     sync_parser.add_argument('--debug', action='store_true', help='if debugging')
 
     tb_parser = subparsers.add_parser('tb', help='Delete a batch of jobs')
-    tb_parser.add_argument('-n', '--namespace', type=str, help='namespace')
+    # tb_parser.add_argument('-n', '--namespace', type=str, help='namespace')
     tb_parser.add_argument('--debug', action='store_true', help='if debugging')
     tb_parser.add_argument('-f', '--file', type=str, help='Path to template file', default='rui_job_tb_v6_ravi.yaml')
+    tb_parser.add_argument('--cpur', type=int, help='request of CPUs', default=1)
+    tb_parser.add_argument('--cpul', type=int, help='limit of CPUs', default=8)
+    tb_parser.add_argument('--memr', type=float, help='request of memory in Gi', default=1)
+    tb_parser.add_argument('--meml', type=int, help='limit of memory in Gi', default=50)
+    tb_parser.add_argument('--namespace', type=str, help='namespace of the job', default='ucsd-ravigroup')
+
 
     # tb_parser.add_argument('--logs_path', type=str, help='python path in pod', default='/root/miniconda3/bin/python')
 
@@ -50,10 +56,15 @@ def parse_args():
     create_parser.add_argument('--deploy_tar', type=str, help='deploy to target path', default='/viscompfs/users/ruizhu/train')
     create_parser.add_argument('--python_path', type=str, help='python path in pod', default='/viscompfs/users/ruizhu/envs/semanticInverse/bin/python')
     create_parser.add_argument('--pip_path', type=str, help='python path in pod', default='/viscompfs/users/ruizhu/envs/semanticInverse/bin/pip')
-    create_parser.add_argument('--gpus', type=int, help='nubmer of GPUs', default=2)    
+    create_parser.add_argument('--gpus', type=int, help='nubmer of GPUs', default=2)  
+    create_parser.add_argument('--cpur', type=int, help='request of CPUs', default=20)
+    create_parser.add_argument('--cpul', type=int, help='limit of CPUs', default=30)
+    create_parser.add_argument('--memr', type=int, help='request of memory in Gi', default=40)
+    create_parser.add_argument('--meml', type=int, help='limit of memory in Gi', default=100)
+    create_parser.add_argument('--namespace', type=str, help='namespace of the job', default='ucsd-ravigroup')
     create_parser.add_argument('-v', '--verbose', action='store_true', help='Verbose')
     create_parser.add_argument('-r', '--num-replicas', type=int, help='Number of replicas')
-    create_parser.add_argument('-n', '--namespace', type=str, help='namespace')
+    # create_parser.add_argument('-n', '--namespace', type=str, help='namespace')
     create_parser.add_argument('vals', help='Values to replace', nargs=argparse.REMAINDER)
     create_parser.add_argument('--debug', action='store_true', help='if debugging')
 
@@ -66,14 +77,14 @@ def iterate_dict(input_dict, var_replace_list=None):
         if isinstance(input_dict, list):
             return [iterate_dict(x, var_replace_list=var_replace_list) for x in input_dict]
         else:
-            # return input_dict
             if var_replace_list is not None:
                 for var in var_replace_list:
-                    # print('------', input_dict, var)
-                    if input_dict == var:
-                        # print('======', input_dict, var, var_replace_list[var])
-                        return var_replace_list[var]
-            # print('======', input_dict)
+                    # if input_dict == var:
+                    #     return var_replace_list[var]
+                    # print('------', str(input_dict), var)
+                    if var in str(input_dict):
+                        print(var, input_dict, '------>', input_dict.replace(str(var), str(var_replace_list[var])))
+                        return input_dict.replace(str(var), str(var_replace_list[var]))
             return input_dict
     
     new_dict = {}
@@ -83,7 +94,7 @@ def iterate_dict(input_dict, var_replace_list=None):
     return new_dict
 
 def replace_vars(args):
-    var_mapping = {'gpus': '#GPUS'}
+    var_mapping = {'gpus': '#GPUS', 'cpur': '#CPUR', 'cpul': '#CPUL', 'memr': '#MEMR', 'meml': '#MEML', 'namespace': '#NAMESPACE'}
     var_replace_list = {}
     for var in args:
         if var in var_mapping:
@@ -250,7 +261,17 @@ def sync(args):
     create_job_from_yaml(option_to_yaml_dict[option])
 
 def tb(args):
-    create_job_from_yaml(args.file)
+    yaml_content = load_yaml(args.file)
+    var_replace_list = replace_vars(vars(args))
+    yaml_content = iterate_dict(yaml_content, var_replace_list=var_replace_list)
+    print('------------ yaml_content:')
+    print(yaml_content)
+    tmp_yaml_filaname = 'tb_job.yaml'
+    dump_yaml(tmp_yaml_filaname, yaml_content)
+    print('============ YAML file dumped to %s'%tmp_yaml_filaname)
+
+
+    create_job_from_yaml(tmp_yaml_filaname)
 
 def main():
     args = parse_args()

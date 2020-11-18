@@ -6,6 +6,26 @@ import numpy as np
 
 import pac
 
+class PPM(nn.Module):
+    def __init__(self, in_dim, reduction_dim, bins):
+        super(PPM, self).__init__()
+        self.features = []
+        for bin in bins:
+            self.features.append(nn.Sequential(
+                nn.AdaptiveAvgPool2d(bin),
+                nn.Conv2d(in_dim, reduction_dim, kernel_size=1, bias=False),
+                nn.BatchNorm2d(reduction_dim),
+                nn.ReLU(inplace=True)
+            ))
+        self.features = nn.ModuleList(self.features)
+
+    def forward(self, x):
+        x_size = x.size()
+        out = [x]
+        for f in self.features:
+            out.append(F.interpolate(f(x), x_size[2:], mode='bilinear', align_corners=True))
+        return torch.cat(out, 1)
+
 def LSregress(pred, gt, origin):
     nb = pred.size(0)
     origSize = pred.size()
@@ -134,38 +154,45 @@ class encoder0(nn.Module):
 
 
 class decoder0(nn.Module):
-    def __init__(self, opt, mode=-1, out_channel=3):
+    def __init__(self, opt, mode=-1, out_channel=3, in_C = [1024, 1024, 512, 512, 256, 128], out_C = [512, 256, 256, 128, 64, 64], group_C = [32, 16, 16, 8, 4, 4],  if_PPM=False):
         super(decoder0, self).__init__()
         self.opt = opt
         self.mode = mode
+        self.if_PPM = if_PPM
 
-        self.if_mat_seg_guide = self.opt.cfg.MODEL_SEG.if_guide
+        self.if_mat_seg_guide = self.opt.cfg.MODEL_SEG.enable and self.opt.cfg.MODEL_SEG.if_guide
         self.if_mat_seg_guide_layers = ['dconv1', 'dconv2', 'dconv3', 'dconv4', 'dconv5', 'dconv6']
 
         # self.guide_C = self.opt.cfg.MODEL_SEG.guide_channels
-        self.if_semseg_guide = self.opt.cfg.MODEL_SEMSEG.if_guide
+        self.if_semseg_guide = self.opt.cfg.MODEL_SEMSEG.enable and self.opt.cfg.MODEL_SEMSEG.if_guide
         self.if_semseg_guide_layers = ['dconv3', 'dconv4', 'dconv5']
 
-        self.dconv1 = self.get_conv(name='dconv1', in_channels=1024, out_channels=512, kernel_size=3, stride=1, padding = 1, bias=True)
-        self.dgn1 = nn.GroupNorm(num_groups=32, num_channels=512)
+        self.dconv1 = self.get_conv(name='dconv1', in_channels=in_C[0], out_channels=out_C[0], kernel_size=3, stride=1, padding = 1, bias=True)
+        self.dgn1 = nn.GroupNorm(num_groups=group_C[0], num_channels=out_C[0])
 
-        self.dconv2 = self.get_conv(name='dconv2', in_channels=1024, out_channels=256, kernel_size=3, stride=1, padding = 1, bias=True)
-        self.dgn2 = nn.GroupNorm(num_groups=16, num_channels=256)
+        self.dconv2 = self.get_conv(name='dconv2', in_channels=in_C[1], out_channels=out_C[1], kernel_size=3, stride=1, padding = 1, bias=True)
+        self.dgn2 = nn.GroupNorm(num_groups=group_C[1], num_channels=out_C[1])
 
-        self.dconv3 = self.get_conv(name='dconv3', in_channels=512, out_channels=256, kernel_size=3, stride=1, padding=1, bias=True)
-        self.dgn3 = nn.GroupNorm(num_groups=16, num_channels=256)
+        self.dconv3 = self.get_conv(name='dconv3', in_channels=in_C[2], out_channels=out_C[2], kernel_size=3, stride=1, padding=1, bias=True)
+        self.dgn3 = nn.GroupNorm(num_groups=group_C[2], num_channels=out_C[2])
 
-        self.dconv4 = self.get_conv(name='dconv4', in_channels=512, out_channels=128, kernel_size=3, stride=1, padding = 1, bias=True)
-        self.dgn4 = nn.GroupNorm(num_groups=8, num_channels=128)
+        self.dconv4 = self.get_conv(name='dconv4', in_channels=in_C[3], out_channels=out_C[3], kernel_size=3, stride=1, padding = 1, bias=True)
+        self.dgn4 = nn.GroupNorm(num_groups=group_C[3], num_channels=out_C[3])
 
-        self.dconv5 = self.get_conv(name='dconv5', in_channels=256, out_channels=64, kernel_size=3, stride=1, padding = 1, bias=True)
-        self.dgn5 = nn.GroupNorm(num_groups=4, num_channels=64)
+        self.dconv5 = self.get_conv(name='dconv5', in_channels=in_C[4], out_channels=out_C[4], kernel_size=3, stride=1, padding = 1, bias=True)
+        self.dgn5 = nn.GroupNorm(num_groups=group_C[4], num_channels=out_C[4])
 
-        self.dconv6 = self.get_conv(name='dconv6', in_channels=128, out_channels=64, kernel_size=3, stride=1, padding = 1, bias=True)
-        self.dgn6 = nn.GroupNorm(num_groups=4, num_channels=64)
+        self.dconv6 = self.get_conv(name='dconv6', in_channels=in_C[5], out_channels=out_C[5], kernel_size=3, stride=1, padding = 1, bias=True)
+        self.dgn6 = nn.GroupNorm(num_groups=group_C[5], num_channels=out_C[5])
+
+        fea_dim = out_C[5]
+        if self.if_PPM:
+            bins=(1, 2, 3, 6)
+            self.ppm = PPM(fea_dim, int(fea_dim/len(bins)), bins)
+            fea_dim *= 2
 
         self.dpadFinal = nn.ReplicationPad2d(1)
-        self.dconvFinal = nn.Conv2d(in_channels=64, out_channels=out_channel, kernel_size = 3, stride=1, bias=True)
+        self.dconvFinal = nn.Conv2d(in_channels=fea_dim, out_channels=out_channel, kernel_size = 3, stride=1, bias=True)
 
     def get_conv(self, name, in_channels, out_channels, kernel_size, stride, bias, padding):
         if (self.if_mat_seg_guide and name in self.if_mat_seg_guide_layers) or (self.if_semseg_guide and name in self.if_semseg_guide_layers):
@@ -250,6 +277,9 @@ class decoder0(nn.Module):
 
         if dx6.size(3) != im.size(3) or dx6.size(2) != im.size(2):
             dx6 = F.interpolate(dx6, [im.size(2), im.size(3)], mode='bilinear')
+        if self.if_PPM:
+            dx6 = self.ppm(dx6)
+
         x_orig = self.dconvFinal(self.dpadFinal(dx6))
 
         # print(x1, x2, x3, x4, x5, x6)

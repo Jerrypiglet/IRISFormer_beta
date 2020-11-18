@@ -111,6 +111,10 @@ parser.add_argument('--resume', type=str, help='resume training; can be full pat
 parser.add_argument('--reset_scheduler', action='store_true', help='')
 parser.add_argument('--reset_lr', action='store_true', help='')
 
+parser.add_argument('--test_real', action='store_true', help='')
+parser.add_argument("--real_list", type=str, default='')
+
+
 parser.add_argument(
     "--config-file",
     default=os.path.join(pwdpath, "configs/config.yaml"),
@@ -347,7 +351,9 @@ if opt.resume != 'NoCkpt':
     # if 'train_POD_matseg_DDP' in opt.resume:
     #     replace_kws = ['hourglass_model.seq_L2.1', 'hourglass_model.seq_L2.3', 'hourglass_model.disp_res_pred_layer_L2']
     #     replace_with_kws = ['hourglass_model.seq.1', 'hourglass_model.seq.3', 'hourglass_model.disp_res_pred_layer']
-    checkpoint_restored, _, _ = checkpointer.load(task_name=opt.resume, replace_kws=replace_kws, replace_with_kws=replace_with_kws)
+    
+    # skip_kws = ['BRDF_Net.semsegDecoder.dconvFinal', 'dconv5', 'dconv6', 'dgn5', 'dgn6']
+    checkpoint_restored, _, _ = checkpointer.load(task_name=opt.resume, replace_kws=replace_kws, replace_with_kws=replace_with_kws, skip_kws=skip_kws)
     if 'iteration' in checkpoint_restored:
         tid_start = checkpoint_restored['iteration']
     if 'epoch' in checkpoint_restored:

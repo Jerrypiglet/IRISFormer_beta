@@ -24,7 +24,7 @@ class SemSeg_BRDF(nn.Module):
             std = [item * value_scale for item in std]
             self.std = torch.tensor(std).view(1, 3, 1, 1).to(opt.device)
             self.semseg_configs = self.opt.semseg_configs
-            self.semseg_path = self.semseg_configs.semseg_path_cluster if opt.if_cluster else self.semseg_configs.semseg_path_local
+            self.semseg_path = self.opt.cfg.MODEL_SEMSEG.semseg_path_cluster if opt.if_cluster else self.opt.cfg.MODEL_SEMSEG.semseg_path_local
             # self.UNet = Baseline(self.cfg.MODEL_SEMSEG)
             assert self.semseg_configs.arch == 'psp'
 
@@ -164,7 +164,7 @@ class SemSeg_BRDF(nn.Module):
 
     def load_pretrained_semseg(self):
         self.print_net()
-        model_path = self.semseg_path + self.semseg_configs.model_path
+        model_path = os.path.join(self.semseg_path, self.opt.cfg.MODEL_SEMSEG.pretrained_pth)
         if os.path.isfile(model_path):
             self.logger.info(red("=> loading checkpoint '{}'".format(model_path)))
             state_dict = torch.load(model_path)['state_dict']
@@ -174,7 +174,7 @@ class SemSeg_BRDF(nn.Module):
             replace_dict = {'layer0.0': 'layer0_1.0', 'layer0.1': 'layer0_1.1', 'layer0.3': 'layer0_2.0', 'layer0.4': 'layer0_2.1', 'layer0.6': 'layer0_3.0', 'layer0.7': 'layer0_3.1'}
             state_dict = {k.replace(key, replace_dict[key]): v for k, v in state_dict.items() for key in replace_dict}
             
-            self.SEMSEG_Net.load_state_dict(state_dict)
+            self.SEMSEG_Net.load_state_dict(state_dict, strict=True)
             self.logger.info(red("=> loaded checkpoint '{}'".format(model_path)))
         else:
             raise RuntimeError("=> no checkpoint found at '{}'".format(model_path))
