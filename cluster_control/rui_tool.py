@@ -59,7 +59,7 @@ def parse_args():
     create_parser.add_argument('--gpus', type=int, help='nubmer of GPUs', default=2)  
     create_parser.add_argument('--cpur', type=int, help='request of CPUs', default=20)
     create_parser.add_argument('--cpul', type=int, help='limit of CPUs', default=30)
-    create_parser.add_argument('--memr', type=int, help='request of memory in Gi', default=40)
+    create_parser.add_argument('--memr', type=int, help='request of memory in Gi', default=20)
     create_parser.add_argument('--meml', type=int, help='limit of memory in Gi', default=100)
     create_parser.add_argument('--namespace', type=str, help='namespace of the job', default='ucsd-ravigroup')
     create_parser.add_argument('-v', '--verbose', action='store_true', help='Verbose')
@@ -157,6 +157,7 @@ def get_pods(pattern, namespace=None):
         pods = str(pods[0])
     # pprint.pprint(pods)
     print(pods)
+    return pods
 
 def create_job_from_yaml(yaml_filename):
     # https://stackoverflow.com/questions/4760215/running-shell-command-and-capturing-the-output
@@ -192,7 +193,7 @@ def create(args):
         
     yaml_content['spec']['template']['spec']['containers'][0]['args'][0] += command_str
     yaml_content['metadata']['name'] += datetime_str
-    tmp_yaml_filaname = 'tmp_%s.yaml'%datetime_str
+    tmp_yaml_filaname = 'yamls/tmp_%s.yaml'%datetime_str
     dump_yaml(tmp_yaml_filaname, yaml_content)
     print('============ YAML file dumped to %s'%tmp_yaml_filaname)
 
@@ -212,7 +213,12 @@ def create(args):
     os.remove(tmp_yaml_filaname)
     # print('========= REMOVED YAML file %s'%tmp_yaml_filaname)
 
-    get_pods(yaml_content['metadata']['name'])
+    pod_name = get_pods(yaml_content['metadata']['name'])
+    
+    if pod_name:
+        with open("all_commands.txt", "a+") as f:
+            f.write("%s-%s\n" % (pod_name, datetime_str))
+            f.write("%s\n" % command_str)
 
 def delete(args, pattern=None, delete_all=False, answer=None):
     if pattern is None:

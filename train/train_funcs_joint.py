@@ -118,6 +118,13 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         ]
         if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
             loss_keys += ['loss_brdf-semseg']
+
+    if opt.cfg.MODEL_SEMSEG.enable:
+        loss_keys += [
+            'loss_semseg-ALL', 
+            'loss_semseg-main', 
+            'loss_semseg-aux', 
+        ]
         
     loss_meters = {loss_key: AverageMeter() for loss_key in loss_keys}
     time_meters = get_time_meters_joint()
@@ -232,8 +239,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             #     break
 
             input_dict = get_input_dict_joint(data_batch, opt)
-            if batch_id == 0:
-                print(input_dict['im_paths'])
+            # if batch_id == 0:
+            #     print(input_dict['im_paths'])
 
             # ======= Forward
             output_dict, loss_dict = forward_joint(input_dict, model, opt, time_meters)
@@ -246,7 +253,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 semseg_pred = output_dict['semsegPred'].cpu().numpy()
                 semseg_label = input_dict['semseg_label'].cpu().numpy()
 
-            for sample_idx,(im_single, im_path) in enumerate(zip(data_batch['im_not_hdr'], data_batch['imPath'])):
+            for sample_idx,(im_single, im_path) in enumerate(zip(data_batch['im_SDR_RGB'], data_batch['imPath'])):
                 # if num_val_im_vis >= num_val_vis_MAX:
                 #     break
                 im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
@@ -274,7 +281,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             
             # ======= visualize clusters for semseg
             if opt.cfg.MODEL_SEMSEG.enable:
-                for sample_idx, semseg_color in enumerate(output_dict['semseg_color_list']):
+                for sample_idx, (semseg_pred, semseg_GT) in enumerate(zip(output_dict['semseg_pred_color_list'], output_dict['semseg_GT_color_list'])):
 
                     # if num_val_semseg_vis >= num_val_vis_MAX:
                     #     break
@@ -285,7 +292,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     # semseg_color.save(color_path)
                     if opt.is_master:
                         # print(np.array(semseg_color.convert('RGB')).shape, '+++++++')
-                        writer.add_image('VAL_semseg-PRED/%d'%num_val_semseg_vis, np.array(semseg_color.convert('RGB')), tid, dataformats='HWC')
+                        writer.add_image('VAL_semseg-PRED/%d'%num_val_semseg_vis, np.array(semseg_pred.convert('RGB')), tid, dataformats='HWC')
+                        writer.add_image('VAL_semseg-GT/%d'%num_val_semseg_vis, np.array(semseg_GT.convert('RGB')), tid, dataformats='HWC')
                     num_val_semseg_vis += 1
 
                 

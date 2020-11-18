@@ -74,12 +74,16 @@ def load_cfg_from_cfg_file(file):
     return cfg
 
 
-def merge_cfg_from_list(cfg, cfg_list):
+def merge_cfg_from_list_old(cfg, cfg_list):
     new_cfg = copy.deepcopy(cfg)
     assert len(cfg_list) % 2 == 0
+    # print('++++++++', cfg_list)
+    # print('++++---++++', 'dataset_list' in cfg, 'dataset_list' in cfg, type(cfg), cfg)
     for full_key, v in zip(cfg_list[0::2], cfg_list[1::2]):
         subkey = full_key.split('.')[-1]
+        print('=====', full_key, v)
         if subkey not in cfg:
+            # print('merging config.. skipping %s..'%subkey) 
             continue
         # assert subkey in cfg, 'Non-existent key: {}'.format(full_key)
         value = _decode_cfg_value(v)
@@ -88,6 +92,39 @@ def merge_cfg_from_list(cfg, cfg_list):
         )
         setattr(new_cfg, subkey, value)
 
+    return new_cfg
+
+
+def merge_cfg_from_list(cfg, cfg_list):
+    new_cfg = copy.deepcopy(cfg)
+    _assert_with_logging(
+        len(cfg_list) % 2 == 0,
+        "Override list has odd length: {}; it must be a list of pairs".format(
+            cfg_list
+        ),
+    )
+    # root = new_cfg
+    for full_key, v in zip(cfg_list[0::2], cfg_list[1::2]):
+        # if root.key_is_deprecated(full_key):
+        #     continue
+        # if root.key_is_renamed(full_key):
+        #     root.raise_key_rename_error(full_key)
+        key_list = full_key.split(".")
+        d = new_cfg
+        for subkey in key_list[:-1]:
+            # _assert_with_logging(
+            #     subkey in d, "Non-existent key: {}".format(full_key)
+            # )
+            if subkey not in d:
+                continue
+            d = d[subkey]
+        subkey = key_list[-1]
+        # _assert_with_logging(subkey in d, "Non-existent key: {}".format(full_key))
+        if subkey not in d:
+            continue
+        value = _decode_cfg_value(v)
+        value = _check_and_coerce_cfg_value_type(value, d[subkey], subkey, full_key)
+        d[subkey] = value
     return new_cfg
 
 

@@ -16,14 +16,14 @@ import torchvision.transforms as T
 import PIL
 from utils.utils_misc import *
 
-def make_dataset(split='train', data_root=None, data_list=None):
+def make_dataset(split='train', data_root=None, data_list=None, logger=None):
     assert split in ['train', 'val', 'test']
     if not os.path.isfile(data_list):
         raise (RuntimeError("Image list file do not exist: " + data_list + "\n"))
     image_label_list = []
     list_read = open(data_list).readlines()
-    print("Totally {} samples in {} set.".format(len(list_read), split))
-    print("Starting Checking image&label pair {} list...".format(split))
+    logger.info("Totally {} samples in {} set.".format(len(list_read), split))
+    logger.info("Starting Checking image&label pair {} list...".format(split))
     for line in list_read:
         line = line.strip()
         line_split = line.split(' ')
@@ -49,13 +49,13 @@ def make_dataset(split='train', data_root=None, data_list=None):
         '''
         item = (image_name, label_name)
         image_label_list.append(item)
-    print("Checking image&label pair {} list done!".format(split))
+    logger.info("Checking image&label pair {} list done!".format(split))
     # print(image_label_list[:5])
     return image_label_list
 
 
 class openrooms(data.Dataset):
-    def __init__(self, _data_root, transform, opt, data_list=None, logger=None, 
+    def __init__(self, _data_root, opt, data_list=None, logger=None, transforms_fixed=None, transforms_semseg=None, 
             split='train', load_first = -1, rseed = None, 
             cascadeLevel = 0,
             isLight = False, isAllLight = False,
@@ -72,12 +72,14 @@ class openrooms(data.Dataset):
         split_to_list = {'train': 'train.txt', 'val': 'val.txt', 'test': 'test.txt'}
         data_list = os.path.join(self.cfg.PATH.root, self.cfg.DATASET.dataset_list)
         data_list = os.path.join(data_list, split_to_list[split])
-        self.data_list = make_dataset(split, self.data_root, data_list)
+        self.data_list = make_dataset(split, self.data_root, data_list, logger=self.logger)
         if load_first != -1:
             self.data_list = self.data_list[:load_first]
         logger.info(white_blue('%s-%s: total frames: %d'%(self.dataset_name, self.split, len(self.dataset_name))))
 
-        self.transform = transform
+        assert transforms_fixed is not None, 'OpenRooms: Need a transforms_fixed!'
+        self.transforms_fixed = transforms_fixed
+        self.transforms_semseg = transforms_semseg
         self.logger = logger
         # self.target_hw = (cfg.DATA.im_height, cfg.DATA.im_width) # if split in ['train', 'val', 'test'] else (args.test_h, args.test_w)
         self.im_width, self.im_height = self.cfg.DATA.im_width, self.cfg.DATA.im_height
@@ -142,11 +144,13 @@ class openrooms(data.Dataset):
         # Random scale the image
         im, scale = self.scaleHdr(im_ori, seg)
 
-        assert self.transform is not None
-        im_not_hdr = np.clip(im**(1.0/2.2), 0., 1.)
-        im_uint8 = (255. * im_not_hdr).transpose(1, 2, 0).astype(np.uint8)
-        image = Image.fromarray(im_uint8)
-        image_transformed = self.transform(image)
+        # assert self.transforms_fixed is not None
+        im_SDR_scale, _ = self.scaleHdr(im_ori, seg, forced_fixed_scale=True)
+        im_SDR_RGB = np.clip(im_SDR_scale**(1.0/2.2), 0., 1.)
+        im_RGB_uint8 = (255. * im_SDR_RGB).transpose(1, 2, 0).astype(np.uint8)
+        # image = Image.fromarray(im_RGB_uint8)
+        image_transformed_fixed = self.transforms_fixed(im_RGB_uint8)
+        
 
         # Read albedo
         albedo = self.loadImage(albedo_path, isGama = False)
@@ -241,7 +245,7 @@ class openrooms(data.Dataset):
                 'semantic': 1 - torch.FloatTensor(segmentation[num_mat_masks, :, :]).unsqueeze(0),
                 }
         # if self.transform is not None and not self.opt.if_hdr:
-        batch_dict.update({'image_transformed': image_transformed, 'im_not_hdr': im_not_hdr, 'im_uint8': im_uint8})
+        batch_dict.update({'image_transformed_fixed': image_transformed_fixed, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
 
         if self.isLight:
             batch_dict['envmaps'] = envmaps
@@ -260,10 +264,12 @@ class openrooms(data.Dataset):
             batch_dict['specularPre'] = specularPre
             
         if self.opt.cfg.DATA.load_semseg_gt:
-            semseg_label = np.load(semseg_label_path)
-            # semseg_label[semseg_label==0] = 31
+            semseg_label = np.load(semseg_label_path).astype(np.uint8)
             semseg_label = cv2.resize(semseg_label, (self.im_width, self.im_height), interpolation=cv2.INTER_NEAREST)
-            batch_dict.update({'semseg_label': torch.from_numpy(semseg_label).long()})
+            # Transform images
+            im_transformed_trainval, semseg_label = self.transforms_semseg(im_RGB_uint8, semseg_label) # augmented
+            # semseg_label[semseg_label==0] = 31
+            batch_dict.update({'semseg_label': semseg_label.long(), 'im_transformed_trainval': im_transformed_trainval})
 
         return batch_dict
 
@@ -332,10 +338,10 @@ class openrooms(data.Dataset):
         im = im[::-1, :, :]
         return im
 
-    def scaleHdr(self, hdr, seg):
+    def scaleHdr(self, hdr, seg, forced_fixed_scale=False):
         intensityArr = (hdr * seg).flatten()
         intensityArr.sort()
-        if self.split == 'train':
+        if self.split == 'train' and not forced_fixed_scale:
             scale = (0.95 - 0.1 * np.random.random() )  / np.clip(intensityArr[int(0.95 * self.im_width * self.im_height * 3) ], 0.1, None)
         else:
             scale = (0.95 - 0.05)  / np.clip(intensityArr[int(0.95 * self.im_width * self.im_height * 3) ], 0.1, None)

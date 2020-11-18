@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from models_def.model_mat_seg import Baseline
+from models_def.model_matseg import Baseline
 import models_def.models_brdf as models_brdf
 from utils.utils_misc import *
 import pac
@@ -16,21 +16,22 @@ class SemSeg_BRDF(nn.Module):
         self.logger = logger
 
         if self.cfg.MODEL_SEMSEG.enable:
-            value_scale = 255
-            mean = [0.485, 0.456, 0.406]
-            mean = [item * value_scale for item in mean]
-            self.mean = torch.tensor(mean).view(1, 3, 1, 1).to(opt.device)
-            std = [0.229, 0.224, 0.225]
-            std = [item * value_scale for item in std]
-            self.std = torch.tensor(std).view(1, 3, 1, 1).to(opt.device)
+            # value_scale = 255
+            # mean = [0.485, 0.456, 0.406]
+            # mean = [item * value_scale for item in mean]
+            # self.mean = torch.tensor(mean).view(1, 3, 1, 1).to(opt.device)
+            # std = [0.229, 0.224, 0.225]
+            # std = [item * value_scale for item in std]
+            # self.std = torch.tensor(std).view(1, 3, 1, 1).to(opt.device)
             self.semseg_configs = self.opt.semseg_configs
             self.semseg_path = self.opt.cfg.MODEL_SEMSEG.semseg_path_cluster if opt.if_cluster else self.opt.cfg.MODEL_SEMSEG.semseg_path_local
             # self.UNet = Baseline(self.cfg.MODEL_SEMSEG)
             assert self.semseg_configs.arch == 'psp'
 
             from models_def.models_semseg.pspnet import PSPNet
-            self.SEMSEG_Net = PSPNet(layers=self.semseg_configs.layers, classes=self.semseg_configs.classes, zoom_factor=self.semseg_configs.zoom_factor, pretrained=False)
-            self.SEMSEG_Net.eval()
+            self.SEMSEG_Net = PSPNet(layers=self.semseg_configs.layers, classes=self.semseg_configs.classes, zoom_factor=self.semseg_configs.zoom_factor, criterion=opt.semseg_criterion, pretrained=False)
+            if opt.cfg.MODEL_SEMSEG.if_freeze:
+                self.SEMSEG_Net.eval()
 
             if self.opt.cfg.MODEL_SEMSEG.load_pretrained_pth:
                 self.load_pretrained_semseg()
@@ -55,23 +56,28 @@ class SemSeg_BRDF(nn.Module):
     #     return self.UNet(input_dict['im_batch'])
 
     def forward_semseg(self, input_dict):
-        im_batch_255 = input_dict['im_uint8']
-        im_batch_255_float = input_dict['im_uint8'].float().permute(0, 3, 1, 2)
-        im_batch_255_float = F.pad(im_batch_255_float, (0, 1, 0, 1))
-        # print(im_batch_255_float.shape, im_batch_255_float_padded.shape)
-        # print(torch.max(im_batch_255_float), torch.min(im_batch_255_float), torch.median(im_batch_255_float), im_batch_255_float.shape, self.mean.shape)
-        im_batch_255_float.sub_(self.mean).div_(self.std)
-        # print(torch.max(im_batch_255_float), torch.min(im_batch_255_float), torch.median(im_batch_255_float))
-    
-        self.SEMSEG_Net.eval()
-        with torch.no_grad():
-            output_dict_PSPNet = self.SEMSEG_Net(im_batch_255_float)
+        # im_batch_255 = input_dict['im_uint8']
+        # im_batch_255_float = input_dict['im_uint8'].float().permute(0, 3, 1, 2)
+        # im_batch_255_float = F.pad(im_batch_255_float, (0, 1, 0, 1))
+        # # print(im_batch_255_float.shape, im_batch_255_float_padded.shape)
+        # # print(torch.max(im_batch_255_float), torch.min(im_batch_255_float), torch.median(im_batch_255_float), im_batch_255_float.shape, self.mean.shape)
+        # im_batch_255_float.sub_(self.mean).div_(self.std)
+        # # print(torch.max(im_batch_255_float), torch.min(im_batch_255_float), torch.median(im_batch_255_float))
+        
+        if self.opt.cfg.MODEL_SEMSEG.if_freeze:
+            im_batch_semseg = input_dict['im_batch_semseg_fixed']
+            self.SEMSEG_Net.eval()
+            with torch.no_grad():
+                output_dict_PSPNet = self.SEMSEG_Net(im_batch_semseg, input_dict['semseg_label'])
+        else:
+            im_batch_semseg = input_dict['im_batch_semseg']
+            output_dict_PSPNet = self.SEMSEG_Net(im_batch_semseg, input_dict['semseg_label'])
+
         output_PSPNet = output_dict_PSPNet['x']
         feat_dict_PSPNet = output_dict_PSPNet['feat_dict']
-    
-        # print(output_PSPNet.shape)
+        main_loss, aux_loss = output_dict_PSPNet['main_loss'], output_dict_PSPNet['aux_loss']
 
-        _, _, h_i, w_i = im_batch_255_float.shape
+        _, _, h_i, w_i = im_batch_semseg.shape
         _, _, h_o, w_o = output_PSPNet.shape
         # print(h_o, h_i, w_o, w_i)
         assert (h_o == h_i) and (w_o == w_i)
@@ -80,7 +86,7 @@ class SemSeg_BRDF(nn.Module):
         output_PSPNet = output_PSPNet[:, :, :-1, :-1]
         output_PSPNet_softmax = F.softmax(output_PSPNet, dim=1)
 
-        return_dict = {'output_PSPNet': output_PSPNet, 'output_PSPNet_softmax': output_PSPNet_softmax}
+        return_dict = {'output_PSPNet': output_PSPNet, 'output_PSPNet_softmax': output_PSPNet_softmax, 'PSPNet_main_loss': main_loss, 'PSPNet_aux_loss': aux_loss}
         return_dict.update({'feats_semseg_dict': feat_dict_PSPNet})
 
         return return_dict
@@ -173,7 +179,7 @@ class SemSeg_BRDF(nn.Module):
                 torch.load('{0}/depth{1}_{2}.pth'.format(pretrained_path, cascadeLevel, epochIdFineTune) ).state_dict() )
 
     def load_pretrained_semseg(self):
-        self.print_net()
+        # self.print_net()
         model_path = os.path.join(self.semseg_path, self.opt.cfg.MODEL_SEMSEG.pretrained_pth)
         if os.path.isfile(model_path):
             self.logger.info(red("=> loading checkpoint '{}'".format(model_path)))

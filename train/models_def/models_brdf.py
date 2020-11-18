@@ -235,6 +235,7 @@ class decoder0(nn.Module):
             xin2 = self.dconv3(xin2)
         dx3 = F.relu(self.dgn3(xin2), True)
 
+
         if dx3.size(3) != x3.size(3) or dx3.size(2) != x3.size(2):
             dx3 = F.interpolate(dx3, [x3.size(2), x3.size(3)], mode='bilinear')
         xin3 = F.interpolate(torch.cat([dx3, x3], dim=1), scale_factor=2, mode='bilinear')
@@ -249,6 +250,7 @@ class decoder0(nn.Module):
         else:
             xin3 = self.dconv4(xin3)
         dx4 = F.relu(self.dgn4(xin3), True)
+
 
         if dx4.size(3) != x2.size(3) or dx4.size(2) != x2.size(2):
             dx4 = F.interpolate(dx4, [x2.size(2), x2.size(3)], mode='bilinear')
@@ -265,6 +267,7 @@ class decoder0(nn.Module):
             xin4 = self.dconv5(xin4)
         dx5 = F.relu(self.dgn5(xin4), True)
 
+
         if dx5.size(3) != x1.size(3) or dx5.size(2) != x1.size(2):
             dx5 = F.interpolate(dx5, [x1.size(2), x1.size(3)], mode='bilinear')
         xin5 = F.interpolate(torch.cat([dx5, x1], dim=1), scale_factor=2, mode='bilinear')
@@ -274,6 +277,7 @@ class decoder0(nn.Module):
         else:
             xin5 = self.dconv6(xin5)
         dx6 = F.relu(self.dgn6(xin5), True)
+
 
         if dx6.size(3) != im.size(3) or dx6.size(2) != im.size(2):
             dx6 = F.interpolate(dx6, [im.size(2), im.size(3)], mode='bilinear')

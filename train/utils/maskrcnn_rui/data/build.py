@@ -64,7 +64,6 @@ def make_data_sampler(dataset, shuffle, opt, distributed, if_distributed_overrid
         # else:
         # return samplers.DistributedSampler(dataset, shuffle=shuffle)
         # if not if_distributed_override:
-        print(shuffle, 'DSSSSSSSSSSSSSSS')
         return torch.utils.data.distributed.DistributedSampler(
             dataset,
             num_replicas=opt.num_gpus,

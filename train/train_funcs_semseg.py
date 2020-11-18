@@ -18,40 +18,58 @@ def get_input_dict_semseg(data_batch, opt):
     input_dict = {}
 
     input_dict['im_paths'] = data_batch['imPath']
-    if opt.if_hdr_input_mat_seg:
-        im_cpu = data_batch['im']
-    else:
-        im_cpu = data_batch['image_transformed']
-    input_dict['im_batch'] = im_cpu.to(opt.device)
+    # if opt.if_hdr_input_mat_seg:
+    #     im_cpu = data_batch['im']
+    # else:
+    #     im_cpu = data_batch['image_transformed']
+    input_dict['im_batch_semseg_fixed'] = data_batch['image_transformed_fixed'].cuda(non_blocking=True)
+    input_dict['im_batch_semseg'] = data_batch['im_transformed_trainval'].cuda(non_blocking=True)
+    input_dict['semseg_label'] = data_batch['semseg_label'].cuda(non_blocking=True)
 
-    input_dict['im_uint8'] = data_batch['im_uint8'].to(opt.device)
+    input_dict['im_RGB_uint8'] = data_batch['im_RGB_uint8'].cuda(non_blocking=True)
 
     # print('-', im_cpu.dtype, im_cpu.shape, torch.max(im_cpu), torch.min(im_cpu), torch.median(im_cpu))
 
     input_dict['num_mat_masks_batch'] = data_batch['num_mat_masks'].int()
 
     # input_dict['mat_aggre_map_cpu'] = data_batch['mat_aggre_map'].permute(0, 3, 1, 2) # [b, 1, h, w]
-    # input_dict['mat_aggre_map_batch'] = Variable(input_dict['mat_aggre_map_cpu'] ).to(opt.device)
+    # input_dict['mat_aggre_map_batch'] = Variable(input_dict['mat_aggre_map_cpu'] ).cuda(non_blocking=True)
     # input_dict['mat_notlight_mask_cpu'] = input_dict['mat_aggre_map_cpu']!=0
 
     # input_dict['mat_aggre_map_reindex_cpu'] = data_batch['mat_aggre_map_reindex'].permute(0, 3, 1, 2) # [b, 1, h, w]
-    # input_dict['mat_aggre_map_reindex_batch'] = Variable(input_dict['mat_aggre_map_reindex_cpu'] ).to(opt.device)
+    # input_dict['mat_aggre_map_reindex_batch'] = Variable(input_dict['mat_aggre_map_reindex_cpu'] ).cuda(non_blocking=True)
     
-    # input_dict['instance'] = data_batch['instance'].to(opt.device)
-    # input_dict['semantic'] = data_batch['semantic'].to(opt.device)
+    # input_dict['instance'] = data_batch['instance'].cuda(non_blocking=True)
+    # input_dict['semantic'] = data_batch['semantic'].cuda(non_blocking=True)
 
     return input_dict
 
 def process_semseg(input_dict, output_dict, loss_dict, opt, time_meters):
-    prediction_batch = np.argmax(output_dict['output_PSPNet_softmax'].cpu().numpy(), axis=1)
-    semseg_gray_list = []
-    semseg_color_list = []
-    for prediction in prediction_batch:
+    prediction_batch = torch.argmax(output_dict['output_PSPNet'], axis=1)
+    semseg_pred_gray_list = []
+    semseg_pred_color_list = []
+    semseg_GT_gray_list = []
+    semseg_GT_color_list = []
+    
+    for prediction, label in zip(prediction_batch.cpu().numpy(), input_dict['semseg_label'].cpu().numpy()):
         gray = np.uint8(prediction)
         color = colorize(gray, opt.semseg_colors)
-        semseg_gray_list.append(gray)
-        semseg_color_list.append(color)
-    output_dict.update({'semseg_gray_list': semseg_gray_list, 'semseg_color_list': semseg_color_list})
+        semseg_pred_gray_list.append(gray)
+        semseg_pred_color_list.append(color)
+        
+        gray = np.uint8(label)
+        color = colorize(gray, opt.semseg_colors)
+        semseg_GT_gray_list.append(gray)
+        semseg_GT_color_list.append(color)
+
+    output_dict.update({'semseg_pred_gray_list': semseg_pred_gray_list, 'semseg_pred_color_list': semseg_pred_color_list})
+    output_dict.update({'semseg_GT_gray_list': semseg_GT_gray_list, 'semseg_GT_color_list': semseg_GT_color_list})
+
+    # loss_dict['loss_semseg'] = opt.semseg_criterion(prediction_batch, semsegLabel)
+    loss_dict['loss_semseg-main'] = output_dict['PSPNet_main_loss']
+    loss_dict['loss_semseg-aux'] = output_dict['PSPNet_aux_loss']
+    loss_dict['loss_semseg-ALL'] = loss_dict['loss_semseg-main'] + loss_dict['loss_semseg-aux'] * opt.semseg_configs.aux_weight
+
 
     return output_dict, loss_dict
 #     logit, embedding = output_dict['logit'], output_dict['embedding']
@@ -142,7 +160,7 @@ def process_semseg(input_dict, output_dict, loss_dict, opt, time_meters):
 #                     sample_idx = j
 
 #                     # prob_single = torch.sigmoid(logit_single)
-#                     prob_single = input_dict['mat_notlight_mask_cpu'][j].to(opt.device).float()
+#                     prob_single = input_dict['mat_notlight_mask_cpu'][j].cuda(non_blocking=True).float()
 #                     # fast mean shift
 #                     segmentation, sampled_segmentation = bin_mean_shift.test_forward(
 #                         prob_single, embedding_single, mask_threshold=0.1)
@@ -274,7 +292,7 @@ def process_semseg(input_dict, output_dict, loss_dict, opt, time_meters):
 #                     sample_idx = j
 
 #                     # prob_single = torch.sigmoid(logit_single)
-#                     prob_single = input_dict['mat_notlight_mask_cpu'][j].to(opt.device).float()
+#                     prob_single = input_dict['mat_notlight_mask_cpu'][j].cuda(non_blocking=True).float()
 #                     # fast mean shift
 #                     segmentation, sampled_segmentation = bin_mean_shift.test_forward(
 #                         prob_single, embedding_single, mask_threshold=0.1)

@@ -135,16 +135,18 @@ opt = parser.parse_args()
 # print(opt)
 os.environ['MASETER_PORT'] = str(nextPort(int(opt.master_port)))
 cfg.merge_from_file(opt.config_file)
-cfg.merge_from_list(opt.params)
+# cfg.merge_from_list(opt.params)
+cfg = utils_config.merge_cfg_from_list(cfg, opt.params)
 
 opt.cfg = cfg
-# print(opt.cfg)
+# print('====opt.cfg====>', opt.cfg)
 set_up_envs(opt)
 opt.cfg.freeze()
 
 semseg_configs = utils_config.load_cfg_from_cfg_file(os.path.join(pwdpath, cfg.MODEL_SEMSEG.config_file))
 semseg_configs = utils_config.merge_cfg_from_list(semseg_configs, opt.params)
 opt.semseg_configs = semseg_configs
+print('====opt.semseg_configs====>', opt.semseg_configs)
 
 # opt.gpuId = opt.deviceIds[0]
 # >>>> DISTRIBUTED TRAINING
@@ -249,7 +251,6 @@ else:
 # build model
 # model = MatSeg_BRDF(opt, logger)
 model = SemSeg_BRDF(opt, logger)
-print('====cfg.MODEL_SEMSEG', cfg.MODEL_SEMSEG)
 # if not (opt.resume == 'NoCkpt'):
 #     model_dict = torch.load(opt.resume, map_location=lambda storage, loc: storage)
 #     model.load_state_dict(model_dict)
@@ -283,15 +284,14 @@ scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=50, cooldow
 # <<<< MODEL AND OPTIMIZER
 
 # >>>> DATASET
-transforms = T.Compose([
-        T.ToTensor(),
-        T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225])
-    ])
-brdf_dataset_train = openrooms( opt.data_root, transforms, opt, 
-        # im_width = opt.cfg.DATA.im_width, im_height = opt.cfg.DATA.im_height,
-        cascadeLevel = opt.cascadeLevel, split = 'train', logger=logger)
-# brdf_loader_train = DataLoader(brdf_dataset_train, batch_size = cfg.SOLVER.ims_per_batch,
-#         num_workers = 16, shuffle = True, pin_memory=True)
+from utils.utils_semseg import get_transform_semseg
+transforms_semseg_train = get_transform_semseg('train', opt)
+transforms_semseg_val = get_transform_semseg('val', opt)
+
+brdf_dataset_train = openrooms( opt.data_root, opt, 
+    transforms_fixed = transforms_semseg_val, 
+    transforms_semseg = transforms_semseg_train, 
+    cascadeLevel = opt.cascadeLevel, split = 'train', logger=logger)
 brdf_loader_train = make_data_loader(
     opt,
     brdf_dataset_train,
@@ -308,14 +308,14 @@ if 'mini' in opt.cfg.DATASET.dataset_path:
     brdf_dataset_val = brdf_dataset_train
     brdf_dataset_val_vis = brdf_dataset_train
 else:
-    brdf_dataset_val = openrooms( opt.data_root, transforms, opt, 
-            # im_width = opt.cfg.DATA.im_width, im_height = opt.cfg.DATA.im_height,
-            cascadeLevel = opt.cascadeLevel, split = 'val', logger=logger)
-    brdf_dataset_val_vis = openrooms( opt.data_root, transforms, opt, 
-            # im_width = opt.cfg.DATA.im_width, im_height = opt.cfg.DATA.im_height,
-            cascadeLevel = opt.cascadeLevel, split = 'val', load_first = 20, logger=logger)
-# brdfLoaderVal = DataLoader(brdf_dataset_val, batch_size = opt.batchSize,
-        # num_workers = 16, shuffle = False, pin_memory=True)
+    brdf_dataset_val = openrooms( opt.data_root, opt, 
+        transforms_fixed = transforms_semseg_val, 
+        transforms_semseg = transforms_semseg_val, 
+        cascadeLevel = opt.cascadeLevel, split = 'val', logger=logger)
+    brdf_dataset_val_vis = openrooms( opt.data_root, opt, 
+        transforms_fixed = transforms_semseg_val, 
+        transforms_semseg = transforms_semseg_val, 
+        cascadeLevel = opt.cascadeLevel, split = 'val', load_first = 20, logger=logger)
 brdf_loader_val = make_data_loader(
     opt,
     brdf_dataset_val,
@@ -383,9 +383,7 @@ ts_iter_start_end_list = []
 num_mat_masks_MAX = 0
 
 model.train(not cfg.MODEL_SEMSEG.fix_bn)
-print('=======1', opt.rank)
 synchronize()
-print('=======2', opt.rank)
 
 # if task_split
 
@@ -410,7 +408,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
     # ts_iter_start = ts
     ts_iter_end = ts_epoch_start
     
-    print('=======3', opt.rank, not cfg.MODEL_SEMSEG.fix_bn)
+    print('=======3', opt.rank, cfg.MODEL_SEMSEG.fix_bn)
     synchronize()
 
     for i, data_batch in enumerate(brdf_loader_train):
@@ -478,35 +476,26 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
 
         # ======= Backward
         loss = 0.
+        loss_keys_backward = []
         if opt.cfg.MODEL_SEG.enable:
-            loss += loss_dict['loss_mat_seg-ALL']
+            loss_keys_backward.append('loss_mat_seg-ALL')
         if opt.cfg.MODEL_BRDF.enable:
-            loss += loss_dict['loss_brdf-ALL']
+            loss_keys_backward.append('loss_brdf-ALL')
+        if opt.cfg.MODEL_SEMSEG.enable and not opt.cfg.MODEL_SEMSEG.if_freeze:
+            loss_keys_backward.append('loss_semseg-ALL')
+        loss = sum([loss_dict[loss_key] for loss_key in loss_keys_backward])
         loss.backward()
         optimizer.step()
         time_meters['backward'].update(time.time() - time_meters['ts'])
         time_meters['ts'] = time.time()
 
-
-        # # ======= update loss
-        # losses.update(loss_dict_reduced['loss_all'].item())
-        # losses_pull.update(loss_dict_reduced['loss_pull'].item())
-        # losses_push.update(loss_dict_reduced['loss_push'].item())
-        # losses_binary.update(loss_dict_reduced['loss_binary'].item())
-
         if opt.is_master:
+            logger_str = 'Epoch %d - Tid %d -'%(epoch, tid) + ', '.join(['%s %.3f'%(loss_key, loss_dict_reduced[loss_key]) for loss_key in loss_keys_backward])
+            logger.info(logger_str)
+
             for loss_key in loss_dict_reduced:
-                # print(loss_key, loss_dict_reduced[loss_key].item())
                 writer.add_scalar('loss_train/%s'%loss_key, loss_dict_reduced[loss_key].item(), tid)
             writer.add_scalar('training/epoch', epoch, tid)
-
-            # if opt.cfg.MODEL_SEMSEG.enable:
-            #     logger.info('Epoch %d - Tid %d - loss_mat_seg-ALL %.3f = loss_pull %.3f + loss_push %.3f + loss_binary %.3f' % \
-            #         (epoch, tid, loss_dict_reduced['loss_mat_seg-ALL'].item(), loss_dict_reduced['loss_mat_seg-pull'].item(), loss_dict_reduced['loss_mat_seg-push'].item(), loss_dict_reduced['loss_mat_seg-binary'].item()))
-                    
-            if opt.cfg.MODEL_BRDF.enable:
-                logger.info('Epoch %d - Tid %d - loss_brdf-ALL %.3f' % \
-                    (epoch, tid, loss_dict_reduced['loss_brdf-ALL'].item()))
 
         # End of iteration logging
         ts_iter_end = time.time()
@@ -520,6 +509,12 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
                 writer.add_scalar('training/GPU_usage_ratio', usage_ratio, tid)
                 writer.add_scalar('training/batch_size_per_gpu', len(data_batch['imPath']), tid)
                 writer.add_scalar('training/gpus', opt.num_gpus, tid)
+            if opt.is_master and tid % 1000 == 0:
+                for sample_idx, (im_single, im_path) in enumerate(zip(data_batch['im'], data_batch['imPath'])):
+                    im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
+                    writer.add_image('TRAIN_im/%d'%sample_idx, im_single, tid, dataformats='HWC')
+                    writer.add_text('TRAIN_image_name/%d'%sample_idx, im_path, tid)
+
 
         # if opt.is_master and tid % 100 == 0:
         #     for im_index, (im_single, semseg_color) in enumerate(zip(data_batch['im_not_hdr'], output_dict['semseg_color_list'])):
@@ -530,7 +525,5 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         #         semseg_color.save(color_path)
 
         tid += 1
-
-
 
             # print(ts_iter_end_start_list, ts_iter_start_end_list)

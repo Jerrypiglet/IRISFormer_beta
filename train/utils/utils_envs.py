@@ -1,4 +1,6 @@
 import os
+import torch.nn as nn
+
 
 def get_dataset_path(opt):
     if opt.if_cluster:
@@ -22,6 +24,11 @@ def set_up_envs(opt):
             # print(key_to_set_path, cfg_key)
             # if key_to_set_path in cfg_key:
 
-    if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.use_as_input:
+    if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable or opt.cfg.MODEL_SEMSEG.use_as_input:
         opt.cfg.DATA.load_semseg_gt = True
+        opt.semseg_criterion = nn.CrossEntropyLoss(ignore_index=opt.cfg.DATA.semseg_ignore_label)
+
+
+    if not opt.cfg.MODEL_SEMSEG.if_freeze:
+        opt.cfg.MODEL_SEMSEG.fix_bn = False
 

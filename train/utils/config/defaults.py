@@ -32,7 +32,7 @@ _C.PATH.semseg_names_path = 'data/openrooms/openrooms_names.txt'
 
 
 _C.MODEL_SEG = CN()
-_C.MODEL_SEG.enable = True
+_C.MODEL_SEG.enable = False
 _C.MODEL_SEG.arch = 'resnet101'
 _C.MODEL_SEG.pretrained = True
 _C.MODEL_SEG.if_freeze = False
@@ -53,13 +53,12 @@ _C.MODEL_BRDF.if_debug_arch = False
 
 _C.MODEL_BRDF.enable_semseg_decoder = False
 _C.MODEL_BRDF.semseg_PPM = False
-_C.MODEL_BRDF.semseg_ignore_label = 0
 _C.MODEL_BRDF.semseg_classes = 46
 
 
 
 _C.MODEL_SEMSEG = CN()
-_C.MODEL_SEMSEG.enable = True
+_C.MODEL_SEMSEG.enable = False
 _C.MODEL_SEMSEG.use_as_input = False
 _C.MODEL_SEMSEG.semseg_path = ''
 _C.MODEL_SEMSEG.semseg_path_local = '/home/ruizhu/Documents/Projects/semseg'
@@ -91,6 +90,7 @@ _C.DATA = CN()
 _C.DATA.im_height = 240
 _C.DATA.im_width = 320
 _C.DATA.load_semseg_gt = False
+_C.DATA.semseg_ignore_label = 0
 
 
 _C.SOLVER = CN()

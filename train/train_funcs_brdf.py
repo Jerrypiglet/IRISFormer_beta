@@ -173,9 +173,6 @@ def process_brdf(input_dict, output_dict, loss_dict, opt, time_meters):
 
     return output_dict, loss_dict
 
-
-
-
     
 
 def train_step(input_dict, output_dict, preBatchDict, optimizer, opt, if_train=True):

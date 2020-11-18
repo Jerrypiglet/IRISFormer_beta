@@ -127,16 +127,17 @@ class PSPNet(nn.Module):
             x = F.interpolate(x, size=(h, w), mode='bilinear', align_corners=True)
 
         output_dict = {}
-        if self.training:
-            aux = self.aux(x_tmp)
-            if self.zoom_factor != 1:
-                aux = F.interpolate(aux, size=(h, w), mode='bilinear', align_corners=True)
-            main_loss = self.criterion(x, y)
-            aux_loss = self.criterion(aux, y)
-            return x.max(1)[1], main_loss, aux_loss
-        else:
-            output_dict.update({'x': x, 'feat_dict': feat_dict})
-            return output_dict
+        # if self.training:
+        aux = self.aux(x_tmp)
+        if self.zoom_factor != 1:
+            aux = F.interpolate(aux, size=(h, w), mode='bilinear', align_corners=True)
+        main_loss = self.criterion(x, y)
+        aux_loss = self.criterion(aux, y)
+        # return x.max(1)[1], main_loss, aux_loss
+        # else:
+        # print(x.shape, x.max(1)[1].shape, x.max(1)[1])
+        output_dict.update({'x': x, 'feat_dict': feat_dict, 'main_loss': main_loss, 'aux_loss': aux_loss})
+        return output_dict
 
 
 if __name__ == '__main__':
