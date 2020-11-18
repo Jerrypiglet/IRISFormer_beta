@@ -40,7 +40,6 @@ import cv2
 # from models_def.baseline_same import Baseline as UNet
 from models_def.model_semseg_brdf import SemSeg_BRDF
 from utils.utils_vis import vis_index_map
-print('++++++++++++++++++++++++++')
 from utils.config import cfg
 from utils.comm import synchronize, get_rank
 from utils.utils_training import get_optimizer, freeze_bn_in_module
@@ -304,7 +303,7 @@ brdf_loader_train = make_data_loader(
 if opt.cfg.MODEL_SEMSEG.enable:
     opt.semseg_colors = brdf_dataset_train.semseg_colors
 
-if 'mini' in opt.data_root:
+if 'mini' in opt.cfg.DATASET.dataset_path:
     print('=====!!!!===== mini: brdf_dataset_val = brdf_dataset_train')
     brdf_dataset_val = brdf_dataset_train
     brdf_dataset_val_vis = brdf_dataset_train

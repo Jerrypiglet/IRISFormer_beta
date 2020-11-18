@@ -259,7 +259,7 @@ class openrooms(data.Dataset):
             batch_dict['diffusePre'] = diffusePre
             batch_dict['specularPre'] = specularPre
             
-        if self.opt.cfg.MODEL_BRDF.enable_semseg_decoder:
+        if self.opt.cfg.DATA.load_semseg_gt:
             semseg_label = np.load(semseg_label_path)
             # semseg_label[semseg_label==0] = 31
             semseg_label = cv2.resize(semseg_label, (self.im_width, self.im_height), interpolation=cv2.INTER_NEAREST)

@@ -63,7 +63,7 @@ def get_input_dict_joint(data_batch, opt):
 
     if opt.cfg.MODEL_BRDF.enable:
         input_dict.update({'input_batch_brdf': input_batch_brdf, 'pre_batch_dict_brdf': pre_batch_dict_brdf})
-    
+
     # input_dict = {**input_dict_mat_seg, **input_dict_brdf}
     return input_dict
 
@@ -246,7 +246,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 semseg_pred = output_dict['semsegPred'].cpu().numpy()
                 semseg_label = input_dict['semseg_label'].cpu().numpy()
 
-            for sample_idx, im_single in enumerate(data_batch['im_not_hdr']):
+            for sample_idx,(im_single, im_path) in enumerate(zip(data_batch['im_not_hdr'], data_batch['imPath'])):
                 # if num_val_im_vis >= num_val_vis_MAX:
                 #     break
                 im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
@@ -256,6 +256,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 # semseg_color.save(color_path)
                 if opt.is_master:
                     writer.add_image('VAL_im/%d'%num_val_im_vis, im_single, tid, dataformats='HWC')
+                    writer.add_text('VAL_image_name/%d'%num_val_im_vis, im_path, tid)
+
 
                 # ======= Vis BRDF-semseg
                 if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
@@ -499,6 +501,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 writer.add_image('VAL_brdf-normal_PRED/%d'%image_idx, normal_pred_batch_vis_sdr_numpy[image_idx], tid, dataformats='HWC')
                 writer.add_image('VAL_brdf-rough_PRED/%d'%image_idx, rough_pred_batch_vis_sdr_numpy[image_idx], tid, dataformats='HWC')
                 writer.add_image('VAL_brdf-depth_PRED/%d'%image_idx, vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[image_idx].squeeze()), tid, dataformats='HWC')
+            
 
 
 

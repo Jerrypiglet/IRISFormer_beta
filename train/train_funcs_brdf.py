@@ -44,7 +44,7 @@ def get_input_dict_brdf(data_batch, opt):
     im_cpu = (data_batch['im'] )
     input_dict['imBatch'] = Variable(im_cpu ).cuda(non_blocking=True)
 
-    if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
+    if opt.cfg.DATA.load_semseg_gt:
         input_dict['semseg_label'] = data_batch['semseg_label'].cuda(non_blocking=True)
 
     if opt.cascadeLevel > 0:

@@ -36,9 +36,13 @@ class SemSeg_BRDF(nn.Module):
                 self.load_pretrained_semseg()
         
         if self.cfg.MODEL_BRDF.enable:
+            if self.opt.ifMatMapInput or self.opt.cfg.MODEL_SEMSEG.use_as_input:
+                in_channels = 4
+            else:
+                in_channels = 3
             self.BRDF_Net = nn.ModuleDict(
                 {
-                    'encoder': models_brdf.encoder0(opt, cascadeLevel = self.opt.cascadeLevel, in_channels = 3 if not self.opt.ifMatMapInput else 4), 
+                    'encoder': models_brdf.encoder0(opt, cascadeLevel = self.opt.cascadeLevel, in_channels = in_channels), 
                     'albedoDecoder': models_brdf.decoder0(opt, mode=0), 
                     'normalDecoder': models_brdf.decoder0(opt, mode=1), 
                     'roughDecoder': models_brdf.decoder0(opt, mode=2), 
@@ -87,7 +91,13 @@ class SemSeg_BRDF(nn.Module):
         # albedoPred = 0.5 * (self.BRDF_Net['albedoDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_guide=input_dict_guide) + 1)
 
             # Initial Prediction
-        x1, x2, x3, x4, x5, x6 = self.BRDF_Net['encoder'](input_dict['input_batch_brdf'])
+        # print(input_dict['input_batch_brdf'].shape, input_dict['semseg_label'].unsqueeze(1).shape)
+        # print(input_dict['input_batch_brdf'].device, input_dict['semseg_label'].unsqueeze(1).device)
+        if self.opt.cfg.DATA.load_semseg_gt:
+            input_tensor = torch.cat((input_dict['input_batch_brdf'], input_dict['semseg_label'].float().unsqueeze(1)), 1)
+        else:
+            input_tensor = input_dict['input_batch_brdf']
+        x1, x2, x3, x4, x5, x6 = self.BRDF_Net['encoder'](input_tensor)
         albedoPred = 0.5 * (self.BRDF_Net['albedoDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_guide=input_dict_guide) + 1)
         normalPred = self.BRDF_Net['normalDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_guide=input_dict_guide)
         roughPred = self.BRDF_Net['roughDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_guide=input_dict_guide)

@@ -60,6 +60,7 @@ _C.MODEL_BRDF.semseg_classes = 46
 
 _C.MODEL_SEMSEG = CN()
 _C.MODEL_SEMSEG.enable = True
+_C.MODEL_SEMSEG.use_as_input = False
 _C.MODEL_SEMSEG.semseg_path = ''
 _C.MODEL_SEMSEG.semseg_path_local = '/home/ruizhu/Documents/Projects/semseg'
 _C.MODEL_SEMSEG.semseg_path_cluster = '/viscompfs/users/ruizhu/semseg/'
@@ -89,6 +90,7 @@ _C.DATASET.if_val_dist = True
 _C.DATA = CN()
 _C.DATA.im_height = 240
 _C.DATA.im_width = 320
+_C.DATA.load_semseg_gt = False
 
 
 _C.SOLVER = CN()

@@ -22,3 +22,6 @@ def set_up_envs(opt):
             # print(key_to_set_path, cfg_key)
             # if key_to_set_path in cfg_key:
 
+    if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.use_as_input:
+        opt.cfg.DATA.load_semseg_gt = True
+
