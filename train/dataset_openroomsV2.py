@@ -55,7 +55,7 @@ def make_dataset(split='train', data_root=None, data_list=None, logger=None):
 
 
 class openrooms(data.Dataset):
-    def __init__(self, _data_root, opt, data_list=None, logger=None, transforms_fixed=None, transforms_semseg=None, 
+    def __init__(self, opt, data_list=None, logger=None, transforms_fixed=None, transforms_semseg=None, 
             split='train', load_first = -1, rseed = None, 
             cascadeLevel = 0,
             isLight = False, isAllLight = False,
@@ -143,6 +143,7 @@ class openrooms(data.Dataset):
         im_ori = self.loadHdr(hdr_file)
         # Random scale the image
         im, scale = self.scaleHdr(im_ori, seg)
+        im_trainval_RGB = np.clip(im**(1.0/2.2), 0., 1.)
 
         # assert self.transforms_fixed is not None
         im_SDR_scale, _ = self.scaleHdr(im_ori, seg, forced_fixed_scale=True)
@@ -245,7 +246,7 @@ class openrooms(data.Dataset):
                 'semantic': 1 - torch.FloatTensor(segmentation[num_mat_masks, :, :]).unsqueeze(0),
                 }
         # if self.transform is not None and not self.opt.if_hdr:
-        batch_dict.update({'image_transformed_fixed': image_transformed_fixed, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
+        batch_dict.update({'image_transformed_fixed': image_transformed_fixed, 'im_trainval_RGB': im_trainval_RGB, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
 
         if self.isLight:
             batch_dict['envmaps'] = envmaps

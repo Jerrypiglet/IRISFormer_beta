@@ -28,9 +28,10 @@ import torchvision.transforms as T
 
 import torch.multiprocessing as mp
 import torch.distributed as dist
-import apex
-from apex.parallel import DistributedDataParallel as DDP
-from apex import amp
+# import apex
+# from apex.parallel import DistributedDataParallel as DDP
+# from apex import amp
+from torch.nn.parallel import DistributedDataParallel as DDP
 import nvidia_smi
 from torch.utils.tensorboard import SummaryWriter
 from torchsummary import summary
@@ -139,27 +140,25 @@ cfg.merge_from_file(opt.config_file)
 cfg = utils_config.merge_cfg_from_list(cfg, opt.params)
 
 opt.cfg = cfg
-# print('====opt.cfg====>', opt.cfg)
 set_up_envs(opt)
 opt.cfg.freeze()
 
-semseg_configs = utils_config.load_cfg_from_cfg_file(os.path.join(pwdpath, cfg.MODEL_SEMSEG.config_file))
+semseg_configs = utils_config.load_cfg_from_cfg_file(os.path.join(pwdpath, opt.cfg.MODEL_SEMSEG.config_file))
 semseg_configs = utils_config.merge_cfg_from_list(semseg_configs, opt.params)
 opt.semseg_configs = semseg_configs
-print('====opt.semseg_configs====>', opt.semseg_configs)
 
 # opt.gpuId = opt.deviceIds[0]
 # >>>> DISTRIBUTED TRAINING
-torch.manual_seed(cfg.seed)
-np.random.seed(cfg.seed)
-random.seed(cfg.seed)
+torch.manual_seed(opt.cfg.seed)
+np.random.seed(opt.cfg.seed)
+random.seed(opt.cfg.seed)
 
 opt.num_gpus = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
 opt.distributed = opt.num_gpus > 1
 if opt.distributed:
     torch.cuda.set_device(opt.local_rank)
     process_group = torch.distributed.init_process_group(
-        backend="nccl", init_method="env://"
+        backend="nccl", world_size=opt.num_gpus, init_method="env://"
     )
     # synchronize()
 # device = torch.device("cuda" if torch.cuda.is_available() and not opt.cpu else "cpu")
@@ -219,8 +218,11 @@ logger = setup_logger("logger:train", opt.summary_path_task, opt.rank, filename=
 logger.info(red("==[config]== opt"))
 logger.info(opt)
 logger.info(red("==[config]== cfg"))
-logger.info(cfg)
+logger.info(opt.cfg)
 logger.info(red("==[config]== Loaded configuration file {}".format(opt.config_file)))
+logger.info(red("==[opt.semseg_configs]=="))
+logger.info(opt.semseg_configs)
+
 with open(opt.config_file, "r") as cf:
     config_str = "\n" + cf.read()
     # logger.info(config_str)
@@ -237,7 +239,6 @@ if opt.is_master and not opt.task_name in ['tmp']:
     #     folder_dest = opt.summary_vis_path_task_py / folder.name
     #     if not folder_dest.exists() and folder.name not in exclude_list:
     #         os.system('cp -r %s %s'%(folder, folder_dest))
-
 synchronize()
 
 if opt.is_master:
@@ -255,8 +256,8 @@ model = SemSeg_BRDF(opt, logger)
 #     model_dict = torch.load(opt.resume, map_location=lambda storage, loc: storage)
 #     model.load_state_dict(model_dict)
 if opt.distributed: # https://github.com/dougsouza/pytorch-sync-batchnorm-example # export NCCL_LL_THRESHOLD=0
-    # model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
-    model = apex.parallel.convert_syncbn_model(model)
+    model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+    # model = apex.parallel.convert_syncbn_model(model)
 model.to(opt.device)
 model.print_net()
 if opt.cfg.MODEL_BRDF.load_pretrained_pth:
@@ -267,16 +268,17 @@ if opt.cfg.MODEL_SEMSEG.enable and opt.cfg.MODEL_SEMSEG.if_freeze:
     model.turn_off_names(['UNet'])
     model.freeze_bn_semantics()
 
-
 # set up optimizers
 # optimizer = get_optimizer(model.parameters(), cfg.SOLVER)
 optimizer = optim.Adam(model.parameters(), lr=1e-4, betas=(0.5, 0.999) )
 # Initialize mixed-precision training
+# if opt.distributed:
+#     use_mixed_precision = cfg.DTYPE == "float16"
+#     amp_opt_level = 'O1' if use_mixed_precision else 'O0'
+#     model, optimizer = amp.initialize(model, optimizer, opt_level=amp_opt_level)
+#     model = DDP(model)
 if opt.distributed:
-    use_mixed_precision = cfg.DTYPE == "float16"
-    amp_opt_level = 'O1' if use_mixed_precision else 'O0'
-    model, optimizer = amp.initialize(model, optimizer, opt_level=amp_opt_level)
-    model = DDP(model)
+    model = DDP(model, device_ids=[opt.rank], output_device=opt.rank)
 
 logger.info(red('Optimizer: '+type(optimizer).__name__))
 scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=50, cooldown=0, verbose=True, threshold_mode='rel', threshold=0.01)
@@ -288,7 +290,7 @@ from utils.utils_semseg import get_transform_semseg
 transforms_semseg_train = get_transform_semseg('train', opt)
 transforms_semseg_val = get_transform_semseg('val', opt)
 
-brdf_dataset_train = openrooms( opt.data_root, opt, 
+brdf_dataset_train = openrooms(opt, 
     transforms_fixed = transforms_semseg_val, 
     transforms_semseg = transforms_semseg_train, 
     cascadeLevel = opt.cascadeLevel, split = 'train', logger=logger)
@@ -308,11 +310,11 @@ if 'mini' in opt.cfg.DATASET.dataset_path:
     brdf_dataset_val = brdf_dataset_train
     brdf_dataset_val_vis = brdf_dataset_train
 else:
-    brdf_dataset_val = openrooms( opt.data_root, opt, 
+    brdf_dataset_val = openrooms(opt, 
         transforms_fixed = transforms_semseg_val, 
         transforms_semseg = transforms_semseg_val, 
         cascadeLevel = opt.cascadeLevel, split = 'val', logger=logger)
-    brdf_dataset_val_vis = openrooms( opt.data_root, opt, 
+    brdf_dataset_val_vis = openrooms(opt, 
         transforms_fixed = transforms_semseg_val, 
         transforms_semseg = transforms_semseg_val, 
         cascadeLevel = opt.cascadeLevel, split = 'val', load_first = 20, logger=logger)
@@ -382,7 +384,7 @@ ts_iter_end_start_list = []
 ts_iter_start_end_list = []
 num_mat_masks_MAX = 0
 
-model.train(not cfg.MODEL_SEMSEG.fix_bn)
+model.train(not opt.cfg.MODEL_SEMSEG.fix_bn)
 synchronize()
 
 # if task_split
@@ -510,7 +512,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
                 writer.add_scalar('training/batch_size_per_gpu', len(data_batch['imPath']), tid)
                 writer.add_scalar('training/gpus', opt.num_gpus, tid)
             if opt.is_master and tid % 1000 == 0:
-                for sample_idx, (im_single, im_path) in enumerate(zip(data_batch['im'], data_batch['imPath'])):
+                for sample_idx, (im_single, im_path) in enumerate(zip(data_batch['im'], data_batch['im_trainval_RGB'], data_batch['imPath'])):
                     im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
                     writer.add_image('TRAIN_im/%d'%sample_idx, im_single, tid, dataformats='HWC')
                     writer.add_text('TRAIN_image_name/%d'%sample_idx, im_path, tid)

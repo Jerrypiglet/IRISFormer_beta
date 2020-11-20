@@ -1,18 +1,11 @@
 import os
 import torch.nn as nn
 
-
-def get_dataset_path(opt):
-    if opt.if_cluster:
-        opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_cluster
-    else:
-        opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_local
-    return opt.cfg.DATASET.dataset_path
-
 def set_up_envs(opt):
-    get_dataset_path(opt)
-
     opt.cfg.PATH.root = opt.cfg.PATH.root_cluster if opt.if_cluster else opt.cfg.PATH.root_local
+    opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_cluster if opt.if_cluster else opt.cfg.DATASET.dataset_path_local
+    if opt.data_root is not None:
+        opt.cfg.DATASET.dataset_path = opt.data_root
     opt.cfg.MODEL_SEMSEG.semseg_path = opt.cfg.MODEL_SEMSEG.semseg_path_cluster if opt.if_cluster else opt.cfg.MODEL_SEMSEG.semseg_path_local
     opt.cfg.PATH.semseg_colors_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.semseg_colors_path)
     opt.cfg.PATH.semseg_names_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.semseg_names_path)
@@ -27,7 +20,9 @@ def set_up_envs(opt):
     if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable or opt.cfg.MODEL_SEMSEG.use_as_input:
         opt.cfg.DATA.load_semseg_gt = True
         opt.semseg_criterion = nn.CrossEntropyLoss(ignore_index=opt.cfg.DATA.semseg_ignore_label)
-
+    
+    if opt.cfg.MODEL_BRDF.enable_semseg_decoder and opt.cfg.MODEL_SEMSEG.enable:
+        raise (RuntimeError("Cannot be True at the same time: opt.cfg.MODEL_BRDF.enable_semseg_decoder, opt.cfg.MODEL_SEMSEG.enable"))
 
     if not opt.cfg.MODEL_SEMSEG.if_freeze:
         opt.cfg.MODEL_SEMSEG.fix_bn = False

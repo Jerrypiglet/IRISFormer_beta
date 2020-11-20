@@ -53,7 +53,6 @@ _C.MODEL_BRDF.if_debug_arch = False
 
 _C.MODEL_BRDF.enable_semseg_decoder = False
 _C.MODEL_BRDF.semseg_PPM = False
-_C.MODEL_BRDF.semseg_classes = 46
 
 
 
@@ -91,6 +90,7 @@ _C.DATA.im_height = 240
 _C.DATA.im_width = 320
 _C.DATA.load_semseg_gt = False
 _C.DATA.semseg_ignore_label = 0
+_C.DATA.semseg_classes = 46
 
 
 _C.SOLVER = CN()

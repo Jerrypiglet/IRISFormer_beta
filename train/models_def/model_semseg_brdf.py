@@ -50,6 +50,9 @@ class SemSeg_BRDF(nn.Module):
                     'depthDecoder': models_brdf.decoder0(opt, mode=4)
                 }
             )
+            if self.cfg.MODEL_BRDF.enable_semseg_decoder:
+                self.BRDF_Net.update({'semsegDecoder': models_brdf.decoder0(opt, mode=-1, out_channel=self.cfg.MODEL_BRDF.semseg_classes, if_PPM=self.cfg.MODEL_BRDF.semseg_PPM)})
+
         # self.guide_net = guideNet(opt)
 
     # def forward_mat_seg(self, input_dict):
@@ -83,10 +86,10 @@ class SemSeg_BRDF(nn.Module):
         assert (h_o == h_i) and (w_o == w_i)
         # if (h_o != h_i) or (w_o != w_i):
             # output_PSPNet = F.interpolate(output_PSPNet, (h_i, w_i), mode='bilinear', align_corners=True)
-        output_PSPNet = output_PSPNet[:, :, :-1, :-1]
-        output_PSPNet_softmax = F.softmax(output_PSPNet, dim=1)
+        # output_PSPNet = output_PSPNet[:, :, :-1, :-1]
+        # output_PSPNet_softmax = F.softmax(output_PSPNet, dim=1)
 
-        return_dict = {'output_PSPNet': output_PSPNet, 'output_PSPNet_softmax': output_PSPNet_softmax, 'PSPNet_main_loss': main_loss, 'PSPNet_aux_loss': aux_loss}
+        return_dict = {'semseg_pred': output_PSPNet, 'PSPNet_main_loss': main_loss, 'PSPNet_aux_loss': aux_loss}
         return_dict.update({'feats_semseg_dict': feat_dict_PSPNet})
 
         return return_dict
@@ -100,7 +103,10 @@ class SemSeg_BRDF(nn.Module):
         # print(input_dict['input_batch_brdf'].shape, input_dict['semseg_label'].unsqueeze(1).shape)
         # print(input_dict['input_batch_brdf'].device, input_dict['semseg_label'].unsqueeze(1).device)
         if self.opt.cfg.DATA.load_semseg_gt:
-            input_tensor = torch.cat((input_dict['input_batch_brdf'], input_dict['semseg_label'].float().unsqueeze(1)), 1)
+            input_tensor = torch.cat((input_dict['input_batch_brdf'], input_dict['semseg_label'].float().unsqueeze(1) / float(self.opt.cfg.DATA.semseg_classes)), 1)
+            # a = input_dict['semseg_label'].float().unsqueeze(1) / float(self.opt.cfg.DATA.semseg_classes)
+            # print(torch.max(a), torch.min(a), torch.median(a))
+            # print('--', torch.max(input_dict['input_batch_brdf']), torch.min(input_dict['input_batch_brdf']), torch.median(input_dict['input_batch_brdf']))
         else:
             input_tensor = input_dict['input_batch_brdf']
         x1, x2, x3, x4, x5, x6 = self.BRDF_Net['encoder'](input_tensor)
@@ -118,7 +124,14 @@ class SemSeg_BRDF(nn.Module):
                 input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
 
         # print(x1.shape, x2.shape, x3.shape, x4.shape, x5.shape, x6.shape)
-        return {'albedoPred': albedoPred, 'normalPred': normalPred, 'roughPred': roughPred, 'depthPred': depthPred}
+        return_dict = {'albedoPred': albedoPred, 'normalPred': normalPred, 'roughPred': roughPred, 'depthPred': depthPred}
+
+        if self.cfg.MODEL_BRDF.enable_semseg_decoder:
+            semsegPred = self.BRDF_Net['semsegDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6)
+            return_dict.update({'semseg_pred': semsegPred})
+
+        return return_dict
+    
     
     def forward(self, input_dict):
         return_dict = {}

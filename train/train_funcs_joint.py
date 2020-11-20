@@ -92,8 +92,9 @@ def forward_joint(input_dict, model, opt, time_meters):
     return output_dict, loss_dict
 
 def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
-
     writer, logger, opt, tid = params_mis['writer'], params_mis['logger'], params_mis['opt'], params_mis['tid']
+    ENABLE_SEMSEG = opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable
+
     logger.info(red('===Evaluating for %d batches'%len(brdf_loader_val)))
 
     model.eval()
@@ -128,7 +129,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         
     loss_meters = {loss_key: AverageMeter() for loss_key in loss_keys}
     time_meters = get_time_meters_joint()
-    if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
+    if ENABLE_SEMSEG:
         semseg_meters = get_semseg_meters()
 
     with torch.no_grad():
@@ -153,10 +154,10 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 loss_meters[loss_key].update(loss_dict_reduced[loss_key].item())
 
             # ======= Metering
-            if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
-                output = output_dict['semsegPred'].max(1)[1]
+            if ENABLE_SEMSEG:
+                output = output_dict['semseg_pred'].max(1)[1]
                 target = input_dict['semseg_label']
-                intersection, union, target = intersectionAndUnionGPU(output, target, opt.cfg.MODEL_BRDF.semseg_classes, opt.cfg.MODEL_BRDF.semseg_ignore_label)
+                intersection, union, target = intersectionAndUnionGPU(output, target, opt.cfg.DATA.semseg_classes, opt.cfg.DATA.semseg_ignore_label)
                 if opt.distributed:
                     dist.all_reduce(intersection), dist.all_reduce(union), dist.all_reduce(target)
                 intersection, union, target = intersection.cpu().numpy(), union.cpu().numpy(), target.cpu().numpy()
@@ -168,7 +169,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             # synchronize()
 
     # ======= Metering
-    if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
+    if ENABLE_SEMSEG:
         iou_class = semseg_meters['intersection_meter'].sum / (semseg_meters['union_meter'].sum + 1e-10)
         accuracy_class = semseg_meters['intersection_meter'].sum / (semseg_meters['target_meter'].sum + 1e-10)
         mIoU = np.mean(iou_class)
@@ -176,15 +177,14 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         allAcc = sum(semseg_meters['intersection_meter'].sum) / (sum(semseg_meters['target_meter'].sum) + 1e-10)
         if opt.is_master:
             logger.info('Val result: mIoU/mAcc/allAcc {:.4f}/{:.4f}/{:.4f}.'.format(mIoU, mAcc, allAcc))
-            for i in range(opt.cfg.MODEL_BRDF.semseg_classes):
+            for i in range(opt.cfg.DATA.semseg_classes):
                 logger.info('Class_{} Result: iou/accuracy {:.4f}/{:.4f}.'.format(i, iou_class[i], accuracy_class[i]))
-
 
 
     if opt.is_master:
         for loss_key in loss_dict_reduced:
             writer.add_scalar('loss_val/%s'%loss_key, loss_meters[loss_key].avg, tid)
-        if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
+        if ENABLE_SEMSEG:
             writer.add_scalar('VAL/mIoU_val', mIoU, tid)
             writer.add_scalar('VAL/mAcc_val', mIoU, tid)
             writer.add_scalar('VAL/allAcc_val', mIoU, tid)
@@ -248,9 +248,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             synchronize()
             
             # ======= Vis imagges
-            if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
-                colors = np.loadtxt(os.path.join(opt.pwdpath, opt.cfg.MODEL_BRDF.semseg_colors_path)).astype('uint8')
-                semseg_pred = output_dict['semsegPred'].cpu().numpy()
+            if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable:
+                colors = np.loadtxt(os.path.join(opt.pwdpath, opt.cfg.PATH.semseg_colors_path)).astype('uint8')
+                semseg_pred = output_dict['semseg_pred'].cpu().numpy()
                 semseg_label = input_dict['semseg_label'].cpu().numpy()
 
             for sample_idx,(im_single, im_path) in enumerate(zip(data_batch['im_SDR_RGB'], data_batch['imPath'])):
@@ -266,36 +266,19 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     writer.add_text('VAL_image_name/%d'%num_val_im_vis, im_path, tid)
 
 
-                # ======= Vis BRDF-semseg
-                if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
+                # ======= Vis BRDFsemseg / semseg
+                if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable:
                     gray_GT = np.uint8(semseg_label[sample_idx])
                     color_GT = np.array(colorize(gray_GT, colors).convert('RGB'))
                     prediction = np.argmax(semseg_pred[sample_idx], 0)
                     gray_pred = np.uint8(prediction)
                     color_pred = np.array(colorize(gray_pred, colors).convert('RGB'))
                     if opt.is_master:
-                        writer.add_image('VAL_brdf-semseg_GT/%d'%num_val_im_vis, color_GT, tid, dataformats='HWC')
-                        writer.add_image('VAL_brdf-semseg_PRED/%d'%num_val_im_vis, color_pred, tid, dataformats='HWC')
+                        writer.add_image('VAL_semseg_GT/%d'%num_val_im_vis, color_GT, tid, dataformats='HWC')
+                        writer.add_image('VAL_semseg_PRED/%d'%num_val_im_vis, color_pred, tid, dataformats='HWC')
 
                 num_val_im_vis += 1
             
-            # ======= visualize clusters for semseg
-            if opt.cfg.MODEL_SEMSEG.enable:
-                for sample_idx, (semseg_pred, semseg_GT) in enumerate(zip(output_dict['semseg_pred_color_list'], output_dict['semseg_GT_color_list'])):
-
-                    # if num_val_semseg_vis >= num_val_vis_MAX:
-                    #     break
-
-                    # im_path = os.path.join('./tmp/', 'im_%d-%d_color.png'%(tid, im_index))
-                    # color_path = os.path.join('./tmp/', 'im_%d-%d_semseg.png'%(tid, im_index))
-                    # cv2.imwrite(im_path, im_single * 255.)
-                    # semseg_color.save(color_path)
-                    if opt.is_master:
-                        # print(np.array(semseg_color.convert('RGB')).shape, '+++++++')
-                        writer.add_image('VAL_semseg-PRED/%d'%num_val_semseg_vis, np.array(semseg_pred.convert('RGB')), tid, dataformats='HWC')
-                        writer.add_image('VAL_semseg-GT/%d'%num_val_semseg_vis, np.array(semseg_GT.convert('RGB')), tid, dataformats='HWC')
-                    num_val_semseg_vis += 1
-
                 
             # ======= visualize clusters for mat-seg
             if opt.cfg.MODEL_SEG.enable:

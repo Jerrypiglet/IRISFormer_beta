@@ -168,7 +168,7 @@ def process_brdf(input_dict, output_dict, loss_dict, opt, time_meters):
     if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
         semsegPred = output_dict['semsegPred']
         semsegLabel = input_dict['semseg_label']
-        loss_dict['loss_brdf-semseg'] = opt.semseg_criterion(semsegPred, semsegLabel)
+        loss_dict['loss_semseg-ALL'] = opt.semseg_criterion(semsegPred, semsegLabel)
         output_dict['semsegPred'] = semsegPred
 
     return output_dict, loss_dict

@@ -45,25 +45,25 @@ def get_input_dict_semseg(data_batch, opt):
     return input_dict
 
 def process_semseg(input_dict, output_dict, loss_dict, opt, time_meters):
-    prediction_batch = torch.argmax(output_dict['output_PSPNet'], axis=1)
-    semseg_pred_gray_list = []
-    semseg_pred_color_list = []
-    semseg_GT_gray_list = []
-    semseg_GT_color_list = []
+    # prediction_batch = torch.argmax(output_dict['semseg_pred'], axis=1)
+    # semseg_pred_gray_list = []
+    # semseg_pred_color_list = []
+    # semseg_GT_gray_list = []
+    # semseg_GT_color_list = []
     
-    for prediction, label in zip(prediction_batch.cpu().numpy(), input_dict['semseg_label'].cpu().numpy()):
-        gray = np.uint8(prediction)
-        color = colorize(gray, opt.semseg_colors)
-        semseg_pred_gray_list.append(gray)
-        semseg_pred_color_list.append(color)
+    # for prediction, label in zip(prediction_batch.cpu().numpy(), input_dict['semseg_label'].cpu().numpy()):
+    #     gray = np.uint8(prediction)
+    #     color = colorize(gray, opt.semseg_colors)
+    #     semseg_pred_gray_list.append(gray)
+    #     semseg_pred_color_list.append(color)
         
-        gray = np.uint8(label)
-        color = colorize(gray, opt.semseg_colors)
-        semseg_GT_gray_list.append(gray)
-        semseg_GT_color_list.append(color)
+    #     gray = np.uint8(label)
+    #     color = colorize(gray, opt.semseg_colors)
+    #     semseg_GT_gray_list.append(gray)
+    #     semseg_GT_color_list.append(color)
 
-    output_dict.update({'semseg_pred_gray_list': semseg_pred_gray_list, 'semseg_pred_color_list': semseg_pred_color_list})
-    output_dict.update({'semseg_GT_gray_list': semseg_GT_gray_list, 'semseg_GT_color_list': semseg_GT_color_list})
+    # output_dict.update({'semseg_pred_gray_list': semseg_pred_gray_list, 'semseg_pred_color_list': semseg_pred_color_list})
+    # output_dict.update({'semseg_GT_gray_list': semseg_GT_gray_list, 'semseg_GT_color_list': semseg_GT_color_list})
 
     # loss_dict['loss_semseg'] = opt.semseg_criterion(prediction_batch, semsegLabel)
     loss_dict['loss_semseg-main'] = output_dict['PSPNet_main_loss']

@@ -38,10 +38,10 @@ def parse_args():
     # tb_parser.add_argument('-n', '--namespace', type=str, help='namespace')
     tb_parser.add_argument('--debug', action='store_true', help='if debugging')
     tb_parser.add_argument('-f', '--file', type=str, help='Path to template file', default='rui_job_tb_v6_ravi.yaml')
-    tb_parser.add_argument('--cpur', type=int, help='request of CPUs', default=1)
-    tb_parser.add_argument('--cpul', type=int, help='limit of CPUs', default=8)
+    tb_parser.add_argument('--cpur', type=float, help='request of CPUs', default=1)
+    tb_parser.add_argument('--cpul', type=float, help='limit of CPUs', default=8)
     tb_parser.add_argument('--memr', type=float, help='request of memory in Gi', default=1)
-    tb_parser.add_argument('--meml', type=int, help='limit of memory in Gi', default=50)
+    tb_parser.add_argument('--meml', type=float, help='limit of memory in Gi', default=50)
     tb_parser.add_argument('--namespace', type=str, help='namespace of the job', default='ucsd-ravigroup')
 
 
