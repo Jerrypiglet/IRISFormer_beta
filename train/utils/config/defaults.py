@@ -102,7 +102,7 @@ _C.SOLVER.max_epoch = 1000
 _C.SOLVER.ims_per_batch = 16
 
 _C.TRAINING = CN()
-_C.TRAINING.MAX_CKPT_KEEP = 10
+_C.TRAINING.MAX_CKPT_KEEP = 20
 
 _C.TEST = CN()
 _C.TEST.ims_per_batch = 16

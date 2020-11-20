@@ -201,6 +201,7 @@ def _check_and_coerce_cfg_value_type(replacement, original, key, full_key):
 
 def _assert_with_logging(cond, msg):
     if not cond:
-        logger.debug(msg)
+        # logger.debug(msg)
+        print(msg)
     assert cond, msg
 

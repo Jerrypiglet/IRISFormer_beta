@@ -186,8 +186,8 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             writer.add_scalar('loss_val/%s'%loss_key, loss_meters[loss_key].avg, tid)
         if ENABLE_SEMSEG:
             writer.add_scalar('VAL/mIoU_val', mIoU, tid)
-            writer.add_scalar('VAL/mAcc_val', mIoU, tid)
-            writer.add_scalar('VAL/allAcc_val', mIoU, tid)
+            writer.add_scalar('VAL/mAcc_val', mAcc, tid)
+            writer.add_scalar('VAL/allAcc_val', allAcc, tid)
 
 
         logger.info(red('Evaluation timings: ' + time_meters_to_string(time_meters)))
