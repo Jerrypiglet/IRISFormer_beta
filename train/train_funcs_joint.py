@@ -152,7 +152,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             
             # ======= update loss
             for loss_key in loss_dict_reduced:
-                print(loss_key)
+                # print(loss_key)
                 loss_meters[loss_key].update(loss_dict_reduced[loss_key].item())
 
             # ======= Metering
