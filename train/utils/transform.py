@@ -15,7 +15,11 @@ class Compose(object):
 
     def __call__(self, image, label=None):
         for t in self.segtransform:
-            image, label = t(image, label)
+            if label is not None:
+                image, label = t(image, label)
+            else:
+                image = t(image)
+
         if label is not None:
             return image, label
         else:
@@ -47,7 +51,7 @@ class ToTensor(object):
                 label = label.long()
             return image, label
         else:
-            return image, None
+            return image
 
 
 class Normalize(object):
@@ -70,7 +74,7 @@ class Normalize(object):
         if label is not None:
             return image, label
         else:
-            return image, None
+            return image
 
 
 class Resize(object):
@@ -85,7 +89,7 @@ class Resize(object):
             label = cv2.resize(label, self.size[::-1], interpolation=cv2.INTER_NEAREST)
             return image, label
         else:
-            return image, None
+            return image
 
 
 class RandScale(object):
@@ -120,7 +124,7 @@ class RandScale(object):
             label = cv2.resize(label, None, fx=scale_factor_x, fy=scale_factor_y, interpolation=cv2.INTER_NEAREST)
             return image, label
         else:
-            return image, None
+            return image
 
 
 class Crop(object):
@@ -186,7 +190,7 @@ class Crop(object):
             label = label[h_off:h_off+self.crop_h, w_off:w_off+self.crop_w]
             return image, label
         else:
-            return image, None
+            return image
 
 
 class RandRotate(object):
@@ -210,7 +214,8 @@ class RandRotate(object):
     def __call__(self, image, label=None):
         if random.random() < self.p:
             angle = self.rotate[0] + (self.rotate[1] - self.rotate[0]) * random.random()
-            h, w = label.shape
+            # h, w = label.shape
+            h, w, _ = image.shape
             matrix = cv2.getRotationMatrix2D((w / 2, h / 2), angle, 1)
             image = cv2.warpAffine(image, matrix, (w, h), flags=cv2.INTER_LINEAR, borderMode=cv2.BORDER_CONSTANT, borderValue=self.padding)
             if label is not None:
@@ -218,7 +223,7 @@ class RandRotate(object):
         if label is not None:
             return image, label
         else:
-            return image, None
+            return image
 
 class RandomHorizontalFlip(object):
     def __init__(self, p=0.5):
@@ -232,7 +237,7 @@ class RandomHorizontalFlip(object):
         if label is not None:
             return image, label
         else:
-            return image, None
+            return image
 
 
 class RandomVerticalFlip(object):
@@ -247,7 +252,7 @@ class RandomVerticalFlip(object):
         if label is not None:
             return image, label
         else:
-            return image, None
+            return image
 
 
 class RandomGaussianBlur(object):
@@ -260,7 +265,7 @@ class RandomGaussianBlur(object):
         if label is not None:
             return image, label
         else:
-            return image, None
+            return image
 
 
 class RGB2BGR(object):
@@ -270,7 +275,7 @@ class RGB2BGR(object):
         if label is not None:
             return image, label
         else:
-            return image, None
+            return image
 
 
 class BGR2RGB(object):
@@ -280,4 +285,4 @@ class BGR2RGB(object):
         if label is not None:
             return image, label
         else:
-            return image, None
+            return image

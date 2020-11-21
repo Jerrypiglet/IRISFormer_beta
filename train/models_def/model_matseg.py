@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 
 from models_def import resnet_scene as resnet
+import torch.nn.functional as F
 
 
 class ResNet(nn.Module):
@@ -80,10 +81,16 @@ class Baseline(nn.Module):
         # surface plane parameters
         self.pred_param = nn.Conv2d(channel, 3, (1, 1), padding=0)
 
-    def top_down(self, x):
+    def top_down_original(self, x):
         c1, c2, c3, c4, c5 = x
+        # torch.Size([8, 128, 120, 160]) torch.Size([8, 256, 60, 80]) torch.Size([8, 512, 30, 40]) torch.Size([8, 1024, 15, 20]) torch.Size([8, 2048, 8, 10])
+        # print(c1.shape, c2.shape, c3.shape, c4.shape, c5.shape)
 
         p5 = self.relu(self.c5_conv(c5))
+
+        # --- torch.Size([8, 64, 8, 10]) torch.Size([8, 64, 16, 20]) torch.Size([8, 1024, 15, 20]) torch.Size([8, 64, 15, 20]) ------
+        # print('---', p5.shape, self.upsample(p5).shape, c4.shape, self.c4_conv(c4).shape, '------')
+
         p4 = self.up_conv5(self.upsample(p5)) + self.relu(self.c4_conv(c4))
         p3 = self.up_conv4(self.upsample(p4)) + self.relu(self.c3_conv(c3))
         p2 = self.up_conv3(self.upsample(p3)) + self.relu(self.c2_conv(c2))
@@ -95,13 +102,49 @@ class Baseline(nn.Module):
 
         return p0, p1, p2, p3, p4, p5
 
+    def top_down(self, x):
+        c1, c2, c3, c4, c5 = x
+        # torch.Size([8, 128, 120, 160]) torch.Size([8, 256, 60, 80]) torch.Size([8, 512, 30, 40]) torch.Size([8, 1024, 15, 20]) torch.Size([8, 2048, 8, 10])
+        # print(c1.shape, c2.shape, c3.shape, c4.shape, c5.shape)
+
+        p5 = self.relu(self.c5_conv(c5))
+
+        # --- torch.Size([8, 64, 8, 10]) torch.Size([8, 64, 16, 20]) torch.Size([8, 1024, 15, 20]) torch.Size([8, 64, 15, 20]) ------
+        # print('---', p5.shape, self.upsample(p5).shape, c4.shape, self.c4_conv(c4).shape, '------')
+
+        # p4 = self.up_conv5(self.upsample(p5))
+        # p4 += F.interpolate(self.relu(self.c4_conv(c4)), (p4.shape[2], p4.shape[3]), mode='bilinear', align_corners=True)
+        # p3 = self.up_conv4(self.upsample(p4))
+        # p3 += F.interpolate(self.relu(self.c3_conv(c3)), (p3.shape[2], p3.shape[3]), mode='bilinear', align_corners=True)
+        # p2 = self.up_conv3(self.upsample(p3))
+        # p2 += F.interpolate(self.relu(self.c2_conv(c2)), (p2.shape[2], p2.shape[3]), mode='bilinear', align_corners=True)
+        # p1 = self.up_conv2(self.upsample(p2))
+        # p1 += F.interpolate(self.relu(self.c1_conv(c1)), (p1.shape[2], p1.shape[3]), mode='bilinear', align_corners=True)
+
+        p4 = self.relu(self.c4_conv(c4))
+        p4 = p4 + F.interpolate(self.up_conv5(self.upsample(p5)), (p4.shape[2], p4.shape[3]), mode='bilinear', align_corners=True)
+        p3 = self.relu(self.c3_conv(c3))
+        p3 = p3 + F.interpolate(self.up_conv4(self.upsample(p4)), (p3.shape[2], p3.shape[3]), mode='bilinear', align_corners=True)
+        p2 = self.relu(self.c2_conv(c2))
+        p2 = p2 + F.interpolate(self.up_conv3(self.upsample(p3)), (p2.shape[2], p2.shape[3]), mode='bilinear', align_corners=True)
+        p1 = self.relu(self.c1_conv(c1))
+        p1 = p1 + F.interpolate(self.up_conv2(self.upsample(p2)), (p1.shape[2], p1.shape[3]), mode='bilinear', align_corners=True)
+
+
+        p0 = self.upsample(p1)
+
+        p0 = self.relu(self.p0_conv(p0))
+
+        return p0, p1, p2, p3, p4, p5
+
     def forward(self, x):
         # bottom up
         c1, c2, c3, c4, c5 = self.backbone(x)
+        # print(x.shape, c1.shape, c2.shape, c3.shape, c4.shape, c5.shape) # torch.Size([8, 3, 240, 320]) torch.Size([8, 128, 120, 160]) torch.Size([8, 256, 60, 80]) torch.Size([8, 512, 30, 40]) torch.Size([8, 1024, 15, 20]) torch.Size([8, 2048, 8, 10])
 
         # top down
         p0, p1, p2, p3, p4, p5 = self.top_down((c1, c2, c3, c4, c5)) # [16, 3, 192, 256],  [16, 64, 96, 128],  [16, 128, 48, 64],  [16, 256, 24, 32],  [16, 256, 12, 16],  [16, 512, 6, 8]
-        feats_mat_seg_dict = {'p0': p0, 'p1': p1, 'p2': p2, 'p3': p3, 'p4': p4, 'p5': p5}
+        feats_matseg_dict = {'p0': p0, 'p1': p1, 'p2': p2, 'p3': p3, 'p4': p4, 'p5': p5}
         # print(p0.shape, p1.shape, p2.shape, p3.shape, p4.shape, p5.shape)
 
         # output
@@ -111,7 +154,7 @@ class Baseline(nn.Module):
         # surface_normal = self.pred_surface_normal(p0)
         # param = self.pred_param(p0)
 
-        return_dict = {'logit': logit, 'embedding': embedding, 'feats_mat_seg_dict': feats_mat_seg_dict}
+        return_dict = {'logit': logit, 'embedding': embedding, 'feats_matseg_dict': feats_matseg_dict}
         return return_dict
         # return prob, embedding
         # return prob, embedding, depth, surface_normal, param

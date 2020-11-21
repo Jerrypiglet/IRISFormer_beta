@@ -22,7 +22,7 @@ DATASET:
 MODEL_BRDF:
   load_pretrained_pth: False
 
-MODEL_SEG:
+MODEL_MATSEG:
   arch: resnet101
   pretrained: True
   embed_dims: 2

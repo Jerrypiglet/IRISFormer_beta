@@ -47,6 +47,7 @@ def hinge_embedding_loss(embedding, num_planes, segmentation, device, t_pull=0.5
     embeddings = []
     # select embedding with segmentation
     for i in range(num_planes):
+        # print(embedding.shape, segmentation.shape)
         feature = torch.transpose(torch.masked_select(embedding, segmentation[i, :, :].view(1, h, w).bool()).view(c, -1), 0, 1)
         embeddings.append(feature)
 

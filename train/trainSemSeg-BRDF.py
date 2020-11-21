@@ -34,6 +34,8 @@ from torch.optim.lr_scheduler import MultiStepLR, ReduceLROnPlateau, StepLR
 import utils.utils_config as utils_config
 from utils.utils_envs import set_up_envs
 
+from utils.utils_vis import vis_index_map
+
 parser = argparse.ArgumentParser()
 # The locationi of training set
 parser.add_argument('--data_root', default=None, help='path to input images')
@@ -64,7 +66,7 @@ parser.add_argument('--debug', action='store_true', help='Debug eval')
 parser.add_argument('--ifMatMapInput', action='store_true', help='using mask as additional input')
 parser.add_argument('--ifDataloaderOnly', action='store_true', help='benchmark dataloading overhead')
 parser.add_argument('--if_cluster', action='store_true', help='if using cluster')
-parser.add_argument('--if_hdr_input_mat_seg', action='store_true', help='if using hdr images')
+parser.add_argument('--if_hdr_input_matseg', action='store_true', help='if using hdr images')
 parser.add_argument('--eval_every_iter', type=int, default=2000, help='')
 parser.add_argument('--save_every_iter', type=int, default=2000, help='')
 parser.add_argument('--invalid_index', type=int, default = 255, help='index for invalid aread (e.g. windows, lights)')
@@ -73,7 +75,8 @@ parser.add_argument('--invalid_index', type=int, default = 255, help='index for 
 parser.add_argument('--resume', type=str, help='resume training; can be full path (e.g. tmp/checkpoint0.pth.tar) or taskname (e.g. tmp); [to continue the current task, use: resume]', default='NoCkpt')
 parser.add_argument('--reset_scheduler', action='store_true', help='')
 parser.add_argument('--reset_lr', action='store_true', help='')
-
+# debug
+parser.add_argument("--mini_val", type=str2bool, nargs='?', const=True, default=False)
 # to get rid of
 parser.add_argument('--test_real', action='store_true', help='')
 
@@ -110,6 +113,7 @@ opt.semseg_configs = semseg_configs
 
 opt.pwdpath = pwdpath
 
+# >>>>>>>>>>>>> A bunch of modularised set-ups
 # opt.gpuId = opt.deviceIds[0]
 from utils.utils_envs import set_up_dist
 handle = set_up_dist(opt)
@@ -119,29 +123,28 @@ set_up_folders(opt)
 
 from utils.utils_envs import set_up_logger
 logger, writer = set_up_logger(opt)
+# <<<<<<<<<<<<< A bunch of modularised set-ups
 
 # >>>> MODEL AND OPTIMIZER
 # build model
 # model = MatSeg_BRDF(opt, logger)
 model = SemSeg_BRDF(opt, logger)
-# if not (opt.resume == 'NoCkpt'):
-#     model_dict = torch.load(opt.resume, map_location=lambda storage, loc: storage)
-#     model.load_state_dict(model_dict)
 if opt.distributed: # https://github.com/dougsouza/pytorch-sync-batchnorm-example # export NCCL_LL_THRESHOLD=0
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 model.to(opt.device)
-model.print_net()
 if opt.cfg.MODEL_BRDF.load_pretrained_pth:
     model.load_pretrained_brdf(opt.cfg.MODEL_BRDF.pretrained_pth_name)
 if opt.cfg.MODEL_SEMSEG.enable and opt.cfg.MODEL_SEMSEG.if_freeze:
-    model.turn_off_names(['UNet'])
+    # model.turn_off_names(['UNet'])
+    model.turn_off_names(['SEMSEG_Net'])
     model.freeze_bn_semantics()
+model.print_net()
 
 # set up optimizers
 # optimizer = get_optimizer(model.parameters(), cfg.SOLVER)
 optimizer = optim.Adam(model.parameters(), lr=1e-4, betas=(0.5, 0.999) )
 if opt.distributed:
-    model = DDP(model, device_ids=[opt.rank], output_device=opt.rank)
+    model = DDP(model, device_ids=[opt.rank], output_device=opt.rank, find_unused_parameters=True)
 
 logger.info(red('Optimizer: '+type(optimizer).__name__))
 scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=50, cooldown=0, verbose=True, threshold_mode='rel', threshold=0.01)
@@ -149,13 +152,16 @@ scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=50, cooldow
 # <<<< MODEL AND OPTIMIZER
 
 # >>>> DATASET
-from utils.utils_semseg import get_transform_semseg
-transforms_semseg_train = get_transform_semseg('train', opt)
-transforms_semseg_val = get_transform_semseg('val', opt)
+from utils.utils_semseg import get_transform_semseg, get_transform_matseg
+transforms_train_semseg = get_transform_semseg('train', opt)
+transforms_val_semseg = get_transform_semseg('val', opt)
+transforms_train_matseg = get_transform_matseg('train', opt)
+transforms_val_matseg = get_transform_matseg('val', opt)
 
 brdf_dataset_train = openrooms(opt, 
-    transforms_fixed = transforms_semseg_val, 
-    transforms_semseg = transforms_semseg_train, 
+    transforms_fixed = transforms_val_semseg, 
+    transforms = transforms_train_semseg, 
+    transforms_matseg = transforms_train_matseg,
     cascadeLevel = opt.cascadeLevel, split = 'train', logger=logger)
 brdf_loader_train = make_data_loader(
     opt,
@@ -174,12 +180,15 @@ if 'mini' in opt.cfg.DATASET.dataset_path:
     brdf_dataset_val_vis = brdf_dataset_train
 else:
     brdf_dataset_val = openrooms(opt, 
-        transforms_fixed = transforms_semseg_val, 
-        transforms_semseg = transforms_semseg_val, 
-        cascadeLevel = opt.cascadeLevel, split = 'val', logger=logger)
+        transforms_fixed = transforms_val_semseg, 
+        transforms = transforms_val_semseg, 
+        transforms_matseg = transforms_val_matseg,
+        # cascadeLevel = opt.cascadeLevel, split = 'val', logger=logger)
+        cascadeLevel = opt.cascadeLevel, split = 'val', load_first = 20 if opt.mini_val else -1, logger=logger)
     brdf_dataset_val_vis = openrooms(opt, 
-        transforms_fixed = transforms_semseg_val, 
-        transforms_semseg = transforms_semseg_val, 
+        transforms_fixed = transforms_val_semseg, 
+        transforms = transforms_val_semseg, 
+        transforms_matseg = transforms_val_matseg,
         cascadeLevel = opt.cascadeLevel, split = 'val', load_first = 20, logger=logger)
 brdf_loader_val = make_data_loader(
     opt,
@@ -297,12 +306,29 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         # ======= Backward
         loss = 0.
         loss_keys_backward = []
-        if opt.cfg.MODEL_SEG.enable:
-            loss_keys_backward.append('loss_mat_seg-ALL')
-        if opt.cfg.MODEL_BRDF.enable:
+        loss_keys_print = []
+        if opt.cfg.MODEL_MATSEG.enable:
+            loss_keys_backward.append('loss_matseg-ALL')
+            loss_keys_print.append('loss_matseg-ALL')
+            loss_keys_print.append('loss_matseg-pull')
+            loss_keys_print.append('loss_matseg-push')
+            loss_keys_print.append('loss_matseg-binary')
+
+        if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
             loss_keys_backward.append('loss_brdf-ALL')
-        if opt.cfg.MODEL_SEMSEG.enable and not opt.cfg.MODEL_SEMSEG.if_freeze:
+            loss_keys_print.append('loss_brdf-ALL')
+            loss_keys_print.append('loss_brdf-albedo') 
+            loss_keys_print.append('loss_brdf-normal') 
+            loss_keys_print.append('loss_brdf-rough') 
+            loss_keys_print.append('loss_brdf-depth') 
+
+        if (opt.cfg.MODEL_SEMSEG.enable and not opt.cfg.MODEL_SEMSEG.if_freeze) or (opt.cfg.MODEL_BRDF.enable_semseg_decoder):
             loss_keys_backward.append('loss_semseg-ALL')
+            loss_keys_print.append('loss_semseg-ALL')
+            if opt.cfg.MODEL_SEMSEG.enable:
+                loss_keys_print.append('loss_semseg-main') 
+                loss_keys_print.append('loss_semseg-aux') 
+
         loss = sum([loss_dict[loss_key] for loss_key in loss_keys_backward])
         loss.backward()
         optimizer.step()
@@ -310,7 +336,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         time_meters['ts'] = time.time()
 
         if opt.is_master:
-            logger_str = 'Epoch %d - Tid %d -'%(epoch, tid) + ', '.join(['%s %.3f'%(loss_key, loss_dict_reduced[loss_key]) for loss_key in loss_keys_backward])
+            logger_str = 'Epoch %d - Tid %d -'%(epoch, tid) + ', '.join(['%s %.3f'%(loss_key, loss_dict_reduced[loss_key]) for loss_key in loss_keys_print])
             logger.info(logger_str)
 
             for loss_key in loss_dict_reduced:
@@ -329,11 +355,32 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
                 writer.add_scalar('training/GPU_usage_ratio', usage_ratio, tid)
                 writer.add_scalar('training/batch_size_per_gpu', len(data_batch['imPath']), tid)
                 writer.add_scalar('training/gpus', opt.num_gpus, tid)
-            if opt.is_master and tid % 1000 == 0:
-                for sample_idx, (im_single, im_path) in enumerate(zip(data_batch['im'], data_batch['im_trainval_RGB'], data_batch['imPath'])):
+        if opt.is_master:
+            if opt.is_master and tid % 2000 == 0:
+                for sample_idx, (im_single, im_trainval_RGB, im_path) in enumerate(zip(data_batch['im'], data_batch['im_trainval_RGB'], data_batch['imPath'])):
                     im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
+                    im_trainval_RGB = im_trainval_RGB.numpy().squeeze().transpose(1, 2, 0)
                     writer.add_image('TRAIN_im/%d'%sample_idx, im_single, tid, dataformats='HWC')
+                    writer.add_image('TRAIN_im_trainval_RGB/%d'%sample_idx, im_trainval_RGB, tid, dataformats='HWC')
                     writer.add_text('TRAIN_image_name/%d'%sample_idx, im_path, tid)
+                if opt.cfg.DATA.load_matseg_gt:
+                    for sample_idx, (im_single, mat_aggre_map) in enumerate(zip(data_batch['im_matseg_transformed_trainval'], input_dict['mat_aggre_map_cpu'])):
+                        im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
+                        mat_aggre_map = mat_aggre_map.numpy().squeeze()
+                        writer.add_image('TRAIN_matseg_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
+                        writer.add_image('TRAIN_matseg_mat_aggre_map_trainval/%d'%sample_idx, vis_index_map(mat_aggre_map), tid, dataformats='HWC')
+                        logger.info('Logged training mat seg')
+                if opt.cfg.DATA.load_semseg_gt:
+                    for sample_idx, (im_single, semseg_label) in enumerate(zip(data_batch['im_semseg_transformed_trainval'], data_batch['semseg_label'])):
+                        im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
+                        colors = np.loadtxt(os.path.join(opt.pwdpath, opt.cfg.PATH.semseg_colors_path)).astype('uint8')
+                        semseg_label = np.uint8(semseg_label.numpy().squeeze())
+                        from utils.utils_vis import colorize
+                        semseg_label_color = np.array(colorize(semseg_label, colors).convert('RGB'))
+                        writer.add_image('TRAIN_semseg_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
+                        writer.add_image('TRAIN_semseg_label_trainval/%d'%sample_idx, semseg_label_color, tid, dataformats='HWC')
+                        logger.info('Logged training sem seg')
+
 
 
         # if opt.is_master and tid % 100 == 0:
@@ -344,6 +391,8 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         #         cv2.imwrite(im_path, im_single * 255.)
         #         semseg_color.save(color_path)
 
+        # print(input_dict['im_batch_matseg'].shape)
+        # print(input_dict['im_batch_matseg'].shape)
         tid += 1
 
             # print(ts_iter_end_start_list, ts_iter_start_end_list)

@@ -17,7 +17,7 @@ from utils.utils_semseg import intersectionAndUnionGPU
 import torchvision.utils as vutils
 import torch.distributed as dist
 
-from train_funcs_mat_seg import get_input_dict_mat_seg, process_mat_seg
+from train_funcs_matseg import get_input_dict_matseg, process_matseg, val_epoch_matseg
 from train_funcs_semseg import get_input_dict_semseg, process_semseg
 from train_funcs_brdf import get_input_dict_brdf, process_brdf
 from utils.comm import synchronize
@@ -28,7 +28,7 @@ def get_time_meters_joint():
     time_meters['data_to_gpu'] = AverageMeter()
     time_meters['forward'] = AverageMeter()
     time_meters['loss_brdf'] = AverageMeter()
-    time_meters['loss_mat_seg'] = AverageMeter()
+    time_meters['loss_matseg'] = AverageMeter()
     time_meters['loss_semseg'] = AverageMeter()
     time_meters['backward'] = AverageMeter()    
     return time_meters
@@ -43,28 +43,27 @@ def get_semseg_meters():
 
 def get_input_dict_joint(data_batch, opt):
     input_dict = {}
-    if opt.cfg.MODEL_SEG.enable:
-        input_dict_mat_seg = get_input_dict_mat_seg(data_batch, opt)
+    if opt.cfg.DATA.load_matseg_gt:
+        input_dict_matseg = get_input_dict_matseg(data_batch, opt)
     else:
-        input_dict_mat_seg = {}
-    input_dict.update(input_dict_mat_seg)
+        input_dict_matseg = {}
+    input_dict.update(input_dict_matseg)
 
-    if opt.cfg.MODEL_SEMSEG.enable:
+    if opt.cfg.DATA.load_semseg_gt:
         input_dict_semseg = get_input_dict_semseg(data_batch, opt)
     else:
         input_dict_semseg = {}
     input_dict.update(input_dict_semseg)
 
-    if opt.cfg.MODEL_BRDF.enable:
+    if opt.cfg.DATA.load_brdf_gt:
         input_batch_brdf, input_dict_brdf, pre_batch_dict_brdf = get_input_dict_brdf(data_batch, opt)
+        input_dict.update({'input_batch_brdf': input_batch_brdf, 'pre_batch_dict_brdf': pre_batch_dict_brdf})
     else:
         input_dict_brdf = {}    
+
     input_dict.update(input_dict_brdf)
 
-    if opt.cfg.MODEL_BRDF.enable:
-        input_dict.update({'input_batch_brdf': input_batch_brdf, 'pre_batch_dict_brdf': pre_batch_dict_brdf})
-
-    # input_dict = {**input_dict_mat_seg, **input_dict_brdf}
+    # input_dict = {**input_dict_matseg, **input_dict_brdf}
     return input_dict
 
 def forward_joint(input_dict, model, opt, time_meters):
@@ -74,9 +73,9 @@ def forward_joint(input_dict, model, opt, time_meters):
 
     loss_dict = {}
 
-    if opt.cfg.MODEL_SEG.enable:
-        output_dict, loss_dict = process_mat_seg(input_dict, output_dict, loss_dict, opt, time_meters)
-        time_meters['loss_mat_seg'].update(time.time() - time_meters['ts'])
+    if opt.cfg.MODEL_MATSEG.enable:
+        output_dict, loss_dict = process_matseg(input_dict, output_dict, loss_dict, opt, time_meters)
+        time_meters['loss_matseg'].update(time.time() - time_meters['ts'])
         time_meters['ts'] = time.time()
     
     if opt.cfg.MODEL_BRDF.enable:
@@ -94,6 +93,8 @@ def forward_joint(input_dict, model, opt, time_meters):
 def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     writer, logger, opt, tid = params_mis['writer'], params_mis['logger'], params_mis['opt'], params_mis['tid']
     ENABLE_SEMSEG = opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable
+    ENABLE_MATSEG = opt.cfg.MODEL_MATSEG.enable and not opt.cfg.MODEL_MATSEG.if_freeze
+
 
     logger.info(red('===Evaluating for %d batches'%len(brdf_loader_val)))
 
@@ -101,12 +102,12 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     
     loss_keys = []
 
-    if opt.cfg.MODEL_SEG.enable:
+    if opt.cfg.MODEL_MATSEG.enable:
         loss_keys += [
-            'loss_mat_seg-ALL', 
-            'loss_mat_seg-pull', 
-            'loss_mat_seg-push', 
-            'loss_mat_seg-binary', 
+            'loss_matseg-ALL', 
+            'loss_matseg-pull', 
+            'loss_matseg-push', 
+            'loss_matseg-binary', 
         ]
 
     if opt.cfg.MODEL_BRDF.enable:
@@ -118,7 +119,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             'loss_brdf-ALL', 
         ]
         if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
-            loss_keys += ['loss_brdf-semseg']
+            loss_keys += ['loss_semseg-ALL']
 
     if opt.cfg.MODEL_SEMSEG.enable:
         loss_keys += [
@@ -151,6 +152,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             
             # ======= update loss
             for loss_key in loss_dict_reduced:
+                print(loss_key)
                 loss_meters[loss_key].update(loss_dict_reduced[loss_key].item())
 
             # ======= Metering
@@ -164,7 +166,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 semseg_meters['intersection_meter'].update(intersection), semseg_meters['union_meter'].update(union), semseg_meters['target_meter'].update(target)
                 # accuracy = sum(semseg_meters['intersection_meter'].val) / (sum(semseg_meters['target_meter'].val) + 1e-10)
 
-            # print(batch_id)
+            print(batch_id)
 
             # synchronize()
 
@@ -184,11 +186,11 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     if opt.is_master:
         for loss_key in loss_dict_reduced:
             writer.add_scalar('loss_val/%s'%loss_key, loss_meters[loss_key].avg, tid)
+            logger.info('Logged val loss for %s'%loss_key)
         if ENABLE_SEMSEG:
             writer.add_scalar('VAL/mIoU_val', mIoU, tid)
             writer.add_scalar('VAL/mAcc_val', mAcc, tid)
             writer.add_scalar('VAL/allAcc_val', allAcc, tid)
-
 
         logger.info(red('Evaluation timings: ' + time_meters_to_string(time_meters)))
 
@@ -200,15 +202,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
     model.eval()
 
-    num_val_mat_seg_vis = 0
-    num_val_im_vis = 0
-    num_val_semseg_vis = 0
-    num_val_brdf_vis = 0
-    # num_val_vis_MAX = 100
-
     time_meters = get_time_meters_joint()
 
-    if opt.cfg.MODEL_SEG.enable:
+    if opt.cfg.MODEL_MATSEG.enable:
         match_segmentatin = MatchSegmentation()
 
     if opt.cfg.MODEL_BRDF.enable:
@@ -232,10 +228,11 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
     with torch.no_grad():
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
+            batch_size = len(data_batch['imPath'])
 
             # print(batch_id)
 
-            # if num_val_brdf_vis >= num_val_vis_MAX or num_val_mat_seg_vis >= num_val_vis_MAX:
+            # if num_val_brdf_vis >= num_val_vis_MAX or sample_idx >= num_val_vis_MAX:
             #     break
 
             input_dict = get_input_dict_joint(data_batch, opt)
@@ -248,13 +245,14 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             synchronize()
             
             # ======= Vis imagges
-            if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable:
-                colors = np.loadtxt(os.path.join(opt.pwdpath, opt.cfg.PATH.semseg_colors_path)).astype('uint8')
-                semseg_pred = output_dict['semseg_pred'].cpu().numpy()
+            colors = np.loadtxt(os.path.join(opt.pwdpath, opt.cfg.PATH.semseg_colors_path)).astype('uint8')
+            if opt.cfg.DATA.load_semseg_gt:
                 semseg_label = input_dict['semseg_label'].cpu().numpy()
+            if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable:
+                semseg_pred = output_dict['semseg_pred'].cpu().numpy()
 
             for sample_idx,(im_single, im_path) in enumerate(zip(data_batch['im_SDR_RGB'], data_batch['imPath'])):
-                # if num_val_im_vis >= num_val_vis_MAX:
+                # if sample_idx >= num_val_vis_MAX:
                 #     break
                 im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
                 # im_path = os.path.join('./tmp/', 'im_%d-%d_color.png'%(tid, im_index))
@@ -262,30 +260,39 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 # cv2.imwrite(im_path, im_single * 255.)
                 # semseg_color.save(color_path)
                 if opt.is_master:
-                    writer.add_image('VAL_im/%d'%num_val_im_vis, im_single, tid, dataformats='HWC')
-                    writer.add_text('VAL_image_name/%d'%num_val_im_vis, im_path, tid)
+                    writer.add_image('VAL_im/%d'%(sample_idx+batch_size*batch_id), im_single, tid, dataformats='HWC')
+                    writer.add_text('VAL_image_name/%d'%(sample_idx+batch_size*batch_id), im_path, tid)
 
 
                 # ======= Vis BRDFsemseg / semseg
-                if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable:
+                if opt.cfg.DATA.load_semseg_gt:
                     gray_GT = np.uint8(semseg_label[sample_idx])
                     color_GT = np.array(colorize(gray_GT, colors).convert('RGB'))
+                    if opt.is_master:
+                        writer.add_image('VAL_semseg_GT/%d'%(sample_idx+batch_size*batch_id), color_GT, tid, dataformats='HWC')
+                if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable:
                     prediction = np.argmax(semseg_pred[sample_idx], 0)
                     gray_pred = np.uint8(prediction)
                     color_pred = np.array(colorize(gray_pred, colors).convert('RGB'))
                     if opt.is_master:
-                        writer.add_image('VAL_semseg_GT/%d'%num_val_im_vis, color_GT, tid, dataformats='HWC')
-                        writer.add_image('VAL_semseg_PRED/%d'%num_val_im_vis, color_pred, tid, dataformats='HWC')
-
-                num_val_im_vis += 1
+                        writer.add_image('VAL_semseg_PRED/%d'%(sample_idx+batch_size*batch_id), color_pred, tid, dataformats='HWC')
             
                 
             # ======= visualize clusters for mat-seg
-            if opt.cfg.MODEL_SEG.enable:
+            if opt.cfg.DATA.load_matseg_gt:
+                for sample_idx in range(input_dict['mat_aggre_map_cpu'].shape[0]):
+                    mat_aggre_map_GT_single = input_dict['mat_aggre_map_cpu'][sample_idx].numpy().squeeze()
+                    matAggreMap_GT_single_vis = vis_index_map(mat_aggre_map_GT_single)
+                    mat_notlight_mask_single = input_dict['mat_notlight_mask_cpu'][sample_idx].numpy().squeeze()
+                    if opt.is_master:
+                        writer.add_image('VAL_matseg-aggre_map_GT/%d'%(sample_idx+batch_size*batch_id), matAggreMap_GT_single_vis, tid, dataformats='HWC')
+                        writer.add_image('VAL_matseg-notlight_mask_GT/%d'%(sample_idx+batch_size*batch_id), mat_notlight_mask_single, tid, dataformats='HW')
+
+            if opt.cfg.MODEL_MATSEG.enable:
                 b, c, h, w = output_dict['logit'].size()
                 for sample_idx, (logit_single, embedding_single) in enumerate(zip(output_dict['logit'].detach(), output_dict['embedding'].detach())):
 
-                    # if num_val_mat_seg_vis >= num_val_vis_MAX:
+                    # if sample_idx >= num_val_vis_MAX:
                     #     break
                     
                     # prob_single = torch.sigmoid(logit_single)
@@ -328,34 +335,16 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     # ===== vis
                     # im_single = data_batch['im_not_hdr'][sample_idx].numpy().squeeze().transpose(1, 2, 0)
 
-
-                    mat_aggre_map_GT_single = input_dict['mat_aggre_map_cpu'][sample_idx].numpy().squeeze()
-                    matAggreMap_GT_single_vis = vis_index_map(mat_aggre_map_GT_single)
-
                     mat_aggre_map_pred_single = reindex_output_map(predict_segmentation.squeeze(), opt.invalid_index)
                     matAggreMap_pred_single_vis = vis_index_map(mat_aggre_map_pred_single)
 
-
-                    mat_notlight_mask_single = input_dict['mat_notlight_mask_cpu'][sample_idx].numpy().squeeze()
-
-
                     if opt.is_master:
-                        # writer.add_image('VAL_im/%d'%num_val_mat_seg_vis, im_single, tid, dataformats='HWC')
+                        writer.add_image('VAL_matseg-aggre_map_PRED/%d'%(sample_idx+batch_size*batch_id), matAggreMap_pred_single_vis, tid, dataformats='HWC')
 
-                        writer.add_image('VAL_mat_seg-aggre_map_GT/%d'%num_val_mat_seg_vis, matAggreMap_GT_single_vis, tid, dataformats='HWC')
-
-                        writer.add_image('VAL_mat_seg-aggre_map_PRED/%d'%num_val_mat_seg_vis, matAggreMap_pred_single_vis, tid, dataformats='HWC')
-
-                        writer.add_image('VAL_mat_seg-notlight_mask_GT/%d'%num_val_mat_seg_vis, mat_notlight_mask_single, tid, dataformats='HW')
-
-                        writer.add_text('VAL_im_path/%d'%num_val_mat_seg_vis, input_dict['im_paths'][sample_idx], tid)
-
-
-                    num_val_mat_seg_vis += 1
 
             # ======= visualize clusters for mat-seg
             # print(((input_dict['albedoBatch'] ) ** (1.0/2.2) ).data.shape) # [b, 3, h, w]
-            if opt.cfg.MODEL_BRDF.enable:
+            if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
                 # if opt.is_master:
                     # print(input_dict.keys())
                 im_paths_list.append(input_dict['im_paths'])
@@ -378,12 +367,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 roughPreds_list.append(output_dict['roughPreds'][n])
                 depthPreds_list.append(output_dict['depthPreds'][n])
 
-                num_val_brdf_vis += len(input_dict['im_paths'])
-
-
     synchronize()
 
-    if opt.cfg.MODEL_BRDF.enable:
+    if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
         im_paths_list = flatten_list(im_paths_list)
         # print(im_paths_list)
 

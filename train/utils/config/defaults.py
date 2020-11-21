@@ -31,15 +31,17 @@ _C.PATH.semseg_names_path = 'data/openrooms/openrooms_names.txt'
 # _C.DATA.semseg_names_path = 'data/openrooms/openrooms_names.txt'
 
 
-_C.MODEL_SEG = CN()
-_C.MODEL_SEG.enable = False
-_C.MODEL_SEG.arch = 'resnet101'
-_C.MODEL_SEG.pretrained = True
-_C.MODEL_SEG.if_freeze = False
-_C.MODEL_SEG.fix_bn = False
-_C.MODEL_SEG.embed_dims = 2
-_C.MODEL_SEG.if_guide = False
-_C.MODEL_SEG.guide_channels = 32
+_C.MODEL_MATSEG = CN()
+_C.MODEL_MATSEG.enable = False
+_C.MODEL_MATSEG.arch = 'resnet101'
+_C.MODEL_MATSEG.pretrained = True
+_C.MODEL_MATSEG.if_freeze = False
+_C.MODEL_MATSEG.fix_bn = False
+_C.MODEL_MATSEG.embed_dims = 2
+_C.MODEL_MATSEG.if_guide = False
+_C.MODEL_MATSEG.guide_channels = 32
+_C.MODEL_MATSEG.use_as_input = False
+
 
 _C.MODEL_BRDF = CN()
 _C.MODEL_BRDF.enable = True
@@ -50,6 +52,7 @@ _C.MODEL_BRDF.normalWeight = 1.0
 _C.MODEL_BRDF.roughWeight = 0.5
 _C.MODEL_BRDF.depthWeight = 0.5
 _C.MODEL_BRDF.if_debug_arch = False
+_C.MODEL_BRDF.enable_BRDF_decoders = True
 
 _C.MODEL_BRDF.enable_semseg_decoder = False
 _C.MODEL_BRDF.semseg_PPM = False
@@ -89,6 +92,8 @@ _C.DATA = CN()
 _C.DATA.im_height = 240
 _C.DATA.im_width = 320
 _C.DATA.load_semseg_gt = False
+_C.DATA.load_matseg_gt = False
+_C.DATA.load_brdf_gt = True
 _C.DATA.semseg_ignore_label = 0
 _C.DATA.semseg_classes = 46
 

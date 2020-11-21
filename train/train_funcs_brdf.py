@@ -10,100 +10,103 @@ def get_input_dict_brdf(data_batch, opt):
     input_dict = {}
     
     input_dict['im_paths'] = data_batch['imPath']
-
-    # Load data from cpu to gpu
-    albedo_cpu = data_batch['albedo']
-    input_dict['albedoBatch'] = Variable(albedo_cpu ).cuda(non_blocking=True)
-
-    normal_cpu = data_batch['normal']
-    input_dict['normalBatch'] = Variable(normal_cpu ).cuda(non_blocking=True)
-
-    rough_cpu = data_batch['rough']
-    input_dict['roughBatch'] = Variable(rough_cpu ).cuda(non_blocking=True)
-
-    depth_cpu = data_batch['depth']
-    input_dict['depthBatch'] = Variable(depth_cpu ).cuda(non_blocking=True)
-
-    mask_cpu = data_batch['mask'].permute(0, 3, 1, 2) # [b, 3, h, w]
-    input_dict['maskBatch'] = Variable(mask_cpu ).cuda(non_blocking=True)
-
-    matAggreMap_cpu = data_batch['mat_aggre_map'].permute(0, 3, 1, 2) # [b, 1, h, w]
-    input_dict['matAggreMapBatch'] = Variable(matAggreMap_cpu ).cuda(non_blocking=True)
-
-    segArea_cpu = data_batch['segArea']
-    segEnv_cpu = data_batch['segEnv']
-    segObj_cpu = data_batch['segObj']
-
-    seg_cpu = torch.cat([segArea_cpu, segEnv_cpu, segObj_cpu], dim=1 )
-    segBatch = Variable(seg_cpu ).cuda(non_blocking=True)
-
-    input_dict['segBRDFBatch'] = segBatch[:, 2:3, :, :]
-    input_dict['segAllBatch'] = segBatch[:, 0:1, :, :]  + segBatch[:, 2:3, :, :]
-
     # Load the image from cpu to gpu
     im_cpu = (data_batch['im'] )
     input_dict['imBatch'] = Variable(im_cpu ).cuda(non_blocking=True)
 
+    if opt.cfg.DATA.load_brdf_gt:
+        # Load data from cpu to gpu
+        albedo_cpu = data_batch['albedo']
+        input_dict['albedoBatch'] = Variable(albedo_cpu ).cuda(non_blocking=True)
+
+        normal_cpu = data_batch['normal']
+        input_dict['normalBatch'] = Variable(normal_cpu ).cuda(non_blocking=True)
+
+        rough_cpu = data_batch['rough']
+        input_dict['roughBatch'] = Variable(rough_cpu ).cuda(non_blocking=True)
+
+        depth_cpu = data_batch['depth']
+        input_dict['depthBatch'] = Variable(depth_cpu ).cuda(non_blocking=True)
+
+        mask_cpu = data_batch['mask'].permute(0, 3, 1, 2) # [b, 3, h, w]
+        input_dict['maskBatch'] = Variable(mask_cpu ).cuda(non_blocking=True)
+
+
+        segArea_cpu = data_batch['segArea']
+        segEnv_cpu = data_batch['segEnv']
+        segObj_cpu = data_batch['segObj']
+
+        seg_cpu = torch.cat([segArea_cpu, segEnv_cpu, segObj_cpu], dim=1 )
+        segBatch = Variable(seg_cpu ).cuda(non_blocking=True)
+
+        input_dict['segBRDFBatch'] = segBatch[:, 2:3, :, :]
+        input_dict['segAllBatch'] = segBatch[:, 0:1, :, :]  + segBatch[:, 2:3, :, :]
+
+
     if opt.cfg.DATA.load_semseg_gt:
         input_dict['semseg_label'] = data_batch['semseg_label'].cuda(non_blocking=True)
 
-    if opt.cascadeLevel > 0:
-        albedoPre_cpu = data_batch['albedoPre']
-        albedoPreBatch = Variable(albedoPre_cpu ).cuda(non_blocking=True)
-
-        normalPre_cpu = data_batch['normalPre']
-        normalPreBatch = Variable(normalPre_cpu ).cuda(non_blocking=True)
-
-        roughPre_cpu = data_batch['roughPre']
-        roughPreBatch = Variable(roughPre_cpu ).cuda(non_blocking=True)
-
-        depthPre_cpu = data_batch['depthPre']
-        depthPreBatch = Variable(depthPre_cpu ).cuda(non_blocking=True)
-
-        diffusePre_cpu = data_batch['diffusePre']
-        diffusePreBatch = Variable(diffusePre_cpu ).cuda(non_blocking=True)
-
-        specularPre_cpu = data_batch['specularPre']
-        specularPreBatch = Variable(specularPre_cpu ).cuda(non_blocking=True)
-
-        if albedoPreBatch.size(2) < opt.imHeight or albedoPreBatch.size(3) < opt.imWidth:
-            albedoPreBatch = F.interpolate(albedoPreBatch, [opt.imHeight, opt.imWidth ], mode='bilinear')
-        if normalPreBatch.size(2) < opt.imHeight or normalPreBatch.size(3) < opt.imWidth:
-            normalPreBatch = F.interpolate(normalPreBatch, [opt.imHeight, opt.imWidth ], mode='bilinear')
-        if roughPreBatch.size(2) < opt.imHeight or roughPreBatch.size(3) < opt.imWidth:
-            roughPreBatch = F.interpolate(roughPreBatch, [opt.imHeight, opt.imWidth ], mode='bilinear')
-        if depthPreBatch.size(2) < opt.imHeight or depthPreBatch.size(3) < opt.imWidth:
-            depthPreBatch = F.interpolate(depthPreBatch, [opt.imHeight, opt.imWidth ], mode='bilinear')
-
-        # Regress the diffusePred and specular Pred
-        envRow, envCol = diffusePreBatch.size(2), diffusePreBatch.size(3)
-        imBatchSmall = F.adaptive_avg_pool2d(input_dict['imBatch'], (envRow, envCol) )
-        diffusePreBatch, specularPreBatch = models.LSregressDiffSpec(
-                diffusePreBatch, specularPreBatch, imBatchSmall,
-                diffusePreBatch, specularPreBatch )
-
-        if diffusePreBatch.size(2) < opt.imHeight or diffusePreBatch.size(3) < opt.imWidth:
-            diffusePreBatch = F.interpolate(diffusePreBatch, [opt.imHeight, opt.imWidth ], mode='bilinear')
-        if specularPreBatch.size(2) < opt.imHeight or specularPreBatch.size(3) < opt.imWidth:
-            specularPreBatch = F.interpolate(specularPreBatch, [opt.imHeight, opt.imWidth ], mode='bilinear')
-
-        renderedImBatch = diffusePreBatch + specularPreBatch
+    if opt.cfg.DATA.load_matseg_gt:
+        matAggreMap_cpu = data_batch['mat_aggre_map'].permute(0, 3, 1, 2) # [b, 1, h, w]
+        input_dict['matAggreMapBatch'] = Variable(matAggreMap_cpu ).cuda(non_blocking=True)
 
     preBatchDict = {}
+    if opt.cfg.DATA.load_brdf_gt:
+        if opt.cascadeLevel > 0:
+            albedoPre_cpu = data_batch['albedoPre']
+            albedoPreBatch = Variable(albedoPre_cpu ).cuda(non_blocking=True)
 
-    if opt.cascadeLevel == 0:
-        if opt.ifMatMapInput:
-            # matinput_dict['maskBatch'] = input_dict['maskBatch'][:, 0:1, :, :]
-            inputBatch = torch.cat([input_dict['imBatch'], input_dict['matAggreMapBatch']], dim=1)
-        else:
-            inputBatch = input_dict['imBatch']
-    elif opt.cascadeLevel > 0:
-        inputBatch = torch.cat([input_dict['imBatch'], albedoPreBatch,
-            normalPreBatch, roughPreBatch, depthPreBatch,
-            diffusePreBatch, specularPreBatch], dim=1)
+            normalPre_cpu = data_batch['normalPre']
+            normalPreBatch = Variable(normalPre_cpu ).cuda(non_blocking=True)
 
-        preBatchDict.update({'albedoPreBatch': albedoPreBatch, 'normalPreBatch': normalPreBatch, 'roughPreBatch': roughPreBatch, 'depthPreBatch': depthPreBatch, 'diffusePreBatch': diffusePreBatch, 'specularPreBatch': specularPreBatch})
-        preBatchDict['renderedImBatch'] = renderedImBatch
+            roughPre_cpu = data_batch['roughPre']
+            roughPreBatch = Variable(roughPre_cpu ).cuda(non_blocking=True)
+
+            depthPre_cpu = data_batch['depthPre']
+            depthPreBatch = Variable(depthPre_cpu ).cuda(non_blocking=True)
+
+            diffusePre_cpu = data_batch['diffusePre']
+            diffusePreBatch = Variable(diffusePre_cpu ).cuda(non_blocking=True)
+
+            specularPre_cpu = data_batch['specularPre']
+            specularPreBatch = Variable(specularPre_cpu ).cuda(non_blocking=True)
+
+            if albedoPreBatch.size(2) < opt.imHeight or albedoPreBatch.size(3) < opt.imWidth:
+                albedoPreBatch = F.interpolate(albedoPreBatch, [opt.imHeight, opt.imWidth ], mode='bilinear')
+            if normalPreBatch.size(2) < opt.imHeight or normalPreBatch.size(3) < opt.imWidth:
+                normalPreBatch = F.interpolate(normalPreBatch, [opt.imHeight, opt.imWidth ], mode='bilinear')
+            if roughPreBatch.size(2) < opt.imHeight or roughPreBatch.size(3) < opt.imWidth:
+                roughPreBatch = F.interpolate(roughPreBatch, [opt.imHeight, opt.imWidth ], mode='bilinear')
+            if depthPreBatch.size(2) < opt.imHeight or depthPreBatch.size(3) < opt.imWidth:
+                depthPreBatch = F.interpolate(depthPreBatch, [opt.imHeight, opt.imWidth ], mode='bilinear')
+
+            # Regress the diffusePred and specular Pred
+            envRow, envCol = diffusePreBatch.size(2), diffusePreBatch.size(3)
+            imBatchSmall = F.adaptive_avg_pool2d(input_dict['imBatch'], (envRow, envCol) )
+            diffusePreBatch, specularPreBatch = models.LSregressDiffSpec(
+                    diffusePreBatch, specularPreBatch, imBatchSmall,
+                    diffusePreBatch, specularPreBatch )
+
+            if diffusePreBatch.size(2) < opt.imHeight or diffusePreBatch.size(3) < opt.imWidth:
+                diffusePreBatch = F.interpolate(diffusePreBatch, [opt.imHeight, opt.imWidth ], mode='bilinear')
+            if specularPreBatch.size(2) < opt.imHeight or specularPreBatch.size(3) < opt.imWidth:
+                specularPreBatch = F.interpolate(specularPreBatch, [opt.imHeight, opt.imWidth ], mode='bilinear')
+
+            renderedImBatch = diffusePreBatch + specularPreBatch
+
+        if opt.cascadeLevel == 0:
+            if opt.ifMatMapInput:
+                # matinput_dict['maskBatch'] = input_dict['maskBatch'][:, 0:1, :, :]
+                inputBatch = torch.cat([input_dict['imBatch'], input_dict['matAggreMapBatch']], dim=1)
+            else:
+                inputBatch = input_dict['imBatch']
+        elif opt.cascadeLevel > 0:
+            inputBatch = torch.cat([input_dict['imBatch'], albedoPreBatch,
+                normalPreBatch, roughPreBatch, depthPreBatch,
+                diffusePreBatch, specularPreBatch], dim=1)
+
+            preBatchDict.update({'albedoPreBatch': albedoPreBatch, 'normalPreBatch': normalPreBatch, 'roughPreBatch': roughPreBatch, 'depthPreBatch': depthPreBatch, 'diffusePreBatch': diffusePreBatch, 'specularPreBatch': specularPreBatch})
+            preBatchDict['renderedImBatch'] = renderedImBatch
 
     return inputBatch, input_dict, preBatchDict
 
@@ -112,61 +115,62 @@ def get_input_dict_brdf(data_batch, opt):
     # return output_dict
 
 def process_brdf(input_dict, output_dict, loss_dict, opt, time_meters):
-    albedoPreds = []
-    normalPreds = []
-    roughPreds = []
-    depthPreds = []
+    if opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
+        albedoPreds = []
+        normalPreds = []
+        roughPreds = []
+        depthPreds = []
 
-    albedoPred, normalPred, roughPred, depthPred = output_dict['albedoPred'], output_dict['normalPred'], output_dict['roughPred'], output_dict['depthPred']
+        albedoPred, normalPred, roughPred, depthPred = output_dict['albedoPred'], output_dict['normalPred'], output_dict['roughPred'], output_dict['depthPred']
 
-    albedoPreds.append(albedoPred )
-    normalPreds.append(normalPred )
-    roughPreds.append(roughPred )
-    depthPreds.append(depthPred )
-    
-
-    ########################################################
-    opt.albeW, opt.normW, opt.rougW, opt.deptW = opt.cfg.MODEL_BRDF.albedoWeight, opt.cfg.MODEL_BRDF.normalWeight, opt.cfg.MODEL_BRDF.roughWeight, opt.cfg.MODEL_BRDF.depthWeight
-
-    # Compute the error
-    loss_dict['loss_brdf-albedo'] = []
-    loss_dict['loss_brdf-normal'] = []
-    loss_dict['loss_brdf-rough'] = []
-    loss_dict['loss_brdf-depth'] = []
-
-    pixelObjNum = (torch.sum(input_dict['segBRDFBatch'] ).cpu().data).item()
-    pixelAllNum = (torch.sum(input_dict['segAllBatch'] ).cpu().data).item()
-    for n in range(0, len(albedoPreds) ):
-       loss_dict['loss_brdf-albedo'].append( torch.sum( (albedoPreds[n] - input_dict['albedoBatch'])
-            * (albedoPreds[n] - input_dict['albedoBatch']) * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch'] ) ) / pixelObjNum / 3.0 )
-    for n in range(0, len(normalPreds) ):
-        loss_dict['loss_brdf-normal'].append( torch.sum( (normalPreds[n] - input_dict['normalBatch'])
-            * (normalPreds[n] - input_dict['normalBatch']) * input_dict['segAllBatch'].expand_as(input_dict['normalBatch']) ) / pixelAllNum / 3.0)
-    for n in range(0, len(roughPreds) ):
-        loss_dict['loss_brdf-rough'].append( torch.sum( (roughPreds[n] - input_dict['roughBatch'])
-            * (roughPreds[n] - input_dict['roughBatch']) * input_dict['segBRDFBatch'] ) / pixelObjNum )
-    for n in range(0, len(depthPreds ) ):
-        loss_dict['loss_brdf-depth'].append( torch.sum( (torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) )
-            * ( torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum )
-
-    # Back propagate the gradients
-    loss_dict['loss_brdf-ALL'] = 4 * opt.albeW * loss_dict['loss_brdf-albedo'][-1] + opt.normW * loss_dict['loss_brdf-normal'][-1] \
-            + opt.rougW * loss_dict['loss_brdf-rough'][-1] + opt.deptW * loss_dict['loss_brdf-depth'][-1]
+        albedoPreds.append(albedoPred )
+        normalPreds.append(normalPred )
+        roughPreds.append(roughPred )
+        depthPreds.append(depthPred )
         
-    output_dict.update({'mat_seg-albedoPreds': albedoPreds, 'mat_seg-normalPreds': normalPreds, 'mat_seg-roughPreds': roughPreds, 'mat_seg-depthPreds': depthPreds})
 
-    loss_dict['loss_brdf-albedo'] = loss_dict['loss_brdf-albedo'][-1]
-    loss_dict['loss_brdf-normal'] = loss_dict['loss_brdf-normal'][-1]
-    loss_dict['loss_brdf-rough'] = loss_dict['loss_brdf-rough'][-1]
-    loss_dict['loss_brdf-depth'] = loss_dict['loss_brdf-depth'][-1]
+        ########################################################
+        opt.albeW, opt.normW, opt.rougW, opt.deptW = opt.cfg.MODEL_BRDF.albedoWeight, opt.cfg.MODEL_BRDF.normalWeight, opt.cfg.MODEL_BRDF.roughWeight, opt.cfg.MODEL_BRDF.depthWeight
 
-    output_dict['albedoPreds'] = albedoPreds
-    output_dict['normalPreds'] = normalPreds
-    output_dict['roughPreds'] = roughPreds
-    output_dict['depthPreds'] = depthPreds
+        # Compute the error
+        loss_dict['loss_brdf-albedo'] = []
+        loss_dict['loss_brdf-normal'] = []
+        loss_dict['loss_brdf-rough'] = []
+        loss_dict['loss_brdf-depth'] = []
+
+        pixelObjNum = (torch.sum(input_dict['segBRDFBatch'] ).cpu().data).item()
+        pixelAllNum = (torch.sum(input_dict['segAllBatch'] ).cpu().data).item()
+        for n in range(0, len(albedoPreds) ):
+            loss_dict['loss_brdf-albedo'].append( torch.sum( (albedoPreds[n] - input_dict['albedoBatch'])
+                * (albedoPreds[n] - input_dict['albedoBatch']) * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch'] ) ) / pixelObjNum / 3.0 )
+        for n in range(0, len(normalPreds) ):
+            loss_dict['loss_brdf-normal'].append( torch.sum( (normalPreds[n] - input_dict['normalBatch'])
+                * (normalPreds[n] - input_dict['normalBatch']) * input_dict['segAllBatch'].expand_as(input_dict['normalBatch']) ) / pixelAllNum / 3.0)
+        for n in range(0, len(roughPreds) ):
+            loss_dict['loss_brdf-rough'].append( torch.sum( (roughPreds[n] - input_dict['roughBatch'])
+                * (roughPreds[n] - input_dict['roughBatch']) * input_dict['segBRDFBatch'] ) / pixelObjNum )
+        for n in range(0, len(depthPreds ) ):
+            loss_dict['loss_brdf-depth'].append( torch.sum( (torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) )
+                * ( torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum )
+
+        # Back propagate the gradients
+        loss_dict['loss_brdf-ALL'] = 4 * opt.albeW * loss_dict['loss_brdf-albedo'][-1] + opt.normW * loss_dict['loss_brdf-normal'][-1] \
+                + opt.rougW * loss_dict['loss_brdf-rough'][-1] + opt.deptW * loss_dict['loss_brdf-depth'][-1]
+            
+        output_dict.update({'mat_seg-albedoPreds': albedoPreds, 'mat_seg-normalPreds': normalPreds, 'mat_seg-roughPreds': roughPreds, 'mat_seg-depthPreds': depthPreds})
+
+        loss_dict['loss_brdf-albedo'] = loss_dict['loss_brdf-albedo'][-1]
+        loss_dict['loss_brdf-normal'] = loss_dict['loss_brdf-normal'][-1]
+        loss_dict['loss_brdf-rough'] = loss_dict['loss_brdf-rough'][-1]
+        loss_dict['loss_brdf-depth'] = loss_dict['loss_brdf-depth'][-1]
+
+        output_dict['albedoPreds'] = albedoPreds
+        output_dict['normalPreds'] = normalPreds
+        output_dict['roughPreds'] = roughPreds
+        output_dict['depthPreds'] = depthPreds
 
     if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
-        semsegPred = output_dict['semsegPred']
+        semsegPred = output_dict['semseg_pred']
         semsegLabel = input_dict['semseg_label']
         loss_dict['loss_semseg-ALL'] = opt.semseg_criterion(semsegPred, semsegLabel)
         output_dict['semsegPred'] = semsegPred

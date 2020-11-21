@@ -24,9 +24,15 @@ def set_up_envs(opt):
             # print(key_to_set_path, cfg_key)
             # if key_to_set_path in cfg_key:
 
+    if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
+        opt.cfg.DATA.load_brdf_gt = True
+
     if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable or opt.cfg.MODEL_SEMSEG.use_as_input:
         opt.cfg.DATA.load_semseg_gt = True
         opt.semseg_criterion = nn.CrossEntropyLoss(ignore_index=opt.cfg.DATA.semseg_ignore_label)
+    
+    if opt.cfg.MODEL_MATSEG.enable or opt.cfg.MODEL_MATSEG.use_as_input:
+        opt.cfg.DATA.load_matseg_gt = True
     
     if opt.cfg.MODEL_BRDF.enable_semseg_decoder and opt.cfg.MODEL_SEMSEG.enable:
         raise (RuntimeError("Cannot be True at the same time: opt.cfg.MODEL_BRDF.enable_semseg_decoder, opt.cfg.MODEL_SEMSEG.enable"))
@@ -56,7 +62,7 @@ def set_up_logger(opt):
         # logger.info(config_str)
     printer = printer(opt.rank, debug=opt.debug)
 
-    if opt.is_master and not opt.task_name in ['tmp']:
+    if opt.is_master and 'tmp' not in opt.task_name:
         exclude_list = ['apex', 'logs_bkg', 'archive', 'train_cifar10_py', 'train_mnist_tf', 'utils_external', 'build/'] + \
             ['Summary', 'Summary_vis', 'Checkpoint', 'logs', '__pycache__', 'snapshots', '.vscode', '.ipynb_checkpoints', 'azureml-setup', 'azureml_compute_logs']
         copy_py_files(opt.pwdpath, opt.summary_vis_path_task_py, exclude_paths=[str(opt.SUMMARY_PATH), str(opt.CKPT_PATH), str(opt.SUMMARY_VIS_PATH)]+exclude_list)

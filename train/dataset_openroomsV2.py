@@ -55,7 +55,7 @@ def make_dataset(split='train', data_root=None, data_list=None, logger=None):
 
 
 class openrooms(data.Dataset):
-    def __init__(self, opt, data_list=None, logger=None, transforms_fixed=None, transforms_semseg=None, 
+    def __init__(self, opt, data_list=None, logger=None, transforms_fixed=None, transforms=None, transforms_matseg=None, 
             split='train', load_first = -1, rseed = None, 
             cascadeLevel = 0,
             isLight = False, isAllLight = False,
@@ -79,7 +79,8 @@ class openrooms(data.Dataset):
 
         assert transforms_fixed is not None, 'OpenRooms: Need a transforms_fixed!'
         self.transforms_fixed = transforms_fixed
-        self.transforms_semseg = transforms_semseg
+        self.transforms = transforms
+        self.transforms_matseg = transforms_matseg
         self.logger = logger
         # self.target_hw = (cfg.DATA.im_height, cfg.DATA.im_width) # if split in ['train', 'val', 'test'] else (args.test_h, args.test_w)
         self.im_width, self.im_height = self.cfg.DATA.im_width, self.cfg.DATA.im_height
@@ -99,44 +100,11 @@ class openrooms(data.Dataset):
     def __getitem__(self, index):
 
         image_path, semseg_label_path = self.data_list[index]
-
-        # Get paths for BRDF params
-        albedo_path = image_path.replace('im_', 'imbaseColor_').replace('hdr', 'png') 
-        normal_path = image_path.replace('im_', 'imnormal_').replace('hdr', 'png').replace('DiffLight', '')
-        rough_path = image_path.replace('im_', 'imroughness_').replace('hdr', 'png')
-        depth_path = image_path.replace('im_', 'imdepth_').replace('hdr', 'dat').replace('DiffLight', '').replace('DiffMat', '')
-        mask_path = image_path.replace('im_', 'immatPart_').replace('hdr', 'dat')
         seg_path = image_path.replace('im_', 'immask_').replace('hdr', 'png').replace('DiffMat', '')
-
-        if self.cascadeLevel == 0:
-            if self.isLight:
-                env_path = image_path.replace('im_', 'imenv_')
-        else:
-            if self.isLight:
-                env_path = image_path.replace('im_', 'imenv_')
-                envPre_path = image_path.replace('im_', 'imenv_').replace('.hdr', '_%d.h5'  % (self.cascadeLevel -1) )
-            
-            albedoPre_path = image_path.replace('im_', 'imbaseColor_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
-            normalPre_path = image_path.replace('im_', 'imnormal_').replace('.hdr', '_%d.h5' % (self.cascadeLevel-1) )
-            roughPre_path = image_path.replace('im_', 'imroughness_').replace('.hdr', '_%d.h5' % (self.cascadeLevel-1) )
-            depthPre_path = image_path.replace('im_', 'imdepth_').replace('.hdr', '_%d.h5' % (self.cascadeLevel-1) )
-
-            diffusePre_path = image_path.replace('im_', 'imdiffuse_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
-            specularPre_path = image_path.replace('im_', 'imspecular_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
-
         # Read segmentation
         seg = 0.5 * (self.loadImage(seg_path ) + 1)[0:1, :, :]
-        segArea = np.logical_and(seg > 0.49, seg < 0.51 ).astype(np.float32 )
-        segEnv = (seg < 0.1).astype(np.float32 )
-        segObj = (seg > 0.9) 
-
-        if self.isLight:
-            segObj = segObj.squeeze()
-            segObj = ndimage.binary_erosion(segObj, structure=np.ones((7, 7) ),
-                    border_value=1)
-            segObj = segObj[np.newaxis, :, :]
-
-        segObj = segObj.astype(np.float32 )
+        mask_path = image_path.replace('im_', 'immatPart_').replace('hdr', 'dat')
+        mask = self.loadBinary(mask_path, channels = 3, dtype=np.int32, if_resize=True).squeeze() # [h, w, 3]
 
         # Read Image
         hdr_file = image_path
@@ -152,125 +120,175 @@ class openrooms(data.Dataset):
         # image = Image.fromarray(im_RGB_uint8)
         image_transformed_fixed = self.transforms_fixed(im_RGB_uint8)
         
-
-        # Read albedo
-        albedo = self.loadImage(albedo_path, isGama = False)
-        albedo = (0.5 * (albedo + 1) ) ** 2.2
-
-        # normalize the normal vector so that it will be unit length
-        normal = self.loadImage(normal_path )
-        normal = normal / np.sqrt(np.maximum(np.sum(normal * normal, axis=0), 1e-5) )[np.newaxis, :]
-
-        # Read roughness
-        rough = self.loadImage(rough_path )[0:1, :, :]
-
-        # Read depth
-        depth = self.loadBinary(depth_path)
-
-        # >>>> Rui: Read obj mask
-        mask = self.loadBinary(mask_path, channels = 3, dtype=np.int32, if_resize=True).squeeze() # [h, w, 3]
-        mat_aggre_map, num_mat_masks = self.get_map_aggre_map(mask) # 0 for invalid region
-        mat_aggre_map = mat_aggre_map[:, :, np.newaxis]
-
-        mat_aggre_map_reindex = np.zeros_like(mat_aggre_map)
-        mat_aggre_map_reindex[mat_aggre_map==0] = self.opt.invalid_index
-        mat_aggre_map_reindex[mat_aggre_map!=0] = mat_aggre_map[mat_aggre_map!=0] - 1
-
-
-        # >>>> Rui: Convert to Plane-paper compatible formats
-        h, w, _ = mat_aggre_map.shape
-        gt_segmentation = mat_aggre_map
-        segmentation = np.zeros([50, h, w], dtype=np.uint8)
-        for i in range(num_mat_masks+1):
-            if i == 0:
-                # deal with backgroud
-                seg = gt_segmentation == 0
-                segmentation[num_mat_masks, :, :] = seg.reshape(h, w)
-            else:
-                seg = gt_segmentation == i
-                segmentation[i-1, :, :] = seg.reshape(h, w)
-        # <<<<
-
-        if self.isLight == True:
-            envmaps, envmapsInd = self.loadEnvmap(env_path )
-            envmaps = envmaps * scale 
-            if self.cascadeLevel > 0: 
-                envmapsPre = self.loadH5(envPre_path ) 
-                if envmapsPre is None:
-                    print("Wrong envmap pred")
-                    envmapsInd = envmapsInd * 0 
-                    envmapsPre = np.zeros((84, 120, 160), dtype=np.float32 ) 
-
-        if self.cascadeLevel > 0:
-            # Read albedo
-            albedoPre = self.loadH5(albedoPre_path )
-            albedoPre = albedoPre / np.maximum(np.mean(albedoPre ), 1e-10) / 3
-
-            # normalize the normal vector so that it will be unit length
-            normalPre = self.loadH5(normalPre_path )
-            normalPre = normalPre / np.sqrt(np.maximum(np.sum(normalPre * normalPre, axis=0), 1e-5) )[np.newaxis, :]
-            normalPre = 0.5 * (normalPre + 1)
-
-            # Read roughness
-            roughPre = self.loadH5(roughPre_path )[0:1, :, :]
-            roughPre = 0.5 * (roughPre + 1)
-
-            # Read depth
-            depthPre = self.loadH5(depthPre_path )
-            depthPre = depthPre / np.maximum(np.mean(depthPre), 1e-10) / 3
-
-            diffusePre = self.loadH5(diffusePre_path )
-            diffusePre = diffusePre / max(diffusePre.max(), 1e-10)
-
-            specularPre = self.loadH5(specularPre_path )
-            specularPre = specularPre / max(specularPre.max(), 1e-10)
-
-        batch_dict = {
-                'albedo': torch.from_numpy(albedo),
-                'normal': torch.from_numpy(normal),
-                'rough': torch.from_numpy(rough),
-                'depth': torch.from_numpy(depth),
-                'mask': torch.from_numpy(mask), 
-                'maskPath': mask_path, 
-                'segArea': torch.from_numpy(segArea),
-                'segEnv': torch.from_numpy(segEnv),
-                'segObj': torch.from_numpy(segObj),
-                'im': torch.from_numpy(im),
-                'object_type_seg': torch.from_numpy(seg), 
-                'imPath': image_path, 
-                'mat_aggre_map': torch.from_numpy(mat_aggre_map), 
-                'mat_aggre_map_reindex': torch.from_numpy(mat_aggre_map_reindex), # gt_seg
-                'num_mat_masks': num_mat_masks,  
-                'mat_notlight_mask': torch.from_numpy(mat_aggre_map!=0).float(),
-                'instance': torch.ByteTensor(segmentation), 
-                'semantic': 1 - torch.FloatTensor(segmentation[num_mat_masks, :, :]).unsqueeze(0),
-                }
-        # if self.transform is not None and not self.opt.if_hdr:
+        batch_dict = {'im': torch.from_numpy(im), 'imPath': image_path}
         batch_dict.update({'image_transformed_fixed': image_transformed_fixed, 'im_trainval_RGB': im_trainval_RGB, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
 
-        if self.isLight:
-            batch_dict['envmaps'] = envmaps
-            batch_dict['envmapsInd'] = envmapsInd
+        if self.opt.cfg.DATA.load_brdf_gt:
+            # Get paths for BRDF params
+            albedo_path = image_path.replace('im_', 'imbaseColor_').replace('hdr', 'png') 
+            normal_path = image_path.replace('im_', 'imnormal_').replace('hdr', 'png').replace('DiffLight', '')
+            rough_path = image_path.replace('im_', 'imroughness_').replace('hdr', 'png')
+            depth_path = image_path.replace('im_', 'imdepth_').replace('hdr', 'dat').replace('DiffLight', '').replace('DiffMat', '')
+
+            if self.cascadeLevel == 0:
+                if self.isLight:
+                    env_path = image_path.replace('im_', 'imenv_')
+            else:
+                if self.isLight:
+                    env_path = image_path.replace('im_', 'imenv_')
+                    envPre_path = image_path.replace('im_', 'imenv_').replace('.hdr', '_%d.h5'  % (self.cascadeLevel -1) )
+                
+                albedoPre_path = image_path.replace('im_', 'imbaseColor_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
+                normalPre_path = image_path.replace('im_', 'imnormal_').replace('.hdr', '_%d.h5' % (self.cascadeLevel-1) )
+                roughPre_path = image_path.replace('im_', 'imroughness_').replace('.hdr', '_%d.h5' % (self.cascadeLevel-1) )
+                depthPre_path = image_path.replace('im_', 'imdepth_').replace('.hdr', '_%d.h5' % (self.cascadeLevel-1) )
+
+                diffusePre_path = image_path.replace('im_', 'imdiffuse_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
+                specularPre_path = image_path.replace('im_', 'imspecular_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
+
+            segArea = np.logical_and(seg > 0.49, seg < 0.51 ).astype(np.float32 )
+            segEnv = (seg < 0.1).astype(np.float32 )
+            segObj = (seg > 0.9) 
+
+            if self.isLight:
+                segObj = segObj.squeeze()
+                segObj = ndimage.binary_erosion(segObj, structure=np.ones((7, 7) ),
+                        border_value=1)
+                segObj = segObj[np.newaxis, :, :]
+
+            segObj = segObj.astype(np.float32 )
+
+
+            # Read albedo
+            albedo = self.loadImage(albedo_path, isGama = False)
+            albedo = (0.5 * (albedo + 1) ) ** 2.2
+
+            # normalize the normal vector so that it will be unit length
+            normal = self.loadImage(normal_path )
+            normal = normal / np.sqrt(np.maximum(np.sum(normal * normal, axis=0), 1e-5) )[np.newaxis, :]
+
+            # Read roughness
+            rough = self.loadImage(rough_path )[0:1, :, :]
+
+            # Read depth
+            depth = self.loadBinary(depth_path)
+
+
+            if self.isLight == True:
+                envmaps, envmapsInd = self.loadEnvmap(env_path )
+                envmaps = envmaps * scale 
+                if self.cascadeLevel > 0: 
+                    envmapsPre = self.loadH5(envPre_path ) 
+                    if envmapsPre is None:
+                        print("Wrong envmap pred")
+                        envmapsInd = envmapsInd * 0 
+                        envmapsPre = np.zeros((84, 120, 160), dtype=np.float32 ) 
 
             if self.cascadeLevel > 0:
-                batch_dict['envmapsPre'] = envmapsPre
+                # Read albedo
+                albedoPre = self.loadH5(albedoPre_path )
+                albedoPre = albedoPre / np.maximum(np.mean(albedoPre ), 1e-10) / 3
 
-        if self.cascadeLevel > 0:
-            batch_dict['albedoPre'] = albedoPre
-            batch_dict['normalPre'] = normalPre
-            batch_dict['roughPre'] = roughPre
-            batch_dict['depthPre'] = depthPre
+                # normalize the normal vector so that it will be unit length
+                normalPre = self.loadH5(normalPre_path )
+                normalPre = normalPre / np.sqrt(np.maximum(np.sum(normalPre * normalPre, axis=0), 1e-5) )[np.newaxis, :]
+                normalPre = 0.5 * (normalPre + 1)
 
-            batch_dict['diffusePre'] = diffusePre
-            batch_dict['specularPre'] = specularPre
+                # Read roughness
+                roughPre = self.loadH5(roughPre_path )[0:1, :, :]
+                roughPre = 0.5 * (roughPre + 1)
+
+                # Read depth
+                depthPre = self.loadH5(depthPre_path )
+                depthPre = depthPre / np.maximum(np.mean(depthPre), 1e-10) / 3
+
+                diffusePre = self.loadH5(diffusePre_path )
+                diffusePre = diffusePre / max(diffusePre.max(), 1e-10)
+
+                specularPre = self.loadH5(specularPre_path )
+                specularPre = specularPre / max(specularPre.max(), 1e-10)
+
+            batch_dict.update({
+                    'albedo': torch.from_numpy(albedo),
+                    'normal': torch.from_numpy(normal),
+                    'rough': torch.from_numpy(rough),
+                    'depth': torch.from_numpy(depth),
+                    'mask': torch.from_numpy(mask), 
+                    'maskPath': mask_path, 
+                    'segArea': torch.from_numpy(segArea),
+                    'segEnv': torch.from_numpy(segEnv),
+                    'segObj': torch.from_numpy(segObj),
+                    'object_type_seg': torch.from_numpy(seg), 
+                    })
+            # if self.transform is not None and not self.opt.if_hdr:
+
+            if self.isLight:
+                batch_dict['envmaps'] = envmaps
+                batch_dict['envmapsInd'] = envmapsInd
+
+                if self.cascadeLevel > 0:
+                    batch_dict['envmapsPre'] = envmapsPre
+
+            if self.cascadeLevel > 0:
+                batch_dict['albedoPre'] = albedoPre
+                batch_dict['normalPre'] = normalPre
+                batch_dict['roughPre'] = roughPre
+                batch_dict['depthPre'] = depthPre
+
+                batch_dict['diffusePre'] = diffusePre
+                batch_dict['specularPre'] = specularPre
+        
+        if self.opt.cfg.DATA.load_matseg_gt:
+            # >>>> Rui: Read obj mask
+            mat_aggre_map, num_mat_masks = self.get_map_aggre_map(mask) # 0 for invalid region
+            mat_aggre_map = mat_aggre_map[:, :, np.newaxis] + 1 # 0 for padding purpose
+
+            # mat_aggre_map_reindex = np.zeros_like(mat_aggre_map)
+            # mat_aggre_map_reindex[mat_aggre_map==0] = self.opt.invalid_index
+            # mat_aggre_map_reindex[mat_aggre_map!=0] = mat_aggre_map[mat_aggre_map!=0] - 1
+
+
+            # >>>> Rui: Convert to Plane-paper compatible formats
+            # print(seg.shape, mask.shape, im_RGB_uint8.shape, mat_aggre_map.shape)
+            # im_matseg_transformed_trainval, stacked_transformed = self.transforms_matseg(im_RGB_uint8, np.stack((mat_aggre_map, seg, mask), 2)) # augmented
+            # mat_aggre_map_transformed, seg, mask, = np.split(stacked_transformed, [3, 3, 1])
+            # print(mat_aggre_map_transformed.shape, seg.shape, mask.shape)
+            im_matseg_transformed_trainval, mat_aggre_map_transformed = self.transforms_matseg(im_RGB_uint8, mat_aggre_map.squeeze()) # augmented
+            mat_aggre_map = mat_aggre_map_transformed.numpy()[..., np.newaxis]
+
+            # im_matseg_transformed_trainval = self.transforms(im_RGB_uint8) # augmented
+
+            h, w, _ = mat_aggre_map.shape
+            gt_segmentation = mat_aggre_map
+            segmentation = np.zeros([50, h, w], dtype=np.uint8)
+            for i in range(num_mat_masks+1):
+                if i == 0:
+                    # deal with backgroud
+                    seg = gt_segmentation == 1
+                    segmentation[num_mat_masks, :, :] = seg.reshape(h, w) # segmentation[num_mat_masks] for invalid mask
+                else:
+                    seg = gt_segmentation == i+1
+                    segmentation[i-1, :, :] = seg.reshape(h, w) # segmentation[0..num_mat_masks-1] for plane instances
+            # <<<<
             
+
+            batch_dict.update({
+                'mat_aggre_map': torch.from_numpy(mat_aggre_map), 
+                # 'mat_aggre_map_reindex': torch.from_numpy(mat_aggre_map_reindex), # gt_seg
+                'num_mat_masks': num_mat_masks,  
+                'mat_notlight_mask': torch.from_numpy(mat_aggre_map!=0).float(),
+                'instance': torch.ByteTensor(segmentation), # torch.Size([50, 240, 320])
+                'semantic': 1 - torch.FloatTensor(segmentation[num_mat_masks, :, :]).unsqueeze(0), # torch.Size([50, 240, 320]) torch.Size([1, 240, 320])
+                'im_matseg_transformed_trainval': im_matseg_transformed_trainval
+            })
+
         if self.opt.cfg.DATA.load_semseg_gt:
             semseg_label = np.load(semseg_label_path).astype(np.uint8)
             semseg_label = cv2.resize(semseg_label, (self.im_width, self.im_height), interpolation=cv2.INTER_NEAREST)
             # Transform images
-            im_transformed_trainval, semseg_label = self.transforms_semseg(im_RGB_uint8, semseg_label) # augmented
+            im_semseg_transformed_trainval, semseg_label = self.transforms(im_RGB_uint8, semseg_label) # augmented
             # semseg_label[semseg_label==0] = 31
-            batch_dict.update({'semseg_label': semseg_label.long(), 'im_transformed_trainval': im_transformed_trainval})
+            batch_dict.update({'semseg_label': semseg_label.long(), 'im_semseg_transformed_trainval': im_semseg_transformed_trainval})
 
         return batch_dict
 

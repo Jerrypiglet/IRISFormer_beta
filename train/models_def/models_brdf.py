@@ -160,10 +160,10 @@ class decoder0(nn.Module):
         self.mode = mode
         self.if_PPM = if_PPM
 
-        self.if_mat_seg_guide = self.opt.cfg.MODEL_SEG.enable and self.opt.cfg.MODEL_SEG.if_guide
+        self.if_mat_seg_guide = self.opt.cfg.MODEL_MATSEG.enable and self.opt.cfg.MODEL_MATSEG.if_guide
         self.if_mat_seg_guide_layers = ['dconv1', 'dconv2', 'dconv3', 'dconv4', 'dconv5', 'dconv6']
 
-        # self.guide_C = self.opt.cfg.MODEL_SEG.guide_channels
+        # self.guide_C = self.opt.cfg.MODEL_MATSEG.guide_channels
         self.if_semseg_guide = self.opt.cfg.MODEL_SEMSEG.enable and self.opt.cfg.MODEL_SEMSEG.if_guide
         self.if_semseg_guide_layers = ['dconv3', 'dconv4', 'dconv5']
 
