@@ -19,7 +19,7 @@ print(sys.path)
 
 import torchvision.utils as vutils
 import utils
-from dataset_openrooms import openrooms
+from dataset_openroomsV1 import openrooms
 from dataset_openrooms_real import openrooms_real
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -115,6 +115,8 @@ parser.add_argument('--reset_lr', action='store_true', help='')
 parser.add_argument('--test_real', action='store_true', help='')
 parser.add_argument("--real_list", type=str, default='')
 
+parser.add_argument("--mini_val", type=str2bool, nargs='?', const=True, default=False)
+
 
 parser.add_argument(
     "--config-file",
@@ -137,9 +139,10 @@ os.environ['MASETER_PORT'] = str(nextPort(int(opt.master_port)))
 cfg.merge_from_file(opt.config_file)
 cfg.merge_from_list(opt.params)
 
-
-cfg.freeze()
+from utils.utils_envs import set_up_envs
 opt.cfg = cfg
+set_up_envs(opt)
+opt.cfg.freeze()
 print(opt.cfg)
 
 # semseg_configs = utils_config.load_cfg_from_cfg_file(os.path.join(pwdpath, cfg.MODEL_SEMSEG.config_file))
@@ -327,10 +330,12 @@ else:
 
     brdf_dataset_val = openrooms( opt.data_root, transforms, opt, 
             imWidth = opt.cfg.DATA.im_width, imHeight = opt.cfg.DATA.im_height,
-            cascadeLevel = opt.cascadeLevel, split = 'test', phase = 'TEST')
+            cascadeLevel = opt.cascadeLevel, split = 'test', phase = 'TEST', 
+            load_first = 100 if opt.mini_val else -1)
+
     brdf_dataset_val_vis = openrooms( opt.data_root, transforms, opt, 
             imWidth = opt.cfg.DATA.im_width, imHeight = opt.cfg.DATA.im_height,
-            cascadeLevel = opt.cascadeLevel, split = 'test', phase = 'TEST')
+            cascadeLevel = opt.cascadeLevel, split = 'test', phase = 'TEST', load_first = 20)
 
 
 
@@ -349,7 +354,7 @@ brdf_loader_val = make_data_loader(
 )
 brdf_loader_val_vis = make_data_loader(
     opt,
-    brdf_dataset_val,
+    brdf_dataset_val_vis,
     is_train=False,
     start_iter=0,
     logger=logger,
@@ -359,6 +364,8 @@ brdf_loader_val_vis = make_data_loader(
     if_distributed_override=False
 )
 # <<<< DATASET
+
+
 
 # >>>> CHECKPOINTING
 save_to_disk = opt.is_master
@@ -409,7 +416,7 @@ synchronize()
 print('=======2', opt.rank)
 
 if cfg.MODEL_BRDF.enable_semseg_decoder:
-    opt.semseg_criterion = nn.CrossEntropyLoss(ignore_index=opt.cfg.MODEL_BRDF.semseg_ignore_label)
+    opt.semseg_criterion = nn.CrossEntropyLoss(ignore_index=opt.cfg.DATA.semseg_ignore_label)
 
 
 val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid}

@@ -40,6 +40,15 @@ def get_semseg_meters():
     semseg_meters = {'intersection_meter': intersection_meter, 'union_meter': union_meter, 'target_meter': target_meter}
     return semseg_meters
 
+def get_brdf_meters():
+    normal_mean_error_meter = AverageMeter('normal_mean_error_meter')
+    normal_median_error_meter = AverageMeter('normal_median_error_meter')
+    inv_depth_mean_error_meter = AverageMeter('inv_depth_mean_error_meter')
+    inv_depth_median_error_meter = AverageMeter('inv_depth_median_error_meter')
+    brdf_meters = {'normal_mean_error_meter': normal_mean_error_meter, 'normal_median_error_meter': normal_median_error_meter, \
+        'inv_depth_mean_error_meter': inv_depth_mean_error_meter, 'inv_depth_median_error_meter': inv_depth_median_error_meter}
+    return brdf_meters
+
 
 def get_input_dict_joint(data_batch, opt):
     input_dict = {}
@@ -94,7 +103,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     writer, logger, opt, tid = params_mis['writer'], params_mis['logger'], params_mis['opt'], params_mis['tid']
     ENABLE_SEMSEG = opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable
     ENABLE_MATSEG = opt.cfg.MODEL_MATSEG.enable and not opt.cfg.MODEL_MATSEG.if_freeze
-
+    ENABLE_BRDF = opt.cfg.MODEL_BRDF.enable
 
     logger.info(red('===Evaluating for %d batches'%len(brdf_loader_val)))
 
@@ -117,6 +126,8 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             'loss_brdf-rough', 
             'loss_brdf-depth', 
             'loss_brdf-ALL', 
+            'loss_brdf-rough-paper', 
+            'loss_brdf-depth-paper'
         ]
         if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
             loss_keys += ['loss_semseg-ALL']
@@ -132,6 +143,8 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     time_meters = get_time_meters_joint()
     if ENABLE_SEMSEG:
         semseg_meters = get_semseg_meters()
+    if ENABLE_BRDF:
+        brdf_meters = get_brdf_meters()
 
     with torch.no_grad():
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
@@ -156,6 +169,34 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 loss_meters[loss_key].update(loss_dict_reduced[loss_key].item())
 
             # ======= Metering
+            if ENABLE_BRDF:
+                depth_input = input_dict['depthBatch'].detach().cpu().numpy()
+                depth_output = output_dict['depthPreds'][0].detach().cpu().numpy()
+                depth_output[depth_output < 0.] = 0.
+                # depth_input = 1. / (depth_input + 1e-6)
+                # depth_output = 1. / (depth_output + 1e-6)
+                np.save('depth_input.npy', depth_input)
+                np.save('depth_output.npy', depth_output)
+                # normal_input = 0.5 * (normal_input + 1)
+                # normal_output = 0.5 * (normal_output + 1)
+
+                inv_depth_error = np.abs(1./(depth_output+1e-6) - 1./(depth_input+1e-6))
+                brdf_meters['inv_depth_mean_error_meter'].update(np.mean(inv_depth_error))
+                brdf_meters['inv_depth_median_error_meter'].update(np.median(inv_depth_error))
+
+                normal_input = input_dict['normalBatch'].detach().cpu().numpy()
+                normal_output = output_dict['normalPreds'][0].detach().cpu().numpy()
+                np.save('normal_input.npy', normal_input)
+                np.save('normal_output.npy', normal_output)
+                normal_input_Nx3 = np.transpose(normal_input, (0, 2, 3, 1)).reshape(-1, 3)
+                normal_output_Nx3 = np.transpose(normal_output, (0, 2, 3, 1)).reshape(-1, 3)
+                normal_in_n_out_dot = np.sum(np.multiply(normal_input_Nx3, normal_output_Nx3), 1)
+                normal_error = normal_in_n_out_dot / (np.linalg.norm(normal_input_Nx3, axis=1) * np.linalg.norm(normal_output_Nx3, axis=1) + 1e-6)
+                normal_error = np.arccos(normal_error) / np.pi * 180.
+                # print(normal_error.shape, np.mean(normal_error), np.median(normal_error))
+                brdf_meters['normal_mean_error_meter'].update(np.mean(normal_error))
+                brdf_meters['normal_median_error_meter'].update(np.median(normal_error))
+
             if ENABLE_SEMSEG:
                 output = output_dict['semseg_pred'].max(1)[1]
                 target = input_dict['semseg_label']
@@ -190,6 +231,12 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         if ENABLE_SEMSEG:
             writer.add_scalar('VAL/mIoU_val', mIoU, tid)
             writer.add_scalar('VAL/mAcc_val', mAcc, tid)
+            writer.add_scalar('VAL/allAcc_val', allAcc, tid)
+        if ENABLE_BRDF:
+            writer.add_scalar('VAL/BRDF-inv_depth_mean_val', brdf_meters['inv_depth_mean_error_meter'].avg, tid)
+            writer.add_scalar('VAL/BRDF-inv_depth_median_val', brdf_meters['inv_depth_median_error_meter'].get_median(), tid)
+            writer.add_scalar('VAL/BRDF-normal_mean_val', brdf_meters['normal_mean_error_meter'].avg, tid)
+            writer.add_scalar('VAL/BRDF-normal_median_val', brdf_meters['normal_median_error_meter'].get_median(), tid)
             writer.add_scalar('VAL/allAcc_val', allAcc, tid)
 
         logger.info(red('Evaluation timings: ' + time_meters_to_string(time_meters)))
@@ -230,7 +277,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
             batch_size = len(data_batch['imPath'])
 
-            # print(batch_id)
+            print(batch_id, batch_size)
 
             # if num_val_brdf_vis >= num_val_vis_MAX or sample_idx >= num_val_vis_MAX:
             #     break
@@ -262,6 +309,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 if opt.is_master:
                     writer.add_image('VAL_im/%d'%(sample_idx+batch_size*batch_id), im_single, tid, dataformats='HWC')
                     writer.add_text('VAL_image_name/%d'%(sample_idx+batch_size*batch_id), im_path, tid)
+                    print(sample_idx+batch_size*batch_id, im_path)
+
 
 
                 # ======= Vis BRDFsemseg / semseg
@@ -294,10 +343,15 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
                     # if sample_idx >= num_val_vis_MAX:
                     #     break
+                    ts_start_vis = time.time()
+
                     
                     # prob_single = torch.sigmoid(logit_single)
                     prob_single = input_dict['mat_notlight_mask_cpu'][sample_idx].to(opt.device).float()
                     # fast mean shift
+
+                    if opt.bin_mean_shift_device == 'cpu':
+                        prob_single, logit_single, embedding_single = prob_single.cpu(), logit_single.cpu(), embedding_single.cpu()
                     segmentation, sampled_segmentation = bin_mean_shift.test_forward(
                         prob_single, embedding_single, mask_threshold=0.1)
                     
@@ -340,6 +394,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
                     if opt.is_master:
                         writer.add_image('VAL_matseg-aggre_map_PRED/%d'%(sample_idx+batch_size*batch_id), matAggreMap_pred_single_vis, tid, dataformats='HWC')
+
+                    logger.info('Vis batch for %.2f seconds.'%(time.time()-ts_start_vis))
 
 
             # ======= visualize clusters for mat-seg

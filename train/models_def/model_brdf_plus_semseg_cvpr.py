@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from models_def.model_mat_seg import Baseline
+from models_def.model_matseg import Baseline
 import models_def.models_brdf as models_brdf
 from utils.utils_misc import *
 import pac
@@ -46,7 +46,7 @@ class BRDFplusSemSeg(nn.Module):
                 }
             )
         if self.cfg.MODEL_BRDF.enable_semseg_decoder:
-            self.BRDF_Net.update({'semsegDecoder': models_brdf.decoder0(opt, mode=-1, out_channel=self.cfg.MODEL_BRDF.semseg_classes, if_PPM=self.cfg.MODEL_BRDF.semseg_PPM)})
+            self.BRDF_Net.update({'semsegDecoder': models_brdf.decoder0(opt, mode=-1, out_channel=self.cfg.DATA.semseg_classes, if_PPM=self.cfg.MODEL_BRDF.semseg_PPM)})
             # self.BRDF_Net.update({'semsegDecoder': models_brdf.decoder0(opt, mode=-1, out_channel=self.cfg.MODEL_BRDF.semseg_classes, \
                 # in_C=[1024, 1024, 512, 512, 256, 192], out_C=[512, 256, 256, 128, 128, 128], group_C=[32, 16, 16, 8, 8, 8], if_PPM=self.cfg.MODEL_BRDF.semseg_PPM)})
         # self.guide_net = guideNet(opt)
@@ -112,7 +112,7 @@ class BRDFplusSemSeg(nn.Module):
 
         if self.cfg.MODEL_BRDF.enable_semseg_decoder:
             semsegPred = self.BRDF_Net['semsegDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6)
-            return_dict.update({'semsegPred': semsegPred})
+            return_dict.update({'semseg_pred': semsegPred})
 
         return return_dict
     

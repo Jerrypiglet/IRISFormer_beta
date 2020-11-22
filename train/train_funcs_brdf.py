@@ -42,7 +42,6 @@ def get_input_dict_brdf(data_batch, opt):
         input_dict['segBRDFBatch'] = segBatch[:, 2:3, :, :]
         input_dict['segAllBatch'] = segBatch[:, 0:1, :, :]  + segBatch[:, 2:3, :, :]
 
-
     if opt.cfg.DATA.load_semseg_gt:
         input_dict['semseg_label'] = data_batch['semseg_label'].cuda(non_blocking=True)
 
@@ -140,6 +139,7 @@ def process_brdf(input_dict, output_dict, loss_dict, opt, time_meters):
 
         pixelObjNum = (torch.sum(input_dict['segBRDFBatch'] ).cpu().data).item()
         pixelAllNum = (torch.sum(input_dict['segAllBatch'] ).cpu().data).item()
+        assert len(albedoPreds) == 1
         for n in range(0, len(albedoPreds) ):
             loss_dict['loss_brdf-albedo'].append( torch.sum( (albedoPreds[n] - input_dict['albedoBatch'])
                 * (albedoPreds[n] - input_dict['albedoBatch']) * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch'] ) ) / pixelObjNum / 3.0 )
@@ -163,6 +163,10 @@ def process_brdf(input_dict, output_dict, loss_dict, opt, time_meters):
         loss_dict['loss_brdf-normal'] = loss_dict['loss_brdf-normal'][-1]
         loss_dict['loss_brdf-rough'] = loss_dict['loss_brdf-rough'][-1]
         loss_dict['loss_brdf-depth'] = loss_dict['loss_brdf-depth'][-1]
+
+        loss_dict['loss_brdf-rough-paper'] = loss_dict['loss_brdf-rough'] / 4.
+        loss_dict['loss_brdf-depth-paper'] = torch.sum( (torch.log(depthPreds[-1]+0.001) - torch.log(input_dict['depthBatch']+0.001) )
+            * ( torch.log(depthPreds[-1]+0.001) - torch.log(input_dict['depthBatch']+0.001) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum
 
         output_dict['albedoPreds'] = albedoPreds
         output_dict['normalPreds'] = normalPreds

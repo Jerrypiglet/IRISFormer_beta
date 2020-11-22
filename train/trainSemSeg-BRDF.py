@@ -25,6 +25,8 @@ from train_funcs_joint import get_input_dict_joint, val_epoch_joint, vis_val_epo
 from torch.nn.parallel import DistributedDataParallel as DDP
 from utils.config import cfg
 from utils.bin_mean_shift import Bin_Mean_Shift
+from utils.bin_mean_shift_3 import Bin_Mean_Shift_3
+from utils.bin_mean_shift_N import Bin_Mean_Shift_N
 from utils.comm import synchronize
 from utils.utils_misc import *
 from utils.utils_dataloader import make_data_loader
@@ -151,6 +153,15 @@ scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=50, cooldow
 
 # <<<< MODEL AND OPTIMIZER
 
+ENABLE_MATSEG = opt.cfg.MODEL_MATSEG.enable and not opt.cfg.MODEL_MATSEG.if_freeze
+opt.bin_mean_shift_device = opt.device if opt.cfg.MODEL_MATSEG.embed_dims <= 4 else 'cpu'
+opt.batch_size_override_vis = -1 if (opt.bin_mean_shift_device == 'cpu' or not ENABLE_MATSEG) else 1
+if opt.cfg.MODEL_MATSEG.embed_dims == 2:
+    bin_mean_shift = Bin_Mean_Shift(device=opt.device, invalid_index=opt.invalid_index)
+else:
+    bin_mean_shift = Bin_Mean_Shift_N(embedding_dims=opt.cfg.MODEL_MATSEG.embed_dims, \
+        device=opt.bin_mean_shift_device, invalid_index=opt.invalid_index)
+
 # >>>> DATASET
 from utils.utils_semseg import get_transform_semseg, get_transform_matseg
 transforms_train_semseg = get_transform_semseg('train', opt)
@@ -207,6 +218,7 @@ brdf_loader_val_vis = make_data_loader(
     start_iter=0,
     logger=logger,
     workers=0,
+    batch_size_override=opt.batch_size_override_vis, 
     # pin_memory = False, 
     # collate_fn=my_collate_seq_dataset if opt.if_padding else my_collate_seq_dataset_noPadding,
     if_distributed_override=False
@@ -217,7 +229,6 @@ from utils.utils_envs import set_up_checkpointing
 checkpointer, tid_start, epoch_start = set_up_checkpointing(opt, model, optimizer, scheduler, logger)
 
 # >>>> TRANING
-bin_mean_shift = Bin_Mean_Shift(device=opt.device, invalid_index=opt.invalid_index)
 
 tid = tid_start
 albedoErrsNpList = np.ones( [1, 1], dtype = np.float32 )
@@ -355,31 +366,41 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
                 writer.add_scalar('training/GPU_usage_ratio', usage_ratio, tid)
                 writer.add_scalar('training/batch_size_per_gpu', len(data_batch['imPath']), tid)
                 writer.add_scalar('training/gpus', opt.num_gpus, tid)
-        if opt.is_master:
-            if opt.is_master and tid % 2000 == 0:
-                for sample_idx, (im_single, im_trainval_RGB, im_path) in enumerate(zip(data_batch['im'], data_batch['im_trainval_RGB'], data_batch['imPath'])):
-                    im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
-                    im_trainval_RGB = im_trainval_RGB.numpy().squeeze().transpose(1, 2, 0)
+        # if opt.is_master:
+        if tid % 2000 == 0:
+            for sample_idx, (im_single, im_trainval_RGB, im_path) in enumerate(zip(data_batch['im'], data_batch['im_trainval_RGB'], data_batch['imPath'])):
+                im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
+                im_trainval_RGB = im_trainval_RGB.numpy().squeeze().transpose(1, 2, 0)
+                if opt.is_master:
                     writer.add_image('TRAIN_im/%d'%sample_idx, im_single, tid, dataformats='HWC')
                     writer.add_image('TRAIN_im_trainval_RGB/%d'%sample_idx, im_trainval_RGB, tid, dataformats='HWC')
                     writer.add_text('TRAIN_image_name/%d'%sample_idx, im_path, tid)
-                if opt.cfg.DATA.load_matseg_gt:
-                    for sample_idx, (im_single, mat_aggre_map) in enumerate(zip(data_batch['im_matseg_transformed_trainval'], input_dict['mat_aggre_map_cpu'])):
-                        im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
-                        mat_aggre_map = mat_aggre_map.numpy().squeeze()
+            if opt.cfg.DATA.load_matseg_gt:
+                for sample_idx, (im_single, mat_aggre_map) in enumerate(zip(data_batch['im_matseg_transformed_trainval'], input_dict['mat_aggre_map_cpu'])):
+                    im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
+                    mat_aggre_map = mat_aggre_map.numpy().squeeze()
+                    if opt.is_master:
                         writer.add_image('TRAIN_matseg_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
                         writer.add_image('TRAIN_matseg_mat_aggre_map_trainval/%d'%sample_idx, vis_index_map(mat_aggre_map), tid, dataformats='HWC')
-                        logger.info('Logged training mat seg')
-                if opt.cfg.DATA.load_semseg_gt:
-                    for sample_idx, (im_single, semseg_label) in enumerate(zip(data_batch['im_semseg_transformed_trainval'], data_batch['semseg_label'])):
-                        im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
-                        colors = np.loadtxt(os.path.join(opt.pwdpath, opt.cfg.PATH.semseg_colors_path)).astype('uint8')
-                        semseg_label = np.uint8(semseg_label.numpy().squeeze())
-                        from utils.utils_vis import colorize
-                        semseg_label_color = np.array(colorize(semseg_label, colors).convert('RGB'))
+                    logger.info('Logged training mat seg')
+            if opt.cfg.DATA.load_semseg_gt:
+                for sample_idx, (im_single, semseg_label, semseg_pred) in enumerate(zip(data_batch['im_semseg_transformed_trainval'], data_batch['semseg_label'], output_dict['semseg_pred'].detach().cpu())):
+                    im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
+                    colors = np.loadtxt(os.path.join(opt.pwdpath, opt.cfg.PATH.semseg_colors_path)).astype('uint8')
+                    semseg_label = np.uint8(semseg_label.numpy().squeeze())
+                    from utils.utils_vis import colorize
+                    semseg_label_color = np.array(colorize(semseg_label, colors).convert('RGB'))
+                    if opt.is_master:
                         writer.add_image('TRAIN_semseg_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
                         writer.add_image('TRAIN_semseg_label_trainval/%d'%sample_idx, semseg_label_color, tid, dataformats='HWC')
-                        logger.info('Logged training sem seg')
+
+                    prediction = np.argmax(semseg_pred.numpy().squeeze(), 0)
+                    gray_pred = np.uint8(prediction)
+                    color_pred = np.array(colorize(gray_pred, colors).convert('RGB'))
+                    if opt.is_master:
+                        writer.add_image('TRAIN_semseg_PRED/%d'%sample_idx, color_pred, tid, dataformats='HWC')
+
+                    logger.info('Logged training sem seg')
 
 
 

@@ -101,10 +101,12 @@ class Bottleneck(nn.Module):
 
 class ResNet(nn.Module):
 
-    def __init__(self, block, layers, num_classes=1000):
+    def __init__(self, block, layers, num_classes=1000, input_dim=3):
         self.inplanes = 128
         super(ResNet, self).__init__()
-        self.conv1 = conv3x3(3, 64, stride=2)
+        self.input_dim = input_dim
+        
+        self.conv1 = conv3x3(input_dim, 64, stride=2)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu1 = nn.ReLU(inplace=True)
         self.conv2 = conv3x3(64, 64)
@@ -186,7 +188,12 @@ def resnet101(pretrained=False, **kwargs):
     model = ResNet(Bottleneck, [3, 4, 23, 3], **kwargs)
     if pretrained:
         print('>>>>>> Loading from pretrained RESNET101...')
-        model.load_state_dict(load_url(model_urls['resnet101']), strict=True)
+        state_dict = load_url(model_urls['resnet101'])
+        # print(state_dict.keys())
+        if model.input_dim != 3:
+            state_dict = {x:state_dict[x] for x in state_dict if x not in ['conv1.weight']}
+        # print('>>>>>', state_dict.keys())
+        model.load_state_dict(state_dict, strict=False)
     return model
 
 

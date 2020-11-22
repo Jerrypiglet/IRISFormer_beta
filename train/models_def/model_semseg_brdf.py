@@ -16,7 +16,8 @@ class SemSeg_BRDF(nn.Module):
         self.logger = logger
 
         if self.cfg.MODEL_MATSEG.enable:
-            self.UNet = Baseline(self.cfg.MODEL_MATSEG)
+            input_dim = 3 if not self.cfg.MODEL_MATSEG.use_semseg_as_input else 4
+            self.UNet = Baseline(self.cfg.MODEL_MATSEG, embed_dims=self.cfg.MODEL_MATSEG.embed_dims, input_dim=input_dim)
         
         if self.cfg.MODEL_SEMSEG.enable:
             # value_scale = 255
@@ -62,7 +63,11 @@ class SemSeg_BRDF(nn.Module):
         # self.guide_net = guideNet(opt)
 
     def forward_matseg(self, input_dict):
-        return self.UNet(input_dict['im_batch_matseg'])
+        input_list = [input_dict['im_batch_matseg']]
+        if self.cfg.MODEL_MATSEG.use_semseg_as_input:
+            input_list.append(input_dict['semseg_label'].float().unsqueeze(1) / float(self.opt.cfg.DATA.semseg_classes))
+
+        return self.UNet(torch.cat(input_list, 1))
 
     def forward_semseg(self, input_dict):
         # im_batch_255 = input_dict['im_uint8']

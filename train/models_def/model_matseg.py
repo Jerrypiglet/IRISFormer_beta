@@ -43,10 +43,10 @@ class ResNet(nn.Module):
 
 
 class Baseline(nn.Module):
-    def __init__(self, cfg):
+    def __init__(self, cfg, embed_dims=2, input_dim=3):
         super(Baseline, self).__init__()
 
-        orig_resnet = resnet.__dict__[cfg.arch](pretrained=cfg.pretrained)
+        orig_resnet = resnet.__dict__[cfg.arch](pretrained=cfg.pretrained, input_dim=input_dim)
         self.backbone = ResNet(orig_resnet)
 
         self.relu = nn.ReLU(inplace=True)
@@ -73,7 +73,7 @@ class Baseline(nn.Module):
         # plane or non-plane classifier
         self.pred_prob = nn.Conv2d(channel, 1, (1, 1), padding=0)
         # embedding
-        self.embedding_conv = nn.Conv2d(channel, 2, (1, 1), padding=0)
+        self.embedding_conv = nn.Conv2d(channel, embed_dims, (1, 1), padding=0)
         # depth prediction
         self.pred_depth = nn.Conv2d(channel, 1, (1, 1), padding=0)
         # surface normal prediction

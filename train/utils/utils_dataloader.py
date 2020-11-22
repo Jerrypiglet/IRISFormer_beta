@@ -42,7 +42,7 @@ def make_data_loader(opt, dataset, is_train=True, start_iter=0, is_for_period=Fa
         # ), "SOLVER.IMS_PER_BATCH ({}) must be divisible by the number of GPUs ({}) used.".format(
         #     images_per_batch, num_gpus)
         # images_per_gpu = images_per_batch // num_gpus if batch_size_override==-1 else batch_size_override
-        images_per_gpu = cfg.SOLVER.ims_per_batch
+        images_per_gpu = cfg.SOLVER.ims_per_batch if batch_size_override==-1 else batch_size_override
         shuffle = True
         num_iters = cfg.SOLVER.max_iter
         drop_last = False
@@ -55,7 +55,7 @@ def make_data_loader(opt, dataset, is_train=True, start_iter=0, is_for_period=Fa
         # ), "TEST.IMS_PER_BATCH ({}) must be divisible by the number of GPUs ({}) used.".format(
         #     images_per_batch, num_gpus)
         # images_per_gpu = images_per_batch // num_gpus if batch_size_override==-1 else batch_size_override
-        images_per_gpu = cfg.TEST.ims_per_batch
+        images_per_gpu = cfg.TEST.ims_per_batch if batch_size_override==-1 else batch_size_override
         # shuffle = False if not is_distributed else True
         shuffle = False
         num_iters = None

@@ -41,6 +41,7 @@ _C.MODEL_MATSEG.embed_dims = 2
 _C.MODEL_MATSEG.if_guide = False
 _C.MODEL_MATSEG.guide_channels = 32
 _C.MODEL_MATSEG.use_as_input = False
+_C.MODEL_MATSEG.use_semseg_as_input = False
 
 
 _C.MODEL_BRDF = CN()
