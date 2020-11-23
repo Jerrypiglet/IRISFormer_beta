@@ -16,3 +16,5 @@ Checkpoint_cluster
 vis/
 logs_cluster
 cluster_control/tb_job.yaml
+cluster_control/yamls/
+*.npy

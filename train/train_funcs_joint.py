@@ -22,6 +22,8 @@ from train_funcs_semseg import get_input_dict_semseg, process_semseg
 from train_funcs_brdf import get_input_dict_brdf, process_brdf
 from utils.comm import synchronize
 
+from utils.utils_metrics import compute_errors_depth_nyu
+
 def get_time_meters_joint():
     time_meters = {}
     time_meters['ts'] = 0.
@@ -40,15 +42,17 @@ def get_semseg_meters():
     semseg_meters = {'intersection_meter': intersection_meter, 'union_meter': union_meter, 'target_meter': target_meter}
     return semseg_meters
 
-def get_brdf_meters():
+def get_brdf_meters(opt):
     normal_mean_error_meter = AverageMeter('normal_mean_error_meter')
     normal_median_error_meter = AverageMeter('normal_median_error_meter')
-    inv_depth_mean_error_meter = AverageMeter('inv_depth_mean_error_meter')
-    inv_depth_median_error_meter = AverageMeter('inv_depth_median_error_meter')
-    brdf_meters = {'normal_mean_error_meter': normal_mean_error_meter, 'normal_median_error_meter': normal_median_error_meter, \
-        'inv_depth_mean_error_meter': inv_depth_mean_error_meter, 'inv_depth_median_error_meter': inv_depth_median_error_meter}
+    # inv_depth_mean_error_meter = AverageMeter('inv_depth_mean_error_meter')
+    # inv_depth_median_error_meter = AverageMeter('inv_depth_median_error_meter')
+    brdf_meters = {'normal_mean_error_meter': normal_mean_error_meter, 'normal_median_error_meter': normal_median_error_meter}
+    brdf_meters.update(get_depth_meters(opt))
     return brdf_meters
 
+def get_depth_meters(opt):
+    return {metric: AverageMeter(metric) for metric in opt.depth_metrics}
 
 def get_input_dict_joint(data_batch, opt):
     input_dict = {}
@@ -144,7 +148,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     if ENABLE_SEMSEG:
         semseg_meters = get_semseg_meters()
     if ENABLE_BRDF:
-        brdf_meters = get_brdf_meters()
+        brdf_meters = get_brdf_meters(opt)
 
     with torch.no_grad():
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
@@ -172,22 +176,40 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             if ENABLE_BRDF:
                 depth_input = input_dict['depthBatch'].detach().cpu().numpy()
                 depth_output = output_dict['depthPreds'][0].detach().cpu().numpy()
-                depth_output[depth_output < 0.] = 0.
+                seg_obj = data_batch['segObj'].cpu().numpy()
+                min_depth, max_depth = 0.1, 8.
+                # depth_mask = np.logical_and(np.logical_and(seg_obj != 0, depth_input < max_depth), depth_input > min_depth)
+                depth_output = depth_output * seg_obj
+                depth_input = depth_input * seg_obj
+                np.save('depth_input_%d.npy'%(batch_id), depth_input)
+                np.save('depth_output_%d.npy'%(batch_id), depth_output)
+                np.save('seg_obj_%d.npy'%(batch_id), seg_obj)
+
+                depth_input[depth_input < min_depth] = min_depth
+                depth_output[depth_output < min_depth] = min_depth
+                depth_input[depth_input > max_depth] = max_depth
+                depth_output[depth_output > max_depth] = max_depth
+
+                for depth_input_single, depth_output_single in zip(depth_input.squeeze(), depth_output.squeeze()):
+                    metrics_results = compute_errors_depth_nyu(depth_input_single, depth_output_single)
+                    # print(metrics_results)
+                    for metric in metrics_results:
+                        brdf_meters[metric].update(metrics_results[metric])
+
                 # depth_input = 1. / (depth_input + 1e-6)
                 # depth_output = 1. / (depth_output + 1e-6)
-                np.save('depth_input.npy', depth_input)
-                np.save('depth_output.npy', depth_output)
+
                 # normal_input = 0.5 * (normal_input + 1)
                 # normal_output = 0.5 * (normal_output + 1)
 
-                inv_depth_error = np.abs(1./(depth_output+1e-6) - 1./(depth_input+1e-6))
-                brdf_meters['inv_depth_mean_error_meter'].update(np.mean(inv_depth_error))
-                brdf_meters['inv_depth_median_error_meter'].update(np.median(inv_depth_error))
+                # inv_depth_error = np.abs(1./(depth_output+1e-6) - 1./(depth_input+1e-6))
+                # brdf_meters['inv_depth_mean_error_meter'].update(np.mean(inv_depth_error))
+                # brdf_meters['inv_depth_median_error_meter'].update(np.median(inv_depth_error))
 
                 normal_input = input_dict['normalBatch'].detach().cpu().numpy()
                 normal_output = output_dict['normalPreds'][0].detach().cpu().numpy()
-                np.save('normal_input.npy', normal_input)
-                np.save('normal_output.npy', normal_output)
+                # np.save('normal_input_%d.npy'%(batch_id), normal_input)
+                # np.save('normal_output_%d.npy'%(batch_id), normal_output)
                 normal_input_Nx3 = np.transpose(normal_input, (0, 2, 3, 1)).reshape(-1, 3)
                 normal_output_Nx3 = np.transpose(normal_output, (0, 2, 3, 1)).reshape(-1, 3)
                 normal_in_n_out_dot = np.sum(np.multiply(normal_input_Nx3, normal_output_Nx3), 1)
@@ -218,25 +240,28 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         mIoU = np.mean(iou_class)
         mAcc = np.mean(accuracy_class)
         allAcc = sum(semseg_meters['intersection_meter'].sum) / (sum(semseg_meters['target_meter'].sum) + 1e-10)
-        if opt.is_master:
-            logger.info('Val result: mIoU/mAcc/allAcc {:.4f}/{:.4f}/{:.4f}.'.format(mIoU, mAcc, allAcc))
-            for i in range(opt.cfg.DATA.semseg_classes):
-                logger.info('Class_{} Result: iou/accuracy {:.4f}/{:.4f}.'.format(i, iou_class[i], accuracy_class[i]))
-
 
     if opt.is_master:
         for loss_key in loss_dict_reduced:
             writer.add_scalar('loss_val/%s'%loss_key, loss_meters[loss_key].avg, tid)
             logger.info('Logged val loss for %s'%loss_key)
         if ENABLE_SEMSEG:
+            logger.info('Val result: mIoU/mAcc/allAcc {:.4f}/{:.4f}/{:.4f}.'.format(mIoU, mAcc, allAcc))
+            for i in range(opt.cfg.DATA.semseg_classes):
+                logger.info('Class_{} Result: iou/accuracy {:.4f}/{:.4f}.'.format(i, iou_class[i], accuracy_class[i]))
             writer.add_scalar('VAL/mIoU_val', mIoU, tid)
             writer.add_scalar('VAL/mAcc_val', mAcc, tid)
             writer.add_scalar('VAL/allAcc_val', allAcc, tid)
         if ENABLE_BRDF:
-            writer.add_scalar('VAL/BRDF-inv_depth_mean_val', brdf_meters['inv_depth_mean_error_meter'].avg, tid)
-            writer.add_scalar('VAL/BRDF-inv_depth_median_val', brdf_meters['inv_depth_median_error_meter'].get_median(), tid)
+            # writer.add_scalar('VAL/BRDF-inv_depth_mean_val', brdf_meters['inv_depth_mean_error_meter'].avg, tid)
+            # writer.add_scalar('VAL/BRDF-inv_depth_median_val', brdf_meters['inv_depth_median_error_meter'].get_median(), tid)
+            for metric in opt.depth_metrics:
+                writer.add_scalar('VAL/BRDF-depth_%s'%metric, brdf_meters[metric].avg, tid)
+            logger.info('Val result - depth: ' + ', '.join(['%s: %.4f'%(metric, brdf_meters[metric].avg) for metric in opt.depth_metrics]))
+
             writer.add_scalar('VAL/BRDF-normal_mean_val', brdf_meters['normal_mean_error_meter'].avg, tid)
             writer.add_scalar('VAL/BRDF-normal_median_val', brdf_meters['normal_median_error_meter'].get_median(), tid)
+            logger.info('Val result - normal: mean: %.4f, median: %.4f'%(brdf_meters['normal_mean_error_meter'].avg, brdf_meters['normal_median_error_meter'].get_median()))
             writer.add_scalar('VAL/allAcc_val', allAcc, tid)
 
         logger.info(red('Evaluation timings: ' + time_meters_to_string(time_meters)))

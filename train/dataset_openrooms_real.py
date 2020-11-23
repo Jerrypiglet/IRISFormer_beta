@@ -77,6 +77,11 @@ class openrooms_real(data.Dataset):
                 }
         # if self.transform is not None and not self.opt.if_hdr:
         batchDict.update({'image_transformed': image_transformed, 'im_not_hdr': im_not_hdr, 'im_uint8': im_uint8})
+                # if self.transform is not None and not self.opt.if_hdr:
+        batchDict.update({'image_transformed': image_transformed, 'im_semseg_transformed_trainval': image_transformed, 'im_not_hdr': im_not_hdr, 'im_SDR_RGB': im_not_hdr, 'im_uint8': im_uint8})
+        if self.split != 'train':
+            batchDict.update({'image_transformed_fixed': image_transformed, 'im_RGB_uint8': im_uint8})
+
 
         if self.opt.cfg.MODEL_BRDF.enable_semseg_decoder:
             batchDict.update({'semseg_label': torch.ones((self.imHeight, self.imWidth)).long()})
