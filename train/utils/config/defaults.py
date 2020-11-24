@@ -32,6 +32,8 @@ _C.PATH.semseg_names_path = 'data/openrooms/openrooms_names.txt'
 
 _C.MODEL_BRDF = CN()
 _C.MODEL_BRDF.enable = True
+# _C.MODEL_BRDF.enable_list = ['al', 'no', 'de', 'ro']
+_C.MODEL_BRDF.enable_list = 'al_no_de_ro'
 _C.MODEL_BRDF.load_pretrained_pth = False
 _C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240'
 _C.MODEL_BRDF.albedoWeight = 1.5

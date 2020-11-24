@@ -115,63 +115,72 @@ def get_input_dict_brdf(data_batch, opt):
 
 def process_brdf(input_dict, output_dict, loss_dict, opt, time_meters):
     if opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
-        albedoPreds = []
-        normalPreds = []
-        roughPreds = []
-        depthPreds = []
-
-        albedoPred, normalPred, roughPred, depthPred = output_dict['albedoPred'], output_dict['normalPred'], output_dict['roughPred'], output_dict['depthPred']
-
-        albedoPreds.append(albedoPred )
-        normalPreds.append(normalPred )
-        roughPreds.append(roughPred )
-        depthPreds.append(depthPred )
-        
-
-        ########################################################
         opt.albeW, opt.normW, opt.rougW, opt.deptW = opt.cfg.MODEL_BRDF.albedoWeight, opt.cfg.MODEL_BRDF.normalWeight, opt.cfg.MODEL_BRDF.roughWeight, opt.cfg.MODEL_BRDF.depthWeight
-
-        # Compute the error
-        loss_dict['loss_brdf-albedo'] = []
-        loss_dict['loss_brdf-normal'] = []
-        loss_dict['loss_brdf-rough'] = []
-        loss_dict['loss_brdf-depth'] = []
 
         pixelObjNum = (torch.sum(input_dict['segBRDFBatch'] ).cpu().data).item()
         pixelAllNum = (torch.sum(input_dict['segAllBatch'] ).cpu().data).item()
-        assert len(albedoPreds) == 1
-        for n in range(0, len(albedoPreds) ):
-            loss_dict['loss_brdf-albedo'].append( torch.sum( (albedoPreds[n] - input_dict['albedoBatch'])
-                * (albedoPreds[n] - input_dict['albedoBatch']) * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch'] ) ) / pixelObjNum / 3.0 )
-        for n in range(0, len(normalPreds) ):
-            loss_dict['loss_brdf-normal'].append( torch.sum( (normalPreds[n] - input_dict['normalBatch'])
-                * (normalPreds[n] - input_dict['normalBatch']) * input_dict['segAllBatch'].expand_as(input_dict['normalBatch']) ) / pixelAllNum / 3.0)
-        for n in range(0, len(roughPreds) ):
-            loss_dict['loss_brdf-rough'].append( torch.sum( (roughPreds[n] - input_dict['roughBatch'])
-                * (roughPreds[n] - input_dict['roughBatch']) * input_dict['segBRDFBatch'] ) / pixelObjNum )
-        for n in range(0, len(depthPreds ) ):
-            loss_dict['loss_brdf-depth'].append( torch.sum( (torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) )
-                * ( torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum )
 
-        # Back propagate the gradients
-        loss_dict['loss_brdf-ALL'] = 4 * opt.albeW * loss_dict['loss_brdf-albedo'][-1] + opt.normW * loss_dict['loss_brdf-normal'][-1] \
-                + opt.rougW * loss_dict['loss_brdf-rough'][-1] + opt.deptW * loss_dict['loss_brdf-depth'][-1]
-            
-        output_dict.update({'mat_seg-albedoPreds': albedoPreds, 'mat_seg-normalPreds': normalPreds, 'mat_seg-roughPreds': roughPreds, 'mat_seg-depthPreds': depthPreds})
+        loss_dict['loss_brdf-ALL'] = 0.
 
-        loss_dict['loss_brdf-albedo'] = loss_dict['loss_brdf-albedo'][-1]
-        loss_dict['loss_brdf-normal'] = loss_dict['loss_brdf-normal'][-1]
-        loss_dict['loss_brdf-rough'] = loss_dict['loss_brdf-rough'][-1]
-        loss_dict['loss_brdf-depth'] = loss_dict['loss_brdf-depth'][-1]
+        if 'al' in opt.cfg.MODEL_BRDF.enable_list:
+            albedoPreds = []
+            albedoPred = output_dict['albedoPred']
+            albedoPreds.append(albedoPred ) 
+            loss_dict['loss_brdf-albedo'] = []
+            assert len(albedoPreds) == 1
+            for n in range(0, len(albedoPreds) ):
+                loss_dict['loss_brdf-albedo'].append( torch.sum( (albedoPreds[n] - input_dict['albedoBatch'])
+                    * (albedoPreds[n] - input_dict['albedoBatch']) * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch'] ) ) / pixelObjNum / 3.0 )
+            loss_dict['loss_brdf-ALL'] += 4 * opt.albeW * loss_dict['loss_brdf-albedo'][-1]
+            # output_dict.update({'mat_seg-albedoPreds': albedoPreds})
+            loss_dict['loss_brdf-albedo'] = loss_dict['loss_brdf-albedo'][-1]
+            output_dict['albedoPreds'] = albedoPreds
 
-        loss_dict['loss_brdf-rough-paper'] = loss_dict['loss_brdf-rough'] / 4.
-        loss_dict['loss_brdf-depth-paper'] = torch.sum( (torch.log(depthPreds[-1]+0.001) - torch.log(input_dict['depthBatch']+0.001) )
-            * ( torch.log(depthPreds[-1]+0.001) - torch.log(input_dict['depthBatch']+0.001) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum
+        if 'no' in opt.cfg.MODEL_BRDF.enable_list:
+            normalPreds = []
+            normalPred = output_dict['normalPred']
+            normalPreds.append(normalPred )
+            loss_dict['loss_brdf-normal'] = []
+            for n in range(0, len(normalPreds) ):
+                loss_dict['loss_brdf-normal'].append( torch.sum( (normalPreds[n] - input_dict['normalBatch'])
+                    * (normalPreds[n] - input_dict['normalBatch']) * input_dict['segAllBatch'].expand_as(input_dict['normalBatch']) ) / pixelAllNum / 3.0)
+            loss_dict['loss_brdf-ALL'] += opt.normW * loss_dict['loss_brdf-normal'][-1]
+            # output_dict.update({'mat_seg-normalPreds': normalPreds})
+            loss_dict['loss_brdf-normal'] = loss_dict['loss_brdf-normal'][-1]
+            output_dict['normalPreds'] = normalPreds
 
-        output_dict['albedoPreds'] = albedoPreds
-        output_dict['normalPreds'] = normalPreds
-        output_dict['roughPreds'] = roughPreds
-        output_dict['depthPreds'] = depthPreds
+        if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
+            roughPreds = []
+            roughPred = output_dict['roughPred']
+            roughPreds.append(roughPred )
+            loss_dict['loss_brdf-rough'] = []
+            for n in range(0, len(roughPreds) ):
+                loss_dict['loss_brdf-rough'].append( torch.sum( (roughPreds[n] - input_dict['roughBatch'])
+                    * (roughPreds[n] - input_dict['roughBatch']) * input_dict['segBRDFBatch'] ) / pixelObjNum )
+            loss_dict['loss_brdf-ALL'] += opt.rougW * loss_dict['loss_brdf-rough'][-1]
+            # output_dict.update({'mat_seg-roughPreds': roughPreds}) 
+            loss_dict['loss_brdf-rough'] = loss_dict['loss_brdf-rough'][-1]
+            loss_dict['loss_brdf-rough-paper'] = loss_dict['loss_brdf-rough'] / 4.
+            output_dict['roughPreds'] = roughPreds
+
+        if 'de' in opt.cfg.MODEL_BRDF.enable_list:
+            depthPreds = []
+            depthPred = output_dict['depthPred']
+            depthPreds.append(depthPred )
+            loss_dict['loss_brdf-depth'] = []
+            for n in range(0, len(depthPreds ) ):
+                loss_dict['loss_brdf-depth'].append( torch.sum( (torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) )
+                    * ( torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum )
+            loss_dict['loss_brdf-ALL'] += opt.deptW * loss_dict['loss_brdf-depth'][-1]
+            # output_dict.update({'mat_seg-depthPreds': depthPreds})
+            loss_dict['loss_brdf-depth'] = loss_dict['loss_brdf-depth'][-1]
+            loss_dict['loss_brdf-depth-paper'] = torch.sum( (torch.log(depthPreds[-1]+0.001) - torch.log(input_dict['depthBatch']+0.001) )
+                * ( torch.log(depthPreds[-1]+0.001) - torch.log(input_dict['depthBatch']+0.001) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum
+            output_dict['depthPreds'] = depthPreds
+
+
+
+
 
     if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
         semsegPred = output_dict['semseg_pred']

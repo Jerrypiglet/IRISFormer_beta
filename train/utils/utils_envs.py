@@ -43,6 +43,8 @@ def set_up_envs(opt):
     if not opt.cfg.MODEL_SEMSEG.if_freeze:
         opt.cfg.MODEL_SEMSEG.fix_bn = False
 
+    opt.cfg.MODEL_BRDF.enable_list = opt.cfg.MODEL_BRDF.enable_list.split('_    ')
+
 def set_up_logger(opt):
     from utils.logger import setup_logger, Logger, printer
     import sys

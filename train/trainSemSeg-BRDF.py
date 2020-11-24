@@ -19,7 +19,8 @@ print(sys.path)
 
 # from dataset_openrooms import openrooms
 from dataset_openroomsV2 import openrooms
-from models_def.model_semseg_brdf import SemSeg_BRDF
+# from models_def.model_semseg_brdf import SemSeg_BRDF
+from models_def.model_joint_all import SemSeg_MatSeg_BRDF as the_model
 from train_funcs_joint import get_input_dict_joint, val_epoch_joint, vis_val_epoch_joint, forward_joint, get_time_meters_joint
 
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -130,7 +131,7 @@ logger, writer = set_up_logger(opt)
 # >>>> MODEL AND OPTIMIZER
 # build model
 # model = MatSeg_BRDF(opt, logger)
-model = SemSeg_BRDF(opt, logger)
+model = the_model(opt, logger)
 if opt.distributed: # https://github.com/dougsouza/pytorch-sync-batchnorm-example # export NCCL_LL_THRESHOLD=0
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 model.to(opt.device)
@@ -293,7 +294,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         synchronize()
 
         # Save checkpoint
-        if opt.save_every_iter != -1 and (tid - tid_start) % opt.save_every_iter == 0:
+        if opt.save_every_iter != -1 and (tid - tid_start) % opt.save_every_iter == 0 and 'tmp' not in opt.task_name:
             check_save(opt, tid, tid, epoch, checkpointer, epochs_saved, opt.checkpoints_path_task, logger)
             reset_tictoc = True
 
@@ -337,10 +338,14 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
             loss_keys_backward.append('loss_brdf-ALL')
             loss_keys_print.append('loss_brdf-ALL')
-            loss_keys_print.append('loss_brdf-albedo') 
-            loss_keys_print.append('loss_brdf-normal') 
-            loss_keys_print.append('loss_brdf-rough') 
-            loss_keys_print.append('loss_brdf-depth') 
+            if 'al' in opt.cfg.MODEL_BRDF.enable_list:
+                loss_keys_print.append('loss_brdf-albedo') 
+            if 'no' in opt.cfg.MODEL_BRDF.enable_list:
+                loss_keys_print.append('loss_brdf-normal') 
+            if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
+                loss_keys_print.append('loss_brdf-rough') 
+            if 'de' in opt.cfg.MODEL_BRDF.enable_list:
+                loss_keys_print.append('loss_brdf-depth') 
 
         if (opt.cfg.MODEL_SEMSEG.enable and not opt.cfg.MODEL_SEMSEG.if_freeze) or (opt.cfg.MODEL_BRDF.enable_semseg_decoder):
             loss_keys_backward.append('loss_semseg-ALL')
@@ -350,8 +355,9 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
                 loss_keys_print.append('loss_semseg-aux') 
 
         loss = sum([loss_dict[loss_key] for loss_key in loss_keys_backward])
-        print('----loss_dict', loss_dict.keys())
-        print('----loss_keys_backward', loss_keys_backward)
+        if opt.is_master and tid % 20 == 0:
+            print('----loss_dict', loss_dict.keys())
+            print('----loss_keys_backward', loss_keys_backward)
         loss.backward()
         optimizer.step()
         time_meters['backward'].update(time.time() - time_meters['ts'])
