@@ -361,7 +361,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                         writer.add_image('VAL_matseg-aggre_map_GT/%d'%(sample_idx+batch_size*batch_id), matAggreMap_GT_single_vis, tid, dataformats='HWC')
                         writer.add_image('VAL_matseg-notlight_mask_GT/%d'%(sample_idx+batch_size*batch_id), mat_notlight_mask_single, tid, dataformats='HW')
 
-            if opt.cfg.MODEL_MATSEG.enable:
+            if opt.cfg.MODEL_MATSEG.enable and opt.cfg.MODEL_MATSEG.embed_dims <= 4:
                 b, c, h, w = output_dict['logit'].size()
                 for sample_idx, (logit_single, embedding_single) in enumerate(zip(output_dict['logit'].detach(), output_dict['embedding'].detach())):
 

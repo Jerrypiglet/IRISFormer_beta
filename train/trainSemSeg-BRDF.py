@@ -159,7 +159,11 @@ scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=50, cooldow
 
 ENABLE_MATSEG = opt.cfg.MODEL_MATSEG.enable
 opt.bin_mean_shift_device = opt.device if opt.cfg.MODEL_MATSEG.embed_dims <= 4 else 'cpu'
-opt.batch_size_override_vis = -1 if (opt.bin_mean_shift_device == 'cpu' or not ENABLE_MATSEG) else 1
+opt.batch_size_override_vis = -1
+if ENABLE_MATSEG:
+    if opt.cfg.MODEL_MATSEG.embed_dims > 2:
+        opt.batch_size_override_vis = 1      
+# opt.batch_size_override_vis = -1 if (opt.bin_mean_shift_device == 'cpu' or not ENABLE_MATSEG) else 1
 if opt.cfg.MODEL_MATSEG.embed_dims == 2:
     bin_mean_shift = Bin_Mean_Shift(device=opt.device, invalid_index=opt.invalid_index)
 else:

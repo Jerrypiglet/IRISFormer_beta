@@ -117,17 +117,18 @@ def set_up_folders(opt):
         for root_folder in [opt.SUMMARY_PATH, opt.CKPT_PATH, opt.SUMMARY_VIS_PATH]:
             if not root_folder.exists():
                 root_folder.mkdir(exist_ok=True)
+        if_delete = 'n'
         if os.path.isdir(opt.summary_path_task):
-            if opt.task_name not in ['tmp'] and opt.resume == 'NoCkpt':
-                if ('POD' in opt.task_name) and opt.resume != 'NoCkpt':
+            if 'POD' in opt.task_name:
+                if opt.resume == 'NoCkpt':
                     if_delete = 'y'
-                else:
-                    if_delete = input(colored('Summary path %s already exists. Delete? [y/n] '%opt.summary_path_task, 'white', 'on_blue'))
-                    # if_delete = 'y'
-                if if_delete == 'y':
-                    for save_folder in save_folders:
-                        os.system('rm -rf %s'%save_folder)
-                        print(green('Deleted summary path %s'%save_folder))
+            else:
+                if_delete = input(colored('Summary path %s already exists. Delete? [y/n] '%opt.summary_path_task, 'white', 'on_blue'))
+                # if_delete = 'y'
+            if if_delete == 'y':
+                for save_folder in save_folders:
+                    os.system('rm -rf %s'%save_folder)
+                    print(green('Deleted summary path %s'%save_folder))
         for save_folder in save_folders:
             if not Path(save_folder).is_dir() and opt.rank == 0:
                 Path(save_folder).mkdir(exist_ok=True)
