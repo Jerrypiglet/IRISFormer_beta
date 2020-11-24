@@ -49,7 +49,7 @@ class Bin_Mean_Shift_N(nn.Module):
             xyz_repeat = xyz.repeat(repeat_list).view(-1, 1)
             xyz_repeat_list.append(xyz_repeat)
 
-        print(self.device, '======')
+        # print(self.device, '======')
         return torch.cat(xyz_repeat_list, dim=1).to(self.device)
 
     def filter_seed(self, point, prob, seed_point, bandwidth, min_count=3):

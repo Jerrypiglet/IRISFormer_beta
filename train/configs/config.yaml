@@ -30,7 +30,7 @@ MODEL_MATSEG:
   if_freeze: False
 
 MODEL_SEMSEG:
-  if_freeze: True
+  if_freeze: False
   if_guide: False
   config_file: 'configs/openrooms/openrooms_pspnet50.yaml'
   pretrained_pth: 'exp/openrooms/pspnet50V3_2gpu_100k/model/train_epoch_23_tid_147000.pth'

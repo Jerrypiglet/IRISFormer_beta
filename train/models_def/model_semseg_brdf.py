@@ -18,7 +18,10 @@ class SemSeg_BRDF(nn.Module):
         if self.cfg.MODEL_MATSEG.enable:
             input_dim = 3 if not self.cfg.MODEL_MATSEG.use_semseg_as_input else 4
             self.UNet = Baseline(self.cfg.MODEL_MATSEG, embed_dims=self.cfg.MODEL_MATSEG.embed_dims, input_dim=input_dim)
-        
+
+            if self.opt.cfg.MODEL_MATSEG.load_pretrained_pth:
+                self.load_pretrained_matseg()
+
         if self.cfg.MODEL_SEMSEG.enable:
             # value_scale = 255
             # mean = [0.485, 0.456, 0.406]
@@ -156,26 +159,40 @@ class SemSeg_BRDF(nn.Module):
     
     def forward(self, input_dict):
         return_dict = {}
+        input_guide_dict = None
         if self.cfg.MODEL_MATSEG.enable:
+            # if self.cfg.MODEL_MATSEG.if_freeze:
+            #     with torch.no_grad():
+            #         return_dict_matseg = self.forward_matseg(input_dict) # {'prob': prob, 'embedding': embedding, 'feats_mat_seg_dict': feats_mat_seg_dict}
+            # else:
             return_dict_matseg = self.forward_matseg(input_dict) # {'prob': prob, 'embedding': embedding, 'feats_mat_seg_dict': feats_mat_seg_dict}
             input_dict_guide_matseg = return_dict_matseg['feats_matseg_dict']
             input_dict_guide_matseg['guide_from'] = 'matseg'
+            input_guide_dict = input_dict_guide_matseg
         else:
             return_dict_matseg = {}
             input_dict_guide_matseg = None
         return_dict.update(return_dict_matseg)
 
         if self.cfg.MODEL_SEMSEG.enable:
+            # if self.cfg.MODEL_SEMSEG.if_freeze:
+            #     with torch.no_grad():
+            #         return_dict_semseg = self.forward_semseg(input_dict) # {'prob': prob, 'embedding': embedding, 'feats_mat_seg_dict': feats_mat_seg_dict}
+            # else:
             return_dict_semseg = self.forward_semseg(input_dict) # {'prob': prob, 'embedding': embedding, 'feats_mat_seg_dict': feats_mat_seg_dict}
+
             input_dict_guide_semseg = return_dict_semseg['feats_semseg_dict']
             input_dict_guide_semseg['guide_from'] = 'semseg'
+            input_guide_dict = input_dict_guide_semseg
         else:
             return_dict_semseg = {}
             input_dict_guide_semseg = None
         return_dict.update(return_dict_semseg)
 
+        assert not(self.cfg.MODEL_MATSEG.if_guide and self.cfg.MODEL_SEMSEG.if_guide), 'cannot guide from MATSEG and SEMSEG at the same time!'
+
         if self.cfg.MODEL_BRDF.enable:
-            return_dict_brdf = self.forward_brdf(input_dict, input_dict_guide=input_dict_guide_semseg)
+            return_dict_brdf = self.forward_brdf(input_dict, input_dict_guide=input_guide_dict)
         else:
             return_dict_brdf = {}
         return_dict.update(return_dict_brdf)
@@ -218,7 +235,7 @@ class SemSeg_BRDF(nn.Module):
         model_path = os.path.join(self.semseg_path, self.opt.cfg.MODEL_SEMSEG.pretrained_pth)
         if os.path.isfile(model_path):
             self.logger.info(red("=> loading checkpoint '{}'".format(model_path)))
-            state_dict = torch.load(model_path)['state_dict']
+            state_dict = torch.load(model_path, map_location=torch.device("cpu"))['state_dict']
             # print(state_dict.keys())
             state_dict = {k.replace('module.', ''): v for k, v in state_dict.items()}
 
@@ -226,6 +243,25 @@ class SemSeg_BRDF(nn.Module):
             state_dict = {k.replace(key, replace_dict[key]): v for k, v in state_dict.items() for key in replace_dict}
             
             self.SEMSEG_Net.load_state_dict(state_dict, strict=True)
+            self.logger.info(red("=> loaded checkpoint '{}'".format(model_path)))
+        else:
+            raise RuntimeError("=> no checkpoint found at '{}'".format(model_path))
+
+    def load_pretrained_matseg(self):
+        # self.print_net()
+        model_path = os.path.join(self.opt.CKPT_PATH, self.opt.cfg.MODEL_MATSEG.pretrained_pth)
+        if os.path.isfile(model_path):
+            self.logger.info(red("=> loading checkpoint '{}'".format(model_path)))
+            state_dict = torch.load(model_path, map_location=torch.device("cpu"))['model']
+            # print(state_dict.keys())
+            state_dict = {k.replace('UNet.', ''): v for k, v in state_dict.items()}
+            state_dict = {k: v for k, v in state_dict.items() if ('pred_depth' not in k) and ('pred_surface_normal' not in k) and ('pred_param' not in k)}
+
+            # replace_dict = {'layer0.0': 'layer0_1.0', 'layer0.1': 'layer0_1.1', 'layer0.3': 'layer0_2.0', 'layer0.4': 'layer0_2.1', 'layer0.6': 'layer0_3.0', 'layer0.7': 'layer0_3.1'}
+            # state_dict = {k.replace(key, replace_dict[key]): v for k, v in state_dict.items() for key in replace_dict}
+            
+            # print(state_dict.keys())
+            self.UNet.load_state_dict(state_dict, strict=True)
             self.logger.info(red("=> loaded checkpoint '{}'".format(model_path)))
         else:
             raise RuntimeError("=> no checkpoint found at '{}'".format(model_path))
@@ -246,8 +282,7 @@ class SemSeg_BRDF(nn.Module):
             # if 'roi_heads.box.predictor' in name or 'classifier_c' in name:
                 if in_name in name:
                     param.requires_grad = True
-                    self.logger.info(colored('turn_ON_in_names: ' + in_name, 'white', 'on_red'))
-
+                    self.logger.info(colored('turn_ON_names: ' + in_name, 'white', 'on_red'))
 
     def turn_off_names(self, in_names):
         for name, param in self.named_parameters():
@@ -255,10 +290,13 @@ class SemSeg_BRDF(nn.Module):
             # if 'roi_heads.box.predictor' in name or 'classifier_c' in name:
                 if in_name in name:
                     param.requires_grad = False
-                    self.logger.info(colored('turn_False_in_names: ' + in_name, 'white', 'on_red'))
+                    self.logger.info(colored('turn_OFF_names: ' + in_name, 'white', 'on_red'))
 
     def freeze_bn_semantics(self):
         freeze_bn_in_module(self.SEMSEG_Net)
+
+    def freeze_bn_matseg(self):
+        freeze_bn_in_module(self.UNet)
 
 # class guideNet(nn.Module):
 #     def __init__(self, opt):

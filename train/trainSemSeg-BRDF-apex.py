@@ -21,8 +21,10 @@ print(sys.path)
 from dataset_openroomsV2 import openrooms
 from models_def.model_semseg_brdf import SemSeg_BRDF
 from train_funcs_joint import get_input_dict_joint, val_epoch_joint, vis_val_epoch_joint, forward_joint, get_time_meters_joint
-
-from torch.nn.parallel import DistributedDataParallel as DDP
+import apex
+from apex.parallel import DistributedDataParallel as DDP
+from apex import amp
+# from torch.nn.parallel import DistributedDataParallel as DDP
 from utils.config import cfg
 from utils.bin_mean_shift import Bin_Mean_Shift
 from utils.bin_mean_shift_3 import Bin_Mean_Shift_3
@@ -132,7 +134,8 @@ logger, writer = set_up_logger(opt)
 # model = MatSeg_BRDF(opt, logger)
 model = SemSeg_BRDF(opt, logger)
 if opt.distributed: # https://github.com/dougsouza/pytorch-sync-batchnorm-example # export NCCL_LL_THRESHOLD=0
-    model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+    # model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
+    model = apex.parallel.convert_syncbn_model(model)
 model.to(opt.device)
 if opt.cfg.MODEL_BRDF.load_pretrained_pth:
     model.load_pretrained_brdf(opt.cfg.MODEL_BRDF.pretrained_pth_name)
@@ -150,7 +153,13 @@ model.print_net()
 # optimizer = get_optimizer(model.parameters(), cfg.SOLVER)
 optimizer = optim.Adam(model.parameters(), lr=1e-4, betas=(0.5, 0.999) )
 if opt.distributed:
-    model = DDP(model, device_ids=[opt.rank], output_device=opt.rank, find_unused_parameters=True)
+    # model = DDP(model, device_ids=[opt.rank], output_device=opt.rank, find_unused_parameters=True)
+    if opt.distributed:
+        use_mixed_precision = cfg.DTYPE == "float16"
+        amp_opt_level = 'O1' if use_mixed_precision else 'O0'
+        model, optimizer = amp.initialize(model, optimizer, opt_level=amp_opt_level)
+        model = DDP(model)
+
 
 logger.info(red('Optimizer: '+type(optimizer).__name__))
 scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=50, cooldown=0, verbose=True, threshold_mode='rel', threshold=0.01)
@@ -322,8 +331,8 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         loss = 0.
         loss_keys_backward = []
         loss_keys_print = []
-        if opt.cfg.MODEL_MATSEG.enable and (not opt.cfg.MODEL_MATSEG.freeze):
-            #  and ((not opt.cfg.MODEL_MATSEG.freeze) or opt.cfg.MODEL_MATSEG.embed_dims <= 4):
+        if opt.cfg.MODEL_MATSEG.enable:
+            #  and ((not opt.cfg.MODEL_MATSEG.freeze) or opt.cfg.MODEL_MATSEG.embed_dims <= 2):
             loss_keys_backward.append('loss_matseg-ALL')
             loss_keys_print.append('loss_matseg-ALL')
             loss_keys_print.append('loss_matseg-pull')
@@ -346,8 +355,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
                 loss_keys_print.append('loss_semseg-aux') 
 
         loss = sum([loss_dict[loss_key] for loss_key in loss_keys_backward])
-        print('----loss_dict', loss_dict.keys())
-        print('----loss_keys_backward', loss_keys_backward)
+        print(loss_keys_backward)
         loss.backward()
         optimizer.step()
         time_meters['backward'].update(time.time() - time_meters['ts'])

@@ -70,16 +70,16 @@ class Baseline(nn.Module):
 
         self.p0_conv = nn.Conv2d(channel, channel, (3, 3), padding=1)
 
-        # plane or non-plane classifier
+        # # plane or non-plane classifier
         self.pred_prob = nn.Conv2d(channel, 1, (1, 1), padding=0)
         # embedding
         self.embedding_conv = nn.Conv2d(channel, embed_dims, (1, 1), padding=0)
-        # depth prediction
-        self.pred_depth = nn.Conv2d(channel, 1, (1, 1), padding=0)
-        # surface normal prediction
-        self.pred_surface_normal = nn.Conv2d(channel, 3, (1, 1), padding=0)
-        # surface plane parameters
-        self.pred_param = nn.Conv2d(channel, 3, (1, 1), padding=0)
+        # # depth prediction
+        # self.pred_depth = nn.Conv2d(channel, 1, (1, 1), padding=0)
+        # # surface normal prediction
+        # self.pred_surface_normal = nn.Conv2d(channel, 3, (1, 1), padding=0)
+        # # surface plane parameters
+        # self.pred_param = nn.Conv2d(channel, 3, (1, 1), padding=0)
 
     def top_down_original(self, x):
         c1, c2, c3, c4, c5 = x

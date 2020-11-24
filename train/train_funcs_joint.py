@@ -106,7 +106,7 @@ def forward_joint(input_dict, model, opt, time_meters):
 def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     writer, logger, opt, tid = params_mis['writer'], params_mis['logger'], params_mis['opt'], params_mis['tid']
     ENABLE_SEMSEG = opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable
-    ENABLE_MATSEG = opt.cfg.MODEL_MATSEG.enable and not opt.cfg.MODEL_MATSEG.if_freeze
+    ENABLE_MATSEG = opt.cfg.MODEL_MATSEG.enable
     ENABLE_BRDF = opt.cfg.MODEL_BRDF.enable
 
     logger.info(red('===Evaluating for %d batches'%len(brdf_loader_val)))
@@ -262,7 +262,6 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             writer.add_scalar('VAL/BRDF-normal_mean_val', brdf_meters['normal_mean_error_meter'].avg, tid)
             writer.add_scalar('VAL/BRDF-normal_median_val', brdf_meters['normal_median_error_meter'].get_median(), tid)
             logger.info('Val result - normal: mean: %.4f, median: %.4f'%(brdf_meters['normal_mean_error_meter'].avg, brdf_meters['normal_median_error_meter'].get_median()))
-            writer.add_scalar('VAL/allAcc_val', allAcc, tid)
 
         logger.info(red('Evaluation timings: ' + time_meters_to_string(time_meters)))
 
@@ -302,7 +301,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
             batch_size = len(data_batch['imPath'])
 
-            print(batch_id, batch_size)
+            # print(batch_id, batch_size)
 
             # if num_val_brdf_vis >= num_val_vis_MAX or sample_idx >= num_val_vis_MAX:
             #     break

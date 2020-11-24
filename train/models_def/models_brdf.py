@@ -160,12 +160,14 @@ class decoder0(nn.Module):
         self.mode = mode
         self.if_PPM = if_PPM
 
-        self.if_mat_seg_guide = self.opt.cfg.MODEL_MATSEG.enable and self.opt.cfg.MODEL_MATSEG.if_guide
-        self.if_mat_seg_guide_layers = ['dconv1', 'dconv2', 'dconv3', 'dconv4', 'dconv5', 'dconv6']
+        self.if_matseg_guide = self.opt.cfg.MODEL_MATSEG.enable and self.opt.cfg.MODEL_MATSEG.if_guide
+        self.if_matseg_guide_layers = ['dconv1', 'dconv2', 'dconv3', 'dconv4', 'dconv5', 'dconv6']
 
         # self.guide_C = self.opt.cfg.MODEL_MATSEG.guide_channels
         self.if_semseg_guide = self.opt.cfg.MODEL_SEMSEG.enable and self.opt.cfg.MODEL_SEMSEG.if_guide
         self.if_semseg_guide_layers = ['dconv3', 'dconv4', 'dconv5']
+
+        assert not(self.if_matseg_guide and self.if_semseg_guide)
 
         self.dconv1 = self.get_conv(name='dconv1', in_channels=in_C[0], out_channels=out_C[0], kernel_size=3, stride=1, padding = 1, bias=True)
         self.dgn1 = nn.GroupNorm(num_groups=group_C[0], num_channels=out_C[0])
@@ -195,14 +197,21 @@ class decoder0(nn.Module):
         self.dconvFinal = nn.Conv2d(in_channels=fea_dim, out_channels=out_channel, kernel_size = 3, stride=1, bias=True)
 
     def get_conv(self, name, in_channels, out_channels, kernel_size, stride, bias, padding):
-        if (self.if_mat_seg_guide and name in self.if_mat_seg_guide_layers) or (self.if_semseg_guide and name in self.if_semseg_guide_layers):
+        if (self.if_matseg_guide and name in self.if_matseg_guide_layers) or (self.if_semseg_guide and name in self.if_semseg_guide_layers):
             return pac.PacConv2d(in_channels, out_channels, kernel_size, padding=padding)
         else:
             return nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride, padding = padding, bias=bias)
 
+    def interpolate_x_to_y(self, x, y):
+        if x.size(3) != y.size(3) or x.size(2) != y.size(2):
+            # print(x.shape, y.shape)
+            return F.interpolate(x, [y.size(2), y.size(3)], mode='bilinear')
+        else:
+            return x
+
     def forward(self, im, x1, x2, x3, x4, x5, x6, input_dict_guide=None):
-        if self.if_mat_seg_guide:
-            xin0 = self.dconv1(x6, input_dict_guide['p5'])
+        if self.if_matseg_guide:
+            xin0 = self.dconv1(x6, self.interpolate_x_to_y(input_dict_guide['p5'], x6))
         else:
             xin0 = self.dconv1(x6)
         dx1 = F.relu(self.dgn1(xin0))
@@ -213,8 +222,9 @@ class decoder0(nn.Module):
         xin1 = F.interpolate(torch.cat([dx1, x5], dim = 1), scale_factor=2, mode='bilinear')
         # print('BRDF xin1', xin1.shape)
         # print(xin1.shape, input_dict_guide['p5'].shape)
-        if self.if_mat_seg_guide:
-            xin1 = self.dconv2(xin1, input_dict_guide['p4'])
+        if self.if_matseg_guide:
+            # print(xin1.shape, input_dict_guide['p4'].shape)
+            xin1 = self.dconv2(xin1, self.interpolate_x_to_y(input_dict_guide['p4'], xin1))
         else:
             xin1 = self.dconv2(xin1)
         dx2 = F.relu(self.dgn2(xin1), True)
@@ -224,8 +234,8 @@ class decoder0(nn.Module):
             dx2 = F.interpolate(dx2, [x4.size(2), x4.size(3)], mode='bilinear')
         xin2 = F.interpolate(torch.cat([dx2, x4], dim=1), scale_factor=2, mode='bilinear')
         # print('BRDF xin2', xin2.shape)
-        if self.if_mat_seg_guide:
-            xin2 = self.dconv3(xin2, input_dict_guide['p3'])
+        if self.if_matseg_guide:
+            xin2 = self.dconv3(xin2, self.interpolate_x_to_y(input_dict_guide['p3'], xin2))
         elif self.if_semseg_guide:
             featinx2 = F.interpolate(input_dict_guide['x2'], [xin2.size(2), xin2.size(3)], mode='bilinear')
             if self.opt.cfg.MODEL_BRDF.if_debug_arch:
@@ -240,8 +250,8 @@ class decoder0(nn.Module):
             dx3 = F.interpolate(dx3, [x3.size(2), x3.size(3)], mode='bilinear')
         xin3 = F.interpolate(torch.cat([dx3, x3], dim=1), scale_factor=2, mode='bilinear')
         # print('BRDF xin3', xin3.shape)
-        if self.if_mat_seg_guide:
-            xin3 = self.dconv4(xin3, input_dict_guide['p2'])
+        if self.if_matseg_guide:
+            xin3 = self.dconv4(xin3, self.interpolate_x_to_y(input_dict_guide['p2'], xin3))
         elif self.if_semseg_guide:
             featinx3 = F.interpolate(input_dict_guide['x1'], [xin3.size(2), xin3.size(3)], mode='bilinear')
             if self.opt.cfg.MODEL_BRDF.if_debug_arch:
@@ -256,8 +266,8 @@ class decoder0(nn.Module):
             dx4 = F.interpolate(dx4, [x2.size(2), x2.size(3)], mode='bilinear')
         xin4 = F.interpolate(torch.cat([dx4, x2], dim=1), scale_factor=2, mode='bilinear')
         # print('BRDF xin4', xin4.shape)
-        if self.if_mat_seg_guide:
-            xin4 = self.dconv5(xin4, input_dict_guide['p1'])
+        if self.if_matseg_guide:
+            xin4 = self.dconv5(xin4, self.interpolate_x_to_y(input_dict_guide['p1'], xin4))
         elif self.if_semseg_guide:
             featinx4 = F.interpolate(input_dict_guide['x0_2'], [xin4.size(2), xin4.size(3)], mode='bilinear')
             if self.opt.cfg.MODEL_BRDF.if_debug_arch:
@@ -272,8 +282,8 @@ class decoder0(nn.Module):
             dx5 = F.interpolate(dx5, [x1.size(2), x1.size(3)], mode='bilinear')
         xin5 = F.interpolate(torch.cat([dx5, x1], dim=1), scale_factor=2, mode='bilinear')
         # print('BRDF xin5', xin5.shape)
-        if self.if_mat_seg_guide:
-            xin5 = self.dconv6(xin5, input_dict_guide['p0'])
+        if self.if_matseg_guide:
+            xin5 = self.dconv6(xin5, self.interpolate_x_to_y(input_dict_guide['p0'], xin5))
         else:
             xin5 = self.dconv6(xin5)
         dx6 = F.relu(self.dgn6(xin5), True)

@@ -30,20 +30,6 @@ _C.PATH.semseg_names_path = 'data/openrooms/openrooms_names.txt'
 # _C.DATA.semseg_colors_path = 'data/openrooms/openrooms_colors.txt'
 # _C.DATA.semseg_names_path = 'data/openrooms/openrooms_names.txt'
 
-
-_C.MODEL_MATSEG = CN()
-_C.MODEL_MATSEG.enable = False
-_C.MODEL_MATSEG.arch = 'resnet101'
-_C.MODEL_MATSEG.pretrained = True
-_C.MODEL_MATSEG.if_freeze = False
-_C.MODEL_MATSEG.fix_bn = False
-_C.MODEL_MATSEG.embed_dims = 2
-_C.MODEL_MATSEG.if_guide = False
-_C.MODEL_MATSEG.guide_channels = 32
-_C.MODEL_MATSEG.use_as_input = False
-_C.MODEL_MATSEG.use_semseg_as_input = False
-
-
 _C.MODEL_BRDF = CN()
 _C.MODEL_BRDF.enable = True
 _C.MODEL_BRDF.load_pretrained_pth = False
@@ -59,6 +45,20 @@ _C.MODEL_BRDF.enable_semseg_decoder = False
 _C.MODEL_BRDF.semseg_PPM = False
 
 
+_C.MODEL_MATSEG = CN()
+_C.MODEL_MATSEG.enable = False
+_C.MODEL_MATSEG.arch = 'resnet101'
+_C.MODEL_MATSEG.pretrained = True
+_C.MODEL_MATSEG.if_freeze = False
+_C.MODEL_MATSEG.fix_bn = False
+_C.MODEL_MATSEG.embed_dims = 2
+_C.MODEL_MATSEG.if_guide = False
+_C.MODEL_MATSEG.guide_channels = 32
+_C.MODEL_MATSEG.use_as_input = False
+_C.MODEL_MATSEG.use_semseg_as_input = False
+_C.MODEL_MATSEG.load_pretrained_pth = False
+_C.MODEL_MATSEG.pretrained_pth = ''
+
 
 _C.MODEL_SEMSEG = CN()
 _C.MODEL_SEMSEG.enable = False
@@ -71,7 +71,7 @@ _C.MODEL_SEMSEG.config_file = 'configs/openrooms/openrooms_pspnet50.yaml'
 _C.MODEL_SEMSEG.if_freeze = False
 _C.MODEL_SEMSEG.fix_bn = False
 _C.MODEL_SEMSEG.if_guide = False
-_C.MODEL_SEMSEG.load_pretrained_pth = True
+_C.MODEL_SEMSEG.load_pretrained_pth = False
 _C.MODEL_SEMSEG.pretrained_pth = 'exp/openrooms/pspnet50V3_2gpu_100k/model/train_epoch_23_tid_147000.pth'
 
 

@@ -24,6 +24,8 @@ def set_up_envs(opt):
             # print(key_to_set_path, cfg_key)
             # if key_to_set_path in cfg_key:
 
+    # opt.cfg.MODEL_MATSEG.matseg_path = opt.CKPT_PATH
+
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
         opt.cfg.DATA.load_brdf_gt = True
         opt.depth_metrics = ['abs_rel', 'sq_rel', 'rmse', 'rmse_log', 'a1', 'a2', 'a3']
