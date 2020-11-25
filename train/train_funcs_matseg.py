@@ -48,6 +48,8 @@ def process_matseg(input_dict, output_dict, loss_dict, opt, time_meters):
     loss_all_list, loss_pull_list, loss_push_list, loss_binary_list = [], [], [], []
     batch_size = input_dict['im_batch_matseg'].size(0)
     for i in range(batch_size):
+        # if i == 0 and opt.is_master:
+        #     print(embedding[i:i+1][0, :, :2, 0])
         _loss_all, _loss_pull, _loss_push = hinge_embedding_loss(embedding[i:i+1], input_dict['num_mat_masks_batch'][i:i+1],
                                                                 input_dict['instance'][i:i+1], opt.device)
 

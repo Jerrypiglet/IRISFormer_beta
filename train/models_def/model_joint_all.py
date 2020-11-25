@@ -17,7 +17,7 @@ class SemSeg_MatSeg_BRDF(nn.Module):
 
         if self.cfg.MODEL_MATSEG.enable:
             input_dim = 3 if not self.cfg.MODEL_MATSEG.use_semseg_as_input else 4
-            self.UNet = Baseline(self.cfg.MODEL_MATSEG, embed_dims=self.cfg.MODEL_MATSEG.embed_dims, input_dim=input_dim)
+            self.MATSEG_Net = Baseline(self.cfg.MODEL_MATSEG, embed_dims=self.cfg.MODEL_MATSEG.embed_dims, input_dim=input_dim)
 
             if self.opt.cfg.MODEL_MATSEG.load_pretrained_pth:
                 self.load_pretrained_matseg()
@@ -32,7 +32,7 @@ class SemSeg_MatSeg_BRDF(nn.Module):
             # self.std = torch.tensor(std).view(1, 3, 1, 1).to(opt.device)
             self.semseg_configs = self.opt.semseg_configs
             self.semseg_path = self.opt.cfg.MODEL_SEMSEG.semseg_path_cluster if opt.if_cluster else self.opt.cfg.MODEL_SEMSEG.semseg_path_local
-            # self.UNet = Baseline(self.cfg.MODEL_SEMSEG)
+            # self.MATSEG_Net = Baseline(self.cfg.MODEL_SEMSEG)
             assert self.semseg_configs.arch == 'psp'
 
             from models_def.models_semseg.pspnet import PSPNet
@@ -85,7 +85,12 @@ class SemSeg_MatSeg_BRDF(nn.Module):
         if self.cfg.MODEL_MATSEG.use_semseg_as_input:
             input_list.append(input_dict['semseg_label'].float().unsqueeze(1) / float(self.opt.cfg.DATA.semseg_classes))
 
-        return self.UNet(torch.cat(input_list, 1))
+        if self.cfg.MODEL_MATSEG.if_freeze:
+            self.MATSEG_Net.eval()
+            with torch.no_grad():
+                return self.MATSEG_Net(torch.cat(input_list, 1))
+        else:
+            return self.MATSEG_Net(torch.cat(input_list, 1))
 
     def forward_semseg(self, input_dict):
         # im_batch_255 = input_dict['im_uint8']
@@ -302,14 +307,14 @@ class SemSeg_MatSeg_BRDF(nn.Module):
             self.logger.info(red("=> loading checkpoint '{}'".format(model_path)))
             state_dict = torch.load(model_path, map_location=torch.device("cpu"))['model']
             # print(state_dict.keys())
-            state_dict = {k.replace('UNet.', ''): v for k, v in state_dict.items()}
+            state_dict = {k.replace('UNet.', '').replace('MATSEG_Net.', ''): v for k, v in state_dict.items()}
             state_dict = {k: v for k, v in state_dict.items() if ('pred_depth' not in k) and ('pred_surface_normal' not in k) and ('pred_param' not in k)}
 
             # replace_dict = {'layer0.0': 'layer0_1.0', 'layer0.1': 'layer0_1.1', 'layer0.3': 'layer0_2.0', 'layer0.4': 'layer0_2.1', 'layer0.6': 'layer0_3.0', 'layer0.7': 'layer0_3.1'}
             # state_dict = {k.replace(key, replace_dict[key]): v for k, v in state_dict.items() for key in replace_dict}
             
             # print(state_dict.keys())
-            self.UNet.load_state_dict(state_dict, strict=True)
+            self.MATSEG_Net.load_state_dict(state_dict, strict=True)
             self.logger.info(red("=> loaded checkpoint '{}'".format(model_path)))
         else:
             raise RuntimeError("=> no checkpoint found at '{}'".format(model_path))
@@ -344,7 +349,7 @@ class SemSeg_MatSeg_BRDF(nn.Module):
         freeze_bn_in_module(self.SEMSEG_Net)
 
     def freeze_bn_matseg(self):
-        freeze_bn_in_module(self.UNet)
+        freeze_bn_in_module(self.MATSEG_Net)
 
 # class guideNet(nn.Module):
 #     def __init__(self, opt):

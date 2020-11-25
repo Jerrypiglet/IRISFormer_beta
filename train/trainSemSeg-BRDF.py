@@ -142,7 +142,7 @@ if opt.cfg.MODEL_SEMSEG.enable and opt.cfg.MODEL_SEMSEG.if_freeze:
     model.turn_off_names(['SEMSEG_Net'])
     model.freeze_bn_semantics()
 if opt.cfg.MODEL_MATSEG.enable and opt.cfg.MODEL_MATSEG.if_freeze:
-    model.turn_off_names(['UNet'])
+    model.turn_off_names(['MATSEG_Net'])
     model.freeze_bn_matseg()
 
 model.print_net()
@@ -169,7 +169,7 @@ if opt.cfg.MODEL_MATSEG.embed_dims == 2:
     bin_mean_shift = Bin_Mean_Shift(device=opt.device, invalid_index=opt.invalid_index)
 else:
     bin_mean_shift = Bin_Mean_Shift_N(embedding_dims=opt.cfg.MODEL_MATSEG.embed_dims, \
-        device=opt.bin_mean_shift_device, invalid_index=opt.invalid_index)
+        device=opt.bin_mean_shift_device, invalid_index=opt.invalid_index, if_freeze=opt.cfg.MODEL_MATSEG.if_freeze)
 opt.bin_mean_shift = bin_mean_shift
 
 # >>>> DATASET

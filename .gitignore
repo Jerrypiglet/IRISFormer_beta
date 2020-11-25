@@ -11,7 +11,7 @@ archive/
 pretrained/
 Summary_vis/
 Summary_vis_cluster/
-Checkpoint/
+Checkpoint
 Checkpoint_cluster
 vis/
 logs_cluster

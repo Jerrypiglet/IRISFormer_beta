@@ -5,7 +5,7 @@ import numpy as np
 
 
 class Bin_Mean_Shift_N(nn.Module):
-    def __init__(self, embedding_dims = 2, train_iter=5, test_iter=10, bandwidth=0.5, device='cpu', invalid_index=255):
+    def __init__(self, embedding_dims = 2, train_iter=5, test_iter=10, bandwidth=0.5, device='cpu', invalid_index=255, if_freeze=False):
         super(Bin_Mean_Shift_N, self).__init__()
         self.train_iter = train_iter
         self.test_iter = test_iter
@@ -14,6 +14,7 @@ class Bin_Mean_Shift_N(nn.Module):
         self.sample_num = 3000
         self.device = device
         self.invalid_index = invalid_index
+        self.if_freeze = if_freeze
 
         self.embedding_dims = embedding_dims
 
@@ -244,6 +245,8 @@ class Bin_Mean_Shift_N(nn.Module):
         seg = gt_seg.view(-1)
 
         # random sample planar region data points using ground truth label to speed up training
+        if self.if_freeze:
+            np.random.seed(0)
         rand_index = np.random.choice(np.arange(0, h * w)[seg.cpu().numpy() != self.invalid_index], self.sample_num)
 
         sample_embedding = embedding[rand_index]
@@ -374,6 +377,9 @@ class Bin_Mean_Shift_N(nn.Module):
         # param = param.view(3, h * w)
 
         # random sample planar region data points
+        # np.random.seed(0)
+        if self.if_freeze:
+            np.random.seed(0)
         rand_index = np.random.choice(np.arange(0, h * w)[prob.cpu().numpy().reshape(-1) > mask_threshold], self.sample_num)
 
         sample_embedding = embedding[rand_index]
