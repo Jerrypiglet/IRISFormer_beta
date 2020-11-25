@@ -243,7 +243,7 @@ class openrooms(data.Dataset):
         if self.opt.cfg.DATA.load_matseg_gt:
             # >>>> Rui: Read obj mask
             mat_aggre_map, num_mat_masks = self.get_map_aggre_map(mask) # 0 for invalid region
-            mat_aggre_map = mat_aggre_map[:, :, np.newaxis] + 1 # 0 for padding purpose
+            # mat_aggre_map = mat_aggre_map[:, :, np.newaxis] + 1 # 0 for padding purpose
 
             # mat_aggre_map_reindex = np.zeros_like(mat_aggre_map)
             # mat_aggre_map_reindex[mat_aggre_map==0] = self.opt.invalid_index
@@ -266,16 +266,16 @@ class openrooms(data.Dataset):
             for i in range(num_mat_masks+1):
                 if i == 0:
                     # deal with backgroud
-                    seg = gt_segmentation == 1
+                    seg = gt_segmentation == 0
                     segmentation[num_mat_masks, :, :] = seg.reshape(h, w) # segmentation[num_mat_masks] for invalid mask
                 else:
-                    seg = gt_segmentation == i+1
+                    seg = gt_segmentation == i
                     segmentation[i-1, :, :] = seg.reshape(h, w) # segmentation[0..num_mat_masks-1] for plane instances
             # <<<<
             
 
             batch_dict.update({
-                'mat_aggre_map': torch.from_numpy(mat_aggre_map), 
+                'mat_aggre_map': torch.from_numpy(mat_aggre_map),  # 0 for invalid region
                 # 'mat_aggre_map_reindex': torch.from_numpy(mat_aggre_map_reindex), # gt_seg
                 'num_mat_masks': num_mat_masks,  
                 'mat_notlight_mask': torch.from_numpy(mat_aggre_map!=0).float(),

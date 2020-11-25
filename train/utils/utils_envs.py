@@ -45,6 +45,8 @@ def set_up_envs(opt):
 
     opt.cfg.MODEL_BRDF.enable_list = opt.cfg.MODEL_BRDF.enable_list.split('_    ')
 
+    assert opt.cfg.MODEL_MATSEG.albedo_pooling_from in ['gt', 'pred']
+
 def set_up_logger(opt):
     from utils.logger import setup_logger, Logger, printer
     import sys

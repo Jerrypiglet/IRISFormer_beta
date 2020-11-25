@@ -4,6 +4,57 @@ import torch.nn as nn
 from models_def import resnet_scene as resnet
 import torch.nn.functional as F
 
+def logit_embedding_to_instance(mat_notlight_mask_cpu, logits, embeddings, opt):
+    h, w = logits.shape[2], logits.shape[3]
+    instance_list = []
+    num_mat_masks_list = []
+
+    for sample_idx, (logit_single, embedding_single) in enumerate(zip(logits, embeddings)):
+        # prob_single = torch.sigmoid(logit_single)
+        # prob_single = input_dict['mat_notlight_mask_cpu'][sample_idx].to(opt.device).float()
+        prob_single = mat_notlight_mask_cpu[sample_idx].to(opt.device).float()
+
+        # fast mean shift
+
+        if opt.bin_mean_shift_device == 'cpu':
+            prob_single, logit_single, embedding_single = prob_single.cpu(), logit_single.cpu(), embedding_single.cpu()
+        segmentation, sampled_segmentation = opt.bin_mean_shift.test_forward(
+            prob_single, embedding_single, mask_threshold=0.1)
+        
+        # since GT plane segmentation is somewhat noise, the boundary of plane in GT is not well aligned, 
+        # we thus use avg_pool_2d to smooth the segmentation results
+        b = segmentation.t().view(1, -1, h, w)
+        pooling_b = torch.nn.functional.avg_pool2d(b, (7, 7), stride=1, padding=(3, 3))
+        b = pooling_b.view(-1, h*w).t()
+        segmentation = b
+
+        predict_segmentation = torch.argmax(segmentation, dim=1).view(h, w) # reshape to [h, w]: [0, 1, ..., len(matching)-1]; use this for mask pooling!!!!
+        num_mat_masks = torch.max(predict_segmentation) + 1
+
+        predict_segmentation[prob_single.squeeze() <= 0.1] = num_mat_masks
+
+        predict_instance = torch.zeros((50, h, w), device=predict_segmentation.device)
+        for i in range(num_mat_masks):
+            seg = predict_segmentation == i
+            predict_instance[i, :, :] = seg.reshape(h, w) # segmentation[0..num_mat_masks-1] for plane instances
+        predict_instance = predict_instance.long()
+
+
+        instance_list.append(predict_instance)
+        num_mat_masks_list.append(num_mat_masks)
+
+    return torch.stack(instance_list), torch.stack(num_mat_masks_list)
+
+
+        # # greedy match of predict segmentation and ground truth segmentation using cross entropy
+        # # to better visualization
+        # gt_plane_num = input_dict['num_mat_masks_batch'][sample_idx]
+        # matching = match_segmentatin(segmentation, prob_single.view(-1, 1), input_dict['instance'][sample_idx], gt_plane_num)
+
+        # return cluster results
+        # predict_segmentation = segmentation.cpu().numpy().argmax(axis=1) # reshape to [h, w]: [0, 1, ..., len(matching)-1]; use this for mask pooling!!!!
+
+
 
 class ResNet(nn.Module):
     def __init__(self, orig_resnet):

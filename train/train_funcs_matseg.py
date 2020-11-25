@@ -305,7 +305,8 @@ def val_epoch_combine(brdfLoaderVal, model, bin_mean_shift, params_mis):
                     matAggreMap_single_vis = vis_index_map(mat_aggre_map_single)
                     writer.add_image('VAL_mat_aggre_map_GT/%d'%sample_idx, matAggreMap_single_vis, tid, dataformats='HWC')
 
-                    mat_aggre_map_single = reindex_output_map(predict_segmentation.squeeze(), opt.invalid_index)
+                    # mat_aggre_map_single = reindex_output_map(predict_segmentation.squeeze(), opt.invalid_index)
+                    mat_aggre_map_single = predict_segmentation.squeeze()
                     matAggreMap_single_vis = vis_index_map(mat_aggre_map_single)
                     writer.add_image('VAL_mat_aggre_map_PRED/%d'%sample_idx, matAggreMap_single_vis, tid, dataformats='HWC')
 
@@ -315,8 +316,6 @@ def val_epoch_combine(brdfLoaderVal, model, bin_mean_shift, params_mis):
 
                     writer.add_text('VAL_im_path/%d'%sample_idx, input_dict['im_paths'][sample_idx], tid)
 
-                    if j > 12:
-                        break
 
     if opt.is_master:
         writer.add_scalar('loss_eval/loss_all', losses.avg, tid)

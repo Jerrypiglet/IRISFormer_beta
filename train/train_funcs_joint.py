@@ -395,7 +395,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     matching = match_segmentatin(segmentation, prob_single.view(-1, 1), input_dict['instance'][sample_idx], gt_plane_num)
 
                     # return cluster results
-                    predict_segmentation = segmentation.cpu().numpy().argmax(axis=1)
+                    predict_segmentation = segmentation.cpu().numpy().argmax(axis=1) # reshape to [h, w]: [0, 1, ..., len(matching)-1]; use this for mask pooling!!!!
 
                     # reindexing to matching gt segmentation for better visualization
                     matching = matching.cpu().numpy().reshape(-1)
@@ -407,16 +407,23 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                             max_index += 1
                         else:
                             used.add(a)
-                    predict_segmentation = matching[predict_segmentation]
+                    # np.save('tmp/predict_segmentation_ori_%d.npy'%(max_index), predict_segmentation)
+                    # np.save('tmp/instance_%d.npy'%(max_index), input_dict['instance'][sample_idx].cpu().numpy().squeeze())
+                    # np.save('tmp/gt_%d.npy'%(max_index), input_dict['mat_aggre_map_cpu'][sample_idx].numpy().squeeze())
+                    # np.save('tmp/matching_%d.npy'%(max_index), matching)
+                    predict_segmentation = matching[predict_segmentation] # matching GT: [0, 1, ... N-1]
+                    # np.save('tmp/predict_segmentation_matched%d.npy'%(max_index), predict_segmentation)
 
                     # mask out non planar region
-                    predict_segmentation[prob_single.cpu().numpy().reshape(-1) <= 0.1] = opt.invalid_index
-                    predict_segmentation = predict_segmentation.reshape(h, w)
+                    predict_segmentation = predict_segmentation.reshape(h, w) # [0..N-1]
+                    predict_segmentation += 1 # 0 for invalid region
+                    predict_segmentation[prob_single.cpu().squeeze().numpy() <= 0.1] = opt.invalid_index
 
                     # ===== vis
                     # im_single = data_batch['im_not_hdr'][sample_idx].numpy().squeeze().transpose(1, 2, 0)
 
-                    mat_aggre_map_pred_single = reindex_output_map(predict_segmentation.squeeze(), opt.invalid_index)
+                    # mat_aggre_map_pred_single = reindex_output_map(predict_segmentation.squeeze(), opt.invalid_index)
+                    mat_aggre_map_pred_single = predict_segmentation.squeeze()
                     matAggreMap_pred_single_vis = vis_index_map(mat_aggre_map_pred_single)
 
                     if opt.is_master:

@@ -12,12 +12,14 @@ def _get_colors(num_colors):
         colors.append(colorsys.hls_to_rgb(hue, lightness, saturation))
     return colors
 
-def vis_index_map(index_map):
+def vis_index_map(index_map, num_colors=-1):
     """
     input: [H, W], np.uint8, with indexs from [0, 1, 2, 3, ...] where 0 is no object
     return: [H, W], np.float32, RGB ~ [0., 1.]
     """
-    num_colors = np.amax(index_map)
+    if num_colors == -1:
+        num_colors = np.amax(index_map)
+        # num_colors = 50
     colors = _get_colors(num_colors)
     index_map_vis = np.zeros((index_map.shape[0], index_map.shape[1], 3))
     for color_idx, color in enumerate(colors):

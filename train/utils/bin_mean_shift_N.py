@@ -382,7 +382,7 @@ class Bin_Mean_Shift_N(nn.Module):
 
         # generate seed points and filter out those with low density
         seed_point = self.generate_seed(sample_embedding, self.anchor_num)
-        print(sample_embedding.device, sample_prob.device, seed_point.device)
+        # print(sample_embedding.device, sample_prob.device, seed_point.device)
         seed_point = self.filter_seed(sample_embedding, sample_prob, seed_point, bandwidth=self.bandwidth, min_count=3)
 
         with torch.no_grad():

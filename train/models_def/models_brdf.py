@@ -5,6 +5,7 @@ from torch.autograd import Variable
 import numpy as np
 
 import pac
+from models_def.model_matseg import logit_embedding_to_instance
 
 class PPM(nn.Module):
     def __init__(self, in_dim, reduction_dim, bins):
@@ -371,8 +372,14 @@ class decoder0(nn.Module):
 
     def forward(self, im, x1, x2, x3, x4, x5, x6, input_extra_dict=None):
         if self.if_albedo_pooling:
-            instance = input_extra_dict['matseg-instance']
-            num_mat_masks_batch = input_extra_dict['semseg-num_mat_masks_batch']
+            if self.opt.cfg.MODEL_MATSEG.albedo_pooling_from == 'gt':
+                instance = input_extra_dict['matseg-instance']
+                num_mat_masks_batch = input_extra_dict['semseg-num_mat_masks_batch']
+            else:
+                matseg_logits = input_extra_dict['matseg-logits']
+                matseg_embeddings = input_extra_dict['matseg-embeddings']
+                mat_notlight_mask_cpu = input_extra_dict['mat_notlight_mask_cpu']
+                instance, num_mat_masks_batch = logit_embedding_to_instance(mat_notlight_mask_cpu, matseg_logits, matseg_embeddings, self.opt)
             # print(instance.shape, num_mat_masks_batch.shape) # torch.Size([16, 50, 240, 320]) torch.Size([16])
             # if self.flag:
             #     np.save('instance.npy', instance.cpu().numpy())
@@ -449,8 +456,10 @@ class decoder0(nn.Module):
             dx6 = torch.cat([dx6, dx6 - dx6_pooled_mean], 1)
             # dx6 = torch.cat([dx6, dx6], 1)
 
-            # im_trainval_RGB_mask_pooled_mean = self.mask_pooled_mean(input_extra_dict['im_trainval_RGB'], instance, num_mat_masks_batch)
-            im_trainval_RGB_mask_pooled_mean = None
+            if self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
+                im_trainval_RGB_mask_pooled_mean = self.mask_pooled_mean(input_extra_dict['im_trainval_RGB'], instance, num_mat_masks_batch)
+            else:
+                im_trainval_RGB_mask_pooled_mean = None
 
         if dx6.size(3) != im.size(3) or dx6.size(2) != im.size(2):
             dx6 = F.interpolate(dx6, [im.size(2), im.size(3)], mode='bilinear')

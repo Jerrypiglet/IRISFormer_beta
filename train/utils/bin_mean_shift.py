@@ -357,6 +357,7 @@ class Bin_Mean_Shift(nn.Module):
 
         c, h, w = embedding.size()
 
+
         embedding = embedding.view(c, h*w).t()
         prob = prob.view(h*w, 1)
         # param = param.view(3, h * w)
@@ -386,6 +387,7 @@ class Bin_Mean_Shift(nn.Module):
         segmentation = self.cluster(embedding, center)
 
         sampled_segmentation = segmentation[rand_index]
+
 
         return segmentation, sampled_segmentation
 

@@ -124,7 +124,12 @@ class SemSeg_MatSeg_BRDF(nn.Module):
         return return_dict
 
 
-    def forward_brdf(self, input_dict, input_dict_guide=None):
+    def forward_brdf(self, input_dict, input_dict_extra={}):
+        assert 'input_dict_guide' in input_dict_extra
+        if 'input_dict_guide' in input_dict_extra:
+            input_dict_guide = input_dict_extra['input_dict_guide']
+        else:
+            input_dict_guide = None
         # x1, x2, x3, x4, x5, x6 = self.BRDF_Net['encoder'](input_dict['input_batch_brdf']) # [16, 64, 96, 128], [16, 128, 48, 64], [16, 256, 24, 32], [16, 256, 12, 16], [16, 512, 6, 8]
         # albedoPred = 0.5 * (self.BRDF_Net['albedoDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_guide=input_dict_guide) + 1)
 
@@ -155,6 +160,11 @@ class SemSeg_MatSeg_BRDF(nn.Module):
             if self.cfg.MODEL_MATSEG.if_albedo_pooling:
                 input_extra_dict.update({'matseg-instance': input_dict['instance'], 'semseg-num_mat_masks_batch': input_dict['num_mat_masks_batch']})
                 input_extra_dict.update({'im_trainval_RGB': input_dict['im_trainval_RGB']})
+                if self.cfg.MODEL_MATSEG.albedo_pooling_from == 'pred':
+                    assert input_dict_extra is not None
+                    assert input_dict_extra['return_dict_matseg'] is not None
+                    input_extra_dict.update({'matseg-logits': input_dict_extra['return_dict_matseg']['logit'], 'matseg-embeddings': input_dict_extra['return_dict_matseg']['embedding'], \
+                        'mat_notlight_mask_cpu': input_dict['mat_notlight_mask_cpu']})
 
             if 'al' in self.cfg.MODEL_BRDF.enable_list:
                 albedo_output = self.BRDF_Net['albedoDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)
@@ -192,7 +202,7 @@ class SemSeg_MatSeg_BRDF(nn.Module):
     
     def forward(self, input_dict):
         return_dict = {}
-        input_guide_dict = None
+        input_dict_guide = None
         if self.cfg.MODEL_MATSEG.enable:
             # if self.cfg.MODEL_MATSEG.if_freeze:
             #     with torch.no_grad():
@@ -201,7 +211,7 @@ class SemSeg_MatSeg_BRDF(nn.Module):
             return_dict_matseg = self.forward_matseg(input_dict) # {'prob': prob, 'embedding': embedding, 'feats_mat_seg_dict': feats_mat_seg_dict}
             input_dict_guide_matseg = return_dict_matseg['feats_matseg_dict']
             input_dict_guide_matseg['guide_from'] = 'matseg'
-            input_guide_dict = input_dict_guide_matseg
+            input_dict_guide = input_dict_guide_matseg
         else:
             return_dict_matseg = {}
             input_dict_guide_matseg = None
@@ -216,7 +226,7 @@ class SemSeg_MatSeg_BRDF(nn.Module):
 
             input_dict_guide_semseg = return_dict_semseg['feats_semseg_dict']
             input_dict_guide_semseg['guide_from'] = 'semseg'
-            input_guide_dict = input_dict_guide_semseg
+            input_dict_guide = input_dict_guide_semseg
         else:
             return_dict_semseg = {}
             input_dict_guide_semseg = None
@@ -225,7 +235,12 @@ class SemSeg_MatSeg_BRDF(nn.Module):
         assert not(self.cfg.MODEL_MATSEG.if_guide and self.cfg.MODEL_SEMSEG.if_guide), 'cannot guide from MATSEG and SEMSEG at the same time!'
 
         if self.cfg.MODEL_BRDF.enable:
-            return_dict_brdf = self.forward_brdf(input_dict, input_dict_guide=input_guide_dict)
+            input_dict_extra = {'input_dict_guide': input_dict_guide}
+            if self.cfg.MODEL_MATSEG.if_albedo_pooling and self.cfg.MODEL_MATSEG.albedo_pooling_from == 'pred':
+                # print(return_dict_matseg.keys()) # dict_keys(['logit', 'embedding', 'feats_matseg_dict'])
+                input_dict_extra.update({'return_dict_matseg': return_dict_matseg})
+
+            return_dict_brdf = self.forward_brdf(input_dict, input_dict_extra=input_dict_extra)
         else:
             return_dict_brdf = {}
         return_dict.update(return_dict_brdf)

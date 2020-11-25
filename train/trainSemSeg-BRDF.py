@@ -72,7 +72,7 @@ parser.add_argument('--if_cluster', action='store_true', help='if using cluster'
 parser.add_argument('--if_hdr_input_matseg', action='store_true', help='if using hdr images')
 parser.add_argument('--eval_every_iter', type=int, default=2000, help='')
 parser.add_argument('--save_every_iter', type=int, default=2000, help='')
-parser.add_argument('--invalid_index', type=int, default = 255, help='index for invalid aread (e.g. windows, lights)')
+parser.add_argument('--invalid_index', type=int, default = 0, help='index for invalid aread (e.g. windows, lights)')
 
 # Pre-training
 parser.add_argument('--resume', type=str, help='resume training; can be full path (e.g. tmp/checkpoint0.pth.tar) or taskname (e.g. tmp); [to continue the current task, use: resume]', default='NoCkpt')
@@ -170,6 +170,7 @@ if opt.cfg.MODEL_MATSEG.embed_dims == 2:
 else:
     bin_mean_shift = Bin_Mean_Shift_N(embedding_dims=opt.cfg.MODEL_MATSEG.embed_dims, \
         device=opt.bin_mean_shift_device, invalid_index=opt.invalid_index)
+opt.bin_mean_shift = bin_mean_shift
 
 # >>>> DATASET
 from utils.utils_semseg import get_transform_semseg, get_transform_matseg
@@ -385,11 +386,11 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
                 writer.add_scalar('training/gpus', opt.num_gpus, tid)
         # if opt.is_master:
         if tid % 2000 == 0:
-            # if opt.cfg.MODEL_MATSEG.if_albedo_pooling:
-            #     if opt.is_master:
-            #         for sample_idx, im_trainval_RGB_mask_pooled_mean in enumerate(output_dict['im_trainval_RGB_mask_pooled_mean']):
-            #             im_trainval_RGB_mask_pooled_mean = im_trainval_RGB_mask_pooled_mean.numpy().squeeze().transpose(1, 2, 0)
-            #             writer.add_image('TRAIN_im_trainval_RGB_mask_pooled_mean/%d'%sample_idx, im_trainval_RGB_mask_pooled_mean, tid, dataformats='HWC')
+            if opt.cfg.MODEL_MATSEG.if_albedo_pooling and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
+                if opt.is_master:
+                    for sample_idx, im_trainval_RGB_mask_pooled_mean in enumerate(output_dict['im_trainval_RGB_mask_pooled_mean']):
+                        im_trainval_RGB_mask_pooled_mean = im_trainval_RGB_mask_pooled_mean.numpy().squeeze().transpose(1, 2, 0)
+                        writer.add_image('TRAIN_im_trainval_RGB_mask_pooled_mean/%d'%sample_idx, im_trainval_RGB_mask_pooled_mean, tid, dataformats='HWC')
 
             for sample_idx, (im_single, im_trainval_RGB, im_path) in enumerate(zip(data_batch['im'], data_batch['im_trainval_RGB'], data_batch['imPath'])):
                 im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
