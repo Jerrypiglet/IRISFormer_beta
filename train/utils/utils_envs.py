@@ -43,7 +43,7 @@ def set_up_envs(opt):
     if not opt.cfg.MODEL_SEMSEG.if_freeze:
         opt.cfg.MODEL_SEMSEG.fix_bn = False
 
-    opt.cfg.MODEL_BRDF.enable_list = opt.cfg.MODEL_BRDF.enable_list.split('_    ')
+    opt.cfg.MODEL_BRDF.enable_list = opt.cfg.MODEL_BRDF.enable_list.split('_')
 
     assert opt.cfg.MODEL_MATSEG.albedo_pooling_from in ['gt', 'pred']
 

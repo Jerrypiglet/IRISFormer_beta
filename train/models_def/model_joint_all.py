@@ -175,13 +175,13 @@ class SemSeg_MatSeg_BRDF(nn.Module):
                 albedoPred = torch.clamp(albedoPred, 0, 1)
                 return_dict.update({'albedoPred': albedoPred})
             if 'no' in self.cfg.MODEL_BRDF.enable_list:
-                normalPred = self.BRDF_Net['normalDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)
+                normalPred = self.BRDF_Net['normalDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)['x_out']
                 return_dict.update({'normalPred': normalPred})
             if 'ro' in self.cfg.MODEL_BRDF.enable_list:
-                roughPred = self.BRDF_Net['roughDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)
+                roughPred = self.BRDF_Net['roughDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)['x_out']
                 return_dict.update({'roughPred': roughPred})
             if 'de' in self.cfg.MODEL_BRDF.enable_list:
-                depthPred = 0.5 * (self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict) + 1)
+                depthPred = 0.5 * (self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)['x_out'] + 1)
                 depthPred = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
                         input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
                 return_dict.update({'depthPred': depthPred})
