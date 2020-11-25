@@ -61,6 +61,7 @@ _C.MODEL_MATSEG.use_semseg_as_input = False
 _C.MODEL_MATSEG.load_pretrained_pth = False
 _C.MODEL_MATSEG.pretrained_pth = ''
 
+_C.MODEL_MATSEG.if_albedo_pooling = False
 
 _C.MODEL_SEMSEG = CN()
 _C.MODEL_SEMSEG.enable = False
@@ -99,7 +100,6 @@ _C.DATA.load_matseg_gt = False
 _C.DATA.load_brdf_gt = True
 _C.DATA.semseg_ignore_label = 0
 _C.DATA.semseg_classes = 46
-
 
 _C.SOLVER = CN()
 _C.SOLVER.method = 'adam'

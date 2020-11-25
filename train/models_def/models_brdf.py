@@ -153,7 +153,7 @@ class encoder0(nn.Module):
         return x1, x2, x3, x4, x5, x6
 
 
-class decoder0(nn.Module):
+class decoder0_guide(nn.Module):
     def __init__(self, opt, mode=-1, out_channel=3, in_C = [1024, 1024, 512, 512, 256, 128], out_C = [512, 256, 256, 128, 64, 64], group_C = [32, 16, 16, 8, 4, 4],  if_PPM=False):
         super(decoder0, self).__init__()
         self.opt = opt
@@ -209,7 +209,12 @@ class decoder0(nn.Module):
         else:
             return x
 
-    def forward(self, im, x1, x2, x3, x4, x5, x6, input_dict_guide=None):
+    def forward(self, im, x1, x2, x3, x4, x5, x6, input_extra_dict={}):
+        if 'input_dict_guide' in input_extra_dict:
+            input_dict_guide = input_extra_dict['input_dict_guide']
+        else:
+            input_dict_guide = None
+
         if self.if_matseg_guide:
             xin0 = self.dconv1(x6, self.interpolate_x_to_y(input_dict_guide['p5'], x6))
         else:
@@ -317,6 +322,165 @@ class decoder0(nn.Module):
             x_out = x_orig
         return x_out
 
+class decoder0(nn.Module):
+    def __init__(self, opt, mode=-1, out_channel=3, input_dict_guide=None):
+        super(decoder0, self).__init__()
+        self.mode = mode
+        self.opt = opt
+
+        self.if_albedo_pooling = self.opt.cfg.MODEL_MATSEG.if_albedo_pooling
+        
+        self.dconv1 = nn.Conv2d(in_channels=1024, out_channels=512, kernel_size=3, stride=1, padding = 1, bias=True)
+        self.dgn1 = nn.GroupNorm(num_groups=32, num_channels=512 )
+
+        self.dconv2 = nn.Conv2d(in_channels=1024, out_channels=256, kernel_size=3, stride=1, padding = 1, bias=True)
+        self.dgn2 = nn.GroupNorm(num_groups=16, num_channels=256 )
+
+        self.dconv3 = nn.Conv2d(in_channels=512, out_channels=256, kernel_size=3, stride=1, padding=1, bias=True)
+        self.dgn3 = nn.GroupNorm(num_groups=16, num_channels=256 )
+
+        self.dconv4 = nn.Conv2d(in_channels=512, out_channels=128, kernel_size=3, stride=1, padding = 1, bias=True)
+        self.dgn4 = nn.GroupNorm(num_groups=8, num_channels=128 )
+
+        self.dconv5 = nn.Conv2d(in_channels=256, out_channels=64, kernel_size=3, stride=1, padding = 1, bias=True)
+        self.dgn5 = nn.GroupNorm(num_groups=4, num_channels=64 )
+
+        self.dconv6 = nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3, stride=1, padding = 1, bias=True)
+        self.dgn6 = nn.GroupNorm(num_groups=4, num_channels=64 )
+
+        self.dpadFinal = nn.ReplicationPad2d(1)
+        self.dconvFinal = nn.Conv2d(in_channels=64 if not self.if_albedo_pooling else 128, out_channels=3, kernel_size = 3, stride=1, bias=True)
+
+        self.flag = True
+
+    def mask_pooled_mean(self, dx6, instance, num_mat_masks_batch):
+        dx6_pooled_mean = torch.zeros_like(dx6)
+        # c = dx6.shape[1]
+        for batch_id, (dx6_single, instance_single, num_mat) in enumerate(zip(dx6, instance, num_mat_masks_batch)):
+            num_mat = num_mat.item()
+            for mat_id in range(num_mat):
+                instance_mat = instance_single[mat_id].bool() # [h, w]
+                # dx6_single_mat_selected = torch.masked_select(dx6_single, instance_mat).view(c, -1) # [c, ?]
+                dx6_single_mat_selected = dx6_single[:, instance_mat] # [c, ?]
+                # dx6_single_mat_selected_mean = torch.mean(dx6_single_mat_selected, 1, keepdim=True) # [c, 1]
+                # dx6_single_mat_selected_mean_expand = dx6_single_mat_selected_mean.expand(-1, torch.sum(instance_mat).item()).reshape(-1)
+                # dx6_pooled_mean[batch_id][instance_mat.expand(c, -1, -1)] -= dx6_single_mat_selected_mean_expand
+                # dx6_pooled_mean[batch_id][:, instance_mat] -= 1
+                dx6_pooled_mean[batch_id][:, instance_mat] = torch.mean(dx6_single_mat_selected, 1, keepdim=True)
+        return dx6_pooled_mean
+
+    def forward(self, im, x1, x2, x3, x4, x5, x6, input_extra_dict=None):
+        if self.if_albedo_pooling:
+            instance = input_extra_dict['matseg-instance']
+            num_mat_masks_batch = input_extra_dict['semseg-num_mat_masks_batch']
+            # print(instance.shape, num_mat_masks_batch.shape) # torch.Size([16, 50, 240, 320]) torch.Size([16])
+            # if self.flag:
+            #     np.save('instance.npy', instance.cpu().numpy())
+            #     np.save('num_mat_masks_batch.npy', num_mat_masks_batch.cpu().numpy())
+            #     self.flag = False
+
+        dx1 = F.relu(self.dgn1(self.dconv1(x6 ) ) )
+
+        xin1 = torch.cat([dx1, x5], dim = 1)
+        dx2 = F.relu(self.dgn2(self.dconv2(F.interpolate(xin1, scale_factor=2, mode='bilinear') ) ), True)
+
+        if dx2.size(3) != x4.size(3) or dx2.size(2) != x4.size(2):
+            dx2 = F.interpolate(dx2, [x4.size(2), x4.size(3)], mode='bilinear')
+        xin2 = torch.cat([dx2, x4], dim=1 )
+        dx3 = F.relu(self.dgn3(self.dconv3(F.interpolate(xin2, scale_factor=2, mode='bilinear') ) ), True)
+
+        if dx3.size(3) != x3.size(3) or dx3.size(2) != x3.size(2):
+            dx3 = F.interpolate(dx3, [x3.size(2), x3.size(3)], mode='bilinear')
+        xin3 = torch.cat([dx3, x3], dim=1)
+        dx4 = F.relu(self.dgn4(self.dconv4(F.interpolate(xin3, scale_factor=2, mode='bilinear') ) ), True)
+
+        if dx4.size(3) != x2.size(3) or dx4.size(2) != x2.size(2):
+            dx4 = F.interpolate(dx4, [x2.size(2), x2.size(3)], mode='bilinear')
+        xin4 = torch.cat([dx4, x2], dim=1 )
+        dx5 = F.relu(self.dgn5(self.dconv5(F.interpolate(xin4, scale_factor=2, mode='bilinear') ) ), True)
+
+        if dx5.size(3) != x1.size(3) or dx5.size(2) != x1.size(2):
+            dx5 = F.interpolate(dx5, [x1.size(2), x1.size(3)], mode='bilinear')
+        xin5 = torch.cat([dx5, x1], dim=1 )
+        dx6 = F.relu(self.dgn6(self.dconv6(F.interpolate(xin5, scale_factor=2, mode='bilinear') ) ), True)
+        # if self.opt.is_master:
+        #     batch_id, mat_id = 0, 0
+        #     print('-<', batch_id, mat_id, dx6[0, :2, :3, 0])
+
+        if self.if_albedo_pooling:
+            # dx6_pooled_mean = torch.zeros_like(dx6)
+            # # c = dx6.shape[1]
+            # for batch_id, (dx6_single, instance_single, num_mat) in enumerate(zip(dx6, instance, num_mat_masks_batch)):
+            #     num_mat = num_mat.item()
+            #     for mat_id in range(num_mat):
+            #         instance_mat = instance_single[mat_id].bool() # [h, w]
+            #         # dx6_single_mat_selected = torch.masked_select(dx6_single, instance_mat).view(c, -1) # [c, ?]
+            #         dx6_single_mat_selected = dx6_single[:, instance_mat] # [c, ?]
+            #         # dx6_single_mat_selected_mean = torch.mean(dx6_single_mat_selected, 1, keepdim=True) # [c, 1]
+            #         # dx6_single_mat_selected_mean_expand = dx6_single_mat_selected_mean.expand(-1, torch.sum(instance_mat).item()).reshape(-1)
+            #         # dx6_pooled_mean[batch_id][instance_mat.expand(c, -1, -1)] -= dx6_single_mat_selected_mean_expand
+            #         # dx6_pooled_mean[batch_id][:, instance_mat] -= 1
+            #         dx6_pooled_mean[batch_id][:, instance_mat] -= torch.mean(dx6_single_mat_selected, 1, keepdim=True)
+            #         # if self.opt.is_master:
+            #         #     print(dx6_single_mat_selected.shape, dx6_pooled_mean[batch_id][:, instance_mat].shape)
+
+            #     # for mat_id in range(num_mat):
+            #     #     instance_mat = instance_single[mat_id:mat_id+1].bool() # [1, h, w]
+            #     #     dx6_single_mat_selected = torch.masked_select(dx6_single, instance_mat).view(c, -1) # [c, ?]
+            #     #     dx6_single_mat_selected_mean = torch.mean(dx6_single_mat_selected, 1, keepdim=True) # [c, 1]
+            #     #     dx6_single_mat_selected_mean_expand = dx6_single_mat_selected_mean.expand(-1, torch.sum(instance_mat).item()).reshape(-1)
+
+            #     #     # dx6_pooled_mean[batch_id][instance_mat.expand(c, -1, -1)] -= 1
+            #     #     dx6_pooled_mean[batch_id][instance_mat.expand(c, -1, -1)] -= dx6_single_mat_selected_mean_expand
+                    
+            #         # if self.opt.is_master:
+            #         #     # print(torch.sum(dx6_single_mat_selected_mean))
+            #         #     print(dx6_single_mat_selected_mean_expand.shape, dx6_pooled_mean[batch_id][instance_mat.expand(c, -1, -1)].shape)
+            #         #     print('-', batch_id, mat_id, dx6_single_mat_selected[:5, 0].squeeze())
+            #         #     print('----', batch_id, mat_id, b[:5, 0].squeeze())
+            #         #     # print(dx6_single.shape, instance_single[mat_id:mat_id+1].shape) # torch.Size([64, 240, 320]) torch.Size([1, 240, 320])
+            #         #     # print(dx6_single_selected.shape) # torch.Size([259, 64])
+            # # if self.opt.is_master:
+            # #     print('-', batch_id, mat_id, dx6[0, :2, :3, 0])
+            # #     print('---', batch_id, mat_id, dx6_pooled_mean[0, :2, :3, 0], torch.sum(dx6_pooled_mean))
+
+
+            dx6_pooled_mean = self.mask_pooled_mean(dx6, instance, num_mat_masks_batch)
+            dx6 = torch.cat([dx6, dx6 - dx6_pooled_mean], 1)
+            # dx6 = torch.cat([dx6, dx6], 1)
+
+            # im_trainval_RGB_mask_pooled_mean = self.mask_pooled_mean(input_extra_dict['im_trainval_RGB'], instance, num_mat_masks_batch)
+            im_trainval_RGB_mask_pooled_mean = None
+
+        if dx6.size(3) != im.size(3) or dx6.size(2) != im.size(2):
+            dx6 = F.interpolate(dx6, [im.size(2), im.size(3)], mode='bilinear')
+        x_orig = self.dconvFinal(self.dpadFinal(dx6 ) )
+
+        # print(x1, x2, x3, x4, x5, x6)
+        
+        # print(dx1.shape, dx2.shape, dx3.shape, dx4.shape, dx5.shape, dx6.shape, x_orig.shape) 
+        # torch.Size([16, 512, 7, 10]) torch.Size([16, 256, 15, 20]) torch.Size([16, 256, 30, 40]) torch.Size([16, 128, 60, 80]) torch.Size([16, 64, 120, 160]) torch.Size([16, 64, 240, 320]) torch.Size([16, 3, 240, 320])
+
+
+        if self.mode == 0:
+            x_out = torch.clamp(1.01 * torch.tanh(x_orig ), -1, 1)
+        elif self.mode == 1:
+            x_orig = torch.clamp(1.01 * torch.tanh(x_orig ), -1, 1)
+            norm = torch.sqrt(torch.sum(x_orig * x_orig, dim=1).unsqueeze(1) ).expand_as(x_orig)
+            x_out = x_orig / torch.clamp(norm, min=1e-6)
+        elif self.mode == 2:
+            x_orig = torch.clamp(1.01 * torch.tanh(x_orig ), -1, 1)
+            x_out = torch.mean(x_orig, dim=1).unsqueeze(1)
+        elif self.mode == 3:
+            x_out = F.softmax(x_orig, dim=1)
+        elif self.mode == 4:
+            x_orig = torch.mean(x_orig, dim=1).unsqueeze(1)
+            x_out = torch.clamp(1.01 * torch.tanh(x_orig ), -1, 1)
+
+        return_dict = {'x_out': x_out}
+        if self.if_albedo_pooling:
+            return_dict.update({'im_trainval_RGB_mask_pooled_mean': im_trainval_RGB_mask_pooled_mean})
+        return return_dict
 
 class encoderLight(nn.Module):
     def __init__(self, SGNum, cascadeLevel = 0):

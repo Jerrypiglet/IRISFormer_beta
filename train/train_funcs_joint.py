@@ -55,7 +55,7 @@ def get_depth_meters(opt):
     return {metric: AverageMeter(metric) for metric in opt.depth_metrics}
 
 def get_input_dict_joint(data_batch, opt):
-    input_dict = {}
+    input_dict = {'im_trainval_RGB': data_batch['im_trainval_RGB']}
     if opt.cfg.DATA.load_matseg_gt:
         input_dict_matseg = get_input_dict_matseg(data_batch, opt)
     else:

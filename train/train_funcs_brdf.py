@@ -16,17 +16,21 @@ def get_input_dict_brdf(data_batch, opt):
 
     if opt.cfg.DATA.load_brdf_gt:
         # Load data from cpu to gpu
-        albedo_cpu = data_batch['albedo']
-        input_dict['albedoBatch'] = Variable(albedo_cpu ).cuda(non_blocking=True)
+        if 'al' in opt.cfg.MODEL_BRDF.enable_list:
+            albedo_cpu = data_batch['albedo']
+            input_dict['albedoBatch'] = Variable(albedo_cpu ).cuda(non_blocking=True)
 
-        normal_cpu = data_batch['normal']
-        input_dict['normalBatch'] = Variable(normal_cpu ).cuda(non_blocking=True)
+        if 'no' in opt.cfg.MODEL_BRDF.enable_list:
+            normal_cpu = data_batch['normal']
+            input_dict['normalBatch'] = Variable(normal_cpu ).cuda(non_blocking=True)
 
-        rough_cpu = data_batch['rough']
-        input_dict['roughBatch'] = Variable(rough_cpu ).cuda(non_blocking=True)
+        if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
+            rough_cpu = data_batch['rough']
+            input_dict['roughBatch'] = Variable(rough_cpu ).cuda(non_blocking=True)
 
-        depth_cpu = data_batch['depth']
-        input_dict['depthBatch'] = Variable(depth_cpu ).cuda(non_blocking=True)
+        if 'de' in opt.cfg.MODEL_BRDF.enable_list:
+            depth_cpu = data_batch['depth']
+            input_dict['depthBatch'] = Variable(depth_cpu ).cuda(non_blocking=True)
 
         mask_cpu = data_batch['mask'].permute(0, 3, 1, 2) # [b, 3, h, w]
         input_dict['maskBatch'] = Variable(mask_cpu ).cuda(non_blocking=True)
@@ -177,10 +181,6 @@ def process_brdf(input_dict, output_dict, loss_dict, opt, time_meters):
             loss_dict['loss_brdf-depth-paper'] = torch.sum( (torch.log(depthPreds[-1]+0.001) - torch.log(input_dict['depthBatch']+0.001) )
                 * ( torch.log(depthPreds[-1]+0.001) - torch.log(input_dict['depthBatch']+0.001) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum
             output_dict['depthPreds'] = depthPreds
-
-
-
-
 
     if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
         semsegPred = output_dict['semseg_pred']

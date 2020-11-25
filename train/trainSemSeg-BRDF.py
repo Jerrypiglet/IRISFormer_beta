@@ -149,7 +149,7 @@ model.print_net()
 
 # set up optimizers
 # optimizer = get_optimizer(model.parameters(), cfg.SOLVER)
-optimizer = optim.Adam(model.parameters(), lr=1e-4, betas=(0.5, 0.999) )
+optimizer = optim.Adam(model.parameters(), lr=cfg.SOLVER.lr, betas=(0.5, 0.999) )
 if opt.distributed:
     model = DDP(model, device_ids=[opt.rank], output_device=opt.rank, find_unused_parameters=True)
 
@@ -385,6 +385,12 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
                 writer.add_scalar('training/gpus', opt.num_gpus, tid)
         # if opt.is_master:
         if tid % 2000 == 0:
+            # if opt.cfg.MODEL_MATSEG.if_albedo_pooling:
+            #     if opt.is_master:
+            #         for sample_idx, im_trainval_RGB_mask_pooled_mean in enumerate(output_dict['im_trainval_RGB_mask_pooled_mean']):
+            #             im_trainval_RGB_mask_pooled_mean = im_trainval_RGB_mask_pooled_mean.numpy().squeeze().transpose(1, 2, 0)
+            #             writer.add_image('TRAIN_im_trainval_RGB_mask_pooled_mean/%d'%sample_idx, im_trainval_RGB_mask_pooled_mean, tid, dataformats='HWC')
+
             for sample_idx, (im_single, im_trainval_RGB, im_path) in enumerate(zip(data_batch['im'], data_batch['im_trainval_RGB'], data_batch['imPath'])):
                 im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
                 im_trainval_RGB = im_trainval_RGB.numpy().squeeze().transpose(1, 2, 0)

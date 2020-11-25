@@ -210,7 +210,7 @@ def create(args):
     text_file.close()
     print('yaml and command file saved to %s'%task_dir)
 
-    os.remove(tmp_yaml_filaname)
+    # os.remove(tmp_yaml_filaname)
     # print('========= REMOVED YAML file %s'%tmp_yaml_filaname)
 
     pod_name = get_pods(yaml_content['metadata']['name'])

@@ -125,10 +125,31 @@ class openrooms(data.Dataset):
 
         if self.opt.cfg.DATA.load_brdf_gt:
             # Get paths for BRDF params
-            albedo_path = image_path.replace('im_', 'imbaseColor_').replace('hdr', 'png') 
-            normal_path = image_path.replace('im_', 'imnormal_').replace('hdr', 'png').replace('DiffLight', '')
-            rough_path = image_path.replace('im_', 'imroughness_').replace('hdr', 'png')
-            depth_path = image_path.replace('im_', 'imdepth_').replace('hdr', 'dat').replace('DiffLight', '').replace('DiffMat', '')
+            if 'al' in self.cfg.MODEL_BRDF.enable_list:
+                albedo_path = image_path.replace('im_', 'imbaseColor_').replace('hdr', 'png') 
+                # Read albedo
+                albedo = self.loadImage(albedo_path, isGama = False)
+                albedo = (0.5 * (albedo + 1) ) ** 2.2
+                batch_dict.update({'albedo': torch.from_numpy(albedo)})
+
+            if 'no' in self.cfg.MODEL_BRDF.enable_list:
+                normal_path = image_path.replace('im_', 'imnormal_').replace('hdr', 'png').replace('DiffLight', '')
+                # normalize the normal vector so that it will be unit length
+                normal = self.loadImage(normal_path )
+                normal = normal / np.sqrt(np.maximum(np.sum(normal * normal, axis=0), 1e-5) )[np.newaxis, :]
+                batch_dict.update({'normal': torch.from_numpy(normal),})
+
+            if 'ro' in self.cfg.MODEL_BRDF.enable_list:
+                rough_path = image_path.replace('im_', 'imroughness_').replace('hdr', 'png')
+                # Read roughness
+                rough = self.loadImage(rough_path )[0:1, :, :]
+                batch_dict.update({'rough': torch.from_numpy(rough),})
+
+            if 'de' in self.cfg.MODEL_BRDF.enable_list:
+                depth_path = image_path.replace('im_', 'imdepth_').replace('hdr', 'dat').replace('DiffLight', '').replace('DiffMat', '')
+                # Read depth
+                depth = self.loadBinary(depth_path)
+                batch_dict.update({'depth': torch.from_numpy(depth),})
 
             if self.cascadeLevel == 0:
                 if self.isLight:
@@ -157,21 +178,6 @@ class openrooms(data.Dataset):
                 segObj = segObj[np.newaxis, :, :]
 
             segObj = segObj.astype(np.float32 )
-
-
-            # Read albedo
-            albedo = self.loadImage(albedo_path, isGama = False)
-            albedo = (0.5 * (albedo + 1) ) ** 2.2
-
-            # normalize the normal vector so that it will be unit length
-            normal = self.loadImage(normal_path )
-            normal = normal / np.sqrt(np.maximum(np.sum(normal * normal, axis=0), 1e-5) )[np.newaxis, :]
-
-            # Read roughness
-            rough = self.loadImage(rough_path )[0:1, :, :]
-
-            # Read depth
-            depth = self.loadBinary(depth_path)
 
 
             if self.isLight == True:
@@ -209,10 +215,6 @@ class openrooms(data.Dataset):
                 specularPre = specularPre / max(specularPre.max(), 1e-10)
 
             batch_dict.update({
-                    'albedo': torch.from_numpy(albedo),
-                    'normal': torch.from_numpy(normal),
-                    'rough': torch.from_numpy(rough),
-                    'depth': torch.from_numpy(depth),
                     'mask': torch.from_numpy(mask), 
                     'maskPath': mask_path, 
                     'segArea': torch.from_numpy(segArea),

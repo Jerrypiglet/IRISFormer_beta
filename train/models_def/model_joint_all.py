@@ -50,6 +50,13 @@ class SemSeg_MatSeg_BRDF(nn.Module):
             if self.opt.cfg.MODEL_SEMSEG.use_as_input:
                 in_channels += 1
 
+            self.decoder_to_use = models_brdf.decoder0_guide
+
+            self.if_semseg_matseg_guidance = self.opt.cfg.MODEL_MATSEG.if_guide or self.opt.cfg.MODEL_SEMSEG.if_guide
+            if self.if_semseg_matseg_guidance:
+                self.decoder_to_use = models_brdf.decoder0_guide
+
+
             self.BRDF_Net = nn.ModuleDict({
                     'encoder': models_brdf.encoder0(opt, cascadeLevel = self.opt.cascadeLevel, in_channels = in_channels)
                     })
@@ -142,21 +149,29 @@ class SemSeg_MatSeg_BRDF(nn.Module):
         return_dict = {}
 
         if self.cfg.MODEL_BRDF.enable_BRDF_decoders:
+            input_extra_dict = {}
+            if input_dict_guide is not None:
+                input_extra_dict.update({'input_dict_guide': input_dict_guide})
+            if self.cfg.MODEL_MATSEG.if_albedo_pooling:
+                input_extra_dict.update({'matseg-instance': input_dict['instance'], 'semseg-num_mat_masks_batch': input_dict['num_mat_masks_batch']})
+                input_extra_dict.update({'im_trainval_RGB': input_dict['im_trainval_RGB']})
+
             if 'al' in self.cfg.MODEL_BRDF.enable_list:
-                albedoPred = 0.5 * (self.BRDF_Net['albedoDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_guide=input_dict_guide) + 1)
+                albedo_output = self.BRDF_Net['albedoDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)
+                albedoPred = 0.5 * (albedo_output['x_out'] + 1)
                 input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
                 albedoPred = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
                         input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
                 albedoPred = torch.clamp(albedoPred, 0, 1)
                 return_dict.update({'albedoPred': albedoPred})
             if 'no' in self.cfg.MODEL_BRDF.enable_list:
-                normalPred = self.BRDF_Net['normalDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_guide=input_dict_guide)
+                normalPred = self.BRDF_Net['normalDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)
                 return_dict.update({'normalPred': normalPred})
             if 'ro' in self.cfg.MODEL_BRDF.enable_list:
-                roughPred = self.BRDF_Net['roughDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_guide=input_dict_guide)
+                roughPred = self.BRDF_Net['roughDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)
                 return_dict.update({'roughPred': roughPred})
             if 'de' in self.cfg.MODEL_BRDF.enable_list:
-                depthPred = 0.5 * (self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_guide=input_dict_guide) + 1)
+                depthPred = 0.5 * (self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict) + 1)
                 depthPred = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
                         input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
                 return_dict.update({'depthPred': depthPred})
@@ -167,6 +182,10 @@ class SemSeg_MatSeg_BRDF(nn.Module):
         if self.cfg.MODEL_BRDF.enable_semseg_decoder:
             semsegPred = self.BRDF_Net['semsegDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6)
             return_dict.update({'semseg_pred': semsegPred})
+            
+        if self.cfg.MODEL_MATSEG.if_albedo_pooling:
+            return_dict.update({'im_trainval_RGB_mask_pooled_mean': albedo_output['im_trainval_RGB_mask_pooled_mean']})
+            
 
         return return_dict
     
