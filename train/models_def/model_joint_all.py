@@ -170,6 +170,11 @@ class SemSeg_MatSeg_BRDF(nn.Module):
                     assert input_dict_extra['return_dict_matseg'] is not None
                     input_extra_dict.update({'matseg-logits': input_dict_extra['return_dict_matseg']['logit'], 'matseg-embeddings': input_dict_extra['return_dict_matseg']['embedding'], \
                         'mat_notlight_mask_cpu': input_dict['mat_notlight_mask_cpu']})
+            if self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool:
+                assert input_dict_extra is not None
+                assert input_dict_extra['return_dict_matseg'] is not None
+                input_extra_dict.update({'im_trainval_RGB': input_dict['im_trainval_RGB'], 'mat_notlight_mask_gpu_float': input_dict['mat_notlight_mask_gpu_float']})
+                input_extra_dict.update({'matseg-embeddings': input_dict_extra['return_dict_matseg']['embedding']})
 
             if 'al' in self.cfg.MODEL_BRDF.enable_list:
                 albedo_output = self.BRDF_Net['albedoDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)
@@ -198,7 +203,7 @@ class SemSeg_MatSeg_BRDF(nn.Module):
             semsegPred = self.BRDF_Net['semsegDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6)
             return_dict.update({'semseg_pred': semsegPred})
             
-        if self.cfg.MODEL_MATSEG.if_albedo_pooling:
+        if self.cfg.MODEL_MATSEG.if_albedo_pooling or self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv:
             return_dict.update({'im_trainval_RGB_mask_pooled_mean': albedo_output['im_trainval_RGB_mask_pooled_mean']})
             
 
@@ -241,7 +246,7 @@ class SemSeg_MatSeg_BRDF(nn.Module):
 
         if self.cfg.MODEL_BRDF.enable:
             input_dict_extra = {'input_dict_guide': input_dict_guide}
-            if self.cfg.MODEL_MATSEG.if_albedo_pooling and self.cfg.MODEL_MATSEG.albedo_pooling_from == 'pred':
+            if (self.cfg.MODEL_MATSEG.if_albedo_pooling and self.cfg.MODEL_MATSEG.albedo_pooling_from == 'pred') or self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool:
                 # print(return_dict_matseg.keys()) # dict_keys(['logit', 'embedding', 'feats_matseg_dict'])
                 input_dict_extra.update({'return_dict_matseg': return_dict_matseg})
 

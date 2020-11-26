@@ -285,10 +285,12 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         if opt.eval_every_iter != -1 and (tid - tid_start) % opt.eval_every_iter == 0:
             val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid}
             if opt.if_vis:
-                vis_val_epoch_joint(brdf_loader_val_vis, model, bin_mean_shift, val_params)
+                with torch.no_grad():
+                    vis_val_epoch_joint(brdf_loader_val_vis, model, bin_mean_shift, val_params)
                 synchronize()                
             if opt.if_val:
-                val_epoch_joint(brdf_loader_val, model, bin_mean_shift, val_params)
+                with torch.no_grad():
+                    val_epoch_joint(brdf_loader_val, model, bin_mean_shift, val_params)
             model.train(not cfg.MODEL_SEMSEG.fix_bn)
             reset_tictoc = True
             
@@ -300,6 +302,8 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
             reset_tictoc = True
 
         synchronize()
+
+        torch.cuda.empty_cache()
 
         if reset_tictoc:
             ts_iter_end = time.time()
@@ -319,6 +323,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         # ======= Forward
         optimizer.zero_grad()
         output_dict, loss_dict = forward_joint(input_dict, model, opt, time_meters)
+        synchronize()
         
         # print('=======loss_dict', loss_dict)
         loss_dict_reduced = reduce_loss_dict(loss_dict, mark=tid, logger=logger) # **average** over multi GPUs
@@ -363,6 +368,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         optimizer.step()
         time_meters['backward'].update(time.time() - time_meters['ts'])
         time_meters['ts'] = time.time()
+        synchronize()
 
         if opt.is_master:
             logger_str = 'Epoch %d - Tid %d -'%(epoch, tid) + ', '.join(['%s %.3f'%(loss_key, loss_dict_reduced[loss_key]) for loss_key in loss_keys_print])
@@ -386,12 +392,12 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
                 writer.add_scalar('training/gpus', opt.num_gpus, tid)
         # if opt.is_master:
         if tid % 2000 == 0:
-            if opt.cfg.MODEL_MATSEG.if_albedo_pooling and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
+            if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
                 if opt.is_master:
                     for sample_idx, im_trainval_RGB_mask_pooled_mean in enumerate(output_dict['im_trainval_RGB_mask_pooled_mean']):
-                        im_trainval_RGB_mask_pooled_mean = im_trainval_RGB_mask_pooled_mean.numpy().squeeze().transpose(1, 2, 0)
+                        im_trainval_RGB_mask_pooled_mean = im_trainval_RGB_mask_pooled_mean.cpu().numpy().squeeze().transpose(1, 2, 0)
                         writer.add_image('TRAIN_im_trainval_RGB_mask_pooled_mean/%d'%sample_idx, im_trainval_RGB_mask_pooled_mean, tid, dataformats='HWC')
-
+            
             for sample_idx, (im_single, im_trainval_RGB, im_path) in enumerate(zip(data_batch['im'], data_batch['im_trainval_RGB'], data_batch['imPath'])):
                 im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
                 im_trainval_RGB = im_trainval_RGB.numpy().squeeze().transpose(1, 2, 0)
@@ -438,6 +444,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
 
         # print(input_dict['im_batch_matseg'].shape)
         # print(input_dict['im_batch_matseg'].shape)
+        synchronize()
         tid += 1
 
             # print(ts_iter_end_start_list, ts_iter_start_end_list)

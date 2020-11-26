@@ -330,6 +330,8 @@ class decoder0(nn.Module):
         self.opt = opt
 
         self.if_albedo_pooling = self.opt.cfg.MODEL_MATSEG.if_albedo_pooling
+        self.if_albedo_asso_pool_conv = self.opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv
+        self.if_albedo_pac_pool = self.opt.cfg.MODEL_MATSEG.if_albedo_pac_pool
         
         self.dconv1 = nn.Conv2d(in_channels=1024, out_channels=512, kernel_size=3, stride=1, padding = 1, bias=True)
         self.dgn1 = nn.GroupNorm(num_groups=32, num_channels=512 )
@@ -349,8 +351,51 @@ class decoder0(nn.Module):
         self.dconv6 = nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3, stride=1, padding = 1, bias=True)
         self.dgn6 = nn.GroupNorm(num_groups=4, num_channels=64 )
 
+        if self.if_albedo_asso_pool_conv:
+            self.acco_pool_1 = pac.PacPool2d(kernel_size=3, stride=1, padding=1, dilation=1)
+            self.acco_pool_2 = pac.PacPool2d(kernel_size=3, stride=1, padding=2, dilation=2)
+            self.acco_pool_4 = pac.PacPool2d(kernel_size=3, stride=1, padding=4, dilation=4)
+
+        # self.acco_pool_mean = pac.PacPool2d(kernel_size=3, stride=1, padding=4, dilation=4)
+
+        if self.if_albedo_pac_pool:
+            self.acco_pool_mean_list = torch.nn.ModuleList([])
+            # self.acco_pool_mean_list.append(
+            #     pac.PacPool2d(kernel_size=5, stride=1, padding=20, dilation=10, normalize_kernel=True)
+            # )
+
+            self.acco_pool_mean_list += [
+                pac.PacPool2d(kernel_size=3, stride=1, padding=20, dilation=20, normalize_kernel=True), 
+                pac.PacPool2d(kernel_size=3, stride=1, padding=10, dilation=10, normalize_kernel=True), 
+                pac.PacPool2d(kernel_size=3, stride=1, padding=5, dilation=5, normalize_kernel=True), 
+                pac.PacPool2d(kernel_size=3, stride=1, padding=2, dilation=2, normalize_kernel=True), 
+                pac.PacPool2d(kernel_size=3, stride=1, padding=1, dilation=1, normalize_kernel=True), 
+            ]
+            # self.acco_pool_mean = pac.PacPool2d(kernel_size=7, stride=1, padding=30, dilation=10, normalize_kernel=True)
+            # self.acco_pool_mean = pac.PacPool2d(kernel_size=7, stride=1, padding=15, dilation=5, normalize_kernel=True)
+            # self.acco_pool_mean = pac.PacPool2d(kernel_size=7, stride=1, padding=6, dilation=2, normalize_kernel=True)
+            # self.acco_pool_mean = pac.PacPool2d(kernel_size=3, stride=1, padding=20, dilation=20, normalize_kernel=True)
+            # self.acco_pool_mean = pac.PacPool2d(kernel_size=3, stride=1, padding=10, dilation=10, normalize_kernel=True)
+            # self.acco_pool_mean = pac.PacPool2d(kernel_size=3, stride=1, padding=5, dilation=5, normalize_kernel=True)
+            # self.acco_pool_mean = pac.PacPool2d(kernel_size=3, stride=1, padding=2, dilation=2, normalize_kernel=True)
+            # self.acco_pool_mean = pac.PacPool2d(kernel_size=3, stride=1, padding=1, dilation=1, normalize_kernel=True)
+            # self.acco_pool_mean = pac.PacPool2d(kernel_size=5, stride=1, padding=20, dilation=10, normalize_kernel=True)
+            # self.acco_pool_mean = pac.PacPool2d(kernel_size=5, stride=1, padding=10, dilation=5, normalize_kernel=True)
+
+
+
         self.dpadFinal = nn.ReplicationPad2d(1)
-        self.dconvFinal = nn.Conv2d(in_channels=64 if not self.if_albedo_pooling else 128, out_channels=3, kernel_size = 3, stride=1, bias=True)
+
+        dconv_final_in_channels = 64
+        if self.if_albedo_pooling:
+            dconv_final_in_channels = 128
+        if self.if_albedo_asso_pool_conv:
+            dconv_final_in_channels = 64 * 4
+        if self.if_albedo_pac_pool:
+            dconv_final_in_channels = 64 * 2 if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_pool_keep_input else 64
+        assert not(self.if_albedo_pooling and self.if_albedo_asso_pool_conv), 'self.if_albedo_pooling and self.if_albedo_asso_pool_conv cannot be True at the same time!'
+
+        self.dconvFinal = nn.Conv2d(in_channels=dconv_final_in_channels, out_channels=3, kernel_size = 3, stride=1, bias=True)
 
         self.flag = True
 
@@ -386,6 +431,9 @@ class decoder0(nn.Module):
             #     np.save('num_mat_masks_batch.npy', num_mat_masks_batch.cpu().numpy())
             #     self.flag = False
 
+        if self.if_albedo_asso_pool_conv or self.if_albedo_pac_pool:
+            matseg_embeddings = input_extra_dict['matseg-embeddings']
+            
         dx1 = F.relu(self.dgn1(self.dconv1(x6 ) ) )
 
         xin1 = torch.cat([dx1, x5], dim = 1)
@@ -410,56 +458,39 @@ class decoder0(nn.Module):
             dx5 = F.interpolate(dx5, [x1.size(2), x1.size(3)], mode='bilinear')
         xin5 = torch.cat([dx5, x1], dim=1 )
         dx6 = F.relu(self.dgn6(self.dconv6(F.interpolate(xin5, scale_factor=2, mode='bilinear') ) ), True)
-        # if self.opt.is_master:
-        #     batch_id, mat_id = 0, 0
-        #     print('-<', batch_id, mat_id, dx6[0, :2, :3, 0])
 
+        im_trainval_RGB_mask_pooled_mean = None
         if self.if_albedo_pooling:
-            # dx6_pooled_mean = torch.zeros_like(dx6)
-            # # c = dx6.shape[1]
-            # for batch_id, (dx6_single, instance_single, num_mat) in enumerate(zip(dx6, instance, num_mat_masks_batch)):
-            #     num_mat = num_mat.item()
-            #     for mat_id in range(num_mat):
-            #         instance_mat = instance_single[mat_id].bool() # [h, w]
-            #         # dx6_single_mat_selected = torch.masked_select(dx6_single, instance_mat).view(c, -1) # [c, ?]
-            #         dx6_single_mat_selected = dx6_single[:, instance_mat] # [c, ?]
-            #         # dx6_single_mat_selected_mean = torch.mean(dx6_single_mat_selected, 1, keepdim=True) # [c, 1]
-            #         # dx6_single_mat_selected_mean_expand = dx6_single_mat_selected_mean.expand(-1, torch.sum(instance_mat).item()).reshape(-1)
-            #         # dx6_pooled_mean[batch_id][instance_mat.expand(c, -1, -1)] -= dx6_single_mat_selected_mean_expand
-            #         # dx6_pooled_mean[batch_id][:, instance_mat] -= 1
-            #         dx6_pooled_mean[batch_id][:, instance_mat] -= torch.mean(dx6_single_mat_selected, 1, keepdim=True)
-            #         # if self.opt.is_master:
-            #         #     print(dx6_single_mat_selected.shape, dx6_pooled_mean[batch_id][:, instance_mat].shape)
-
-            #     # for mat_id in range(num_mat):
-            #     #     instance_mat = instance_single[mat_id:mat_id+1].bool() # [1, h, w]
-            #     #     dx6_single_mat_selected = torch.masked_select(dx6_single, instance_mat).view(c, -1) # [c, ?]
-            #     #     dx6_single_mat_selected_mean = torch.mean(dx6_single_mat_selected, 1, keepdim=True) # [c, 1]
-            #     #     dx6_single_mat_selected_mean_expand = dx6_single_mat_selected_mean.expand(-1, torch.sum(instance_mat).item()).reshape(-1)
-
-            #     #     # dx6_pooled_mean[batch_id][instance_mat.expand(c, -1, -1)] -= 1
-            #     #     dx6_pooled_mean[batch_id][instance_mat.expand(c, -1, -1)] -= dx6_single_mat_selected_mean_expand
-                    
-            #         # if self.opt.is_master:
-            #         #     # print(torch.sum(dx6_single_mat_selected_mean))
-            #         #     print(dx6_single_mat_selected_mean_expand.shape, dx6_pooled_mean[batch_id][instance_mat.expand(c, -1, -1)].shape)
-            #         #     print('-', batch_id, mat_id, dx6_single_mat_selected[:5, 0].squeeze())
-            #         #     print('----', batch_id, mat_id, b[:5, 0].squeeze())
-            #         #     # print(dx6_single.shape, instance_single[mat_id:mat_id+1].shape) # torch.Size([64, 240, 320]) torch.Size([1, 240, 320])
-            #         #     # print(dx6_single_selected.shape) # torch.Size([259, 64])
-            # # if self.opt.is_master:
-            # #     print('-', batch_id, mat_id, dx6[0, :2, :3, 0])
-            # #     print('---', batch_id, mat_id, dx6_pooled_mean[0, :2, :3, 0], torch.sum(dx6_pooled_mean))
-
-
             dx6_pooled_mean = self.mask_pooled_mean(dx6, instance, num_mat_masks_batch)
             dx6 = torch.cat([dx6, dx6 - dx6_pooled_mean], 1)
-            # dx6 = torch.cat([dx6, dx6], 1)
 
             if self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
                 im_trainval_RGB_mask_pooled_mean = self.mask_pooled_mean(input_extra_dict['im_trainval_RGB'], instance, num_mat_masks_batch)
+
+        if self.if_albedo_asso_pool_conv:
+            dx6_pool_1 = self.acco_pool_1(dx6, matseg_embeddings)
+            dx6_pool_2 = self.acco_pool_2(dx6, matseg_embeddings)
+            dx6_pool_4 = self.acco_pool_4(dx6, matseg_embeddings)
+            # print(dx6_pool_1.shape, dx6_pool_2.shape, dx6_pool_4.shape)
+            dx6 = torch.cat([dx6, dx6_pool_1, dx6_pool_2, dx6_pool_4], 1)
+
+        if self.if_albedo_pac_pool:
+            dx6_pool_mean_list = []
+            for acco_pool_mean in self.acco_pool_mean_list:
+                dx6_pool_mean = acco_pool_mean(dx6, matseg_embeddings)
+                dx6_pool_mean_list.append(dx6_pool_mean)
+            # dx6_pool_mean = torch.sum(dx6_pool_mean_list) / len(dx6_pool_mean_list)
+            dx6_pool_mean = torch.stack(dx6_pool_mean_list, dim=0).mean(dim=0)
+            # print(dx6_pool_mean.shape)
+            # dx6 = torch.cat([dx6, dx6_pool_1, dx6_pool_2, dx6_pool_4], 1)
+            if self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
+                im_trainval_RGB_mask_pooled_mean = self.acco_pool_mean(input_extra_dict['im_trainval_RGB'], matseg_embeddings * (2. * input_extra_dict['mat_notlight_mask_gpu_float'] - 1))
+                print(im_trainval_RGB_mask_pooled_mean.shape)
+            if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_pool_keep_input            :
+                dx6 = torch.cat([dx6, dx6_pool_mean], 1)
             else:
-                im_trainval_RGB_mask_pooled_mean = None
+                dx6 = dx6_pool_mean
+
 
         if dx6.size(3) != im.size(3) or dx6.size(2) != im.size(2):
             dx6 = F.interpolate(dx6, [im.size(2), im.size(3)], mode='bilinear')
@@ -487,8 +518,8 @@ class decoder0(nn.Module):
             x_out = torch.clamp(1.01 * torch.tanh(x_orig ), -1, 1)
 
         return_dict = {'x_out': x_out}
-        if self.if_albedo_pooling:
-            return_dict.update({'im_trainval_RGB_mask_pooled_mean': im_trainval_RGB_mask_pooled_mean})
+        # if self.if_albedo_pooling:
+        return_dict.update({'im_trainval_RGB_mask_pooled_mean': im_trainval_RGB_mask_pooled_mean})
         return return_dict
 
 class encoderLight(nn.Module):

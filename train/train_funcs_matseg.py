@@ -32,6 +32,7 @@ def get_input_dict_matseg(data_batch, opt):
     input_dict['mat_aggre_map_cpu'] = data_batch['mat_aggre_map'].permute(0, 3, 1, 2) # [b, 1, h, w]
     input_dict[' '] = Variable(input_dict['mat_aggre_map_cpu'] ).to(opt.device)
     input_dict['mat_notlight_mask_cpu'] = input_dict['mat_aggre_map_cpu']!=0
+    input_dict['mat_notlight_mask_gpu_float'] = input_dict['mat_notlight_mask_cpu'].to(opt.device).float()
 
     # input_dict['mat_aggre_map_reindex_cpu'] = data_batch['mat_aggre_map_reindex'].permute(0, 3, 1, 2) # [b, 1, h, w]
     # input_dict['mat_aggre_map_reindex_batch'] = Variable(input_dict['mat_aggre_map_reindex_cpu'] ).to(opt.device)

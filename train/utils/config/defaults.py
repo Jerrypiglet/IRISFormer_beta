@@ -61,10 +61,15 @@ _C.MODEL_MATSEG.use_semseg_as_input = False
 _C.MODEL_MATSEG.load_pretrained_pth = False
 _C.MODEL_MATSEG.pretrained_pth = ''
 
-_C.MODEL_MATSEG.if_albedo_pooling = False
 _C.MODEL_MATSEG.albedo_pooling_debug = False
+
+_C.MODEL_MATSEG.if_albedo_pooling = False
 _C.MODEL_MATSEG.albedo_pooling_from = 'gt' # ['gt', 'pred']
 
+_C.MODEL_MATSEG.if_albedo_asso_pool_conv = False
+
+_C.MODEL_MATSEG.if_albedo_pac_pool = False
+_C.MODEL_MATSEG.if_albedo_pac_pool_keep_input = True
 
 _C.MODEL_SEMSEG = CN()
 _C.MODEL_SEMSEG.enable = False
