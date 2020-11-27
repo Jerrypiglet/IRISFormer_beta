@@ -45,6 +45,10 @@ def set_up_envs(opt):
 
     opt.cfg.MODEL_BRDF.enable_list = opt.cfg.MODEL_BRDF.enable_list.split('_')
 
+    opt.cfg.MODEL_MATSEG.albedo_pac_pool_mean_layers  = opt.cfg.MODEL_MATSEG.albedo_pac_pool_mean_layers.split('_')
+    opt.cfg.MODEL_MATSEG.albedo_pac_pool_mean_layers_allowed  = opt.cfg.MODEL_MATSEG.albedo_pac_pool_mean_layers_allowed.split('_')
+    assert all(e in opt.cfg.MODEL_MATSEG.albedo_pac_pool_mean_layers_allowed for e in opt.cfg.MODEL_MATSEG.albedo_pac_pool_mean_layers)
+
     assert opt.cfg.MODEL_MATSEG.albedo_pooling_from in ['gt', 'pred']
 
 def set_up_logger(opt):

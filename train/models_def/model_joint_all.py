@@ -50,33 +50,35 @@ class SemSeg_MatSeg_BRDF(nn.Module):
             if self.opt.cfg.MODEL_SEMSEG.use_as_input:
                 in_channels += 1
 
-            self.decoder_to_use = models_brdf.decoder0_guide
+            self.decoder_to_use = models_brdf.decoder0
 
             self.if_semseg_matseg_guidance = self.opt.cfg.MODEL_MATSEG.if_guide or self.opt.cfg.MODEL_SEMSEG.if_guide
             if self.if_semseg_matseg_guidance:
                 self.decoder_to_use = models_brdf.decoder0_guide
 
+            if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_pool:
+                self.decoder_to_use = models_brdf.decoder0_pacpool
 
             self.BRDF_Net = nn.ModuleDict({
                     'encoder': models_brdf.encoder0(opt, cascadeLevel = self.opt.cascadeLevel, in_channels = in_channels)
                     })
             if self.cfg.MODEL_BRDF.enable_BRDF_decoders:
                 if 'al' in self.cfg.MODEL_BRDF.enable_list:
-                    self.BRDF_Net.update({'albedoDecoder': models_brdf.decoder0(opt, mode=0)})
+                    self.BRDF_Net.update({'albedoDecoder': self.decoder_to_use(opt, mode=0)})
                 if 'no' in self.cfg.MODEL_BRDF.enable_list:
-                    self.BRDF_Net.update({'normalDecoder': models_brdf.decoder0(opt, mode=1)})
+                    self.BRDF_Net.update({'normalDecoder': self.decoder_to_use(opt, mode=1)})
                 if 'ro' in self.cfg.MODEL_BRDF.enable_list:
-                    self.BRDF_Net.update({'roughDecoder': models_brdf.decoder0(opt, mode=2)})
+                    self.BRDF_Net.update({'roughDecoder': self.decoder_to_use(opt, mode=2)})
                 if 'de' in self.cfg.MODEL_BRDF.enable_list:
-                    self.BRDF_Net.update({'depthDecoder': models_brdf.decoder0(opt, mode=4)})
+                    self.BRDF_Net.update({'depthDecoder': self.decoder_to_use(opt, mode=4)})
                 # self.BRDF_Net.update({
-                #     'albedoDecoder': models_brdf.decoder0(opt, mode=0), 
-                #     'normalDecoder': models_brdf.decoder0(opt, mode=1), 
-                #     'roughDecoder': models_brdf.decoder0(opt, mode=2), 
-                #     'depthDecoder': models_brdf.decoder0(opt, mode=4)
+                #     'albedoDecoder': self.decoder_to_use(opt, mode=0), 
+                #     'normalDecoder': self.decoder_to_use(opt, mode=1), 
+                #     'roughDecoder': self.decoder_to_use(opt, mode=2), 
+                #     'depthDecoder': self.decoder_to_use(opt, mode=4)
                     # })
             if self.cfg.MODEL_BRDF.enable_semseg_decoder:
-                self.BRDF_Net.update({'semsegDecoder': models_brdf.decoder0(opt, mode=-1, out_channel=self.cfg.DATA.semseg_classes, if_PPM=self.cfg.MODEL_BRDF.semseg_PPM)})
+                self.BRDF_Net.update({'semsegDecoder': self.decoder_to_use(opt, mode=-1, out_channel=self.cfg.DATA.semseg_classes, if_PPM=self.cfg.MODEL_BRDF.semseg_PPM)})
 
         # self.guide_net = guideNet(opt)
 
@@ -203,7 +205,7 @@ class SemSeg_MatSeg_BRDF(nn.Module):
             semsegPred = self.BRDF_Net['semsegDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6)
             return_dict.update({'semseg_pred': semsegPred})
             
-        if self.cfg.MODEL_MATSEG.if_albedo_pooling or self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv:
+        if self.cfg.MODEL_MATSEG.if_albedo_pooling or self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool:
             return_dict.update({'im_trainval_RGB_mask_pooled_mean': albedo_output['im_trainval_RGB_mask_pooled_mean']})
             
 

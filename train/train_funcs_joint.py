@@ -338,6 +338,11 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     writer.add_text('VAL_image_name/%d'%(sample_idx+batch_size*batch_id), im_path, tid)
                     print(sample_idx+batch_size*batch_id, im_path)
 
+                if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
+                    if opt.is_master:
+                        im_trainval_RGB_mask_pooled_mean = output_dict['im_trainval_RGB_mask_pooled_mean'][sample_idx]
+                        im_trainval_RGB_mask_pooled_mean = im_trainval_RGB_mask_pooled_mean.cpu().numpy().squeeze().transpose(1, 2, 0)
+                        writer.add_image('VAL_im_trainval_RGB_mask_pooled_mean/%d'%(sample_idx+batch_size*batch_id), im_trainval_RGB_mask_pooled_mean, tid, dataformats='HWC')
 
 
                 # ======= Vis BRDFsemseg / semseg

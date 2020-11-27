@@ -70,6 +70,9 @@ _C.MODEL_MATSEG.if_albedo_asso_pool_conv = False
 
 _C.MODEL_MATSEG.if_albedo_pac_pool = False
 _C.MODEL_MATSEG.if_albedo_pac_pool_keep_input = True
+_C.MODEL_MATSEG.if_albedo_pac_pool_mean = False # True: return mean of pooled tensors; False: return stacked
+_C.MODEL_MATSEG.albedo_pac_pool_mean_layers = 'xin6'
+_C.MODEL_MATSEG.albedo_pac_pool_mean_layers_allowed = 'x6_xin1_xin2_xin3_xin4_xin5_xin6'
 
 _C.MODEL_SEMSEG = CN()
 _C.MODEL_SEMSEG.enable = False
