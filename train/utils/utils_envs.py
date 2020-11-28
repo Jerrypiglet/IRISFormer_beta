@@ -34,7 +34,7 @@ def set_up_envs(opt):
         opt.cfg.DATA.load_semseg_gt = True
         opt.semseg_criterion = nn.CrossEntropyLoss(ignore_index=opt.cfg.DATA.semseg_ignore_label)
     
-    if opt.cfg.MODEL_MATSEG.enable or opt.cfg.MODEL_MATSEG.use_as_input or opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv:
+    if opt.cfg.MODEL_MATSEG.enable or opt.cfg.MODEL_MATSEG.use_as_input or opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool:
         opt.cfg.DATA.load_matseg_gt = True
     
     if opt.cfg.MODEL_BRDF.enable_semseg_decoder and opt.cfg.MODEL_SEMSEG.enable:
@@ -50,6 +50,9 @@ def set_up_envs(opt):
     assert all(e in opt.cfg.MODEL_MATSEG.albedo_pac_pool_mean_layers_allowed for e in opt.cfg.MODEL_MATSEG.albedo_pac_pool_mean_layers)
 
     assert opt.cfg.MODEL_MATSEG.albedo_pooling_from in ['gt', 'pred']
+
+    opt.if_vis_debug_pac_pool = False
+
 
 def set_up_logger(opt):
     from utils.logger import setup_logger, Logger, printer

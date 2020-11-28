@@ -72,6 +72,8 @@ parser.add_argument('--if_cluster', action='store_true', help='if using cluster'
 parser.add_argument('--if_hdr_input_matseg', action='store_true', help='if using hdr images')
 parser.add_argument('--eval_every_iter', type=int, default=2000, help='')
 parser.add_argument('--save_every_iter', type=int, default=2000, help='')
+parser.add_argument('--debug_every_iter', type=int, default=2000, help='')
+parser.add_argument('--max_iter', type=int, default=-1, help='')
 parser.add_argument('--invalid_index', type=int, default = 0, help='index for invalid aread (e.g. windows, lights)')
 
 # Pre-training
@@ -276,8 +278,11 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
     # ts_iter_start = ts
     ts_iter_end = ts_epoch_start
     
-    print('=======3', opt.rank, cfg.MODEL_SEMSEG.fix_bn)
+    print('=======NEW EPOCH', opt.rank, cfg.MODEL_SEMSEG.fix_bn)
     synchronize()
+
+    if tid >= opt.max_iter and opt.max_iter != -1:
+        break
 
     for i, data_batch in enumerate(brdf_loader_train):
         reset_tictoc = False
@@ -313,6 +318,9 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
 
         if opt.ifDataloaderOnly:
             continue
+        if tid % opt.debug_every_iter == 0:
+            opt.if_vis_debug_pac_pool = True
+
 
         # ======= Load data from cpu to gpu
         input_dict = get_input_dict_joint(data_batch, opt)
@@ -391,13 +399,17 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
                 writer.add_scalar('training/batch_size_per_gpu', len(data_batch['imPath']), tid)
                 writer.add_scalar('training/gpus', opt.num_gpus, tid)
         # if opt.is_master:
-        if tid % 2000 == 0:
+
+        if tid % opt.debug_every_iter == 0:       
             if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
                 if opt.is_master:
                     for sample_idx, im_trainval_RGB_mask_pooled_mean in enumerate(output_dict['im_trainval_RGB_mask_pooled_mean']):
                         im_trainval_RGB_mask_pooled_mean = im_trainval_RGB_mask_pooled_mean.cpu().numpy().squeeze().transpose(1, 2, 0)
-                        writer.add_image('TRAIN_im_trainval_RGB_mask_pooled_mean/%d'%sample_idx, im_trainval_RGB_mask_pooled_mean, tid, dataformats='HWC')
+                        writer.add_image('TRAIN_im_trainval_RGB_debug/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), data_batch['im_trainval_RGB'][sample_idx].numpy().squeeze().transpose(1, 2, 0), tid, dataformats='HWC')
+                        writer.add_image('TRAIN_im_trainval_RGB_mask_pooled_mean/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), im_trainval_RGB_mask_pooled_mean, tid, dataformats='HWC')
+                        logger.info('Added debug pooling sample')
             
+        if tid % 2000 == 0:
             for sample_idx, (im_single, im_trainval_RGB, im_path) in enumerate(zip(data_batch['im'], data_batch['im_trainval_RGB'], data_batch['imPath'])):
                 im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
                 im_trainval_RGB = im_trainval_RGB.numpy().squeeze().transpose(1, 2, 0)
@@ -445,6 +457,11 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         # print(input_dict['im_batch_matseg'].shape)
         # print(input_dict['im_batch_matseg'].shape)
         synchronize()
+        if tid % opt.debug_every_iter == 0:
+            opt.if_vis_debug_pac_pool = False
+
         tid += 1
+        if tid >= opt.max_iter and opt.max_iter != -1:
+            break
 
             # print(ts_iter_end_start_list, ts_iter_start_end_list)

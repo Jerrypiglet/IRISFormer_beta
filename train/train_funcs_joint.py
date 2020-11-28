@@ -275,6 +275,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     logger.info(red('===Visualizing for %d batches on rank %d'%(len(brdf_loader_val), opt.rank)))
 
     model.eval()
+    opt.if_vis_debug_pac_pool = True
 
     time_meters = get_time_meters_joint()
 
@@ -298,7 +299,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         normalPreds_list = []
         roughPreds_list = []
         depthPreds_list = []
-
+    
+    # opt.albedo_pooling_debug = True
 
     with torch.no_grad():
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
@@ -335,6 +337,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 # semseg_color.save(color_path)
                 if opt.is_master:
                     writer.add_image('VAL_im/%d'%(sample_idx+batch_size*batch_id), im_single, tid, dataformats='HWC')
+                    if opt.cfg.MODEL_MATSEG.albedo_pooling_debug and not opt.if_cluster:
+                        np.save('tmp/pac-pool/im_trainval_RGB_tid%d_idx%d.npy'%(tid, sample_idx+batch_size*batch_id), im_single)
+
                     writer.add_text('VAL_image_name/%d'%(sample_idx+batch_size*batch_id), im_path, tid)
                     print(sample_idx+batch_size*batch_id, im_path)
 
@@ -343,6 +348,11 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                         im_trainval_RGB_mask_pooled_mean = output_dict['im_trainval_RGB_mask_pooled_mean'][sample_idx]
                         im_trainval_RGB_mask_pooled_mean = im_trainval_RGB_mask_pooled_mean.cpu().numpy().squeeze().transpose(1, 2, 0)
                         writer.add_image('VAL_im_trainval_RGB_mask_pooled_mean/%d'%(sample_idx+batch_size*batch_id), im_trainval_RGB_mask_pooled_mean, tid, dataformats='HWC')
+                        if not opt.if_cluster:
+                            kernel_list = output_dict['kernel_list']
+                            print(len(kernel_list), kernel_list[0].shape)
+                            np.save('tmp/pac-pool/kernel_list_tid%d_idx%d.npy'%(tid, sample_idx+batch_size*batch_id), kernel_list[0].detach().cpu().numpy())
+                            np.save('tmp/pac-pool/im_trainval_RGB_mask_pooled_mean_tid%d_idx%d.npy'%(tid, sample_idx+batch_size*batch_id), im_trainval_RGB_mask_pooled_mean)
 
 
                 # ======= Vis BRDFsemseg / semseg
@@ -357,6 +367,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     color_pred = np.array(colorize(gray_pred, colors).convert('RGB'))
                     if opt.is_master:
                         writer.add_image('VAL_semseg_PRED/%d'%(sample_idx+batch_size*batch_id), color_pred, tid, dataformats='HWC')
+
             
                 
             # ======= visualize clusters for mat-seg
@@ -433,6 +444,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
                     if opt.is_master:
                         writer.add_image('VAL_matseg-aggre_map_PRED/%d'%(sample_idx+batch_size*batch_id), matAggreMap_pred_single_vis, tid, dataformats='HWC')
+                        if opt.cfg.MODEL_MATSEG.albedo_pooling_debug and not opt.if_cluster:
+                            np.save('tmp/pac-pool/matseg_pred_tid%d_idx%d.npy'%(tid, sample_idx+batch_size*batch_id), matAggreMap_pred_single_vis)
 
                     logger.info('Vis batch for %.2f seconds.'%(time.time()-ts_start_vis))
 
@@ -611,6 +624,10 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
     logger.info(red('Evaluation VIS timings: ' + time_meters_to_string(time_meters)))
 
+    # opt.albedo_pooling_debug = False
+
     synchronize()
+    opt.if_vis_debug_pac_pool = False
+
 
 

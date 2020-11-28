@@ -206,7 +206,7 @@ class SemSeg_MatSeg_BRDF(nn.Module):
             return_dict.update({'semseg_pred': semsegPred})
             
         if self.cfg.MODEL_MATSEG.if_albedo_pooling or self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool:
-            return_dict.update({'im_trainval_RGB_mask_pooled_mean': albedo_output['im_trainval_RGB_mask_pooled_mean']})
+            return_dict.update({'im_trainval_RGB_mask_pooled_mean': albedo_output['im_trainval_RGB_mask_pooled_mean'], 'kernel_list': albedo_output['kernel_list']})
             
 
         return return_dict
