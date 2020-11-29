@@ -206,3 +206,6 @@ def only1true(l):
                 true_found = True
     # found zero or one True value
     return true_found
+
+def nonetrue(l):
+    return not any(l)

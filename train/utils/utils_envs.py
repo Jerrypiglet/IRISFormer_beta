@@ -45,13 +45,28 @@ def set_up_envs(opt):
 
     opt.cfg.MODEL_BRDF.enable_list = opt.cfg.MODEL_BRDF.enable_list.split('_')
 
+    # Guidance in general
+    guidance_options = [opt.cfg.MODEL_MATSEG.if_albedo_pooling,opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv,opt.cfg.MODEL_MATSEG.if_albedo_pac_pool,opt.cfg.MODEL_MATSEG.if_albedo_pac_conv]
+    from utils.utils_misc import only1true
+    assert only1true(guidance_options) or nonetrue(guidance_options), 'Only ONE of the guidance methods canbe true at the same time!'
+
+    assert opt.cfg.MODEL_MATSEG.albedo_pooling_from in ['gt', 'pred']
+
+    # PAC
+    opt.if_vis_debug_pac = False
+    # Pac pool
     opt.cfg.MODEL_MATSEG.albedo_pac_pool_mean_layers  = opt.cfg.MODEL_MATSEG.albedo_pac_pool_mean_layers.split('_')
     opt.cfg.MODEL_MATSEG.albedo_pac_pool_mean_layers_allowed  = opt.cfg.MODEL_MATSEG.albedo_pac_pool_mean_layers_allowed.split('_')
     assert all(e in opt.cfg.MODEL_MATSEG.albedo_pac_pool_mean_layers_allowed for e in opt.cfg.MODEL_MATSEG.albedo_pac_pool_mean_layers)
 
-    assert opt.cfg.MODEL_MATSEG.albedo_pooling_from in ['gt', 'pred']
+    # Pac cov
+    opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers  = opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers.split('_')
+    opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers_allowed  = opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers_allowed.split('_')
+    assert all(e in opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers_allowed for e in opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers)
 
-    opt.if_vis_debug_pac_pool = False
+
+
+
 
 
 def set_up_logger(opt):

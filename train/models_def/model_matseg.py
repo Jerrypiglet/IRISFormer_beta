@@ -8,6 +8,8 @@ def logit_embedding_to_instance(mat_notlight_mask_cpu, logits, embeddings, opt):
     h, w = logits.shape[2], logits.shape[3]
     instance_list = []
     num_mat_masks_list = []
+    predict_segmentation_list = []
+    
 
     for sample_idx, (logit_single, embedding_single) in enumerate(zip(logits, embeddings)):
         # prob_single = torch.sigmoid(logit_single)
@@ -31,7 +33,7 @@ def logit_embedding_to_instance(mat_notlight_mask_cpu, logits, embeddings, opt):
         predict_segmentation = torch.argmax(segmentation, dim=1).view(h, w) # reshape to [h, w]: [0, 1, ..., len(matching)-1]; use this for mask pooling!!!!
         num_mat_masks = torch.max(predict_segmentation) + 1
 
-        predict_segmentation[prob_single.squeeze() <= 0.1] = num_mat_masks
+        predict_segmentation[prob_single.squeeze() <= 0.1] = num_mat_masks # [h, w]: [0, 1, ..., len(matching)]; the last being the light mask
 
         predict_instance = torch.zeros((50, h, w), device=predict_segmentation.device)
         for i in range(num_mat_masks):
@@ -39,11 +41,11 @@ def logit_embedding_to_instance(mat_notlight_mask_cpu, logits, embeddings, opt):
             predict_instance[i, :, :] = seg.reshape(h, w) # segmentation[0..num_mat_masks-1] for plane instances
         predict_instance = predict_instance.long()
 
-
         instance_list.append(predict_instance)
         num_mat_masks_list.append(num_mat_masks)
+        predict_segmentation_list.append(predict_segmentation)
 
-    return torch.stack(instance_list), torch.stack(num_mat_masks_list)
+    return torch.stack(instance_list), torch.stack(num_mat_masks_list), torch.stack(predict_segmentation_list)
 
 
         # # greedy match of predict segmentation and ground truth segmentation using cross entropy

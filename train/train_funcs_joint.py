@@ -275,7 +275,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     logger.info(red('===Visualizing for %d batches on rank %d'%(len(brdf_loader_val), opt.rank)))
 
     model.eval()
-    opt.if_vis_debug_pac_pool = True
+    opt.if_vis_debug_pac = True
 
     time_meters = get_time_meters_joint()
 
@@ -627,7 +627,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     # opt.albedo_pooling_debug = False
 
     synchronize()
-    opt.if_vis_debug_pac_pool = False
+    opt.if_vis_debug_pac = False
 
 
 

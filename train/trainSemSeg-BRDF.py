@@ -319,7 +319,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         if opt.ifDataloaderOnly:
             continue
         if tid % opt.debug_every_iter == 0:
-            opt.if_vis_debug_pac_pool = True
+            opt.if_vis_debug_pac = True
 
 
         # ======= Load data from cpu to gpu
@@ -458,7 +458,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         # print(input_dict['im_batch_matseg'].shape)
         synchronize()
         if tid % opt.debug_every_iter == 0:
-            opt.if_vis_debug_pac_pool = False
+            opt.if_vis_debug_pac = False
 
         tid += 1
         if tid >= opt.max_iter and opt.max_iter != -1:

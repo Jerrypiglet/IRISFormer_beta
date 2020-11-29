@@ -60,6 +60,7 @@ _C.MODEL_MATSEG.use_as_input = False
 _C.MODEL_MATSEG.use_semseg_as_input = False
 _C.MODEL_MATSEG.load_pretrained_pth = False
 _C.MODEL_MATSEG.pretrained_pth = ''
+_C.MODEL_MATSEG.use_pred_as_input = False
 
 _C.MODEL_MATSEG.albedo_pooling_debug = False
 
@@ -73,6 +74,12 @@ _C.MODEL_MATSEG.if_albedo_pac_pool_keep_input = True
 _C.MODEL_MATSEG.if_albedo_pac_pool_mean = False # True: return mean of pooled tensors; False: return stacked
 _C.MODEL_MATSEG.albedo_pac_pool_mean_layers = 'xin6'
 _C.MODEL_MATSEG.albedo_pac_pool_mean_layers_allowed = 'x6_xin1_xin2_xin3_xin4_xin5_xin6'
+
+_C.MODEL_MATSEG.if_albedo_pac_conv = False
+_C.MODEL_MATSEG.if_albedo_pac_conv_keep_input = True
+_C.MODEL_MATSEG.if_albedo_pac_conv_mean = False # True: return mean of pooled tensors; False: return stacked
+_C.MODEL_MATSEG.albedo_pac_conv_mean_layers = 'xin6'
+_C.MODEL_MATSEG.albedo_pac_conv_mean_layers_allowed = 'x6_xin1_xin2_xin3_xin4_xin5_xin6'
 
 _C.MODEL_SEMSEG = CN()
 _C.MODEL_SEMSEG.enable = False

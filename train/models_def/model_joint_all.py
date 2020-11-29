@@ -7,6 +7,7 @@ from utils.utils_misc import *
 import pac
 from utils.utils_training import freeze_bn_in_module
 import torch.nn.functional as F
+from models_def.model_matseg import logit_embedding_to_instance
 
 class SemSeg_MatSeg_BRDF(nn.Module):
     def __init__(self, opt, logger):
@@ -49,6 +50,8 @@ class SemSeg_MatSeg_BRDF(nn.Module):
                 in_channels += 1
             if self.opt.cfg.MODEL_SEMSEG.use_as_input:
                 in_channels += 1
+            if self.opt.cfg.MODEL_MATSEG.use_pred_as_input:
+                in_channels += 1
 
             self.decoder_to_use = models_brdf.decoder0
 
@@ -58,6 +61,9 @@ class SemSeg_MatSeg_BRDF(nn.Module):
 
             if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_pool:
                 self.decoder_to_use = models_brdf.decoder0_pacpool
+            if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_conv:
+                import models_def.models_brdf_pac_conv as models_brdf_pac_conv
+                self.decoder_to_use = models_brdf_pac_conv.decoder0_pacconv
 
             self.BRDF_Net = nn.ModuleDict({
                     'encoder': models_brdf.encoder0(opt, cascadeLevel = self.opt.cascadeLevel, in_channels = in_channels)
@@ -149,6 +155,12 @@ class SemSeg_MatSeg_BRDF(nn.Module):
             input_list.append(input_dict['semseg_label'].float().unsqueeze(1) / float(self.opt.cfg.DATA.semseg_classes))
         if self.opt.cfg.MODEL_MATSEG.use_as_input:
             input_list.append(input_dict['matAggreMapBatch'].float() / float(255.))
+        if self.opt.cfg.MODEL_MATSEG.use_pred_as_input:
+            matseg_logits = input_dict_extra['return_dict_matseg']['logit']
+            matseg_embeddings = input_dict_extra['return_dict_matseg']['embedding']
+            mat_notlight_mask_cpu = input_dict['mat_notlight_mask_cpu']
+            _, _, predict_segmentation = logit_embedding_to_instance(mat_notlight_mask_cpu, matseg_logits, matseg_embeddings, self.opt)
+            input_list.append(predict_segmentation.float().unsqueeze(1) / float(self.opt.cfg.DATA.semseg_classes))
 
         input_tensor = torch.cat(input_list, 1)
         #     # a = input_dict['semseg_label'].float().unsqueeze(1) / float(self.opt.cfg.DATA.semseg_classes)
@@ -172,7 +184,7 @@ class SemSeg_MatSeg_BRDF(nn.Module):
                     assert input_dict_extra['return_dict_matseg'] is not None
                     input_extra_dict.update({'matseg-logits': input_dict_extra['return_dict_matseg']['logit'], 'matseg-embeddings': input_dict_extra['return_dict_matseg']['embedding'], \
                         'mat_notlight_mask_cpu': input_dict['mat_notlight_mask_cpu']})
-            if self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool:
+            if self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool or self.cfg.MODEL_MATSEG.if_albedo_pac_conv:
                 assert input_dict_extra is not None
                 assert input_dict_extra['return_dict_matseg'] is not None
                 input_extra_dict.update({'im_trainval_RGB': input_dict['im_trainval_RGB'], 'mat_notlight_mask_gpu_float': input_dict['mat_notlight_mask_gpu_float']})
@@ -248,7 +260,9 @@ class SemSeg_MatSeg_BRDF(nn.Module):
 
         if self.cfg.MODEL_BRDF.enable:
             input_dict_extra = {'input_dict_guide': input_dict_guide}
-            if (self.cfg.MODEL_MATSEG.if_albedo_pooling and self.cfg.MODEL_MATSEG.albedo_pooling_from == 'pred') or self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool:
+            if (self.cfg.MODEL_MATSEG.if_albedo_pooling and self.cfg.MODEL_MATSEG.albedo_pooling_from == 'pred') \
+                or self.cfg.MODEL_MATSEG.use_pred_as_input \
+                or self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool or self.cfg.MODEL_MATSEG.if_albedo_pac_conv:
                 # print(return_dict_matseg.keys()) # dict_keys(['logit', 'embedding', 'feats_matseg_dict'])
                 input_dict_extra.update({'return_dict_matseg': return_dict_matseg})
 
