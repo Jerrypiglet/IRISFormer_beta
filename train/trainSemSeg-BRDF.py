@@ -78,6 +78,7 @@ parser.add_argument('--invalid_index', type=int, default = 0, help='index for in
 
 # Pre-training
 parser.add_argument('--resume', type=str, help='resume training; can be full path (e.g. tmp/checkpoint0.pth.tar) or taskname (e.g. tmp); [to continue the current task, use: resume]', default='NoCkpt')
+parser.add_argument('--reset_latest_ckpt', action='store_true', help='remove latest_checkpoint file')
 parser.add_argument('--reset_scheduler', action='store_true', help='')
 parser.add_argument('--reset_lr', action='store_true', help='')
 # debug
@@ -401,7 +402,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         # if opt.is_master:
 
         if tid % opt.debug_every_iter == 0:       
-            if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
+            if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool or opt.cfg.MODEL_MATSEG.if_albedo_safenet) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
                 if opt.is_master:
                     for sample_idx, im_trainval_RGB_mask_pooled_mean in enumerate(output_dict['im_trainval_RGB_mask_pooled_mean']):
                         im_trainval_RGB_mask_pooled_mean = im_trainval_RGB_mask_pooled_mean.cpu().numpy().squeeze().transpose(1, 2, 0)

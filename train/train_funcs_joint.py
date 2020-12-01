@@ -338,21 +338,34 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 if opt.is_master:
                     writer.add_image('VAL_im/%d'%(sample_idx+batch_size*batch_id), im_single, tid, dataformats='HWC')
                     if opt.cfg.MODEL_MATSEG.albedo_pooling_debug and not opt.if_cluster:
-                        np.save('tmp/pac-pool/im_trainval_RGB_tid%d_idx%d.npy'%(tid, sample_idx+batch_size*batch_id), im_single)
+                        os.makedirs('tmp/demo_%s'%(opt.task_name), exist_ok=True)
+                        np.save('tmp/demo_%s/im_trainval_RGB_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id), im_single)
+                        print('Saved to' + 'tmp/demo_%s/im_trainval_RGB_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id))
 
                     writer.add_text('VAL_image_name/%d'%(sample_idx+batch_size*batch_id), im_path, tid)
                     print(sample_idx+batch_size*batch_id, im_path)
 
-                if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
+                if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool or opt.cfg.MODEL_MATSEG.if_albedo_safenet) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
                     if opt.is_master:
-                        im_trainval_RGB_mask_pooled_mean = output_dict['im_trainval_RGB_mask_pooled_mean'][sample_idx]
-                        im_trainval_RGB_mask_pooled_mean = im_trainval_RGB_mask_pooled_mean.cpu().numpy().squeeze().transpose(1, 2, 0)
-                        writer.add_image('VAL_im_trainval_RGB_mask_pooled_mean/%d'%(sample_idx+batch_size*batch_id), im_trainval_RGB_mask_pooled_mean, tid, dataformats='HWC')
+                        if output_dict['im_trainval_RGB_mask_pooled_mean'] is not None:
+                            im_trainval_RGB_mask_pooled_mean = output_dict['im_trainval_RGB_mask_pooled_mean'][sample_idx]
+                            im_trainval_RGB_mask_pooled_mean = im_trainval_RGB_mask_pooled_mean.cpu().numpy().squeeze().transpose(1, 2, 0)
+                            writer.add_image('VAL_im_trainval_RGB_mask_pooled_mean/%d'%(sample_idx+batch_size*batch_id), im_trainval_RGB_mask_pooled_mean, tid, dataformats='HWC')
                         if not opt.if_cluster:
                             kernel_list = output_dict['kernel_list']
-                            print(len(kernel_list), kernel_list[0].shape)
-                            np.save('tmp/pac-pool/kernel_list_tid%d_idx%d.npy'%(tid, sample_idx+batch_size*batch_id), kernel_list[0].detach().cpu().numpy())
-                            np.save('tmp/pac-pool/im_trainval_RGB_mask_pooled_mean_tid%d_idx%d.npy'%(tid, sample_idx+batch_size*batch_id), im_trainval_RGB_mask_pooled_mean)
+                            if not kernel_list is None:
+                                print(len(kernel_list), kernel_list[0].shape)
+                                np.save('tmp/demo_%s/kernel_list_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id), kernel_list[0].detach().cpu().numpy())
+                            if output_dict['im_trainval_RGB_mask_pooled_mean'] is not None:
+                                np.save('tmp/demo_%s/im_trainval_RGB_mask_pooled_mean_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id), im_trainval_RGB_mask_pooled_mean)
+                            if 'affinity' in output_dict:
+                                affinity = output_dict['affinity']
+                                sample_ij = output_dict['sample_ij']
+                                if affinity is not None:
+                                    np.save('tmp/demo_%s/affinity_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id), affinity[0].detach().cpu().numpy())
+                                    np.save('tmp/demo_%s/sample_ij_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id), sample_ij)
+
+
 
 
                 # ======= Vis BRDFsemseg / semseg
@@ -445,7 +458,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     if opt.is_master:
                         writer.add_image('VAL_matseg-aggre_map_PRED/%d'%(sample_idx+batch_size*batch_id), matAggreMap_pred_single_vis, tid, dataformats='HWC')
                         if opt.cfg.MODEL_MATSEG.albedo_pooling_debug and not opt.if_cluster:
-                            np.save('tmp/pac-pool/matseg_pred_tid%d_idx%d.npy'%(tid, sample_idx+batch_size*batch_id), matAggreMap_pred_single_vis)
+                            np.save('tmp/demo_%s/matseg_pred_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id), matAggreMap_pred_single_vis)
 
                     logger.info('Vis batch for %.2f seconds.'%(time.time()-ts_start_vis))
 

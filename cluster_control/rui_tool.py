@@ -51,6 +51,7 @@ def parse_args():
     create_parser.add_argument('-f', '--file', type=str, help='Path to template file')
     create_parser.add_argument('-s', '--string', type=str, help='Input command')
     create_parser.add_argument('-d', '--deploy', action='store_true', help='deploy the code')
+    create_parser.add_argument('--resume', type=str, help='resume_from: e.g. 20201129-232627', default='none')
     create_parser.add_argument('--deploy_src', type=str, help='deploy to target path', default='~/Documents/Projects/semanticInverse/train/')
     create_parser.add_argument('--deploy_s3', type=str, help='deploy s3 container', default='s3mm1:train')
     create_parser.add_argument('--deploy_tar', type=str, help='deploy to target path', default='/viscompfs/users/ruizhu/train')
@@ -173,49 +174,71 @@ def deploy_to_s3(args):
     print('>>>>>>>>>>>> deployed with: %s'%deploy_command)
 
 def create(args):
-    command_str = args.string
-    datetime_str = get_datetime()
-    command_str = command_str.replace('DATE', datetime_str)
-    print('------------ Command string:')
-    print(command_str)
+    if args.resume != 'none':
+        datetime_str = args.resume
+        tmp_yaml_filaname = 'tasks/%s/tmp_%s.yaml'%(datetime_str, datetime_str)
+        print('============ Resuming from YAML file: %s'%tmp_yaml_filaname)
+        yaml_content = load_yaml(tmp_yaml_filaname)
+        yaml_content['metadata']['name'] += '-re'
+        command_str = yaml_content['spec']['template']['spec']['containers'][0]['args'][0]
+        s_split = command_str.split(' ')
+        start_index = s_split.index('rclone')
+        for i in range(5):
+            s_split.pop(start_index)
+        insert_index = s_split.index('--if_cluster')
+        s_split.insert(insert_index+1, '--reset_latest_ckpt')
+        command_str = ' '.join(s_split)
+        yaml_content['spec']['template']['spec']['containers'][0]['args'][0] = command_str
+        tmp_yaml_filaname = tmp_yaml_filaname.replace('.yaml', '-RE.yaml')
+        dump_yaml(tmp_yaml_filaname, yaml_content)
+        print('============ YAML file dumped to %s'%tmp_yaml_filaname)
+        print(command_str)
 
-    yaml_content = load_yaml(args.file)
-    var_replace_list = replace_vars(vars(args))
-    yaml_content = iterate_dict(yaml_content, var_replace_list=var_replace_list)
-    print('------------ yaml_content:')
-    print(yaml_content)
+    else:
+        command_str = args.string
+        datetime_str = get_datetime()
+        command_str = command_str.replace('DATE', datetime_str)
+        print('------------ Command string:')
+        print(command_str)
 
-    command_str = command_str.replace('python', args.python_path)
-    if args.deploy:
-        args.deploy_tar += '-%s'%datetime_str
-        command_str = 'rclone copy %s %s && cd %s && '%(args.deploy_s3, args.deploy_tar, args.deploy_tar) + command_str
-        command_str = command_str.replace('pip', args.pip_path)
-        
-    yaml_content['spec']['template']['spec']['containers'][0]['args'][0] += command_str
-    yaml_content['metadata']['name'] += datetime_str
-    tmp_yaml_filaname = 'yamls/tmp_%s.yaml'%datetime_str
-    dump_yaml(tmp_yaml_filaname, yaml_content)
-    print('============ YAML file dumped to %s'%tmp_yaml_filaname)
+        yaml_content = load_yaml(args.file)
+        var_replace_list = replace_vars(vars(args))
+        yaml_content = iterate_dict(yaml_content, var_replace_list=var_replace_list)
+        print('------------ yaml_content:')
+        print(yaml_content)
+
+        command_str = command_str.replace('python', args.python_path)
+        if args.deploy:
+            args.deploy_tar += '-%s'%datetime_str
+            command_str = 'rclone copy %s %s && cd %s && '%(args.deploy_s3, args.deploy_tar, args.deploy_tar) + command_str
+            command_str = command_str.replace('pip', args.pip_path)
+            
+        yaml_content['spec']['template']['spec']['containers'][0]['args'][0] += command_str
+        yaml_content['metadata']['name'] += datetime_str
+        tmp_yaml_filaname = 'yamls/tmp_%s.yaml'%datetime_str
+        dump_yaml(tmp_yaml_filaname, yaml_content)
+        print('============ YAML file dumped to %s'%tmp_yaml_filaname)
 
     if args.deploy:
         deploy_to_s3(args)
     
     create_job_from_yaml(tmp_yaml_filaname)
 
-    task_dir = './tasks/%s'%datetime_str
-    os.mkdir(task_dir)
-    os.system('cp %s %s/'%(tmp_yaml_filaname, task_dir))
-    text_file = open(task_dir + "/command.txt", "w")
-    n = text_file.write(command_str)
-    text_file.close()
-    print('yaml and command file saved to %s'%task_dir)
+    if args.resume == 'none':
+        task_dir = './tasks/%s'%datetime_str
+        os.mkdir(task_dir)
+        os.system('cp %s %s/'%(tmp_yaml_filaname, task_dir))
+        text_file = open(task_dir + "/command.txt", "w")
+        n = text_file.write(command_str)
+        text_file.close()
+        print('yaml and command file saved to %s'%task_dir)
 
     # os.remove(tmp_yaml_filaname)
     # print('========= REMOVED YAML file %s'%tmp_yaml_filaname)
 
     pod_name = get_pods(yaml_content['metadata']['name'])
     
-    if pod_name:
+    if pod_name and args.resume == 'none':
         with open("all_commands.txt", "a+") as f:
             f.write("%s-%s\n" % (pod_name, datetime_str))
             f.write("%s\n" % command_str)

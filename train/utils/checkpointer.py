@@ -124,6 +124,15 @@ class Checkpointer(object):
         save_file = os.path.join(self.save_dir, "last_checkpoint")
         return os.path.exists(save_file)
 
+    def get_latest_ckpt(self, ckpt_path):
+        ckpt_list = [x for x in os.listdir(ckpt_path) if 'checkpointer' in x]
+        if not ckpt_list:
+            self.logger.warning('ckpt path %s is empty!'%ckpt_path)
+            return None
+        iter_list = [x.split('_')[2].split('.')[0] for x in ckpt_list]
+        idx_sort = sorted(range(len(iter_list)), key=lambda k: iter_list[k])
+        return os.path.join(ckpt_path, ckpt_list[idx_sort[-1]])
+
     def get_checkpoint_file(self, task_name=None):
         if task_name is not None:
             task_name_splits = task_name.split('/')
@@ -134,20 +143,23 @@ class Checkpointer(object):
         else:
             ckpt_folder = self.save_dir
         save_file = os.path.join(ckpt_folder, "last_checkpoint")
-        try:
-            with open(save_file, "r") as f:
-                last_saved = f.read()
-                last_saved = last_saved.strip()
-                import re
-                sub_start = '/mnt'
-                sub_end = 'Checkpoint/'
-                last_saved = re.sub(r'{}.*?{}'.format(re.escape(sub_start),re.escape(sub_end)),'', last_saved)
-        except IOError:
-            # if file doesn't exist, maybe because it has just been
-            # deleted by a separate process
-            last_saved = ""
-            self.logger.warning(save_file + 'NOT FOUND!')
-        return os.path.join(self.checkpoint_all_dir, last_saved)
+        if os.path.exists(save_file):
+            try:
+                with open(save_file, "r") as f:
+                    last_saved = f.read()
+                    last_saved = last_saved.strip()
+                    import re
+                    sub_start = '/mnt'
+                    sub_end = 'Checkpoint/'
+                    last_saved = re.sub(r'{}.*?{}'.format(re.escape(sub_start),re.escape(sub_end)),'', last_saved)
+            except IOError:
+                # if file doesn't exist, maybe because it has just been
+                # deleted by a separate process
+                last_saved = ""
+                self.logger.warning(save_file + 'NOT FOUND!')
+            return os.path.join(self.checkpoint_all_dir, last_saved)
+        else:
+            return self.get_latest_ckpt(ckpt_folder)
 
     def tag_last_checkpoint(self, last_filename):
         save_file = os.path.join(self.save_dir, "last_checkpoint")

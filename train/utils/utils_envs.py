@@ -46,7 +46,9 @@ def set_up_envs(opt):
     opt.cfg.MODEL_BRDF.enable_list = opt.cfg.MODEL_BRDF.enable_list.split('_')
 
     # Guidance in general
-    guidance_options = [opt.cfg.MODEL_MATSEG.if_albedo_pooling,opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv,opt.cfg.MODEL_MATSEG.if_albedo_pac_pool,opt.cfg.MODEL_MATSEG.if_albedo_pac_conv]
+    guidance_options = [opt.cfg.MODEL_MATSEG.if_albedo_pooling,opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv, \
+        opt.cfg.MODEL_MATSEG.if_albedo_pac_pool, opt.cfg.MODEL_MATSEG.if_albedo_pac_conv, \
+        opt.cfg.MODEL_MATSEG.if_albedo_safenet]
     from utils.utils_misc import only1true
     assert only1true(guidance_options) or nonetrue(guidance_options), 'Only ONE of the guidance methods canbe true at the same time!'
 
@@ -64,7 +66,10 @@ def set_up_envs(opt):
     opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers_allowed  = opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers_allowed.split('_')
     assert all(e in opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers_allowed for e in opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers)
 
-
+    # Safenet global affinity
+    opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers  = opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers.split('_')
+    opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers_allowed  = opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers_allowed.split('_')
+    assert all(e in opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers_allowed for e in opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers)
 
 
 
@@ -144,12 +149,21 @@ def set_up_folders(opt):
             if not root_folder.exists():
                 root_folder.mkdir(exist_ok=True)
         if_delete = 'n'
+        print(green(opt.summary_path_task), os.path.isdir(opt.summary_path_task))
         if os.path.isdir(opt.summary_path_task):
             if 'POD' in opt.task_name:
-                if opt.resume == 'NoCkpt':
-                    if_delete = 'y'
-            else:
-                if_delete = input(colored('Summary path %s already exists. Delete? [y/n] '%opt.summary_path_task, 'white', 'on_blue'))
+                if_delete = 'n'
+                opt.resume = opt.task_name
+                print(green('Resuming task %s'%opt.resume))
+
+                if opt.reset_latest_ckpt:
+                    os.system('rm %s'%(os.path.join(opt.checkpoints_path_task, 'last_checkpoint')))
+                    print(green('Removed last_checkpoint shortcut for %s'%opt.resume))
+
+            #     if opt.resume == 'NoCkpt':
+            #         if_delete = 'y'
+            # else:
+            #     if_delete = input(colored('Summary path %s already exists. Delete? [y/n] '%opt.summary_p[ath_task, 'white', 'on_blue'))
                 # if_delete = 'y'
             if if_delete == 'y':
                 for save_folder in save_folders:
