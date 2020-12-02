@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: z-job-tb
+  name: zz-job-tb
   # name: z-job-tb-before-cvpr
   # namespace: ucsd-haosulab
   namespace: "#NAMESPACE"

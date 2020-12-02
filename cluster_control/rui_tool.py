@@ -180,6 +180,8 @@ def create(args):
         print('============ Resuming from YAML file: %s'%tmp_yaml_filaname)
         yaml_content = load_yaml(tmp_yaml_filaname)
         yaml_content['metadata']['name'] += '-re'
+        sys.command('kubectl delete job '+yaml_content['metadata']['name'])
+        print('============ Task removed: %s'%yaml_content['metadata']['name'])
         command_str = yaml_content['spec']['template']['spec']['containers'][0]['args'][0]
         s_split = command_str.split(' ')
         start_index = s_split.index('rclone')

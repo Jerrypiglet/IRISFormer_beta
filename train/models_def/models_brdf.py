@@ -360,7 +360,7 @@ class decoder0(nn.Module):
 
         if self.if_albedo_pac_pool:
             self.acco_pool_mean_list = torch.nn.ModuleList([])
-            self.albedo_pac_pool_mean_layers = MODEL_MATSEG.albedo_pac_pool_mean_layers
+            self.albedo_pac_pool_mean_layers = self.opt.cfg.MODEL_MATSEG.albedo_pac_pool_mean_layers
 
             # self.acco_pool_mean_list.append(
             #     pac.PacPool2d(kernel_size=7, stride=1, padding=30, dilation=10, normalize_kernel=True)

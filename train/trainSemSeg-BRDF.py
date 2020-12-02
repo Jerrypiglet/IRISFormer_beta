@@ -403,7 +403,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
 
         if tid % opt.debug_every_iter == 0:       
             if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool or opt.cfg.MODEL_MATSEG.if_albedo_safenet) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
-                if opt.is_master:
+                if opt.is_master and output_dict['im_trainval_RGB_mask_pooled_mean'] is not None:
                     for sample_idx, im_trainval_RGB_mask_pooled_mean in enumerate(output_dict['im_trainval_RGB_mask_pooled_mean']):
                         im_trainval_RGB_mask_pooled_mean = im_trainval_RGB_mask_pooled_mean.cpu().numpy().squeeze().transpose(1, 2, 0)
                         writer.add_image('TRAIN_im_trainval_RGB_debug/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), data_batch['im_trainval_RGB'][sample_idx].numpy().squeeze().transpose(1, 2, 0), tid, dataformats='HWC')

@@ -224,6 +224,8 @@ class SemSeg_MatSeg_BRDF(nn.Module):
             return_dict.update({'im_trainval_RGB_mask_pooled_mean': albedo_output['im_trainval_RGB_mask_pooled_mean']})
             if 'kernel_list' in albedo_output:
                 return_dict.update({'kernel_list': albedo_output['kernel_list']})
+            if 'embeddings' in albedo_output:
+                return_dict.update({'embeddings': albedo_output['embeddings']})
             if 'affinity' in albedo_output:
                 return_dict.update({'affinity': albedo_output['affinity'], 'sample_ij': albedo_output['sample_ij']})
             

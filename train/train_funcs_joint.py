@@ -358,6 +358,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                                 np.save('tmp/demo_%s/kernel_list_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id), kernel_list[0].detach().cpu().numpy())
                             if output_dict['im_trainval_RGB_mask_pooled_mean'] is not None:
                                 np.save('tmp/demo_%s/im_trainval_RGB_mask_pooled_mean_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id), im_trainval_RGB_mask_pooled_mean)
+                            if output_dict['embeddings'] is not None:
+                                np.save('tmp/demo_%s/embeddings_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id), output_dict['embeddings'].detach().cpu().numpy())
                             if 'affinity' in output_dict:
                                 affinity = output_dict['affinity']
                                 sample_ij = output_dict['sample_ij']

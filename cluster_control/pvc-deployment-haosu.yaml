@@ -1,0 +1,63 @@
+apiVersion: apps/v1
+kind: Deployment
+
+metadata:
+  name: ruizhu-deployment-migration
+  namespace: ucsd-haosulab
+  labels:
+    user: ruizhu
+
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      k8s-app: nginx
+  template:
+    metadata:
+      labels:
+        k8s-app: nginx
+    spec:
+      containers:
+      - name: container
+        image: localhost:30081/jerrypiglet/deeplearningconda38s3
+        args: ["sleep", "infinity"]
+        resources:  
+          requests:
+            cpu: "100m"
+            memory: "100Mi"
+          limits:
+            cpu: "1"
+            memory: "1Gi"
+        volumeMounts:
+        - name: cephfs
+          mountPath: /cephfs
+        - name: ruidata-fast-vol-haosu
+          mountPath: /ruidata-fast-haosu
+        - name: ruidata-slow-vol-haosu
+          mountPath: /ruidata-slow-haosu
+        - name: dshm
+          mountPath: /dev/shm
+
+      volumes:
+      - name: cephfs
+        persistentVolumeClaim:
+          claimName: haosulab-cephfs
+      - name: ruidata-fast-vol-haosu
+        persistentVolumeClaim:
+          claimName: ruidata-fast-vol-haosu
+      - name: ruidata-slow-vol-haosu
+        persistentVolumeClaim:
+          claimName: ruidata-slow-vol-haosu
+      - name: dshm
+        emptyDir:
+          medium: Memory
+
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: nautilus.io/group
+                operator: In
+                values:
+                - haosu

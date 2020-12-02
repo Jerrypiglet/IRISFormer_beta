@@ -77,11 +77,14 @@ def align_and_update_state_dicts(model_state_dict, loaded_state_dict, logger=Non
     # print(logger)
     all_possible_loads = 0
     success_loads = 0
+
+    reloaded_keys = []
     for idx_new, idx_old in enumerate(idxs.tolist()):
         all_possible_loads += 1
         if idx_old == -1:
             continue
         key = current_keys[idx_new]
+        reloaded_keys.append(key)
 
         break_flag = False
         for skip_kw in skip_kws:
@@ -119,6 +122,9 @@ def align_and_update_state_dicts(model_state_dict, loaded_state_dict, logger=Non
         logger.warning(white_blue('====== Successfully loaded %d from %d possible loads.'%(success_loads, all_possible_loads)))
     else:
         logger.warning(red('====== Successfully loaded %d from %d possible loads.'%(success_loads, all_possible_loads)))
+    not_loaded_keys = list(set(current_keys) - set(reloaded_keys))
+    if len(not_loaded_keys) > 0:
+        logger.warning(red('====== NOT loaded keys: ' + ', '.join(not_loaded_keys)))
     return current_keys_ori , loaded_keys_ori
 
 

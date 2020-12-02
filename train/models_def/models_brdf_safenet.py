@@ -70,11 +70,20 @@ class decoder0_safenet(nn.Module):
         assert embeddings.shape == (N, self.opt.cfg.MODEL_MATSEG.embed_dims, H, W)
         if self.opt.cfg.MODEL_MATSEG.if_albedo_safenet_normalize_embedding:
             embeddings = F.normalize(embeddings, p=2, dim=1)
-        embeddings_1 = embeddings.permute(0, 2, 3, 1).view(N, H*W, self.opt.cfg.MODEL_MATSEG.embed_dims)
+
         embeddings_2 = embeddings.view(N, self.opt.cfg.MODEL_MATSEG.embed_dims, H*W)
-        A = torch.exp(torch.matmul(embeddings_1, embeddings_2))
+
+        if self.opt.cfg.MODEL_MATSEG.if_albedo_safenet_use_pacnet_affinity:
+            embed_expand = embeddings_2.unsqueeze(-1).expand(-1, -1, -1, H*W) # [N, D, H*W, H*W]
+            # print(embed_expand.shape, embed_expand.transpose(2, 3).shape)
+            A = torch.exp(-0.5 * (torch.norm(embed_expand - embed_expand.transpose(2, 3), dim=1)**2))
+        else:
+            embeddings_1 = embeddings.permute(0, 2, 3, 1).view(N, H*W, self.opt.cfg.MODEL_MATSEG.embed_dims)
+            A = torch.exp(torch.matmul(embeddings_1, embeddings_2))
+
+        A = A / (A.sum(dim=2, keepdims=True)) # normalize row-wise
         # a1 = a / a.sum(dim=1, keepdims=True)
-        A = torch.transpose(F.normalize(A, p=1, dim=1), 1, 2)
+        # A = torch.transpose(F.normalize(A, p=1, dim=1), 1, 2)
         xin_conv1_transformed = torch.matmul(A, xin_conv1)
         assert xin_conv1_transformed.shape == (N, H*W, C)
         xin_conv1_transformed = xin_conv1_transformed.transpose(1, 2).view(N, C, H, W)
@@ -100,48 +109,57 @@ class decoder0_safenet(nn.Module):
         # matseg_embeddings = matseg_embeddings * (2. * input_extra_dict['mat_notlight_mask_gpu_float'] - 1)
         mat_notlight_mask_gpu_float = input_extra_dict['mat_notlight_mask_gpu_float']
 
-        im_in_transformed, kernel_list, A, sample_ij = None, None, None, None
+        im_in_transformed, kernel_list, A, sample_ij, embeddings = None, None, None, None, None
         
         # assert self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug == False
         if self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug and self.opt.if_vis_debug_pac:
             im_in = input_extra_dict['im_trainval_RGB']
-            # im_in = F.interpolate(im_in, [120, 160], mode='bilinear')
+            im_in = F.interpolate(im_in, [120, 160], mode='bilinear')
             # im_in = F.interpolate(im_in, [60, 80], mode='bilinear')
             # im_in = F.interpolate(im_in, [30, 40], mode='bilinear')
             N, C, H, W = im_in.shape
             embeddings = self.process_embedding(im_in, matseg_embeddings, mat_notlight_mask_gpu_float)
             assert embeddings.shape == (N, self.opt.cfg.MODEL_MATSEG.embed_dims, H, W)
-            embeddings = F.normalize(embeddings, p=2, dim=1)
+            
+            # embeddings = F.normalize(embeddings, p=2, dim=1)
 
-            # embeddings_1 = embeddings.permute(0, 2, 3, 1).view(N, H*W, self.opt.cfg.MODEL_MATSEG.embed_dims)
-            embeddings_2 = embeddings.view(N, self.opt.cfg.MODEL_MATSEG.embed_dims, H*W)
+            embeddings_2 = embeddings.contiguous().view(N, self.opt.cfg.MODEL_MATSEG.embed_dims, -1)
 
-            # A = torch.exp(torch.matmul(embeddings_1, embeddings_2))
-            # # A = torch.sum(torch.exp(-0.5 * embeddings_1.unsqueeze(2).expand(-1, -1, H*W, -1) * embeddings_1.unsqueeze(1).expand(-1, H*W, -1, -1)), -1)
-            # print(A.shape, '====-------')
-            # # A = torch.transpose(A / A.sum(dim=1, keepdims=True), 1, 2)
-            # # A = torch.transpose(F.normalize(A, p=1, dim=2), 1, 2)
-            # A = A / (A.sum(dim=2, keepdims=True))
-            # # A = F.normalize(A, p=1, dim=0)
-            # print(torch.sum(A[0], dim=1))
+            # SAFENET
+            embeddings_1 = embeddings.permute(0, 2, 3, 1).view(N, H*W, self.opt.cfg.MODEL_MATSEG.embed_dims)
+            A = torch.exp(torch.matmul(embeddings_1, embeddings_2))
+            # A = torch.sum(torch.exp(-0.5 * embeddings_1.unsqueeze(2).expand(-1, -1, H*W, -1) * embeddings_1.unsqueeze(1).expand(-1, H*W, -1, -1)), -1)
+            print(A.shape, '====-------')
+            # A = torch.transpose(A / A.sum(dim=1, keepdims=True), 1, 2)
+            # A = torch.transpose(F.normalize(A, p=1, dim=2), 1, 2)
+            A = A / (A.sum(dim=2, keepdims=True))
+            # A = F.normalize(A, p=1, dim=0)
+            print(torch.sum(A[0], dim=1))
 
-            # im_in = im_in.permute(0, 2, 3, 1).view(N, H*W, C)
-            # im_in_transformed = torch.matmul(A, im_in)
-            # assert im_in_transformed.shape == (N, H*W, C)
-            # im_in_transformed = im_in_transformed.transpose(1, 2).view(N, C, H, W)
-            # print(im_in_transformed.shape, '======')
+            # Pac-conv
+            # embed_expand = embeddings_2.unsqueeze(-1).expand(-1, -1, -1, H*W) # [N, D, H*W, H*W]
+            # print(embed_expand.shape, embed_expand.transpose(2, 3).shape)
+            # A = torch.exp(-0.5 * (torch.norm(embed_expand - embed_expand.transpose(2, 3), dim=1)**2))
+            # A = A / (A.sum(dim=2, keepdims=True)) # [N, D, H*W, H*W]
+
+            ## Visualize transformed image
+            im_in = im_in.permute(0, 2, 3, 1).view(N, H*W, C)
+            im_in_transformed = torch.matmul(A, im_in)
+            assert im_in_transformed.shape == (N, H*W, C)
+            im_in_transformed = im_in_transformed.transpose(1, 2).view(N, C, H, W)
+            print(im_in_transformed.shape, '======')
             
             # Visualize sampled affinity matrix
             # sample_ij = [[1, 1], [1, 100], [1, 200], [101, 1], [101, 100], [101, 200], [201, 1], [201, 100], [201, 200]]
-            i_s = np.linspace(0, 220, 12)
-            j_s = np.linspace(0, 300, 16)
-            ij_s = np.meshgrid(i_s, j_s)
-            sample_ij = [[i, j] for i, j in zip(ij_s[0].flatten().astype(np.int16).tolist(), ij_s[1].flatten().astype(np.int16).tolist())]
-            embeddings_sampled = torch.cat([embeddings[:, :, i:i+1, j] for i, j in sample_ij], 2).permute(0, 2, 1) # [N, n, embed_dims]
-            A = torch.exp(torch.matmul(embeddings_sampled, embeddings_2))
-            A = A / (A.sum(dim=2, keepdims=True))
+            # i_s = np.linspace(0, 220, 12) / 2.
+            # j_s = np.linspace(0, 300, 16) / 2.
+            # ij_s = np.meshgrid(i_s, j_s)
+            # sample_ij = [[i, j] for i, j in zip(ij_s[0].flatten().astype(np.int16).tolist(), ij_s[1].flatten().astype(np.int16).tolist())]
+            # embeddings_sampled = torch.cat([embeddings[:, :, i:i+1, j] for i, j in sample_ij], 2).permute(0, 2, 1) # [N, n, embed_dims]
+            # A = torch.exp(torch.matmul(embeddings_sampled, embeddings_2))
+            # A = A / (A.sum(dim=2, keepdims=True))
 
-        return_dict.update({'im_trainval_RGB_mask_pooled_mean': im_in_transformed, 'kernel_list': kernel_list, 'affinity': A, 'sample_ij': sample_ij})
+        return_dict.update({'im_trainval_RGB_mask_pooled_mean': im_in_transformed, 'kernel_list': kernel_list, 'affinity': A, 'sample_ij': sample_ij, 'embeddings': embeddings})
 
         
         if 'x6' in self.albedo_safenet_affinity_layers:
