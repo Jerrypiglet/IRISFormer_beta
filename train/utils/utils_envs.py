@@ -1,11 +1,11 @@
-import os
-import torch.nn as nn
 import torch
+import torch.nn as nn
 import numpy as np
 import random
 from pathlib import Path
 from utils.utils_misc import *
 from utils.comm import synchronize, get_rank
+import os, sys
 
 
 def set_up_envs(opt):
@@ -71,7 +71,9 @@ def set_up_envs(opt):
     opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers_allowed  = opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers_allowed.split('_')
     assert all(e in opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers_allowed for e in opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers)
 
-
+    # DCN
+    opt.cfg.PATH.dcn_path = opt.cfg.PATH.dcn_cluster if opt.if_cluster else opt.cfg.PATH.dcn_local
+    sys.path.insert(0, os.path.join(opt.cfg.PATH.dcn_path, 'functions'))
 
 
 def set_up_logger(opt):

@@ -19,56 +19,58 @@ class decoder0_pacconv(nn.Module):
         self.conv_layers_num = {name: None for name in self.opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers_allowed}
 
         if 'x6' in self.albedo_pac_conv_mean_layers:
-            self.x6_pac_conv, self.x6_pac_conv_len = self.build_pac_conv_list(1024, kernel_sizes=[], paddings=[], dilations=[])
+            self.x6_pac_conv, self.x6_pac_conv_len = self.build_pac_conv_list('x6', 1024, kernel_sizes=[], paddings=[], dilations=[])
         self.dconv1 = nn.Conv2d(in_channels=self.get_in_c(1024, 'x6', self.conv_layers_num['x6']), out_channels=512, kernel_size=3, stride=1, padding = 1, bias=True) #in: [16, 512, 7, 10]
         self.dgn1 = nn.GroupNorm(num_groups=32, num_channels=512 )
 
         if 'xin1' in self.albedo_pac_conv_mean_layers:
-            self.xin1_pac_conv, self.xin1_pac_conv_len = self.build_pac_conv_list(1024, kernel_sizes=[], paddings=[], dilations=[])
+            self.xin1_pac_conv, self.xin1_pac_conv_len = self.build_pac_conv_list('xin1', 1024, kernel_sizes=[], paddings=[], dilations=[])
         self.dconv2 = nn.Conv2d(in_channels=self.get_in_c(1024, 'xin1', self.conv_layers_num['xin1']), out_channels=256, kernel_size=3, stride=1, padding = 1, bias=True) #in: [16, 512, 7, 10]
         self.dgn2 = nn.GroupNorm(num_groups=16, num_channels=256 )
 
         if 'xin2' in self.albedo_pac_conv_mean_layers:
-            self.xin2_pac_conv, self.xin2_pac_conv_len = self.build_pac_conv_list(512, kernel_sizes=[], paddings=[], dilations=[])
+            self.xin2_pac_conv, self.xin2_pac_conv_len = self.build_pac_conv_list('xin2', 512, kernel_sizes=[], paddings=[], dilations=[])
         self.dconv3 = nn.Conv2d(in_channels=self.get_in_c(512, 'xin2', self.conv_layers_num['xin2']), out_channels=256, kernel_size=3, stride=1, padding=1, bias=True) #in: [16, 256, 15, 20]
         self.dgn3 = nn.GroupNorm(num_groups=16, num_channels=256 )
 
         if 'xin3' in self.albedo_pac_conv_mean_layers:
-            # self.xin3_pac_conv, self.xin3_pac_conv_len = self.build_pac_conv_list(512, kernel_sizes=[7], paddings=[6], dilations=[2]) # all 7 input
-            self.xin3_pac_conv, self.xin3_pac_conv_len = self.build_pac_conv_list(512, kernel_sizes=[3, 3, 3], paddings=[5, 2, 1], dilations=[5, 2, 1]) # all 333 input
-            # self.xin3_pac_conv, self.xin3_pac_conv_len = self.build_pac_conv_list(512, kernel_sizes=[3, 3, 3], paddings=[5, 2, 1], dilations=[5, 2, 1]) # all 333 input-finer20-10-5-2-1
+            # self.xin3_pac_conv, self.xin3_pac_conv_len = self.build_pac_conv_list('xin3', 512, kernel_sizes=[7], paddings=[6], dilations=[2]) # all 7 input
+            # self.xin3_pac_conv, self.xin3_pac_conv_len = self.build_pac_conv_list('xin3', 512, kernel_sizes=[3, 3, 3], paddings=[5, 2, 1], dilations=[5, 2, 1]) # all 333 input
+            self.xin3_pac_conv, self.xin3_pac_conv_len = self.build_pac_conv_list('xin3', 512, kernel_sizes=[3, 3, 3], paddings=[5, 2, 1], dilations=[5, 2, 1]) # all 333 input-finer20-10-5-2-1
         self.dconv4 = nn.Conv2d(in_channels=self.get_in_c(512, 'xin3', self.conv_layers_num['xin3']), out_channels=128, kernel_size=3, stride=1, padding = 1, bias=True) #in: [16, 256, 30, 40]
         self.dgn4 = nn.GroupNorm(num_groups=8, num_channels=128 )
 
         if 'xin4' in self.albedo_pac_conv_mean_layers:
-            # self.xin4_pac_conv, self.xin4_pac_conv_len = self.build_pac_conv_list(256, kernel_sizes=[7], paddings=[9], dilations=[3]) # all 7 input
-            self.xin4_pac_conv, self.xin4_pac_conv_len = self.build_pac_conv_list(256, kernel_sizes=[3, 3, 3], paddings=[10, 5, 2], dilations=[10, 5, 2]) # all 333 input
-            # self.xin4_pac_conv, self.xin4_pac_conv_len = self.build_pac_conv_list(256, kernel_sizes=[3, 3, 3, 3], paddings=[10, 5, 2, 1], dilations=[10, 5, 2, 1]) # all 333 input-finer20-10-5-2-1
+            # self.xin4_pac_conv, self.xin4_pac_conv_len = self.build_pac_conv_list('xin4', 256, kernel_sizes=[7], paddings=[9], dilations=[3]) # all 7 input
+            # self.xin4_pac_conv, self.xin4_pac_conv_len = self.build_pac_conv_list('xin4', 256, kernel_sizes=[3, 3, 3], paddings=[10, 5, 2], dilations=[10, 5, 2]) # all 333 input
+            self.xin4_pac_conv, self.xin4_pac_conv_len = self.build_pac_conv_list('xin4', 256, kernel_sizes=[3, 3, 3, 3], paddings=[10, 5, 2, 1], dilations=[10, 5, 2, 1]) # all 333 input-finer20-10-5-2-1
         self.dconv5 = nn.Conv2d(in_channels=self.get_in_c(256, 'xin4', self.conv_layers_num['xin4']), out_channels=64, kernel_size=3, stride=1, padding = 1, bias=True) # in: [16, 128, 60, 80]
         self.dgn5 = nn.GroupNorm(num_groups=4, num_channels=64 )
 
         if 'xin5' in self.albedo_pac_conv_mean_layers:
-            # self.xin5_pac_conv, self.xin5_pac_conv_len = self.build_pac_conv_list(128, kernel_sizes=[7], paddings=[15], dilations=[5]) # all 7 input
-            self.xin5_pac_conv, self.xin5_pac_conv_len = self.build_pac_conv_list(128, kernel_sizes=[3, 3, 3], paddings=[20, 10, 5], dilations=[20, 10, 5]) # all 333 input
-            # self.xin5_pac_conv, self.xin5_pac_conv_len = self.build_pac_conv_list(128, kernel_sizes=[3, 3, 3, 3, 3], paddings=[20, 10, 5, 2, 1], dilations=[20, 10, 5, 2, 1]) # all 333 input-finer20-10-5-2-1
+            # self.xin5_pac_conv, self.xin5_pac_conv_len = self.build_pac_conv_list('xin5', 128, kernel_sizes=[7], paddings=[15], dilations=[5]) # all 7 input
+            # self.xin5_pac_conv, self.xin5_pac_conv_len = self.build_pac_conv_list('xin5', 128, kernel_sizes=[3, 3, 3], paddings=[20, 10, 5], dilations=[20, 10, 5]) # all 333 input
+            self.xin5_pac_conv, self.xin5_pac_conv_len = self.build_pac_conv_list('xin5', 128, kernel_sizes=[3, 3, 3, 3, 3], paddings=[20, 10, 5, 2, 1], dilations=[20, 10, 5, 2, 1]) # all 333 input-finer20-10-5-2-1
         self.dconv6 = nn.Conv2d(in_channels=self.get_in_c(128, 'xin5', self.conv_layers_num['xin5']), out_channels=64, kernel_size=3, stride=1, padding = 1, bias=True) # in: [16, 64, 120, 160]
         self.dgn6 = nn.GroupNorm(num_groups=4, num_channels=64 )
 
         self.dpadFinal = nn.ReplicationPad2d(1)
         if 'xin6' in self.albedo_pac_conv_mean_layers:
-            # self.xin6_pac_conv, self.xin6_pac_conv_len = self.build_pac_conv_list(64, kernel_sizes=[7], paddings=[30], dilations=[10])
-            self.xin6_pac_conv, self.xin6_pac_conv_len = self.build_pac_conv_list(64, kernel_sizes=[3, 3, 3, 3], paddings=[50, 20, 10, 5], dilations=[50, 20, 10, 5]) # all 333 input
+            # self.xin6_pac_conv, self.xin6_pac_conv_len = self.build_pac_conv_list('xin6', 64, kernel_sizes=[7], paddings=[30], dilations=[10])
+            self.xin6_pac_conv, self.xin6_pac_conv_len = self.build_pac_conv_list('xin6', 64, kernel_sizes=[3, 3, 3, 3], paddings=[50, 20, 10, 5], dilations=[50, 20, 10, 5]) # all 333 input
             # raise (RuntimeError("'xin6' in self.albedo_pac_conv_mean_layers NOT supported because of too much memory cost!\n"))
         self.dconvFinal = nn.Conv2d(in_channels=self.get_in_c(64, 'xin6', self.conv_layers_num['xin6']), out_channels=3, kernel_size = 3, stride=1, bias=True) # in: [16, 64, 240, 320]
 
         self.flag = True
 
-    def build_pac_conv_list(self, in_N_out_channels, kernel_sizes=[], strides=[], paddings=[], dilations=[]):
+    def build_pac_conv_list(self, layer_name, in_N_out_channels, kernel_sizes=[], strides=[], paddings=[], dilations=[]):
         assert len(kernel_sizes) == len(paddings) == len(dilations)
         assert len(kernel_sizes) != 0
         if strides == []:
             strides = [1] * len(kernel_sizes)
         assert len(kernel_sizes) == len(strides)
+
+        self.conv_layers_num[layer_name] = len(kernel_sizes)
 
         return torch.nn.ModuleList([
             pac.PacConv2d(in_channels=in_N_out_channels, out_channels=in_N_out_channels, kernel_size=kernel, stride=stride, padding=padding, dilation=dilation, normalize_kernel=self.opt.cfg.MODEL_MATSEG.if_albedo_pac_conv_normalize_kernel) for kernel, stride, padding, dilation in zip(kernel_sizes, strides, paddings, dilations)
@@ -79,10 +81,13 @@ class decoder0_pacconv(nn.Module):
         assert layer_name in self.opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers_allowed
         out_c = in_c
         if layer_name in self.albedo_pac_conv_mean_layers:
+            out_c_input = in_c if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_conv_keep_input else 0
             if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_conv_mean:
-                out_c = in_c * 2 if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_conv_keep_input else in_c
+                out_c_concat = in_c
             else:
-                out_c = in_c * (1 + pac_conv_len) if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_conv_keep_input else in_c * pac_conv_len
+                assert pac_conv_len is not None
+                out_c_concat = in_c * pac_conv_len
+            out_c = out_c_input + out_c_concat
         else:
             out_c = in_c
             
