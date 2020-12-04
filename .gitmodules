@@ -7,3 +7,6 @@
 [submodule "train/third-parties/pacnet"]
 	path = train/third-parties/pacnet
 	url = https://github.com/NVlabs/pacnet.git
+[submodule "train/third-parties/deformable-convolution-pytorch"]
+	path = train/third-parties/deformable-convolution-pytorch
+	url = https://github.com/1zb/deformable-convolution-pytorch.git

@@ -58,7 +58,7 @@ def parse_args():
     create_parser.add_argument('--python_path', type=str, help='python path in pod', default='/viscompfs/users/ruizhu/envs/semanticInverse/bin/python')
     create_parser.add_argument('--pip_path', type=str, help='python path in pod', default='/viscompfs/users/ruizhu/envs/semanticInverse/bin/pip')
     create_parser.add_argument('--gpus', type=int, help='nubmer of GPUs', default=2)  
-    create_parser.add_argument('--cpur', type=int, help='request of CPUs', default=20)
+    create_parser.add_argument('--cpur', type=int, help='request of CPUs', default=10)
     create_parser.add_argument('--cpul', type=int, help='limit of CPUs', default=30)
     create_parser.add_argument('--memr', type=int, help='request of memory in Gi', default=20)
     create_parser.add_argument('--meml', type=int, help='limit of memory in Gi', default=100)
