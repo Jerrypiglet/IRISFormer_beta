@@ -34,23 +34,23 @@ class decoder0_pacconv(nn.Module):
         self.dgn3 = nn.GroupNorm(num_groups=16, num_channels=256 )
 
         if 'xin3' in self.albedo_pac_conv_mean_layers:
-            # self.xin3_pac_conv, self.xin3_pac_conv_len = self.build_pac_conv_list('xin3', 512, kernel_sizes=[7], paddings=[6], dilations=[2]) # all 7 input
+            self.xin3_pac_conv, self.xin3_pac_conv_len = self.build_pac_conv_list('xin3', 512, kernel_sizes=[7], paddings=[6], dilations=[2]) # all 7 input
             # self.xin3_pac_conv, self.xin3_pac_conv_len = self.build_pac_conv_list('xin3', 512, kernel_sizes=[3, 3, 3], paddings=[5, 2, 1], dilations=[5, 2, 1]) # all 333 input
-            self.xin3_pac_conv, self.xin3_pac_conv_len = self.build_pac_conv_list('xin3', 512, kernel_sizes=[3, 3, 3], paddings=[5, 2, 1], dilations=[5, 2, 1]) # all 333 input-finer20-10-5-2-1
+            # self.xin3_pac_conv, self.xin3_pac_conv_len = self.build_pac_conv_list('xin3', 512, kernel_sizes=[3, 3, 3], paddings=[5, 2, 1], dilations=[5, 2, 1]) # all 333 input-finer20-10-5-2-1
         self.dconv4 = nn.Conv2d(in_channels=self.get_in_c(512, 'xin3', self.conv_layers_num['xin3']), out_channels=128, kernel_size=3, stride=1, padding = 1, bias=True) #in: [16, 256, 30, 40]
         self.dgn4 = nn.GroupNorm(num_groups=8, num_channels=128 )
 
         if 'xin4' in self.albedo_pac_conv_mean_layers:
-            # self.xin4_pac_conv, self.xin4_pac_conv_len = self.build_pac_conv_list('xin4', 256, kernel_sizes=[7], paddings=[9], dilations=[3]) # all 7 input
+            self.xin4_pac_conv, self.xin4_pac_conv_len = self.build_pac_conv_list('xin4', 256, kernel_sizes=[7], paddings=[9], dilations=[3]) # all 7 input
             # self.xin4_pac_conv, self.xin4_pac_conv_len = self.build_pac_conv_list('xin4', 256, kernel_sizes=[3, 3, 3], paddings=[10, 5, 2], dilations=[10, 5, 2]) # all 333 input
-            self.xin4_pac_conv, self.xin4_pac_conv_len = self.build_pac_conv_list('xin4', 256, kernel_sizes=[3, 3, 3, 3], paddings=[10, 5, 2, 1], dilations=[10, 5, 2, 1]) # all 333 input-finer20-10-5-2-1
+            # self.xin4_pac_conv, self.xin4_pac_conv_len = self.build_pac_conv_list('xin4', 256, kernel_sizes=[3, 3, 3, 3], paddings=[10, 5, 2, 1], dilations=[10, 5, 2, 1]) # all 333 input-finer20-10-5-2-1
         self.dconv5 = nn.Conv2d(in_channels=self.get_in_c(256, 'xin4', self.conv_layers_num['xin4']), out_channels=64, kernel_size=3, stride=1, padding = 1, bias=True) # in: [16, 128, 60, 80]
         self.dgn5 = nn.GroupNorm(num_groups=4, num_channels=64 )
 
         if 'xin5' in self.albedo_pac_conv_mean_layers:
-            # self.xin5_pac_conv, self.xin5_pac_conv_len = self.build_pac_conv_list('xin5', 128, kernel_sizes=[7], paddings=[15], dilations=[5]) # all 7 input
+            self.xin5_pac_conv, self.xin5_pac_conv_len = self.build_pac_conv_list('xin5', 128, kernel_sizes=[7], paddings=[15], dilations=[5]) # all 7 input
             # self.xin5_pac_conv, self.xin5_pac_conv_len = self.build_pac_conv_list('xin5', 128, kernel_sizes=[3, 3, 3], paddings=[20, 10, 5], dilations=[20, 10, 5]) # all 333 input
-            self.xin5_pac_conv, self.xin5_pac_conv_len = self.build_pac_conv_list('xin5', 128, kernel_sizes=[3, 3, 3, 3, 3], paddings=[20, 10, 5, 2, 1], dilations=[20, 10, 5, 2, 1]) # all 333 input-finer20-10-5-2-1
+            # self.xin5_pac_conv, self.xin5_pac_conv_len = self.build_pac_conv_list('xin5', 128, kernel_sizes=[3, 3, 3, 3, 3], paddings=[20, 10, 5, 2, 1], dilations=[20, 10, 5, 2, 1]) # all 333 input-finer20-10-5-2-1
         self.dconv6 = nn.Conv2d(in_channels=self.get_in_c(128, 'xin5', self.conv_layers_num['xin5']), out_channels=64, kernel_size=3, stride=1, padding = 1, bias=True) # in: [16, 64, 120, 160]
         self.dgn6 = nn.GroupNorm(num_groups=4, num_channels=64 )
 
@@ -70,11 +70,12 @@ class decoder0_pacconv(nn.Module):
             strides = [1] * len(kernel_sizes)
         assert len(kernel_sizes) == len(strides)
 
-        self.conv_layers_num[layer_name] = len(kernel_sizes)
+        if layer_name is not None:
+            self.conv_layers_num[layer_name] = len(kernel_sizes)
 
         return torch.nn.ModuleList([
             pac.PacConv2d(in_channels=in_N_out_channels, out_channels=in_N_out_channels, kernel_size=kernel, stride=stride, padding=padding, dilation=dilation, normalize_kernel=self.opt.cfg.MODEL_MATSEG.if_albedo_pac_conv_normalize_kernel) for kernel, stride, padding, dilation in zip(kernel_sizes, strides, paddings, dilations)
-        ]), len(kernel_sizes)
+        ]).cuda(), len(kernel_sizes)
 
     
     def get_in_c(self, in_c, layer_name, pac_conv_len=None):
@@ -134,7 +135,7 @@ class decoder0_pacconv(nn.Module):
 
         im_trainval_RGB_mask_pooled_mean, kernel_list = None, None
         
-        assert self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug == False
+        # assert self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug == False
         if self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug and self.opt.if_vis_debug_pac:
             # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[3, 3, 3], paddings=[30, 20, 10], dilations=[30, 20, 10])
             # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[3, 3, 3], paddings=[20, 10, 5], dilations=[20, 10, 5])
@@ -142,11 +143,11 @@ class decoder0_pacconv(nn.Module):
             # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[3], paddings=[20], dilations=[20])
             # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[3], paddings=[10], dilations=[10])
             # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[3], paddings=[5], dilations=[5])
-            # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[7], paddings=[30], dilations=[10])
+            x_pac_conv, _ = self.build_pac_conv_list(None, kernel_sizes=[7], paddings=[30], dilations=[10])
             # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[7], paddings=[15], dilations=[5])
             # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[7], paddings=[9], dilations=[3])
             # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[7], paddings=[3], dilations=[1])
-            x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[9], paddings=[8], dilations=[2])
+            # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[9], paddings=[8], dilatsions=[2])
 
             # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[15], strides=[15], paddings=[7], dilations=[1])
 
@@ -154,12 +155,11 @@ class decoder0_pacconv(nn.Module):
             im_in = input_extra_dict['im_trainval_RGB']
             # im_in = F.interpolate(im_in, [120, 160], mode='bilinear')
             # im_in = F.interpolate(im_in, [60, 80], mode='bilinear')
-            im_in = F.interpolate(im_in, [30, 40], mode='bilinear')
+            # im_in = F.interpolate(im_in, [30, 40], mode='bilinear')
             
             # print(matseg_embeddings.shape, matseg_embeddings[0, :5, :2, 0])
             # matseg_embeddings = torch.ones_like(matseg_embeddings, device=matseg_embeddings.device)
             # im_trainval_RGB_mask_pooled_mean = im_in
-            
             im_trainval_RGB_mask_pooled_mean, kernel_list = self.pac_conv_transform(im_in, (matseg_embeddings, mat_notlight_mask_gpu_float), x_pac_conv, force_mean=True, return_kernel_list=True)
             print(im_trainval_RGB_mask_pooled_mean.shape, '======')
         return_dict.update({'im_trainval_RGB_mask_pooled_mean': im_trainval_RGB_mask_pooled_mean, 'kernel_list': kernel_list})

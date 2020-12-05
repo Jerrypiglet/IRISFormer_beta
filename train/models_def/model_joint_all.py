@@ -60,7 +60,8 @@ class SemSeg_MatSeg_BRDF(nn.Module):
                 self.decoder_to_use = models_brdf.decoder0_guide
 
             if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_pool:
-                self.decoder_to_use = models_brdf.decoder0_pacpool
+                import models_def.models_brdf_pac_pool as models_brdf_pac_pool
+                self.decoder_to_use = models_brdf_pac_pool.decoder0_pacpool
             if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_conv:
                 import models_def.models_brdf_pac_conv as models_brdf_pac_conv
                 self.decoder_to_use = models_brdf_pac_conv.decoder0_pacconv

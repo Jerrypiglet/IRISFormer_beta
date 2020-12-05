@@ -66,6 +66,10 @@ def set_up_envs(opt):
     opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers_allowed  = opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers_allowed.split('_')
     assert all(e in opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers_allowed for e in opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers)
 
+    opt.cfg.MODEL_MATSEG.albedo_pac_conv_deform_layers  = opt.cfg.MODEL_MATSEG.albedo_pac_conv_deform_layers.split('_')
+    opt.cfg.MODEL_MATSEG.albedo_pac_conv_deform_layers_allowed  = opt.cfg.MODEL_MATSEG.albedo_pac_conv_deform_layers_allowed.split('_')
+    assert all(e in opt.cfg.MODEL_MATSEG.albedo_pac_conv_deform_layers_allowed for e in opt.cfg.MODEL_MATSEG.albedo_pac_conv_deform_layers)
+    
     # Safenet global affinity
     opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers  = opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers.split('_')
     opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers_allowed  = opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers_allowed.split('_')
@@ -74,6 +78,10 @@ def set_up_envs(opt):
     # DCN
     opt.cfg.PATH.dcn_path = opt.cfg.PATH.dcn_cluster if opt.if_cluster else opt.cfg.PATH.dcn_local
     sys.path.insert(0, os.path.join(opt.cfg.PATH.dcn_path, 'functions'))
+
+    # export
+    opt.cfg.PATH.torch_home_path = opt.cfg.PATH.torch_home_cluster if opt.if_cluster else opt.cfg.PATH.torch_home_local
+    os.system('export TORCH_HOME=%s'%opt.cfg.PATH.torch_home_path)
 
 
 def set_up_logger(opt):

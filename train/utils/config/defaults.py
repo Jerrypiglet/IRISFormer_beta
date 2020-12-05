@@ -30,6 +30,9 @@ _C.PATH.semseg_names_path = 'data/openrooms/openrooms_names.txt'
 _C.PATH.dcn_path = ''
 _C.PATH.dcn_cluster = '/viscompfs/users/ruizhu/lib/Deformable-Convolution-V2-PyTorch'
 _C.PATH.dcn_local = '/home/ruizhu/Documents/Projects/semanticInverse/third-parties_outside/Deformable-Convolution-V2-PyTorch'
+_C.PATH.torch_home_path = ''
+_C.PATH.torch_home_local = '/home/ruizhu/Documents/Projects/semanticInverse/'
+_C.PATH.torch_home_cluster = '/viscompfs/users/ruizhu/'
 # _C.DATA.semseg_colors_path = 'data/openrooms/openrooms_colors.txt'
 # _C.DATA.semseg_names_path = 'data/openrooms/openrooms_names.txt'
 
@@ -73,16 +76,22 @@ _C.MODEL_MATSEG.albedo_pooling_from = 'gt' # ['gt', 'pred']
 _C.MODEL_MATSEG.if_albedo_asso_pool_conv = False
 
 _C.MODEL_MATSEG.if_albedo_pac_pool = False
+_C.MODEL_MATSEG.if_albedo_pac_pool_debug_deform = False
 _C.MODEL_MATSEG.if_albedo_pac_pool_keep_input = True
 _C.MODEL_MATSEG.if_albedo_pac_pool_mean = False # True: return mean of pooled tensors; False: return stacked
 _C.MODEL_MATSEG.albedo_pac_pool_mean_layers = 'xin6'
 _C.MODEL_MATSEG.albedo_pac_pool_mean_layers_allowed = 'x6_xin1_xin2_xin3_xin4_xin5_xin6'
+# _C.MODEL_MATSEG.albedo_pac_pool_deform_layers = 'xin6'
+# _C.MODEL_MATSEG.albedo_pac_pool_deform_layers_allowed = 'x6_xin1_xin2_xin3_xin4_xin5_xin6'
 
 _C.MODEL_MATSEG.if_albedo_pac_conv = False
 _C.MODEL_MATSEG.if_albedo_pac_conv_keep_input = True
 _C.MODEL_MATSEG.if_albedo_pac_conv_mean = False # True: return mean of pooled tensors; False: return stacked
 _C.MODEL_MATSEG.if_albedo_pac_conv_normalize_kernel = True
 _C.MODEL_MATSEG.if_albedo_pac_conv_DCN = False
+_C.MODEL_MATSEG.albedo_pac_conv_deform_layers = 'xin6'
+_C.MODEL_MATSEG.albedo_pac_conv_deform_layers_allowed = 'x6_xin1_xin2_xin3_xin4_xin5_xin6'
+
 
 _C.MODEL_MATSEG.albedo_pac_conv_mean_layers = 'xin6'
 _C.MODEL_MATSEG.albedo_pac_conv_mean_layers_allowed = 'x6_xin1_xin2_xin3_xin4_xin5_xin6'

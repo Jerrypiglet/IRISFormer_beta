@@ -20,7 +20,6 @@ print(sys.path)
 # from dataset_openrooms import openrooms
 from dataset_openroomsV2 import openrooms
 # from models_def.model_semseg_brdf import SemSeg_BRDF
-from models_def.model_joint_all import SemSeg_MatSeg_BRDF as the_model
 from train_funcs_joint import get_input_dict_joint, val_epoch_joint, vis_val_epoch_joint, forward_joint, get_time_meters_joint
 
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -118,6 +117,8 @@ semseg_configs = utils_config.merge_cfg_from_list(semseg_configs, opt.params)
 opt.semseg_configs = semseg_configs
 
 opt.pwdpath = pwdpath
+
+from models_def.model_joint_all import SemSeg_MatSeg_BRDF as the_model
 
 # >>>>>>>>>>>>> A bunch of modularised set-ups
 # opt.gpuId = opt.deviceIds[0]
@@ -405,7 +406,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
             if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool or opt.cfg.MODEL_MATSEG.if_albedo_safenet) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
                 if opt.is_master and output_dict['im_trainval_RGB_mask_pooled_mean'] is not None:
                     for sample_idx, im_trainval_RGB_mask_pooled_mean in enumerate(output_dict['im_trainval_RGB_mask_pooled_mean']):
-                        im_trainval_RGB_mask_pooled_mean = im_trainval_RGB_mask_pooled_mean.cpu().numpy().squeeze().transpose(1, 2, 0)
+                        im_trainval_RGB_mask_pooled_mean = im_trainval_RGB_mask_pooled_mean.detach().cpu().numpy().squeeze().transpose(1, 2, 0)
                         writer.add_image('TRAIN_im_trainval_RGB_debug/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), data_batch['im_trainval_RGB'][sample_idx].numpy().squeeze().transpose(1, 2, 0), tid, dataformats='HWC')
                         writer.add_image('TRAIN_im_trainval_RGB_mask_pooled_mean/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), im_trainval_RGB_mask_pooled_mean, tid, dataformats='HWC')
                         logger.info('Added debug pooling sample')
