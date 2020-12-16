@@ -13,7 +13,7 @@ import argparse
 from datetime import datetime
 import yaml
 import subprocess
-import os
+import os, sys
 import pprint
 import re
 
@@ -179,9 +179,9 @@ def create(args):
         tmp_yaml_filaname = 'tasks/%s/tmp_%s.yaml'%(datetime_str, datetime_str)
         print('============ Resuming from YAML file: %s'%tmp_yaml_filaname)
         yaml_content = load_yaml(tmp_yaml_filaname)
-        yaml_content['metadata']['name'] += '-re'
-        sys.command('kubectl delete job '+yaml_content['metadata']['name'])
+        os.system('kubectl delete job '+yaml_content['metadata']['name'])
         print('============ Task removed: %s'%yaml_content['metadata']['name'])
+        yaml_content['metadata']['name'] += '-re'
         command_str = yaml_content['spec']['template']['spec']['containers'][0]['args'][0]
         s_split = command_str.split(' ')
         start_index = s_split.index('rclone')

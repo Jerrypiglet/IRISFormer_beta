@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: z-torch-job-gpu
+  name: zz-torch-job-gpu
   # namespace: ucsd-haosulab
   namespace: "#NAMESPACE"
   labels:
@@ -13,7 +13,7 @@ spec:
       containers:
       - name: gpu-container-rui1
         # image: pytorch/pytorch:1.2-cuda10.0-cudnn7-runtime  # docker image
-        image: localhost:30081/jerrypiglet/deeplearningconda38s3
+        image: localhost:30081/jerrypiglet/deeplearningconda38v4
         # image: docker.io/ak3636/deeplearning:latest
         imagePullPolicy: IfNotPresent
         command:
@@ -22,7 +22,7 @@ spec:
         args:
         # - ". /root/miniconda2/etc/profile.d/conda.sh && conda activate /viscompfs/users/ruizhu/envs/semanticInverse"
         # - ". /root/miniconda3/etc/profile.d/conda.sh && alias python=/root/miniconda3/bin/python && which python && tensorboard --logdir / --port 6008"
-        - "which python && . /root/miniconda3/etc/profile.d/conda.sh && cd /viscompfs/users/ruizhu/semanticInverse && conda activate /viscompfs/users/ruizhu/envs/semanticInverse && which python && "
+        - "which python && . /root/miniconda3/etc/profile.d/conda.sh && cd /viscompfs/users/ruizhu/semanticInverse && conda activate /viscompfs/users/ruizhu/envs/semanticInverse && which python && export TORCH_HOME=/viscompfs/users/ruizhu/ && "
         # -  "tensorboard --logdir / --port 6008"  # specify the directory to watch
         # - "python /opt/repo/${my_script}.py"
         # - "pip install scipy & pip show scipy & pip show numpy"

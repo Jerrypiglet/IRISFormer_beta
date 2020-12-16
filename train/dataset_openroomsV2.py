@@ -103,7 +103,8 @@ class openrooms(data.Dataset):
         seg_path = image_path.replace('im_', 'immask_').replace('hdr', 'png').replace('DiffMat', '')
         # Read segmentation
         seg = 0.5 * (self.loadImage(seg_path ) + 1)[0:1, :, :]
-        mask_path = image_path.replace('im_', 'immatPart_').replace('hdr', 'dat')
+        semantics_path = image_path.replace('DiffMat', '').replace('DiffMat', '').replace('DiffLight', '')
+        mask_path = semantics_path.replace('im_', 'imcadmatobj_').replace('hdr', 'dat')
         mask = self.loadBinary(mask_path, channels = 3, dtype=np.int32, if_resize=True).squeeze() # [h, w, 3]
 
         # Read Image
