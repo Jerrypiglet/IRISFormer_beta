@@ -202,7 +202,7 @@ class decoder0_pacpool(nn.Module):
             # x_pac_pool, _ = self.build_pac_pool_list(kernel_sizes=[7], paddings=[3], dilations=[1])
             # x_pac_pool, _ = self.build_pac_pool_list(kernel_sizes=[9], paddings=[8], dilations=[2])
 
-            x_pac_pool, _ = self.build_pac_pool_list('demo_layer', kernel_sizes=[15], strides=[15cd], paddings=[0], dilations=[1])
+            x_pac_pool, _ = self.build_pac_pool_list('demo_layer', kernel_sizes=[15], strides=[15], paddings=[0], dilations=[1])
 
             im_in = input_extra_dict['im_trainval_RGB']
             # im_in = F.interpolate(im_in, [120, 160], mode='bilinear')

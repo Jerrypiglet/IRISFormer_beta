@@ -147,6 +147,7 @@ _C.DATA.load_matseg_gt = False
 _C.DATA.load_brdf_gt = True
 _C.DATA.semseg_ignore_label = 0
 _C.DATA.semseg_classes = 46
+_C.DATA.load_lighting = False
 
 _C.SOLVER = CN()
 _C.SOLVER.method = 'adam'

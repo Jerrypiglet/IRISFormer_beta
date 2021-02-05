@@ -146,6 +146,7 @@ def set_up_folders(opt):
         opt.CKPT_PATH = opt.home_path / CKPT_PATH
         opt.SUMMARY_PATH = opt.home_path / SUMMARY_PATH
         opt.SUMMARY_VIS_PATH = opt.home_path / SUMMARY_VIS_PATH
+
     if not opt.if_cluster:
         opt.task_name = get_datetime() + '-' + opt.task_name
         # print(opt.cfg)
