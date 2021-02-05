@@ -38,8 +38,9 @@ _C.PATH.torch_home_cluster = '/viscompfs/users/ruizhu/'
 
 _C.MODEL_BRDF = CN()
 _C.MODEL_BRDF.enable = True
-# _C.MODEL_BRDF.enable_list = ['al', 'no', 'de', 'ro']
+# _C.MODEL_BRDF.enable_list = ['al', 'no', 'de', 'ro', 'li']
 _C.MODEL_BRDF.enable_list = 'al_no_de_ro'
+_C.MODEL_BRDF.enable_list_allowed = ['al', 'no', 'de', 'ro', 'li']
 _C.MODEL_BRDF.load_pretrained_pth = False
 _C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240'
 _C.MODEL_BRDF.albedoWeight = 1.5
@@ -48,6 +49,7 @@ _C.MODEL_BRDF.roughWeight = 0.5
 _C.MODEL_BRDF.depthWeight = 0.5
 _C.MODEL_BRDF.if_debug_arch = False
 _C.MODEL_BRDF.enable_BRDF_decoders = True
+# _C.MODEL_BRDF.is_all_light = True
 
 _C.MODEL_BRDF.enable_semseg_decoder = False
 _C.MODEL_BRDF.semseg_PPM = False
@@ -123,11 +125,14 @@ _C.MODEL_SEMSEG.pretrained_pth = 'exp/openrooms/pspnet50V3_2gpu_100k/model/train
 # _C.MODEL_SEMSEG.configs = ()
 
 _C.DATASET = CN()
+_C.DATASET.mini = False
 _C.DATASET.dataset_name = 'openrooms'
 _C.DATASET.dataset_path = ''
-_C.DATASET.dataset_path_local = 'dataset/openrooms'
+_C.DATASET.dataset_path_local = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms'
 _C.DATASET.dataset_path_cluster = '/siggraphasia20dataset/code/Routine/DatasetCreation/'
 _C.DATASET.dataset_list = 'data/openrooms/list'
+_C.DATASET.dataset_path_mini = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/mini'
+_C.DATASET.dataset_list_mini = 'data/mini/list'
 
 # _C.DATASET.batch_size = 16
 _C.DATASET.num_workers = 8

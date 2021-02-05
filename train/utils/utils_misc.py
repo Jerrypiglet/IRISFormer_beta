@@ -8,6 +8,12 @@ import shutil, errno
 from pathlib import Path
 import statistics
 
+import logging
+
+def basic_logger(name='basic_logger'):
+    logger = logging.getLogger(name)
+    return logger
+
 # Training
 def red(text):
     return colored(text, 'yellow', 'on_red')

@@ -196,26 +196,25 @@ class decoder0_pacpool(nn.Module):
             # x_pac_pool, _ = self.build_pac_pool_list(kernel_sizes=[3], paddings=[20], dilations=[20])
             # x_pac_pool, _ = self.build_pac_pool_list(kernel_sizes=[3], paddings=[10], dilations=[10])
             # x_pac_pool, _ = self.build_pac_pool_list(kernel_sizes=[3], paddings=[5], dilations=[5])
-            x_pac_pool, _ = self.build_pac_pool_list(None, kernel_sizes=[7], paddings=[30], dilations=[10])
+            # x_pac_pool, _ = self.build_pac_pool_list(None, kernel_sizes=[7], paddings=[30], dilations=[10])
             # x_pac_pool, _ = self.build_pac_pool_list(kernel_sizes=[7], paddings=[15], dilations=[5])
             # x_pac_pool, _ = self.build_pac_pool_list(kernel_sizes=[7], paddings=[9], dilations=[3])
             # x_pac_pool, _ = self.build_pac_pool_list(kernel_sizes=[7], paddings=[3], dilations=[1])
             # x_pac_pool, _ = self.build_pac_pool_list(kernel_sizes=[9], paddings=[8], dilations=[2])
 
-            # x_pac_pool, _ = self.build_pac_pool_list(kernel_sizes=[15], strides=[15], paddings=[7], dilations=[1])
+            x_pac_pool, _ = self.build_pac_pool_list('demo_layer', kernel_sizes=[15], strides=[15cd], paddings=[0], dilations=[1])
 
             im_in = input_extra_dict['im_trainval_RGB']
             # im_in = F.interpolate(im_in, [120, 160], mode='bilinear')
-            # im_in = F.interpolate(im_in, [60, 80], mode='bilinear')
+            im_in = F.interpolate(im_in, [60, 80], mode='bilinear')
             # im_in = F.interpolate(im_in, [30, 40], mode='bilinear')
-
-            x_pac_pool, _ = self.build_pac_pool_list(None, kernel_sizes=[kH], paddings=[padding], dilations=[dilation], if_deform=if_deform, native_impl=native_impl)
+            # x_pac_pool, _ = self.build_pac_pool_list(None, kernel_sizes=[kH], paddings=[padding], dilations=[dilation], if_deform=if_deform, native_impl=native_impl)
 
             # print(matseg_embeddings.shape, matseg_embeddings[0, :5, :2, 0])
             # matseg_embeddings = torch.ones_like(matseg_embeddings, device=matseg_embeddings.device)
             # im_trainval_RGB_mask_pooled_mean = im_in
             
-            im_trainval_RGB_mask_pooled_mean, kernel_list = self.pac_pool_transform(im_in, (matseg_embeddings, mat_notlight_mask_gpu_float), x_pac_pool, force_mean=True, return_kernel_list=True, offsets=offsets)
+            im_trainval_RGB_mask_pooled_mean, kernel_list = self.pac_pool_transform(im_in, (matseg_embeddings, mat_notlight_mask_gpu_float), x_pac_pool, force_mean=True, return_kernel_list=True, offsets=None)
 
             print(im_trainval_RGB_mask_pooled_mean.shape, '======')
         return_dict.update({'im_trainval_RGB_mask_pooled_mean': im_trainval_RGB_mask_pooled_mean, 'kernel_list': kernel_list})

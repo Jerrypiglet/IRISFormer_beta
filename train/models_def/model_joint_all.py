@@ -9,6 +9,10 @@ from utils.utils_training import freeze_bn_in_module
 import torch.nn.functional as F
 from models_def.model_matseg import logit_embedding_to_instance
 
+import models_def.models_brdf_pac_pool as models_brdf_pac_pool
+import models_def.models_brdf_pac_conv as models_brdf_pac_conv
+import models_def.models_brdf_safenet as models_brdf_safenet
+
 class SemSeg_MatSeg_BRDF(nn.Module):
     def __init__(self, opt, logger):
         super(SemSeg_MatSeg_BRDF, self).__init__()
@@ -60,13 +64,10 @@ class SemSeg_MatSeg_BRDF(nn.Module):
                 self.decoder_to_use = models_brdf.decoder0_guide
 
             if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_pool:
-                import models_def.models_brdf_pac_pool as models_brdf_pac_pool
                 self.decoder_to_use = models_brdf_pac_pool.decoder0_pacpool
             if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_conv:
-                import models_def.models_brdf_pac_conv as models_brdf_pac_conv
                 self.decoder_to_use = models_brdf_pac_conv.decoder0_pacconv
             if self.opt.cfg.MODEL_MATSEG.if_albedo_safenet:
-                import models_def.models_brdf_safenet as models_brdf_safenet
                 self.decoder_to_use = models_brdf_safenet.decoder0_safenet
 
             self.BRDF_Net = nn.ModuleDict({

@@ -20,6 +20,8 @@ def make_dataset(split='train', data_root=None, data_list=None, logger=None):
     assert split in ['train', 'val', 'test']
     if not os.path.isfile(data_list):
         raise (RuntimeError("Image list file do not exist: " + data_list + "\n"))
+    if logger is None:
+        logger = basic_logger()
     image_label_list = []
     list_read = open(data_list).readlines()
     logger.info("Totally {} samples in {} set.".format(len(list_read), split))
@@ -55,12 +57,15 @@ def make_dataset(split='train', data_root=None, data_list=None, logger=None):
 
 
 class openrooms(data.Dataset):
-    def __init__(self, opt, data_list=None, logger=None, transforms_fixed=None, transforms=None, transforms_matseg=None, 
+    def __init__(self, opt, data_list=None, logger=basic_logger(), transforms_fixed=None, transforms=None, transforms_matseg=None, 
             split='train', load_first = -1, rseed = None, 
             cascadeLevel = 0,
-            isLight = False, isAllLight = False,
+            # is_light = False, is_all_light = False,
             envHeight = 8, envWidth = 16, envRow = 120, envCol = 160, 
             SGNum = 12):
+
+        if logger is None:
+            logger = basic_logger()
 
         self.opt = opt
         self.cfg = self.opt.cfg
@@ -77,6 +82,16 @@ class openrooms(data.Dataset):
             self.data_list = self.data_list[:load_first]
         logger.info(white_blue('%s-%s: total frames: %d'%(self.dataset_name, self.split, len(self.dataset_name))))
 
+        self.cascadeLevel = cascadeLevel
+        self.is_light = 'li' in self.opt.cfg.MODEL_BRDF.enable_list
+        # self.is_all_light = self.opt.cfg.MODEL_BRDF.is_all_light
+        
+        # if self.is_all_light:
+        #     logger.info('Filtering data_list with is_all_light=True...')
+        #     num_before = len(self.data_list)
+        #     self.data_list = [(item[0], item[1]) if os.path.isfile(item[0].replace('im_', 'imenv_')) for item in self.data_list]
+        #     logger.info('Filtering done. Before %d, after %d.'%(num_before, len(self.data_list))
+  
         assert transforms_fixed is not None, 'OpenRooms: Need a transforms_fixed!'
         self.transforms_fixed = transforms_fixed
         self.transforms = transforms
@@ -90,8 +105,6 @@ class openrooms(data.Dataset):
             self.semseg_names = [line.rstrip('\n') for line in open(self.cfg.PATH.semseg_names_path)]
             assert len(self.semseg_colors) == len(self.semseg_names)
 
-        self.cascadeLevel = cascadeLevel
-        self.isLight = isLight
 
     def __len__(self):
         return len(self.data_list)
@@ -104,7 +117,8 @@ class openrooms(data.Dataset):
         # Read segmentation
         seg = 0.5 * (self.loadImage(seg_path ) + 1)[0:1, :, :]
         semantics_path = image_path.replace('DiffMat', '').replace('DiffMat', '').replace('DiffLight', '')
-        mask_path = semantics_path.replace('im_', 'imcadmatobj_').replace('hdr', 'dat')
+        # mask_path = semantics_path.replace('im_', 'imcadmatobj_').replace('hdr', 'dat')
+        mask_path = semantics_path.replace('im_', 'immatPart_').replace('hdr', 'dat')
         mask = self.loadBinary(mask_path, channels = 3, dtype=np.int32, if_resize=True).squeeze() # [h, w, 3]
 
         # Read Image
@@ -153,10 +167,10 @@ class openrooms(data.Dataset):
                 batch_dict.update({'depth': torch.from_numpy(depth),})
 
             if self.cascadeLevel == 0:
-                if self.isLight:
+                if self.is_light:
                     env_path = image_path.replace('im_', 'imenv_')
             else:
-                if self.isLight:
+                if self.is_light:
                     env_path = image_path.replace('im_', 'imenv_')
                     envPre_path = image_path.replace('im_', 'imenv_').replace('.hdr', '_%d.h5'  % (self.cascadeLevel -1) )
                 
@@ -172,7 +186,7 @@ class openrooms(data.Dataset):
             segEnv = (seg < 0.1).astype(np.float32 )
             segObj = (seg > 0.9) 
 
-            if self.isLight:
+            if self.is_light:
                 segObj = segObj.squeeze()
                 segObj = ndimage.binary_erosion(segObj, structure=np.ones((7, 7) ),
                         border_value=1)
@@ -181,7 +195,7 @@ class openrooms(data.Dataset):
             segObj = segObj.astype(np.float32 )
 
 
-            if self.isLight == True:
+            if self.is_light:
                 envmaps, envmapsInd = self.loadEnvmap(env_path )
                 envmaps = envmaps * scale 
                 if self.cascadeLevel > 0: 
@@ -225,7 +239,7 @@ class openrooms(data.Dataset):
                     })
             # if self.transform is not None and not self.opt.if_hdr:
 
-            if self.isLight:
+            if self.is_light:
                 batch_dict['envmaps'] = envmaps
                 batch_dict['envmapsInd'] = envmapsInd
 
@@ -327,7 +341,7 @@ class openrooms(data.Dataset):
 
     def loadImage(self, imName, isGama = False):
         if not(osp.isfile(imName ) ):
-            print(imName )
+            self.logger.warning('File does not exist: ' + imName )
             assert(False )
 
         im = Image.open(imName)

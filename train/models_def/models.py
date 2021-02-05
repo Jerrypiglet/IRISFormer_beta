@@ -273,7 +273,7 @@ class encoderLight(nn.Module ):
 class decoderLight(nn.Module ):
     def __init__(self, SGNum,  mode = 0):
         super(decoderLight, self).__init__()
-
+output2env
         self.SGNum = SGNum
 
         self.dconv1 = nn.Conv2d(in_channels=1024, out_channels=512, kernel_size=3, stride=1, padding=1, bias=True )

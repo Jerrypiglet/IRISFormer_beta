@@ -6,7 +6,7 @@ from utils.maskrcnn_rui.utils.comm import get_world_size
 from utils.maskrcnn_rui.data.build import make_data_sampler
 from utils.maskrcnn_rui.data import samplers
 from utils.utils_training import cycle
-from utils.utils_misc import white_blue
+from utils.utils_misc import white_blue, basic_logger
 
 def make_batch_data_sampler(
     dataset, sampler, images_per_batch, num_iters=None, start_iter=0, drop_last=True
@@ -32,6 +32,9 @@ def make_batch_data_sampler(
 def make_data_loader(opt, dataset, is_train=True, start_iter=0, is_for_period=False, logger=None, override_shuffle=None, collate_fn=None, batch_size_override=-1, workers=-1, pin_memory = True, if_distributed_override=True):
     cfg = opt.cfg
     num_gpus = opt.num_gpus
+    if logger is None:
+        logger = basic_logger()
+
     # print('==============', cfg.TEST.IMS_PER_BATCH, num_gpus, '=====')
     is_distributed=opt.distributed and if_distributed_override
     num_workers = cfg.DATASET.num_workers if workers==-1 else workers

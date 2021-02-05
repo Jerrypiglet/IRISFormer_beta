@@ -352,8 +352,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                             im_trainval_RGB_mask_pooled_mean = im_trainval_RGB_mask_pooled_mean.cpu().numpy().squeeze().transpose(1, 2, 0)
                             writer.add_image('VAL_im_trainval_RGB_mask_pooled_mean/%d'%(sample_idx+batch_size*batch_id), im_trainval_RGB_mask_pooled_mean, tid, dataformats='HWC')
                         if not opt.if_cluster:
-                            kernel_list = output_dict['kernel_list']
-                            if not kernel_list is None:
+                            if 'kernel_list' in output_dict and not output_dict['kernel_list'] is None:
+                                kernel_list = output_dict['kernel_list']
                                 print(len(kernel_list), kernel_list[0].shape)
                                 np.save('tmp/demo_%s/kernel_list_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id), kernel_list[0].detach().cpu().numpy())
                             if output_dict['im_trainval_RGB_mask_pooled_mean'] is not None:

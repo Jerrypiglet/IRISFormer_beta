@@ -13,6 +13,11 @@ def set_up_envs(opt):
     opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_cluster if opt.if_cluster else opt.cfg.DATASET.dataset_path_local
     if opt.data_root is not None:
         opt.cfg.DATASET.dataset_path = opt.data_root
+
+    if opt.cfg.DATASET.mini:
+        opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_mini
+        opt.cfg.DATASET.dataset_list = opt.cfg.DATASET.dataset_list_mini
+
     opt.cfg.MODEL_SEMSEG.semseg_path = opt.cfg.MODEL_SEMSEG.semseg_path_cluster if opt.if_cluster else opt.cfg.MODEL_SEMSEG.semseg_path_local
     opt.cfg.PATH.semseg_colors_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.semseg_colors_path)
     opt.cfg.PATH.semseg_names_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.semseg_names_path)
@@ -44,6 +49,7 @@ def set_up_envs(opt):
         opt.cfg.MODEL_SEMSEG.fix_bn = False
 
     opt.cfg.MODEL_BRDF.enable_list = opt.cfg.MODEL_BRDF.enable_list.split('_')
+    assert all(e in opt.cfg.MODEL_BRDF.enable_list_allowed for e in opt.cfg.MODEL_BRDF.enable_list)
 
     # Guidance in general
     guidance_options = [opt.cfg.MODEL_MATSEG.if_albedo_pooling,opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv, \
@@ -143,9 +149,9 @@ def set_up_folders(opt):
     if not opt.if_cluster:
         opt.task_name = get_datetime() + '-' + opt.task_name
         # print(opt.cfg)
-        opt.root = opt.cfg.PATH.root_local
-    else:
-        opt.root = opt.cfg.PATH.root_cluster
+    #     opt.root = opt.cfg.PATH.root_local
+    # else:
+    #     opt.root = opt.cfg.PATH.root_cluster
     opt.summary_path_task = opt.SUMMARY_PATH / opt.task_name
     opt.checkpoints_path_task = opt.CKPT_PATH / opt.task_name
     opt.summary_vis_path_task = opt.SUMMARY_VIS_PATH / opt.task_name
