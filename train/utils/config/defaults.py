@@ -27,6 +27,7 @@ _C.PATH.root_local = '/home/ruizhu/Documents/Projects/semanticInverse/train'
 _C.PATH.root_cluster = '.'
 _C.PATH.semseg_colors_path = 'data/openrooms/openrooms_colors.txt'
 _C.PATH.semseg_names_path = 'data/openrooms/openrooms_names.txt'
+_C.PATH.total3D_colors_path = 'data/openrooms/total3D_colors'
 _C.PATH.dcn_path = ''
 _C.PATH.dcn_cluster = '/viscompfs/users/ruizhu/lib/Deformable-Convolution-V2-PyTorch'
 _C.PATH.dcn_local = '/home/ruizhu/Documents/Projects/semanticInverse/third-parties_outside/Deformable-Convolution-V2-PyTorch'
@@ -41,6 +42,7 @@ _C.MODEL_BRDF.enable = True
 # _C.MODEL_BRDF.enable_list = ['al', 'no', 'de', 'ro', 'li']
 _C.MODEL_BRDF.enable_list = 'al_no_de_ro'
 _C.MODEL_BRDF.enable_list_allowed = ['al', 'no', 'de', 'ro', 'li']
+_C.MODEL_BRDF.data_read_list = 'de'
 _C.MODEL_BRDF.load_pretrained_pth = False
 _C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240'
 _C.MODEL_BRDF.albedoWeight = 1.5
@@ -50,9 +52,13 @@ _C.MODEL_BRDF.depthWeight = 0.5
 _C.MODEL_BRDF.if_debug_arch = False
 _C.MODEL_BRDF.enable_BRDF_decoders = True
 # _C.MODEL_BRDF.is_all_light = True
-
 _C.MODEL_BRDF.enable_semseg_decoder = False
 _C.MODEL_BRDF.semseg_PPM = False
+
+_C.MODEL_LAYOUT_EMITTER = CN()
+_C.MODEL_LAYOUT_EMITTER.enable = False
+_C.MODEL_LAYOUT_EMITTER.OR = 'OR45'
+_C.MODEL_LAYOUT_EMITTER.load_depth = True
 
 
 _C.MODEL_MATSEG = CN()
@@ -130,7 +136,10 @@ _C.DATASET.dataset_name = 'openrooms'
 _C.DATASET.dataset_path = ''
 _C.DATASET.dataset_path_local = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms'
 _C.DATASET.dataset_path_cluster = '/siggraphasia20dataset/code/Routine/DatasetCreation/'
-_C.DATASET.dataset_list = 'data/openrooms/list'
+_C.DATASET.layout_emitter_path = ''
+_C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-full-OR45_total3D_train_test_data_V4-ORfull'
+_C.DATASET.layout_emitter_path_cluster = ''
+_C.DATASET.dataset_list = 'data/openrooms/list_ORfull/list'
 _C.DATASET.dataset_path_mini = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/mini'
 _C.DATASET.dataset_list_mini = 'data/mini/list'
 
@@ -147,7 +156,8 @@ _C.DATA.load_matseg_gt = False
 _C.DATA.load_brdf_gt = True
 _C.DATA.semseg_ignore_label = 0
 _C.DATA.semseg_classes = 46
-_C.DATA.load_lighting = False
+_C.DATA.load_lighting_gt = False
+_C.DATA.load_layout_emitter_gt = False
 
 _C.SOLVER = CN()
 _C.SOLVER.method = 'adam'

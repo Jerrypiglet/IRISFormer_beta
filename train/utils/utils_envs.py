@@ -11,6 +11,7 @@ import os, sys
 def set_up_envs(opt):
     opt.cfg.PATH.root = opt.cfg.PATH.root_cluster if opt.if_cluster else opt.cfg.PATH.root_local
     opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_cluster if opt.if_cluster else opt.cfg.DATASET.dataset_path_local
+    opt.cfg.DATASET.layout_emitter_path = opt.cfg.DATASET.layout_emitter_path_cluster if opt.if_cluster else opt.cfg.DATASET.layout_emitter_path_local
     if opt.data_root is not None:
         opt.cfg.DATASET.dataset_path = opt.data_root
 
@@ -21,6 +22,7 @@ def set_up_envs(opt):
     opt.cfg.MODEL_SEMSEG.semseg_path = opt.cfg.MODEL_SEMSEG.semseg_path_cluster if opt.if_cluster else opt.cfg.MODEL_SEMSEG.semseg_path_local
     opt.cfg.PATH.semseg_colors_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.semseg_colors_path)
     opt.cfg.PATH.semseg_names_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.semseg_names_path)
+    opt.cfg.PATH.total3D_colors_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.total3D_colors_path)
     # for keys in ['PATH.semseg_colors_path', 'PATH.semseg_names_path']
     # keys_to_set_path = ['PATH.semseg_colors_path', 'PATH.semseg_names_path']
     # for cfg_key in opt.cfg:
@@ -30,6 +32,9 @@ def set_up_envs(opt):
             # if key_to_set_path in cfg_key:
 
     # opt.cfg.MODEL_MATSEG.matseg_path = opt.CKPT_PATH
+
+    if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
+        opt.cfg.DATA.load_layout_obj_gt = True
 
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
         opt.cfg.DATA.load_brdf_gt = True
@@ -50,6 +55,10 @@ def set_up_envs(opt):
 
     opt.cfg.MODEL_BRDF.enable_list = opt.cfg.MODEL_BRDF.enable_list.split('_')
     assert all(e in opt.cfg.MODEL_BRDF.enable_list_allowed for e in opt.cfg.MODEL_BRDF.enable_list)
+    opt.cfg.MODEL_BRDF.data_read_list = list(set(opt.cfg.MODEL_BRDF.data_read_list.split('_')))
+    assert all(e in opt.cfg.MODEL_BRDF.enable_list_allowed for e in opt.cfg.MODEL_BRDF.data_read_list)
+    if opt.cfg.MODEL_LAYOUT_EMITTER.load_depth:
+        opt.cfg.MODEL_BRDF.data_read_list.append('de')
 
     # Guidance in general
     guidance_options = [opt.cfg.MODEL_MATSEG.if_albedo_pooling,opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv, \

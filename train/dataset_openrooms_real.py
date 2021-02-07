@@ -1,4 +1,4 @@
-import glob
+git ls-files . --exclude-standard --othersimport glob
 import numpy as np
 import os.path as osp
 from PIL import Image

@@ -15,3 +15,6 @@ yacs
 pathlib
 termcolor
 nvidia_ml_py3
+
+trimesh
+numpy-quaternion

@@ -194,7 +194,6 @@ class openrooms(data.Dataset):
 
             segObj = segObj.astype(np.float32 )
 
-
             if self.is_light:
                 envmaps, envmapsInd = self.loadEnvmap(env_path )
                 envmaps = envmaps * scale 
