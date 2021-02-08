@@ -2,13 +2,13 @@ import torch
 import torch.nn as nn
 
 from models_def.model_matseg import Baseline
-import models_def.models_brdf as models_brdf
 from utils.utils_misc import *
 import pac
 from utils.utils_training import freeze_bn_in_module
 import torch.nn.functional as F
 from models_def.model_matseg import logit_embedding_to_instance
 
+import models_def.models_brdf as models_brdf # basic model
 import models_def.models_brdf_pac_pool as models_brdf_pac_pool
 import models_def.models_brdf_pac_conv as models_brdf_pac_conv
 import models_def.models_brdf_safenet as models_brdf_safenet
@@ -92,6 +92,19 @@ class SemSeg_MatSeg_BRDF(nn.Module):
                 self.BRDF_Net.update({'semsegDecoder': self.decoder_to_use(opt, mode=-1, out_channel=self.cfg.DATA.semseg_classes, if_PPM=self.cfg.MODEL_BRDF.semseg_PPM)})
 
         # self.guide_net = guideNet(opt)
+
+        self.load_BRDF_Net()
+
+    def load_BRDF_Net(self):
+        self.BRDF_Net['encoder'].load_state_dict(
+            torch.load(self.cfg.MODEL_BRDF.weights%'encoder').state_dict() )
+        loaded_strings = ['encoder']
+        for module_name in ['albedo', 'normal', 'rough', 'depth']:
+            if module_name+'Decoder' in self.BRDF_Net:
+                self.BRDF_Net[module_name+'Decoder'].load_state_dict(
+                    torch.load(self.cfg.MODEL_BRDF.weights%module_name).state_dict() )
+                loaded_strings.append(module_name)
+        self.logger.info(magenta('Loaded pretrained BRDF from %s: %s'%(self.cfg.MODEL_BRDF.weights, '-'.join(loaded_strings))))
 
     def forward_matseg(self, input_dict):
         input_list = [input_dict['im_batch_matseg']]

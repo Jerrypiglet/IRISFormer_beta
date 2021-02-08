@@ -95,7 +95,7 @@ def make_dataset(split='train', data_root=None, data_list=None, logger=None):
         '''
         item = (image_name, label_name)
         image_label_list.append(item)
-        meta_split_scene_name_frame_id_list.append((image_name.split('/')[0], line_split[0], int(line_split[1])))
+        meta_split_scene_name_frame_id_list.append((line_split[2].split('/')[0], line_split[0], int(line_split[1])))
     logger.info("Checking image&label pair {} list done!".format(split))
     # print(image_label_list[:5])
     return image_label_list, meta_split_scene_name_frame_id_list
@@ -130,7 +130,6 @@ class openrooms(data.Dataset):
         logger.info(white_blue('%s-%s: total frames: %d'%(self.dataset_name, self.split, len(self.dataset_name))))
 
         self.cascadeLevel = cascadeLevel
-        self.is_light = 'li' in self.opt.cfg.MODEL_BRDF.enable_list
         # self.is_all_light = self.opt.cfg.MODEL_BRDF.is_all_light
         
         # if self.is_all_light:
@@ -151,17 +150,25 @@ class openrooms(data.Dataset):
             self.semseg_colors = np.loadtxt(self.cfg.PATH.semseg_colors_path).astype('uint8')
             self.semseg_names = [line.rstrip('\n') for line in open(self.cfg.PATH.semseg_names_path)]
             assert len(self.semseg_colors) == len(self.semseg_names)
-
+            
+        # ====== layout, obj, emitters =====
         if self.opt.cfg.DATA.load_layout_emitter_gt:
             self.OR = self.cfg.MODEL_LAYOUT_EMITTER.OR
-            self.classes = OR4XCLASSES_dict[self.OR]
-            self.PNG_data_root = Path('/newfoundland2/ruizhu/siggraphasia20dataset/layout_labels_V4-ORfull/') if opt.if_cluster else self.data_root
+            self.grid_size = self.cfg.MODEL_LAYOUT_EMITTER.grid_size
+            self.OR_classes = OR4XCLASSES_dict[self.OR]
+            self.PNG_data_root = Path('/newfoundland2/ruizhu/siggraphasia20dataset/layout_labels_V4-ORfull/') if not opt.if_cluster else self.data_root
             self.layout_emitter_im_width, self.layout_emitter_im_height = WIDTH_PATCH, HEIGHT_PATCH
             with open(Path(self.cfg.PATH.total3D_colors_path) / OR4X_mapping_catInt_to_RGB['light'], 'rb') as f:
                 self.OR_mapping_catInt_to_RGB = pickle.load(f)[self.OR]
 
-
-
+        # ====== per-pixel lighting =====
+        self.is_light = 'li' in self.opt.cfg.MODEL_BRDF.enable_list
+        if self.is_light:
+            self.envWidth = envWidth
+            self.envHeight = envHeight
+            self.envRow = envRow
+            self.envCol = envCol
+            self.SGNum = SGNum
 
     def __len__(self):
         return len(self.data_list)
@@ -194,6 +201,7 @@ class openrooms(data.Dataset):
         batch_dict = {'im': torch.from_numpy(im), 'imPath': image_path}
         batch_dict.update({'image_transformed_fixed': image_transformed_fixed, 'im_trainval_RGB': im_trainval_RGB, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
 
+        # ====== BRDF =====
         if self.opt.cfg.DATA.load_brdf_gt or len(opt.cfg.MODEL_BRDF.data_read_list) != 0:
             # Get paths for BRDF params
             if 'al' in self.cfg.MODEL_BRDF.enable_list:
@@ -297,6 +305,7 @@ class openrooms(data.Dataset):
             if self.is_light:
                 batch_dict['envmaps'] = envmaps
                 batch_dict['envmapsInd'] = envmapsInd
+                # print(envmaps.shape, envmapsInd.shape)
 
                 if self.cascadeLevel > 0:
                     batch_dict['envmapsPre'] = envmapsPre
@@ -310,57 +319,68 @@ class openrooms(data.Dataset):
                 batch_dict['diffusePre'] = diffusePre
                 batch_dict['specularPre'] = specularPre
         
+        # ====== semseg =====
         if self.opt.cfg.DATA.load_matseg_gt:
-            # >>>> Rui: Read obj mask
-            mat_aggre_map, num_mat_masks = self.get_map_aggre_map(mask) # 0 for invalid region
-            im_matseg_transformed_trainval, mat_aggre_map_transformed = self.transforms_matseg(im_RGB_uint8, mat_aggre_map.squeeze()) # augmented
-            mat_aggre_map = mat_aggre_map_transformed.numpy()[..., np.newaxis]
+            mat_seg_dict = self.load_mat_seg(mask, im_RGB_uint8)
+            batch_dict.update(mat_seg_dict)
 
-            h, w, _ = mat_aggre_map.shape
-            gt_segmentation = mat_aggre_map
-            segmentation = np.zeros([50, h, w], dtype=np.uint8)
-            for i in range(num_mat_masks+1):
-                if i == 0:
-                    # deal with backgroud
-                    seg = gt_segmentation == 0
-                    segmentation[num_mat_masks, :, :] = seg.reshape(h, w) # segmentation[num_mat_masks] for invalid mask
-                else:
-                    seg = gt_segmentation == i
-                    segmentation[i-1, :, :] = seg.reshape(h, w) # segmentation[0..num_mat_masks-1] for plane instances
-            # <<<<
-            batch_dict.update({
-                'mat_aggre_map': torch.from_numpy(mat_aggre_map),  # 0 for invalid region
-                # 'mat_aggre_map_reindex': torch.from_numpy(mat_aggre_map_reindex), # gt_seg
-                'num_mat_masks': num_mat_masks,  
-                'mat_notlight_mask': torch.from_numpy(mat_aggre_map!=0).float(),
-                'instance': torch.ByteTensor(segmentation), # torch.Size([50, 240, 320])
-                'semantic': 1 - torch.FloatTensor(segmentation[num_mat_masks, :, :]).unsqueeze(0), # torch.Size([50, 240, 320]) torch.Size([1, 240, 320])
-                'im_matseg_transformed_trainval': im_matseg_transformed_trainval
-            })
-
+        # ====== matseg =====
         if self.opt.cfg.DATA.load_semseg_gt:
-            semseg_label = np.load(semseg_label_path).astype(np.uint8)
-            semseg_label = cv2.resize(semseg_label, (self.im_width, self.im_height), interpolation=cv2.INTER_NEAREST)
-            # Transform images
-            im_semseg_transformed_trainval, semseg_label = self.transforms(im_RGB_uint8, semseg_label) # augmented
-            # semseg_label[semseg_label==0] = 31
-            batch_dict.update({'semseg_label': semseg_label.long(), 'im_semseg_transformed_trainval': im_semseg_transformed_trainval})
+            sem_seg_dict = self.load_mat_seg(im_RGB_uint8, semseg_label_path)
+            batch_dict.update(sem_seg_dict)
 
+        # ====== layout, obj, emitters =====
         if self.opt.cfg.DATA.load_layout_emitter_gt:
-            load_layout_emitter_gt = self.load_layout_emitter_gt()
-
+            layout_emitter_dict = self.load_layout_emitter_gt(self.meta_split_scene_name_frame_id_list[index])
+            batch_dict.update(layout_emitter_dict)
+        
         return batch_dict
 
-    def load_layout_emitter_gt(self):
-        meta_split, scene_name, frame_id = self.meta_split_scene_name_frame_id_list
-        pickle_path = Path(self.cfg.DATASET.layout_emitter_path) / meta_split / scene_name / ('layout_%d.pkl'%frame_id)
+    def load_sem_seg(self, im_RGB_uint8, semseg_label_path):
+        semseg_label = np.load(semseg_label_path).astype(np.uint8)
+        semseg_label = cv2.resize(semseg_label, (self.im_width, self.im_height), interpolation=cv2.INTER_NEAREST)
+        # Transform images
+        im_semseg_transformed_trainval, semseg_label = self.transforms(im_RGB_uint8, semseg_label) # augmented
+        # semseg_label[semseg_label==0] = 31
+        return {'semseg_label': semseg_label.long(), 'im_semseg_transformed_trainval': im_semseg_transformed_trainval}
+
+    def load_mat_seg(self, mask, im_RGB_uint8):
+        # >>>> Rui: Read obj mask
+        mat_aggre_map, num_mat_masks = self.get_map_aggre_map(mask) # 0 for invalid region
+        im_matseg_transformed_trainval, mat_aggre_map_transformed = self.transforms_matseg(im_RGB_uint8, mat_aggre_map.squeeze()) # augmented
+        mat_aggre_map = mat_aggre_map_transformed.numpy()[..., np.newaxis]
+
+        h, w, _ = mat_aggre_map.shape
+        gt_segmentation = mat_aggre_map
+        segmentation = np.zeros([50, h, w], dtype=np.uint8)
+        for i in range(num_mat_masks+1):
+            if i == 0:
+                # deal with backgroud
+                seg = gt_segmentation == 0
+                segmentation[num_mat_masks, :, :] = seg.reshape(h, w) # segmentation[num_mat_masks] for invalid mask
+            else:
+                seg = gt_segmentation == i
+                segmentation[i-1, :, :] = seg.reshape(h, w) # segmentation[0..num_mat_masks-1] for plane instances
+        return {
+            'mat_aggre_map': torch.from_numpy(mat_aggre_map),  # 0 for invalid region
+            # 'mat_aggre_map_reindex': torch.from_numpy(mat_aggre_map_reindex), # gt_seg
+            'num_mat_masks': num_mat_masks,  
+            'mat_notlight_mask': torch.from_numpy(mat_aggre_map!=0).float(),
+            'instance': torch.ByteTensor(segmentation), # torch.Size([50, 240, 320])
+            'semantic': 1 - torch.FloatTensor(segmentation[num_mat_masks, :, :]).unsqueeze(0), # torch.Size([50, 240, 320]) torch.Size([1, 240, 320])
+            'im_matseg_transformed_trainval': im_matseg_transformed_trainval
+        }
+
+    def load_layout_emitter_gt(self, meta_split_scene_name_frame_id):
+        meta_split, scene_name, frame_id = meta_split_scene_name_frame_id
+        pickle_path = str(Path(self.cfg.DATASET.layout_emitter_path) / meta_split / scene_name / ('layout_obj_%d.pkl'%frame_id))
         file_path = pickle_path.replace('.pkl', '_reindexed.pkl')
         with open(file_path, 'rb') as f:
             sequence = pickle.load(f)
 
         return_dict = {}
 
-        png_image_path = self.PNG_data_root / meta_split / scene_name / ('im_%d.png'%frame_id)
+        png_image_path = Path(self.PNG_data_root) / meta_split / scene_name / ('im_%d.png'%frame_id)
         image = Image.open(str(png_image_path))
         image_np = np.array(image)
 
@@ -369,8 +389,8 @@ class openrooms(data.Dataset):
         n_objects = boxes['bdb2D_pos'].shape[0]
 
         boxes_valid_list = list(boxes['if_valid'] if 'if_valid' in boxes else [True]*n_objects)
-        if not self.config['has_invalid_objs']:
-            assert all(boxes_valid_list), 'has invalid objs from file %s!'%file_path
+        # if not self.config['has_invalid_objs']:
+        #     assert all(boxes_valid_list), 'has invalid objs from file %s!'%file_path
 
         g_feature = [[((loc2[0] + loc2[2]) / 2. - (loc1[0] + loc1[2]) / 2.) / (loc1[2] - loc1[0]),
                       ((loc2[1] + loc2[3]) / 2. - (loc1[1] + loc1[3]) / 2.) / (loc1[3] - loc1[1]),
@@ -390,18 +410,15 @@ class openrooms(data.Dataset):
         boxes['g_feature'] = pe.view(n_objects * n_objects, rel_cfg.d_g)
 
         # encode class
-        cls_codes = torch.zeros([len(boxes['size_cls']), len(self.classes)])
+        cls_codes = torch.zeros([len(boxes['size_cls']), len(self.OR_classes)])
         
-        if self.config['data']['dataset_super'] == 'OR': # OR: set cat_id==0 to invalid, (and [optionally] remap not-detect-cats to 0)
-            # boxes['size_cls'] = [x if x not in OR42CLASSES_not_detect_mapping_ids else OR42CLASSES_not_detect_mapping[x] for x in boxes['size_cls']]
-            assert len(boxes['size_cls']) == len(boxes_valid_list)
-            # for idx in range(len(boxes_valid_list)):
-            for idx in range(len(boxes['size_cls'])):
-                if boxes['size_cls'][idx] == 0:
-                    boxes_valid_list[idx] = False # set cat_id==0 to invalid
-                if boxes['size_cls'][idx] in OR4XCLASSES_not_detect_mapping_ids_dict[self.OR]: # [optionally] remap not-detect-cats to 0
-                    boxes_valid_list[idx] = False
-                    # boxes['size_cls'][idx] = OR42CLASSES_not_detect_mapping[boxes['size_cls'][idx]]
+        # if self.config['data']['dataset_super'] == 'OR': # OR: set cat_id==0 to invalid, (and [optionally] remap not-detect-cats to 0)
+        assert len(boxes['size_cls']) == len(boxes_valid_list)
+        for idx in range(len(boxes['size_cls'])):
+            if boxes['size_cls'][idx] == 0:
+                boxes_valid_list[idx] = False # set cat_id==0 to invalid
+            if boxes['size_cls'][idx] in OR4XCLASSES_not_detect_mapping_ids_dict[self.OR]: # [optionally] remap not-detect-cats to 0
+                boxes_valid_list[idx] = False
 
         cls_codes[range(len(boxes['size_cls'])), boxes['size_cls']] = 1
         boxes['size_cls'] = cls_codes
@@ -411,8 +428,8 @@ class openrooms(data.Dataset):
         # TODO: If the training error is consistently larger than the test error. We remove the crop and add more intermediate FC layers with no dropout.
         # TODO: Or FC layers with more hidden neurons, which ensures more neurons pass through the dropout layer, or with larger learning rate, longer
         # TODO: decay rate.
-        data_transforms = data_transforms_crop if self.mode=='train' else data_transforms_nocrop
-        data_transforms_nonormalize = data_transforms_crop_nonormalize if self.mode=='train' else data_transforms_nocrop_nonormalize
+        data_transforms = data_transforms_crop if self.split == 'train' else data_transforms_nocrop
+        # data_transforms_nonormalize = data_transforms_crop_nonormalize if self.mode=='train' else data_transforms_nocrop_nonormalize
 
         patch = []
         for bdb in boxes['bdb2D_pos']:
@@ -435,19 +452,19 @@ class openrooms(data.Dataset):
         #     return_dict.update({'depth': pil2tensor(depth).squeeze()})
 
         # --- reading emitters
-        pickle_emitter2wall_assign_info_dict_path = pickle_path.replace('.pkl', '_emitters_assign_info_V3.pkl')
+        pickle_emitter2wall_assign_info_dict_path = pickle_path.replace('.pkl', '_emitters_assign_info_%dX%d_V3.pkl'%(self.grid_size, self.grid_size))
         if_emitter = Path(pickle_emitter2wall_assign_info_dict_path).exists()
-        assert if_emitter, pickle_emitter2wall_assign_info_dict_path
+        assert if_emitter, 'Cannot find' + pickle_emitter2wall_assign_info_dict_path
         if if_emitter:
             with open(pickle_emitter2wall_assign_info_dict_path, 'rb') as f:
                 sequence_emitter2wall_assign_info_dict = pickle.load(f)
                 # sequence_emitter2wall_assign_info[0].keys()
             emitter2wall_assign_info_list = sequence_emitter2wall_assign_info_dict['emitter2wall_assign_info_list']
 
-            if self.config['emitters']['wall_prob_or_cell_prob'] == 'wall_prob':
+            if self.cfg.MODEL_LAYOUT_EMITTER.wall_prob_or_cell_prob == 'wall_prob':
                 wall_grid_prob = sequence_emitter2wall_assign_info_dict['wall_grid_prob']
                 return_dict.update({'wall_grid_prob': torch.from_numpy(wall_grid_prob).float()})
-            elif self.config['emitters']['wall_prob_or_cell_prob'] == 'cell_prob':
+            elif self.cfg.MODEL_LAYOUT_EMITTER.wall_prob_or_cell_prob == 'cell_prob':
                 cell_prob_mean = sequence_emitter2wall_assign_info_dict['cell_prob_mean']
                 return_dict.update({'cell_prob_mean': torch.from_numpy(cell_prob_mean).float()})
 
@@ -579,9 +596,8 @@ class openrooms(data.Dataset):
         except:
             return None
 
-
     def loadEnvmap(self, envName ):
-        print('>>>>loadEnvmap', envName)
+        # print('>>>>loadEnvmap', envName)
         if not osp.isfile(envName ):
             env = np.zeros( [3, self.envRow, self.envCol,
                 self.envHeight, self.envWidth], dtype = np.float32 )
@@ -597,8 +613,8 @@ class openrooms(data.Dataset):
 
             if not env is None:
                 env = env.reshape(self.envRow, envHeightOrig, self.envCol,
-                    envWidthOrig, 3)
-                env = np.ascontiguousarray(env.transpose([4, 0, 2, 1, 3] ) )
+                    envWidthOrig, 3) # (1920, 5120, 3) -> (120, 16, 160, 32, 3)
+                env = np.ascontiguousarray(env.transpose([4, 0, 2, 1, 3] ) ) # -> (3, 120, 160, 16, 32)
 
                 scale = envHeightOrig / self.envHeight
                 if scale > 1:
@@ -612,6 +628,41 @@ class openrooms(data.Dataset):
                 envInd = np.zeros([1, 1, 1], dtype=np.float32 )
                 print('Warning: the envmap %s does not exist.' % envName )
                 return env, envInd
-                
 
-            return env, envInd
+default_collate = torch.utils.data.dataloader.default_collate
+def collate_fn_OR(batch):
+    """
+    Data collater.
+
+    Assumes each instance is a dict.
+    Applies different collation rules for each field.
+    Args:
+        batches: List of loaded elements via Dataset.__getitem__
+    """
+    collated_batch = {}
+    # iterate over keys
+    for key in batch[0]:
+        # if key == 'boxes_batch':
+        #     collated_batch[key] = dict()
+        #     for subkey in batch[0][key]:
+        #         if subkey in ['bdb2D_full', 'bdb3D_full']: # lists of original & more information (e.g. color)
+        #             continue
+        #         if subkey == 'mask':
+        #             tensor_batch = [elem[key][subkey] for elem in batch]
+        #         else:
+        #             # print(subkey)
+        #             list_of_tensor = [recursive_convert_to_torch(elem[key][subkey]) for elem in batch]
+        #             tensor_batch = torch.cat(list_of_tensor)
+        #         collated_batch[key][subkey] = tensor_batch
+        # # elif key == 'depth':
+        # #     collated_batch[key] = [elem[key] for elem in batch]
+        if key in ['boxes_valid_list', 'emitter2wall_assign_info_list', 'emitters_obj_list', 'gt_layout_RAW']:
+            collated_batch[key] = [elem[key] for elem in batch]
+        else:
+            # print(key)
+            collated_batch[key] = default_collate([elem[key] for elem in batch])
+
+    interval_list = [elem['boxes_batch']['patch'].shape[0] for elem in batch]
+    collated_batch['obj_split'] = torch.tensor([[sum(interval_list[:i]), sum(interval_list[:i+1])] for i in range(len(interval_list))])
+
+    return collated_batch

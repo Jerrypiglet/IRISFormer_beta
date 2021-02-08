@@ -17,7 +17,7 @@ PACNET_PATH = Path(pwdpath) / 'third-parties' / 'pacnet'
 sys.path.insert(0, str(PACNET_PATH))
 print(sys.path)
 
-from dataset_openroomsV3 import openrooms
+from dataset_openroomsV3 import openrooms, collate_fn_OR
 from train_funcs_joint import get_input_dict_joint, val_epoch_joint, vis_val_epoch_joint, forward_joint, get_time_meters_joint
 
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -192,6 +192,7 @@ brdf_loader_train = make_data_loader(
     is_train=True,
     start_iter=0,
     logger=logger,
+    collate_fn=collate_fn_OR, 
     # collate_fn=my_collate_seq_dataset if opt.if_padding else my_collate_seq_dataset_noPadding,
 )
 if opt.cfg.MODEL_SEMSEG.enable:
@@ -220,6 +221,7 @@ brdf_loader_val = make_data_loader(
     start_iter=0,
     logger=logger,
     # pin_memory = False, 
+    collate_fn=collate_fn_OR, 
     # collate_fn=my_collate_seq_dataset if opt.if_padding else my_collate_seq_dataset_noPadding,
     if_distributed_override=opt.cfg.DATASET.if_val_dist and opt.distributed
 )
@@ -232,6 +234,7 @@ brdf_loader_val_vis = make_data_loader(
     workers=0,
     batch_size_override=opt.batch_size_override_vis, 
     # pin_memory = False, 
+    collate_fn=collate_fn_OR, 
     # collate_fn=my_collate_seq_dataset if opt.if_padding else my_collate_seq_dataset_noPadding,
     if_distributed_override=False
 )

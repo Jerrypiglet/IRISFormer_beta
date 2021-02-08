@@ -17,4 +17,5 @@ termcolor
 nvidia_ml_py3
 
 trimesh
+numba
 numpy-quaternion

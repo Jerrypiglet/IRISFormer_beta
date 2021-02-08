@@ -37,6 +37,7 @@ _C.PATH.torch_home_cluster = '/viscompfs/users/ruizhu/'
 # _C.DATA.semseg_colors_path = 'data/openrooms/openrooms_colors.txt'
 # _C.DATA.semseg_names_path = 'data/openrooms/openrooms_names.txt'
 
+# ===== BRDF
 _C.MODEL_BRDF = CN()
 _C.MODEL_BRDF.enable = True
 # _C.MODEL_BRDF.enable_list = ['al', 'no', 'de', 'ro', 'li']
@@ -54,11 +55,22 @@ _C.MODEL_BRDF.enable_BRDF_decoders = True
 # _C.MODEL_BRDF.is_all_light = True
 _C.MODEL_BRDF.enable_semseg_decoder = False
 _C.MODEL_BRDF.semseg_PPM = False
+_C.MODEL_BRDF.weights = 'models_ckpt/check_cascade0_w320_h240/%s0_13.pth'
 
+# ===== per-pixel lighting
+_C.MODEL_BRDF.envRow = 120
+_C.MODEL_BRDF.envCol = 160
+_C.MODEL_BRDF.envHeight = 8
+_C.MODEL_BRDF.envWidth = 16
+_C.MODEL_BRDF.SGNum = 12
+
+# ===== layout, obj, emitter
 _C.MODEL_LAYOUT_EMITTER = CN()
 _C.MODEL_LAYOUT_EMITTER.enable = False
 _C.MODEL_LAYOUT_EMITTER.OR = 'OR45'
+_C.MODEL_LAYOUT_EMITTER.grid_size = 8
 _C.MODEL_LAYOUT_EMITTER.load_depth = True
+_C.MODEL_LAYOUT_EMITTER.wall_prob_or_cell_prob = 'cell_prob'
 
 
 _C.MODEL_MATSEG = CN()

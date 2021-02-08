@@ -32,9 +32,12 @@ def set_up_envs(opt):
             # if key_to_set_path in cfg_key:
 
     # opt.cfg.MODEL_MATSEG.matseg_path = opt.CKPT_PATH
-
+    
+    # ====== layout, obj, emitters =====
     if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
-        opt.cfg.DATA.load_layout_obj_gt = True
+        opt.cfg.DATA.load_layout_emitter_gt = True
+        assert opt.cfg.MODEL_LAYOUT_EMITTER.wall_prob_or_cell_prob in ['cell_prob', 'wall_prob']
+    # ======
 
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
         opt.cfg.DATA.load_brdf_gt = True
