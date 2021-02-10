@@ -3,7 +3,8 @@ import torch.nn as nn
 
 from models_def.model_matseg import Baseline
 from utils.utils_misc import *
-import pac
+from utils.utils_misc import meganta
+# import pac
 from utils.utils_training import freeze_bn_in_module
 import torch.nn.functional as F
 from models_def.model_matseg import logit_embedding_to_instance
@@ -12,6 +13,7 @@ import models_def.models_brdf as models_brdf # basic model
 import models_def.models_brdf_pac_pool as models_brdf_pac_pool
 import models_def.models_brdf_pac_conv as models_brdf_pac_conv
 import models_def.models_brdf_safenet as models_brdf_safenet
+import models_def.models_light as models_light 
 
 class SemSeg_MatSeg_BRDF(nn.Module):
     def __init__(self, opt, logger):
@@ -19,6 +21,7 @@ class SemSeg_MatSeg_BRDF(nn.Module):
         self.opt = opt
         self.cfg = opt.cfg
         self.logger = logger
+        self.non_learnable_layers = {}
 
         if self.cfg.MODEL_MATSEG.enable:
             input_dim = 3 if not self.cfg.MODEL_MATSEG.use_semseg_as_input else 4
@@ -82,29 +85,86 @@ class SemSeg_MatSeg_BRDF(nn.Module):
                     self.BRDF_Net.update({'roughDecoder': self.decoder_to_use(opt, mode=2)})
                 if 'de' in self.cfg.MODEL_BRDF.enable_list:
                     self.BRDF_Net.update({'depthDecoder': self.decoder_to_use(opt, mode=4)})
-                # self.BRDF_Net.update({
-                #     'albedoDecoder': self.decoder_to_use(opt, mode=0), 
-                #     'normalDecoder': self.decoder_to_use(opt, mode=1), 
-                #     'roughDecoder': self.decoder_to_use(opt, mode=2), 
-                #     'depthDecoder': self.decoder_to_use(opt, mode=4)
-                    # })
+                    
             if self.cfg.MODEL_BRDF.enable_semseg_decoder:
                 self.BRDF_Net.update({'semsegDecoder': self.decoder_to_use(opt, mode=-1, out_channel=self.cfg.DATA.semseg_classes, if_PPM=self.cfg.MODEL_BRDF.semseg_PPM)})
 
         # self.guide_net = guideNet(opt)
 
-        self.load_BRDF_Net()
+        if self.cfg.MODEL_LIGHT.enable:
+            self.LIGHT_Net = nn.ModuleDict({})
+            self.LIGHT_Net.update({'lightEncoder':  models_light.encoderLight(cascadeLevel = opt.cascadeLevel, SGNum = opt.cfg.MODEL_LIGHT.SGNum )})
+            self.LIGHT_Net.update({'axisDecoder':  models_light.decoderLight(mode=0, SGNum = opt.cfg.MODEL_LIGHT.SGNum )})
+            self.LIGHT_Net.update({'lambDecoder':  models_light.decoderLight(mode = 1, SGNum = opt.cfg.MODEL_LIGHT.SGNum )})
+            self.LIGHT_Net.update({'weightDecoder':  models_light.decoderLight(mode = 2, SGNum = opt.cfg.MODEL_LIGHT.SGNum )})
+            self.non_learnable_layers['renderLayer'] = models_light.renderingLayer(isCuda = opt.if_cuda, 
+                imWidth=opt.cfg.MODEL_LIGHT.envCol, imHeight=opt.cfg.MODEL_LIGHT.envRow, 
+                envWidth = opt.cfg.MODEL_LIGHT.envWidth, envHeight = opt.cfg.MODEL_LIGHT.envHeight)
+            self.non_learnable_layers['output2env'] = models_light.output2env(isCuda = opt.if_cuda, 
+                envWidth = opt.cfg.MODEL_LIGHT.envWidth, envHeight = opt.cfg.MODEL_LIGHT.envHeight, SGNum = opt.cfg.MODEL_LIGHT.SGNum )
 
-    def load_BRDF_Net(self):
-        self.BRDF_Net['encoder'].load_state_dict(
-            torch.load(self.cfg.MODEL_BRDF.weights%'encoder').state_dict() )
-        loaded_strings = ['encoder']
-        for module_name in ['albedo', 'normal', 'rough', 'depth']:
-            if module_name+'Decoder' in self.BRDF_Net:
-                self.BRDF_Net[module_name+'Decoder'].load_state_dict(
-                    torch.load(self.cfg.MODEL_BRDF.weights%module_name).state_dict() )
-                loaded_strings.append(module_name)
-        self.logger.info(magenta('Loaded pretrained BRDF from %s: %s'%(self.cfg.MODEL_BRDF.weights, '-'.join(loaded_strings))))
+        if self.cfg.MODEL_LIGHT.load_pretrained_BRDF:
+            self.load_pretrained_brdf()
+
+        if self.cfg.MODEL_LIGHT.freeze_BRDF_Net:
+            self.turn_off_names(['BRDF_Net'])
+            freeze_bn_in_module(self.BRDF_Net)
+
+
+    def forward(self, input_dict):
+        return_dict = {}
+        input_dict_guide = None
+        if self.cfg.MODEL_MATSEG.enable:
+            # if self.cfg.MODEL_MATSEG.if_freeze:
+            #     with torch.no_grad():
+            #         return_dict_matseg = self.forward_matseg(input_dict) # {'prob': prob, 'embedding': embedding, 'feats_mat_seg_dict': feats_mat_seg_dict}
+            # else:
+            return_dict_matseg = self.forward_matseg(input_dict) # {'prob': prob, 'embedding': embedding, 'feats_mat_seg_dict': feats_mat_seg_dict}
+            input_dict_guide_matseg = return_dict_matseg['feats_matseg_dict']
+            input_dict_guide_matseg['guide_from'] = 'matseg'
+            input_dict_guide = input_dict_guide_matseg
+        else:
+            return_dict_matseg = {}
+            input_dict_guide_matseg = None
+        return_dict.update(return_dict_matseg)
+
+        if self.cfg.MODEL_SEMSEG.enable:
+            # if self.cfg.MODEL_SEMSEG.if_freeze:
+            #     with torch.no_grad():
+            #         return_dict_semseg = self.forward_semseg(input_dict) # {'prob': prob, 'embedding': embedding, 'feats_mat_seg_dict': feats_mat_seg_dict}
+            # else:
+            return_dict_semseg = self.forward_semseg(input_dict) # {'prob': prob, 'embedding': embedding, 'feats_mat_seg_dict': feats_mat_seg_dict}
+
+            input_dict_guide_semseg = return_dict_semseg['feats_semseg_dict']
+            input_dict_guide_semseg['guide_from'] = 'semseg'
+            input_dict_guide = input_dict_guide_semseg
+        else:
+            return_dict_semseg = {}
+            input_dict_guide_semseg = None
+        return_dict.update(return_dict_semseg)
+
+        assert not(self.cfg.MODEL_MATSEG.if_guide and self.cfg.MODEL_SEMSEG.if_guide), 'cannot guide from MATSEG and SEMSEG at the same time!'
+
+        if self.cfg.MODEL_BRDF.enable:
+            input_dict_extra = {'input_dict_guide': input_dict_guide}
+            if (self.cfg.MODEL_MATSEG.if_albedo_pooling and self.cfg.MODEL_MATSEG.albedo_pooling_from == 'pred') \
+                or self.cfg.MODEL_MATSEG.use_pred_as_input \
+                or self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool or self.cfg.MODEL_MATSEG.if_albedo_pac_conv or self.cfg.MODEL_MATSEG.if_albedo_safenet:
+                # print(return_dict_matseg.keys()) # dict_keys(['logit', 'embedding', 'feats_matseg_dict'])
+                input_dict_extra.update({'return_dict_matseg': return_dict_matseg})
+
+            return_dict_brdf = self.forward_brdf(input_dict, input_dict_extra=input_dict_extra)
+        else:
+            return_dict_brdf = {}
+        return_dict.update(return_dict_brdf)
+
+        if self.cfg.MODEL_LIGHT.enable:
+            return_dict_light = self.forward_light(input_dict, return_dict_brdf=return_dict_brdf)
+        else:
+            return_dict_light = {}
+        return_dict.update(return_dict_light)
+        
+        return return_dict
 
     def forward_matseg(self, input_dict):
         input_list = [input_dict['im_batch_matseg']]
@@ -153,7 +213,6 @@ class SemSeg_MatSeg_BRDF(nn.Module):
         return_dict.update({'feats_semseg_dict': feat_dict_PSPNet})
 
         return return_dict
-
 
     def forward_brdf(self, input_dict, input_dict_extra={}):
         assert 'input_dict_guide' in input_dict_extra
@@ -246,57 +305,34 @@ class SemSeg_MatSeg_BRDF(nn.Module):
             
 
         return return_dict
+
+    def forward_light(self, input_dict, return_dict_brdf):
+        # Normalize Albedo and depth
+        bn, ch, nrow, ncol = return_dict_brdf['albedoPred'].size()
+        albedoPred = return_dict_brdf['albedoPred'].view(bn, -1)
+        albedoPred = albedoPred / torch.clamp(torch.mean(albedoPred, dim=1), min=1e-10).unsqueeze(1) / 3.0
+        albedoPred = albedoPred.view(bn, ch, nrow, ncol)
+
+        bn, ch, nrow, ncol = return_dict_brdf['depthPred'].size()
+        depthPred = return_dict_brdf['depthPred'].view(bn, -1)
+        depthPred = depthPred / torch.clamp(torch.mean(depthPred, dim=1), min=1e-10).unsqueeze(1) / 3.0
+        depthPred = depthPred.view(bn, ch, nrow, ncol)
+
+        imBatchLarge = F.interpolate(input_dict['imBatch'], [480, 640], mode='bilinear')
+        albedoPredLarge = F.interpolate(albedoPred, [480, 640], mode='bilinear')
+        depthPredLarge = F.interpolate(depthPred, [480, 640], mode='bilinear')
+        normalPredLarge = F.interpolate(return_dict_brdf['normalPred'], [480, 640], mode='bilinear')
+        roughPredLarge = F.interpolate(return_dict_brdf['roughPred'], [480,640], mode='bilinear')
+
+        inputBatch = torch.cat([imBatchLarge, albedoPredLarge,
+            0.5*(normalPredLarge+1), 0.5 * (roughPredLarge+1), depthPredLarge ], dim=1 )
+
+        if self.opt.cascadeLevel == 0:
+            x1, x2, x3, x4, x5, x6 = self.LIGHT_Net['lightEncoder'](inputBatch.detach() )
+        elif self.opt.cascadeLevel > 0:
+            x1, x2, x3, x4, x5, x6 = self.LIGHT_Net['lightEncoder'](inputBatch.detach(), input_dict['envmapsPreBatch'].detach() )
+
     
-    
-    def forward(self, input_dict):
-        return_dict = {}
-        input_dict_guide = None
-        if self.cfg.MODEL_MATSEG.enable:
-            # if self.cfg.MODEL_MATSEG.if_freeze:
-            #     with torch.no_grad():
-            #         return_dict_matseg = self.forward_matseg(input_dict) # {'prob': prob, 'embedding': embedding, 'feats_mat_seg_dict': feats_mat_seg_dict}
-            # else:
-            return_dict_matseg = self.forward_matseg(input_dict) # {'prob': prob, 'embedding': embedding, 'feats_mat_seg_dict': feats_mat_seg_dict}
-            input_dict_guide_matseg = return_dict_matseg['feats_matseg_dict']
-            input_dict_guide_matseg['guide_from'] = 'matseg'
-            input_dict_guide = input_dict_guide_matseg
-        else:
-            return_dict_matseg = {}
-            input_dict_guide_matseg = None
-        return_dict.update(return_dict_matseg)
-
-        if self.cfg.MODEL_SEMSEG.enable:
-            # if self.cfg.MODEL_SEMSEG.if_freeze:
-            #     with torch.no_grad():
-            #         return_dict_semseg = self.forward_semseg(input_dict) # {'prob': prob, 'embedding': embedding, 'feats_mat_seg_dict': feats_mat_seg_dict}
-            # else:
-            return_dict_semseg = self.forward_semseg(input_dict) # {'prob': prob, 'embedding': embedding, 'feats_mat_seg_dict': feats_mat_seg_dict}
-
-            input_dict_guide_semseg = return_dict_semseg['feats_semseg_dict']
-            input_dict_guide_semseg['guide_from'] = 'semseg'
-            input_dict_guide = input_dict_guide_semseg
-        else:
-            return_dict_semseg = {}
-            input_dict_guide_semseg = None
-        return_dict.update(return_dict_semseg)
-
-        assert not(self.cfg.MODEL_MATSEG.if_guide and self.cfg.MODEL_SEMSEG.if_guide), 'cannot guide from MATSEG and SEMSEG at the same time!'
-
-        if self.cfg.MODEL_BRDF.enable:
-            input_dict_extra = {'input_dict_guide': input_dict_guide}
-            if (self.cfg.MODEL_MATSEG.if_albedo_pooling and self.cfg.MODEL_MATSEG.albedo_pooling_from == 'pred') \
-                or self.cfg.MODEL_MATSEG.use_pred_as_input \
-                or self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool or self.cfg.MODEL_MATSEG.if_albedo_pac_conv or self.cfg.MODEL_MATSEG.if_albedo_safenet:
-                # print(return_dict_matseg.keys()) # dict_keys(['logit', 'embedding', 'feats_matseg_dict'])
-                input_dict_extra.update({'return_dict_matseg': return_dict_matseg})
-
-            return_dict_brdf = self.forward_brdf(input_dict, input_dict_extra=input_dict_extra)
-        else:
-            return_dict_brdf = {}
-        return_dict.update(return_dict_brdf)
-        
-        return return_dict
-
     def print_net(self):
         count_grads = 0
         for name, param in self.named_parameters():
@@ -312,21 +348,21 @@ class SemSeg_MatSeg_BRDF(nn.Module):
             pretrained_path = '/viscompfs/users/ruizhu/models_ckpt/' + pretrained_brdf_name
         else:
             pretrained_path = '/home/ruizhu/Documents/Projects/semanticInverse/models_ckpt/' + pretrained_brdf_name
-        self.logger.info(magenta('Loading pretrained BRDF model from %s'%pretrained_path))
         cascadeLevel = 0
         epochIdFineTune = 13
-        print('{0}/encoder{1}_{2}.pth'.format(pretrained_path, cascadeLevel, epochIdFineTune))
-        print(torch.load('{0}/encoder{1}_{2}.pth'.format(pretrained_path, cascadeLevel, epochIdFineTune) ))
-        self.BRDF_Net['encoder'].load_state_dict(
-            torch.load('{0}/encoder{1}_{2}.pth'.format(pretrained_path, cascadeLevel, epochIdFineTune) ).state_dict())
-        self.BRDF_Net['albedoDecoder'].load_state_dict(
-                torch.load('{0}/albedo{1}_{2}.pth'.format(pretrained_path, cascadeLevel, epochIdFineTune) ).state_dict() )
-        self.BRDF_Net['normalDecoder'].load_state_dict(
-                torch.load('{0}/normal{1}_{2}.pth'.format(pretrained_path, cascadeLevel, epochIdFineTune) ).state_dict() )
-        self.BRDF_Net['roughDecoder'].load_state_dict(
-                torch.load('{0}/rough{1}_{2}.pth'.format(pretrained_path, cascadeLevel, epochIdFineTune) ).state_dict() )
-        self.BRDF_Net['depthDecoder'].load_state_dict(
-                torch.load('{0}/depth{1}_{2}.pth'.format(pretrained_path, cascadeLevel, epochIdFineTune) ).state_dict() )
+        # print('{0}/encoder{1}_{2}.pth'.format(pretrained_path, cascadeLevel, epochIdFineTune))
+        # print(torch.load('{0}/encoder{1}_{2}.pth'.format(pretrained_path, cascadeLevel, epochIdFineTune) ))
+        loaded_strings = []
+        for saved_name in ['encoder', 'albedo', 'normal', 'rough', 'depth']:
+            if saved_name == 'encoder':
+                module_name = saved_name
+            else:
+                module_name = saved_name+'Decoder'
+            self.BRDF_Net[module_name].load_state_dict(
+                torch.load('{0}/{1}{2}_{3}.pth'.format(pretrained_path, saved_name, cascadeLevel, epochIdFineTune) ).state_dict())
+            loaded_strings.append(saved_name)
+
+        self.logger.info(magenta('Loaded pretrained BRDF from %s: %s'%(self.cfg.MODEL_BRDF.weights, '-'.join(loaded_strings))))
 
     def load_pretrained_semseg(self):
         # self.print_net()

@@ -42,7 +42,7 @@ def get_input_dict_matseg(data_batch, opt):
 
     return input_dict
 
-def process_matseg(input_dict, output_dict, loss_dict, opt, time_meters):
+def postprocess_matseg(input_dict, output_dict, loss_dict, opt, time_meters):
     logit, embedding = output_dict['logit'], output_dict['embedding']
 
     # ======= Calculate loss
@@ -111,7 +111,7 @@ def val_epoch_matseg(brdfLoaderVal, model, bin_mean_shift, params_mis):
 
             # ======= Forward
             time_meters['ts'] = time.time()
-            output_dict, loss_dict = process_matseg(input_dict, model, opt, time_meters)
+            output_dict, loss_dict = postprocess_matseg(input_dict, model, opt, time_meters)
             loss_dict_reduced = reduce_loss_dict(loss_dict, mark=tid, logger=logger) # **average** over multi GPUs
             time_meters['ts'] = time.time()
             # loss = loss_dict['loss_all']
@@ -245,7 +245,7 @@ def val_epoch_combine(brdfLoaderVal, model, bin_mean_shift, params_mis):
 
             # ======= Forward
             time_meters['ts'] = time.time()
-            output_dict, loss_dict = process_matseg(input_dict, model, opt, time_meters)
+            output_dict, loss_dict = postprocess_matseg(input_dict, model, opt, time_meters)
             loss_dict_reduced = reduce_loss_dict(loss_dict, mark=tid, logger=logger) # **average** over multi GPUs
             time_meters['ts'] = time.time()
             # loss = loss_dict['loss_all']

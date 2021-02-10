@@ -6,7 +6,7 @@ from tqdm import tqdm
 import statistics
 import torchvision.utils as vutils
 
-def get_input_dict_brdf(data_batch, opt):
+def get_input_dict_brdf(data_batch, opt, return_inputBatch_as_list=False):
     input_dict = {}
     
     input_dict['im_paths'] = data_batch['imPath']
@@ -97,36 +97,42 @@ def get_input_dict_brdf(data_batch, opt):
 
             renderedImBatch = diffusePreBatch + specularPreBatch
 
-        if opt.cascadeLevel == 0:
-            if opt.ifMatMapInput:
-                # matinput_dict['maskBatch'] = input_dict['maskBatch'][:, 0:1, :, :]
+        # if opt.cascadeLevel == 0:
+        assert opt.cascadeLevel == 0
+        if opt.ifMatMapInput:
+            # matinput_dict['maskBatch'] = input_dict['maskBatch'][:, 0:1, :, :]
+            if return_inputBatch_as_list:
+                inputBatch = [input_dict['imBatch'], input_dict['matAggreMapBatch']]
+            else:
                 inputBatch = torch.cat([input_dict['imBatch'], input_dict['matAggreMapBatch']], dim=1)
+        else:
+            if return_inputBatch_as_list:
+                inputBatch = [input_dict['imBatch']]
             else:
                 inputBatch = input_dict['imBatch']
-        elif opt.cascadeLevel > 0:
-            inputBatch = torch.cat([input_dict['imBatch'], albedoPreBatch,
-                normalPreBatch, roughPreBatch, depthPreBatch,
-                diffusePreBatch, specularPreBatch], dim=1)
+        # elif opt.cascadeLevel > 0:
+        #     inputBatch = torch.cat([input_dict['imBatch'], albedoPreBatch,
+        #         normalPreBatch, roughPreBatch, depthPreBatch,
+        #         diffusePreBatch, specularPreBatch], dim=1)
 
-            preBatchDict.update({'albedoPreBatch': albedoPreBatch, 'normalPreBatch': normalPreBatch, 'roughPreBatch': roughPreBatch, 'depthPreBatch': depthPreBatch, 'diffusePreBatch': diffusePreBatch, 'specularPreBatch': specularPreBatch})
-            preBatchDict['renderedImBatch'] = renderedImBatch
+        #     preBatchDict.update({'albedoPreBatch': albedoPreBatch, 'normalPreBatch': normalPreBatch, 'roughPreBatch': roughPreBatch, 'depthPreBatch': depthPreBatch, 'diffusePreBatch': diffusePreBatch, 'specularPreBatch': specularPreBatch})
+        #     preBatchDict['renderedImBatch'] = renderedImBatch
 
     return inputBatch, input_dict, preBatchDict
 
-# def forward_brdf(input_dict, model):
-#     output_dict = model(input_dict)
-    # return output_dict
-
-def process_brdf(input_dict, output_dict, loss_dict, opt, time_meters):
+def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_module_list=[]):
     if opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
         opt.albeW, opt.normW, opt.rougW, opt.deptW = opt.cfg.MODEL_BRDF.albedoWeight, opt.cfg.MODEL_BRDF.normalWeight, opt.cfg.MODEL_BRDF.roughWeight, opt.cfg.MODEL_BRDF.depthWeight
 
         pixelObjNum = (torch.sum(input_dict['segBRDFBatch'] ).cpu().data).item()
         pixelAllNum = (torch.sum(input_dict['segAllBatch'] ).cpu().data).item()
 
+        if opt.cfg.MODEL_LIGHT.enable:
+            extra_dict = []
+
         loss_dict['loss_brdf-ALL'] = 0.
 
-        if 'al' in opt.cfg.MODEL_BRDF.enable_list:
+        if 'al' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
             albedoPreds = []
             albedoPred = output_dict['albedoPred']
             albedoPreds.append(albedoPred ) 
@@ -140,7 +146,7 @@ def process_brdf(input_dict, output_dict, loss_dict, opt, time_meters):
             loss_dict['loss_brdf-albedo'] = loss_dict['loss_brdf-albedo'][-1]
             output_dict['albedoPreds'] = albedoPreds
 
-        if 'no' in opt.cfg.MODEL_BRDF.enable_list:
+        if 'no' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
             normalPreds = []
             normalPred = output_dict['normalPred']
             normalPreds.append(normalPred )
@@ -153,7 +159,7 @@ def process_brdf(input_dict, output_dict, loss_dict, opt, time_meters):
             loss_dict['loss_brdf-normal'] = loss_dict['loss_brdf-normal'][-1]
             output_dict['normalPreds'] = normalPreds
 
-        if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
+        if 'ro' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
             roughPreds = []
             roughPred = output_dict['roughPred']
             roughPreds.append(roughPred )
@@ -167,7 +173,7 @@ def process_brdf(input_dict, output_dict, loss_dict, opt, time_meters):
             loss_dict['loss_brdf-rough-paper'] = loss_dict['loss_brdf-rough'] / 4.
             output_dict['roughPreds'] = roughPreds
 
-        if 'de' in opt.cfg.MODEL_BRDF.enable_list:
+        if 'de' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
             depthPreds = []
             depthPred = output_dict['depthPred']
             depthPreds.append(depthPred )

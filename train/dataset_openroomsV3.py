@@ -162,8 +162,7 @@ class openrooms(data.Dataset):
                 self.OR_mapping_catInt_to_RGB = pickle.load(f)[self.OR]
 
         # ====== per-pixel lighting =====
-        self.is_light = 'li' in self.opt.cfg.MODEL_BRDF.enable_list
-        if self.is_light:
+        if self.opt.cfg.MODEL_LIGHT.enable:
             self.envWidth = envWidth
             self.envHeight = envHeight
             self.envRow = envRow
@@ -202,7 +201,7 @@ class openrooms(data.Dataset):
         batch_dict.update({'image_transformed_fixed': image_transformed_fixed, 'im_trainval_RGB': im_trainval_RGB, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
 
         # ====== BRDF =====
-        if self.opt.cfg.DATA.load_brdf_gt or len(opt.cfg.MODEL_BRDF.data_read_list) != 0:
+        if self.opt.cfg.DATA.load_brdf_gt or len(self.opt.cfg.MODEL_BRDF.data_read_list) != 0:
             # Get paths for BRDF params
             if 'al' in self.cfg.MODEL_BRDF.enable_list:
                 albedo_path = image_path.replace('im_', 'imbaseColor_').replace('hdr', 'png') 
@@ -231,10 +230,10 @@ class openrooms(data.Dataset):
                 batch_dict.update({'depth': torch.from_numpy(depth),})
 
             if self.cascadeLevel == 0:
-                if self.is_light:
+                if self.opt.cfg.MODEL_LIGHT.enable:
                     env_path = image_path.replace('im_', 'imenv_')
             else:
-                if self.is_light:
+                if self.opt.cfg.MODEL_LIGHT.enable:
                     env_path = image_path.replace('im_', 'imenv_')
                     envPre_path = image_path.replace('im_', 'imenv_').replace('.hdr', '_%d.h5'  % (self.cascadeLevel -1) )
                 
@@ -250,7 +249,7 @@ class openrooms(data.Dataset):
             segEnv = (seg < 0.1).astype(np.float32 )
             segObj = (seg > 0.9) 
 
-            if self.is_light:
+            if self.opt.cfg.MODEL_LIGHT.enable:
                 segObj = segObj.squeeze()
                 segObj = ndimage.binary_erosion(segObj, structure=np.ones((7, 7) ),
                         border_value=1)
@@ -258,7 +257,7 @@ class openrooms(data.Dataset):
 
             segObj = segObj.astype(np.float32 )
 
-            if self.is_light:
+            if self.opt.cfg.MODEL_LIGHT.enable:
                 envmaps, envmapsInd = self.loadEnvmap(env_path )
                 envmaps = envmaps * scale 
                 if self.cascadeLevel > 0: 
@@ -302,7 +301,7 @@ class openrooms(data.Dataset):
                     })
             # if self.transform is not None and not self.opt.if_hdr:
 
-            if self.is_light:
+            if self.opt.cfg.MODEL_LIGHT.enable:
                 batch_dict['envmaps'] = envmaps
                 batch_dict['envmapsInd'] = envmapsInd
                 # print(envmaps.shape, envmapsInd.shape)
@@ -641,28 +640,43 @@ def collate_fn_OR(batch):
     """
     collated_batch = {}
     # iterate over keys
+    # print(batch[0].keys())
     for key in batch[0]:
-        # if key == 'boxes_batch':
-        #     collated_batch[key] = dict()
-        #     for subkey in batch[0][key]:
-        #         if subkey in ['bdb2D_full', 'bdb3D_full']: # lists of original & more information (e.g. color)
-        #             continue
-        #         if subkey == 'mask':
-        #             tensor_batch = [elem[key][subkey] for elem in batch]
-        #         else:
-        #             # print(subkey)
-        #             list_of_tensor = [recursive_convert_to_torch(elem[key][subkey]) for elem in batch]
-        #             tensor_batch = torch.cat(list_of_tensor)
-        #         collated_batch[key][subkey] = tensor_batch
-        # # elif key == 'depth':
-        # #     collated_batch[key] = [elem[key] for elem in batch]
-        if key in ['boxes_valid_list', 'emitter2wall_assign_info_list', 'emitters_obj_list', 'gt_layout_RAW']:
+        if key == 'boxes_batch':
+            collated_batch[key] = dict()
+            for subkey in batch[0][key]:
+                if subkey in ['bdb2D_full', 'bdb3D_full']: # lists of original & more information (e.g. color)
+                    continue
+                if subkey == 'mask':
+                    tensor_batch = [elem[key][subkey] for elem in batch]
+                else:
+                    # print(subkey)
+                    list_of_tensor = [recursive_convert_to_torch(elem[key][subkey]) for elem in batch]
+                    tensor_batch = torch.cat(list_of_tensor)
+                collated_batch[key][subkey] = tensor_batch
+        elif key in ['boxes_valid_list', 'emitter2wall_assign_info_list', 'emitters_obj_list', 'gt_layout_RAW']:
             collated_batch[key] = [elem[key] for elem in batch]
         else:
             # print(key)
             collated_batch[key] = default_collate([elem[key] for elem in batch])
 
-    interval_list = [elem['boxes_batch']['patch'].shape[0] for elem in batch]
-    collated_batch['obj_split'] = torch.tensor([[sum(interval_list[:i]), sum(interval_list[:i+1])] for i in range(len(interval_list))])
-
     return collated_batch
+
+def recursive_convert_to_torch(elem):
+    if torch.is_tensor(elem):
+        return elem
+    elif type(elem).__module__ == 'numpy':
+        if elem.size == 0:
+            return torch.zeros(elem.shape).type(torch.DoubleTensor)
+        else:
+            return torch.from_numpy(elem)
+    elif isinstance(elem, int):
+        return torch.LongTensor([elem])
+    elif isinstance(elem, float):
+        return torch.DoubleTensor([elem])
+    elif isinstance(elem, collections.Mapping):
+        return {key: recursive_convert_to_torch(elem[key]) for key in elem}
+    elif isinstance(elem, collections.Sequence):
+        return [recursive_convert_to_torch(samples) for samples in elem]
+    else:
+        return elem

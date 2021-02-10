@@ -23,26 +23,30 @@ def set_up_envs(opt):
     opt.cfg.PATH.semseg_colors_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.semseg_colors_path)
     opt.cfg.PATH.semseg_names_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.semseg_names_path)
     opt.cfg.PATH.total3D_colors_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.total3D_colors_path)
-    # for keys in ['PATH.semseg_colors_path', 'PATH.semseg_names_path']
-    # keys_to_set_path = ['PATH.semseg_colors_path', 'PATH.semseg_names_path']
-    # for cfg_key in opt.cfg:
-    #     print(cfg_key)
-        # for key_to_set_path in keys_to_set_path:
-            # print(key_to_set_path, cfg_key)
-            # if key_to_set_path in cfg_key:
-
-    # opt.cfg.MODEL_MATSEG.matseg_path = opt.CKPT_PATH
     
-    # ====== layout, obj, emitters =====
-    if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
-        opt.cfg.DATA.load_layout_emitter_gt = True
-        assert opt.cfg.MODEL_LAYOUT_EMITTER.wall_prob_or_cell_prob in ['cell_prob', 'wall_prob']
-    # ======
-
+    # ====== BRDF =====
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
         opt.cfg.DATA.load_brdf_gt = True
         opt.depth_metrics = ['abs_rel', 'sq_rel', 'rmse', 'rmse_log', 'a1', 'a2', 'a3']
 
+    # ====== per-pixel lighting =====
+    if opt.cfg.MODEL_LIGHT.enable:
+        opt.cfg.DATA.load_light_gt = True
+        opt.cfg.DATA.load_brdf_gt = True
+        opt.cfg.MODEL_BRDF.data_read_list = 'al_no_de_ro'
+        if opt.cfg.MODEL_LIGHT.use_GT_brdf:
+            opt.cfg.MODEL_BRDF.enable = False
+            opt.cfg.MODEL_BRDF.enable_list = ''
+        else:
+            opt.cfg.MODEL_BRDF.enable = True
+            opt.cfg.MODEL_BRDF.enable_list = 'al_no_de_ro'
+
+    # ====== layout, obj, emitters =====
+    if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
+        opt.cfg.DATA.load_layout_emitter_gt = True
+        assert opt.cfg.MODEL_LAYOUT_EMITTER.wall_prob_or_cell_prob in ['cell_prob', 'wall_prob']
+
+    # ====== semseg =====
     if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable or opt.cfg.MODEL_SEMSEG.use_as_input or opt.cfg.MODEL_MATSEG.use_semseg_as_input:
         opt.cfg.DATA.load_semseg_gt = True
         opt.semseg_criterion = nn.CrossEntropyLoss(ignore_index=opt.cfg.DATA.semseg_ignore_label)
@@ -57,9 +61,13 @@ def set_up_envs(opt):
         opt.cfg.MODEL_SEMSEG.fix_bn = False
 
     opt.cfg.MODEL_BRDF.enable_list = opt.cfg.MODEL_BRDF.enable_list.split('_')
-    assert all(e in opt.cfg.MODEL_BRDF.enable_list_allowed for e in opt.cfg.MODEL_BRDF.enable_list)
+    if opt.cfg.MODEL_BRDF.enable_list != ['']:
+        assert all(e in opt.cfg.MODEL_BRDF.enable_list_allowed for e in opt.cfg.MODEL_BRDF.enable_list), \
+            'Illegal MODEL_BRDF.enable_list of lenggth %d: %s'%(len(opt.cfg.MODEL_BRDF.enable_list), '_'.join(opt.cfg.MODEL_BRDF.enable_list))
     opt.cfg.MODEL_BRDF.data_read_list = list(set(opt.cfg.MODEL_BRDF.data_read_list.split('_')))
-    assert all(e in opt.cfg.MODEL_BRDF.enable_list_allowed for e in opt.cfg.MODEL_BRDF.data_read_list)
+    if opt.cfg.MODEL_BRDF.data_read_list != ['']:
+        assert all(e in opt.cfg.MODEL_BRDF.enable_list_allowed for e in opt.cfg.MODEL_BRDF.data_read_list), \
+            'Illegal MODEL_BRDF.data_read_list of lenggth %d: %s'%(len(opt.cfg.MODEL_BRDF.data_read_list), '_'.join(opt.cfg.MODEL_BRDF.data_read_list))
     if opt.cfg.MODEL_LAYOUT_EMITTER.load_depth:
         opt.cfg.MODEL_BRDF.data_read_list.append('de')
 
@@ -127,9 +135,10 @@ def set_up_logger(opt):
     if opt.is_master and 'tmp' not in opt.task_name:
         exclude_list = ['apex', 'logs_bkg', 'archive', 'train_cifar10_py', 'train_mnist_tf', 'utils_external', 'build/'] + \
             ['Summary', 'Summary_vis', 'Checkpoint', 'logs', '__pycache__', 'snapshots', '.vscode', '.ipynb_checkpoints', 'azureml-setup', 'azureml_compute_logs']
-        copy_py_files(opt.pwdpath, opt.summary_vis_path_task_py, exclude_paths=[str(opt.SUMMARY_PATH), str(opt.CKPT_PATH), str(opt.SUMMARY_VIS_PATH)]+exclude_list)
-        os.system('cp -r %s %s'%(opt.pwdpath, opt.summary_vis_path_task_py / 'train'))
-        logger.info(green('Copied source files %s -> %s'%(opt.pwdpath, opt.summary_vis_path_task_py)))
+        if opt.if_cluster:
+            copy_py_files(opt.pwdpath, opt.summary_vis_path_task_py, exclude_paths=[str(opt.SUMMARY_PATH), str(opt.CKPT_PATH), str(opt.SUMMARY_VIS_PATH)]+exclude_list)
+            os.system('cp -r %s %s'%(opt.pwdpath, opt.summary_vis_path_task_py / 'train'))
+            logger.info(green('Copied source files %s -> %s'%(opt.pwdpath, opt.summary_vis_path_task_py)))
         # folders = [f for f in Path('./').iterdir() if f.is_dir()]
         # for folder in folders:
         #     folder_dest = opt.summary_vis_path_task_py / folder.name
@@ -223,6 +232,7 @@ def set_up_dist(opt):
         # synchronize()
     # device = torch.device("cuda" if torch.cuda.is_available() and not opt.cpu else "cpu")
     opt.device = 'cuda'
+    opt.if_cuda = opt.device == 'cuda'
     opt.rank = get_rank()
     opt.is_master = opt.rank == 0
     nvidia_smi.nvmlInit()

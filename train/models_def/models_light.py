@@ -143,3 +143,177 @@ class decoderLight(nn.Module ):
                 dim=2).unsqueeze(2) ), min = 1e-6).expand_as(x_out )
         return x_out
 
+class output2env():
+    def __init__(self, SGNum, envWidth = 16, envHeight = 8, isCuda = True ):
+        self.envWidth = envWidth
+        self.envHeight = envHeight
+
+        Az = ( (np.arange(envWidth) + 0.5) / envWidth - 0.5 )* 2 * np.pi
+        El = ( (np.arange(envHeight) + 0.5) / envHeight) * np.pi / 2.0
+        Az, El = np.meshgrid(Az, El)
+        Az = Az[np.newaxis, :, :]
+        El = El[np.newaxis, :, :]
+        lx = np.sin(El) * np.cos(Az)
+        ly = np.sin(El) * np.sin(Az)
+        lz = np.cos(El)
+        ls = np.concatenate((lx, ly, lz), axis = 0)
+        ls = ls[np.newaxis, np.newaxis, :, np.newaxis, np.newaxis, :, :]
+        self.ls = Variable(torch.from_numpy(ls.astype(np.float32 ) ) )
+
+        self.SGNum = SGNum
+        if isCuda:
+            self.ls = self.ls.cuda()
+
+        self.ls.requires_grad = False
+
+    def fromSGtoIm(self, axis, lamb, weight ):
+        bn = axis.size(0)
+        envRow, envCol = weight.size(2), weight.size(3)
+
+        # Turn SG parameters to environmental maps
+        axis = axis.unsqueeze(-1).unsqueeze(-1)
+
+        weight = weight.view(bn, self.SGNum, 3, envRow, envCol, 1, 1)
+        lamb = lamb.view(bn, self.SGNum, 1, envRow, envCol, 1, 1)
+
+        mi = lamb.expand([bn, self.SGNum, 1, envRow, envCol, self.envHeight, self.envWidth] )* \
+                (torch.sum(axis.expand([bn, self.SGNum, 3, envRow, envCol, self.envHeight, self.envWidth]) * \
+                self.ls.expand([bn, self.SGNum, 3, envRow, envCol, self.envHeight, self.envWidth] ), dim = 2).unsqueeze(2) - 1)
+        envmaps = weight.expand([bn, self.SGNum, 3, envRow, envCol, self.envHeight, self.envWidth] ) * \
+            torch.exp(mi).expand([bn, self.SGNum, 3, envRow, envCol, self.envHeight, self.envWidth] )
+
+        envmaps = torch.sum(envmaps, dim=1)
+
+        return envmaps
+
+    def output2env(self, axisOrig, lambOrig, weightOrig ):
+        bn, _, envRow, envCol = weightOrig.size()
+
+        axis = axisOrig
+
+        weight = 0.999 * weightOrig
+        weight = torch.tan(np.pi / 2 * weight )
+
+        lambOrig = 0.999 * lambOrig
+        lamb = torch.tan(np.pi / 2 * lambOrig )
+
+        envmaps = self.fromSGtoIm(axis, lamb, weight )
+
+        return envmaps, axis, lamb, weight
+
+class renderingLayer():
+    def __init__(self, imWidth = 160, imHeight = 120, fov=57, F0=0.05, cameraPos = [0, 0, 0], 
+            envWidth = 16, envHeight = 8, isCuda = True):
+        self.imHeight = imHeight
+        self.imWidth = imWidth
+        self.envWidth = envWidth
+        self.envHeight = envHeight
+
+        self.fov = fov/180.0 * np.pi
+        self.F0 = F0
+        self.cameraPos = np.array(cameraPos, dtype=np.float32).reshape([1, 3, 1, 1])
+        self.xRange = 1 * np.tan(self.fov/2)
+        self.yRange = float(imHeight) / float(imWidth) * self.xRange
+        self.isCuda = isCuda
+        x, y = np.meshgrid(np.linspace(-self.xRange, self.xRange, imWidth),
+                np.linspace(-self.yRange, self.yRange, imHeight ) )
+        y = np.flip(y, axis=0)
+        z = -np.ones( (imHeight, imWidth), dtype=np.float32)
+
+        pCoord = np.stack([x, y, z]).astype(np.float32)
+        self.pCoord = pCoord[np.newaxis, :, :, :]
+        v = self.cameraPos - self.pCoord
+        v = v / np.sqrt(np.maximum(np.sum(v*v, axis=1), 1e-12)[:, np.newaxis, :, :] )
+        v = v.astype(dtype = np.float32)
+
+        self.v = Variable(torch.from_numpy(v) )
+        self.pCoord = Variable(torch.from_numpy(self.pCoord) )
+
+        self.up = torch.Tensor([0,1,0] )
+
+        Az = ( (np.arange(envWidth) + 0.5) / envWidth - 0.5 )* 2 * np.pi
+        El = ( (np.arange(envHeight) + 0.5) / envHeight) * np.pi / 2.0
+        Az, El = np.meshgrid(Az, El)
+        Az = Az.reshape(-1, 1)
+        El = El.reshape(-1, 1)
+        lx = np.sin(El) * np.cos(Az)
+
+        ly = np.sin(El) * np.sin(Az)
+        lz = np.cos(El)
+        ls = np.concatenate((lx, ly, lz), axis = 1)
+
+        envWeight = np.sin(El ) * np.pi * np.pi / envWidth / envHeight
+
+        self.ls = Variable(torch.from_numpy(ls.astype(np.float32 ) ) )
+        self.envWeight = Variable(torch.from_numpy(envWeight.astype(np.float32 ) ) )
+        self.envWeight = self.envWeight.unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
+
+        if isCuda:
+            self.v = self.v.cuda()
+            self.pCoord = self.pCoord.cuda()
+            self.up = self.up.cuda()
+            self.ls = self.ls.cuda()
+            self.envWeight = self.envWeight.cuda()
+
+    def forwardEnv(self, diffusePred, normalPred, roughPred, envmap):
+        envR, envC = envmap.size(2), envmap.size(3)
+        bn = diffusePred.size(0)
+
+        diffusePred = F.adaptive_avg_pool2d(diffusePred, (envR, envC) )
+        normalPred = F.adaptive_avg_pool2d(normalPred, (envR, envC) )
+        normalPred = normalPred / torch.sqrt( torch.clamp(
+            torch.sum(normalPred * normalPred, dim=1 ), 1e-6, 1).unsqueeze(1) )
+        roughPred = F.adaptive_avg_pool2d(roughPred, (envR, envC ) )
+
+        temp = Variable(torch.FloatTensor(1, 1, 1, 1,1) )
+
+
+        if self.isCuda:
+            temp = temp.cuda()
+
+        ldirections = self.ls.unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
+        camyProj = torch.einsum('b,abcd->acd',(self.up, normalPred)).unsqueeze(1).expand_as(normalPred) * normalPred
+        camy = F.normalize(self.up.unsqueeze(0).unsqueeze(-1).unsqueeze(-1).expand_as(camyProj) - camyProj, dim=1)
+        camx = -F.normalize(torch.cross(camy, normalPred,dim=1), p=1, dim=1)
+
+        l = ldirections[:, :, 0:1, :, :] * camx.unsqueeze(1) \
+                + ldirections[:, :, 1:2, :, :] * camy.unsqueeze(1) \
+                + ldirections[:, :, 2:3, :, :] * normalPred.unsqueeze(1)
+
+        h = (self.v.unsqueeze(1) + l) / 2;
+        h = h / torch.sqrt(torch.clamp(torch.sum(h*h, dim=2), min = 1e-6).unsqueeze(2) )
+
+        vdh = torch.sum( (self.v * h), dim = 2).unsqueeze(2)
+        temp.data[0] = 2.0
+        frac0 = self.F0 + (1-self.F0) * torch.pow(temp.expand_as(vdh), (-5.55472*vdh-6.98316)*vdh)
+
+        diffuseBatch = (diffusePred )/ np.pi
+        roughBatch = (roughPred + 1.0)/2.0
+
+        k = (roughBatch + 1) * (roughBatch + 1) / 8.0
+        alpha = roughBatch * roughBatch
+        alpha2 = alpha * alpha
+
+        ndv = torch.clamp(torch.sum(normalPred * self.v.expand_as(normalPred), dim = 1), 0, 1).unsqueeze(1).unsqueeze(2)
+        ndh = torch.clamp(torch.sum(normalPred.unsqueeze(1) * h, dim = 2), 0, 1).unsqueeze(2)
+        ndl = torch.clamp(torch.sum(normalPred.unsqueeze(1) * l, dim = 2), 0, 1).unsqueeze(2)
+
+        frac = alpha2.unsqueeze(1).expand_as(frac0) * frac0
+        nom0 = ndh * ndh * (alpha2.unsqueeze(1).expand_as(ndh) - 1) + 1
+        nom1 = ndv * (1 - k.unsqueeze(1).expand_as(ndh) ) + k.unsqueeze(1).expand_as(ndh)
+        nom2 = ndl * (1 - k.unsqueeze(1).expand_as(ndh) ) + k.unsqueeze(1).expand_as(ndh)
+        nom = torch.clamp(4*np.pi*nom0*nom0*nom1*nom2, 1e-6, 4*np.pi)
+        specPred = frac / nom
+
+        envmap = envmap.view([bn, 3, envR, envC, self.envWidth * self.envHeight ] )
+        envmap = envmap.permute([0, 4, 1, 2, 3] )
+
+        brdfDiffuse = diffuseBatch.unsqueeze(1).expand([bn, self.envWidth * self.envHeight, 3, envR, envC] ) * \
+                    ndl.expand([bn, self.envWidth * self.envHeight, 3, envR, envC] )
+        colorDiffuse = torch.sum(brdfDiffuse * envmap * self.envWeight.expand_as(brdfDiffuse), dim=1)
+
+        brdfSpec = specPred.expand([bn, self.envWidth * self.envHeight, 3, envR, envC ] ) * \
+                    ndl.expand([bn, self.envWidth * self.envHeight, 3, envR, envC] )
+        colorSpec = torch.sum(brdfSpec * envmap * self.envWeight.expand_as(brdfSpec), dim=1)
+
+        return colorDiffuse, colorSpec

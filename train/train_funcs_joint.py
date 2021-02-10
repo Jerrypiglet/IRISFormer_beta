@@ -17,9 +17,10 @@ from utils.utils_semseg import intersectionAndUnionGPU
 import torchvision.utils as vutils
 import torch.distributed as dist
 
-from train_funcs_matseg import get_input_dict_matseg, process_matseg, val_epoch_matseg
-from train_funcs_semseg import get_input_dict_semseg, process_semseg
-from train_funcs_brdf import get_input_dict_brdf, process_brdf
+from train_funcs_matseg import get_input_dict_matseg, postprocess_matseg, val_epoch_matseg
+from train_funcs_semseg import get_input_dict_semseg, postprocess_semseg
+from train_funcs_brdf import get_input_dict_brdf, postprocess_brdf
+from train_funcs_light import get_input_dict_light, postprocess_light
 from utils.comm import synchronize
 
 from utils.utils_metrics import compute_errors_depth_nyu
@@ -69,35 +70,53 @@ def get_input_dict_joint(data_batch, opt):
     input_dict.update(input_dict_semseg)
 
     if opt.cfg.DATA.load_brdf_gt:
-        input_batch_brdf, input_dict_brdf, pre_batch_dict_brdf = get_input_dict_brdf(data_batch, opt)
-        input_dict.update({'input_batch_brdf': input_batch_brdf, 'pre_batch_dict_brdf': pre_batch_dict_brdf})
+        input_batch_brdf, input_dict_brdf, pre_batch_dict_brdf = get_input_dict_brdf(data_batch, opt, return_inputBatch_as_list=True)
+        list_from_brdf = [input_batch_brdf, input_dict_brdf, pre_batch_dict_brdf]
+        input_dict.update({'input_batch_brdf': torch.cat(input_batch_brdf, dim=1), 'pre_batch_dict_brdf': pre_batch_dict_brdf})
     else:
         input_dict_brdf = {}    
-
+        list_from_brdf = None
     input_dict.update(input_dict_brdf)
+
+    if opt.cfg.DATA.load_light_gt:
+        input_batch_light, input_dict_light, pre_batch_dict_light, extra_dict_light = get_input_dict_light(data_batch, opt, list_from_brdf=list_from_brdf, return_inputBatch_as_list=True)
+        input_dict.update({'input_batch_light': torch.cat(input_batch_light, dim=1), 'pre_batch_dict_light': pre_batch_dict_light})
+    else:
+        input_dict_light = {}
+        extra_dict_light = {}
+    input_dict.update(input_dict_light)
+    input_dict.update({'extra_dict_light': extra_dict_light})
 
     # input_dict = {**input_dict_matseg, **input_dict_brdf}
     return input_dict
 
 def forward_joint(input_dict, model, opt, time_meters):
+
+    # Forward model
     output_dict = model(input_dict)
     time_meters['forward'].update(time.time() - time_meters['ts'])
     time_meters['ts'] = time.time()
 
+    # Post-processing and computing losses
     loss_dict = {}
-
+    
     if opt.cfg.MODEL_MATSEG.enable:
-        output_dict, loss_dict = process_matseg(input_dict, output_dict, loss_dict, opt, time_meters)
+        output_dict, loss_dict = postprocess_matseg(input_dict, output_dict, loss_dict, opt, time_meters)
         time_meters['loss_matseg'].update(time.time() - time_meters['ts'])
         time_meters['ts'] = time.time()
     
     if opt.cfg.MODEL_BRDF.enable:
-        output_dict, loss_dict = process_brdf(input_dict, output_dict, loss_dict, opt, time_meters)
+        output_dict, loss_dict = postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters)
         time_meters['loss_brdf'].update(time.time() - time_meters['ts'])
         time_meters['ts'] = time.time()
 
+    if opt.cfg.MODEL_LIGHT.enable:
+        output_dict, loss_dict = postprocess_light(input_dict, output_dict, loss_dict, opt, time_meters)
+        time_meters['loss_light'].update(time.time() - time_meters['ts'])
+        time_meters['ts'] = time.time()
+
     if opt.cfg.MODEL_SEMSEG.enable:
-        output_dict, loss_dict = process_semseg(input_dict, output_dict, loss_dict, opt, time_meters)
+        output_dict, loss_dict = postprocess_semseg(input_dict, output_dict, loss_dict, opt, time_meters)
         time_meters['loss_semseg'].update(time.time() - time_meters['ts'])
         time_meters['ts'] = time.time()
     
@@ -272,7 +291,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
     writer, logger, opt, tid = params_mis['writer'], params_mis['logger'], params_mis['opt'], params_mis['tid']
-    logger.info(red('===Visualizing for %d batches on rank %d'%(len(brdf_loader_val), opt.rank)))
+    logger.info(red('=== [vis_val_epoch_joint] Visualizing for %d batches on rank %d'%(len(brdf_loader_val), opt.rank)))
 
     model.eval()
     opt.if_vis_debug_pac = True
@@ -343,7 +362,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                         print('Saved to' + 'tmp/demo_%s/im_trainval_RGB_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id))
 
                     writer.add_text('VAL_image_name/%d'%(sample_idx+batch_size*batch_id), im_path, tid)
-                    print(sample_idx+batch_size*batch_id, im_path)
+                    # print(sample_idx+batch_size*batch_id, im_path)
 
                 if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool or opt.cfg.MODEL_MATSEG.if_albedo_safenet) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
                     if opt.is_master:
@@ -367,9 +386,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                                     np.save('tmp/demo_%s/affinity_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id), affinity[0].detach().cpu().numpy())
                                     np.save('tmp/demo_%s/sample_ij_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id), sample_ij)
 
-
-
-
                 # ======= Vis BRDFsemseg / semseg
                 if opt.cfg.DATA.load_semseg_gt:
                     gray_GT = np.uint8(semseg_label[sample_idx])
@@ -383,8 +399,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     if opt.is_master:
                         writer.add_image('VAL_semseg_PRED/%d'%(sample_idx+batch_size*batch_id), color_pred, tid, dataformats='HWC')
 
-            
-                
             # ======= visualize clusters for mat-seg
             if opt.cfg.DATA.load_matseg_gt:
                 for sample_idx in range(input_dict['mat_aggre_map_cpu'].shape[0]):
@@ -566,7 +580,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             # print('++++', rough_gt_batch_vis_sdr_numpy.shape, depth_gt_batch_vis_sdr_numpy.shape, albedo_gt_batch_vis_sdr_numpy.shape, albedo_gt_batch_vis_sdr_numpy.dtype)
             # print(np.amax(albedo_gt_batch_vis_sdr_numpy), np.amin(albedo_gt_batch_vis_sdr_numpy), np.mean(albedo_gt_batch_vis_sdr_numpy))
             if not opt.test_real:
-                for image_idx in range(albedo_gt_batch_vis_sdr.shape[0]):
+                for image_idx in range(im_batch_vis_sdr.shape[0]):
                     if 'al' in opt.cfg.MODEL_BRDF.enable_list:
                         writer.add_image('VAL_brdf-albedo_GT/%d'%image_idx, albedo_gt_batch_vis_sdr_numpy[image_idx], tid, dataformats='HWC')
                     if 'no' in opt.cfg.MODEL_BRDF.enable_list:

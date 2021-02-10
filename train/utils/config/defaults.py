@@ -42,8 +42,8 @@ _C.MODEL_BRDF = CN()
 _C.MODEL_BRDF.enable = True
 # _C.MODEL_BRDF.enable_list = ['al', 'no', 'de', 'ro', 'li']
 _C.MODEL_BRDF.enable_list = 'al_no_de_ro'
-_C.MODEL_BRDF.enable_list_allowed = ['al', 'no', 'de', 'ro', 'li']
-_C.MODEL_BRDF.data_read_list = 'de'
+_C.MODEL_BRDF.enable_list_allowed = ['al', 'no', 'de', 'ro']
+_C.MODEL_BRDF.data_read_list = 'al_no_de_ro'
 _C.MODEL_BRDF.load_pretrained_pth = False
 _C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240'
 _C.MODEL_BRDF.albedoWeight = 1.5
@@ -58,11 +58,16 @@ _C.MODEL_BRDF.semseg_PPM = False
 _C.MODEL_BRDF.weights = 'models_ckpt/check_cascade0_w320_h240/%s0_13.pth'
 
 # ===== per-pixel lighting
-_C.MODEL_BRDF.envRow = 120
-_C.MODEL_BRDF.envCol = 160
-_C.MODEL_BRDF.envHeight = 8
-_C.MODEL_BRDF.envWidth = 16
-_C.MODEL_BRDF.SGNum = 12
+_C.MODEL_LIGHT = CN()
+_C.MODEL_LIGHT.enable = True
+_C.MODEL_LIGHT.envRow = 120
+_C.MODEL_LIGHT.envCol = 160
+_C.MODEL_LIGHT.envHeight = 8
+_C.MODEL_LIGHT.envWidth = 16
+_C.MODEL_LIGHT.SGNum = 12
+_C.MODEL_LIGHT.use_GT_brdf = True
+_C.MODEL_LIGHT.load_pretrained_BRDF = False
+_C.MODEL_LIGHT.freeze_BRDF_Net = True
 
 # ===== layout, obj, emitter
 _C.MODEL_LAYOUT_EMITTER = CN()
@@ -152,8 +157,8 @@ _C.DATASET.layout_emitter_path = ''
 _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-full-OR45_total3D_train_test_data_V4-ORfull'
 _C.DATASET.layout_emitter_path_cluster = ''
 _C.DATASET.dataset_list = 'data/openrooms/list_ORfull/list'
-_C.DATASET.dataset_path_mini = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/mini'
-_C.DATASET.dataset_list_mini = 'data/mini/list'
+_C.DATASET.dataset_path_mini = '/data/ruizhu/openrooms_mini'
+_C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini/list'
 
 # _C.DATASET.batch_size = 16
 _C.DATASET.num_workers = 8
@@ -168,7 +173,7 @@ _C.DATA.load_matseg_gt = False
 _C.DATA.load_brdf_gt = True
 _C.DATA.semseg_ignore_label = 0
 _C.DATA.semseg_classes = 46
-_C.DATA.load_lighting_gt = False
+_C.DATA.load_light_gt = False
 _C.DATA.load_layout_emitter_gt = False
 
 _C.SOLVER = CN()

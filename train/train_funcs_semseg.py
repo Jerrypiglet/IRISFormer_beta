@@ -30,7 +30,7 @@ def get_input_dict_semseg(data_batch, opt):
 
     return input_dict
 
-def process_semseg(input_dict, output_dict, loss_dict, opt, time_meters):
+def postprocess_semseg(input_dict, output_dict, loss_dict, opt, time_meters):
     loss_dict['loss_semseg-main'] = output_dict['PSPNet_main_loss']
     loss_dict['loss_semseg-aux'] = output_dict['PSPNet_aux_loss']
     loss_dict['loss_semseg-ALL'] = loss_dict['loss_semseg-main'] + loss_dict['loss_semseg-aux'] * opt.semseg_configs.aux_weight
