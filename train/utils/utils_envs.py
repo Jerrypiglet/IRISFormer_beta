@@ -28,6 +28,7 @@ def set_up_envs(opt):
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
         opt.cfg.DATA.load_brdf_gt = True
         opt.depth_metrics = ['abs_rel', 'sq_rel', 'rmse', 'rmse_log', 'a1', 'a2', 'a3']
+        opt.cfg.MODEL_BRDF.loss_list = opt.cfg.MODEL_BRDF.enable_list
 
     # ====== per-pixel lighting =====
     if opt.cfg.MODEL_LIGHT.enable:
@@ -40,6 +41,7 @@ def set_up_envs(opt):
         else:
             opt.cfg.MODEL_BRDF.enable = True
             opt.cfg.MODEL_BRDF.enable_list = 'al_no_de_ro'
+        opt.cfg.MODEL_BRDF.loss_list = ''
 
     # ====== layout, obj, emitters =====
     if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
@@ -70,6 +72,7 @@ def set_up_envs(opt):
             'Illegal MODEL_BRDF.data_read_list of lenggth %d: %s'%(len(opt.cfg.MODEL_BRDF.data_read_list), '_'.join(opt.cfg.MODEL_BRDF.data_read_list))
     if opt.cfg.MODEL_LAYOUT_EMITTER.load_depth:
         opt.cfg.MODEL_BRDF.data_read_list.append('de')
+    opt.cfg.MODEL_BRDF.loss_list = opt.cfg.MODEL_BRDF.loss_list.split('_')
 
     # Guidance in general
     guidance_options = [opt.cfg.MODEL_MATSEG.if_albedo_pooling,opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv, \

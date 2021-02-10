@@ -3,7 +3,6 @@ import torch.nn as nn
 
 from models_def.model_matseg import Baseline
 from utils.utils_misc import *
-from utils.utils_misc import meganta
 # import pac
 from utils.utils_training import freeze_bn_in_module
 import torch.nn.functional as F
@@ -103,12 +102,15 @@ class SemSeg_MatSeg_BRDF(nn.Module):
             self.non_learnable_layers['output2env'] = models_light.output2env(isCuda = opt.if_cuda, 
                 envWidth = opt.cfg.MODEL_LIGHT.envWidth, envHeight = opt.cfg.MODEL_LIGHT.envHeight, SGNum = opt.cfg.MODEL_LIGHT.SGNum )
 
-        if self.cfg.MODEL_LIGHT.load_pretrained_BRDF:
-            self.load_pretrained_brdf()
+            if not self.opt.cfg.MODEL_LIGHT.use_GT_brdf:
+                if self.cfg.MODEL_LIGHT.load_pretrained_BRDF:
+                    self.load_pretrained_brdf(self.cfg.MODEL_BRDF.pretrained_pth_name)
+                if self.cfg.MODEL_LIGHT.load_pretrained_LIGHT:
+                    self.load_pretrained_light(self.cfg.MODEL_LIGHT.pretrained_pth_name)
 
-        if self.cfg.MODEL_LIGHT.freeze_BRDF_Net:
-            self.turn_off_names(['BRDF_Net'])
-            freeze_bn_in_module(self.BRDF_Net)
+                if self.cfg.MODEL_LIGHT.freeze_BRDF_Net:
+                    self.turn_off_names(['BRDF_Net'])
+                    freeze_bn_in_module(self.BRDF_Net)
 
 
     def forward(self, input_dict):
@@ -248,6 +250,7 @@ class SemSeg_MatSeg_BRDF(nn.Module):
         x1, x2, x3, x4, x5, x6 = self.BRDF_Net['encoder'](input_tensor)
 
         return_dict = {}
+        albedo_output = {}
 
         if self.cfg.MODEL_BRDF.enable_BRDF_decoders:
             input_extra_dict = {}
@@ -329,9 +332,52 @@ class SemSeg_MatSeg_BRDF(nn.Module):
 
         if self.opt.cascadeLevel == 0:
             x1, x2, x3, x4, x5, x6 = self.LIGHT_Net['lightEncoder'](inputBatch.detach() )
-        elif self.opt.cascadeLevel > 0:
+        else:
+            assert self.opt.cascadeLevel > 0
             x1, x2, x3, x4, x5, x6 = self.LIGHT_Net['lightEncoder'](inputBatch.detach(), input_dict['envmapsPreBatch'].detach() )
 
+        # Prediction
+        axisPred = self.LIGHT_Net['axisDecoder'](x1, x2, x3, x4, x5, x6, input_dict['envmapsBatch'] )
+        lambPred = self.LIGHT_Net['lambDecoder'](x1, x2, x3, x4, x5, x6, input_dict['envmapsBatch'] )
+        weightPred = self.LIGHT_Net['weightDecoder'](x1, x2, x3, x4, x5, x6, input_dict['envmapsBatch'] )
+        bn, SGNum, _, envRow, envCol = axisPred.size()
+        # envmapsPred = torch.cat([axisPred.view(bn, SGNum * 3, envRow, envCol ), lambPred, weightPred], dim=1)
+
+        imBatchSmall = F.adaptive_avg_pool2d(input_dict['imBatch'], (self.cfg.MODEL_LIGHT.envRow, self.cfg.MODEL_LIGHT.envCol) )
+        segBatchSmall = F.adaptive_avg_pool2d(input_dict['segBRDFBatch'], (self.cfg.MODEL_LIGHT.envRow, self.cfg.MODEL_LIGHT.envCol) )
+        notDarkEnv = (torch.mean(torch.mean(torch.mean(input_dict['envmapsBatch'], 4), 4), 1, True ) > 0.001 ).float()
+        segEnvBatch = (segBatchSmall * input_dict['envmapsIndBatch'].expand_as(segBatchSmall) ).unsqueeze(-1).unsqueeze(-1)
+        segEnvBatch = segEnvBatch * notDarkEnv.unsqueeze(-1).unsqueeze(-1)
+        
+        return_dict = {}
+
+        # Compute the recontructed error
+        envmapsPredImage, axisPred, lambPred, weightPred = self.non_learnable_layers['output2env'].output2env(axisPred, lambPred, weightPred )
+
+        pixelNum_recon = max( (torch.sum(segEnvBatch ).cpu().data).item(), 1e-5)
+        envmapsPredScaledImage = models_brdf.LSregress(envmapsPredImage.detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
+            input_dict['envmapsBatch'] * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage )
+
+        return_dict.update({'envmapsPredImage': envmapsPredImage, 'envmapsPredScaledImage': envmapsPredScaledImage, 'segEnvBatch': segEnvBatch, \
+            'imBatchSmall': imBatchSmall, 'segBatchSmall': segBatchSmall, 'pixelNum_recon': pixelNum_recon}) 
+
+        # Compute the rendered error
+        pixelNum_render = max( (torch.sum(segBatchSmall ).cpu().data).item(), 1e-5 )
+
+        diffusePred, specularPred = self.non_learnable_layers['renderLayer'].forwardEnv(albedoPred.detach(), return_dict_brdf['normalPred'],
+            return_dict_brdf['roughPred'], envmapsPredImage )
+
+        diffusePredScaled, specularPredScaled = models_brdf.LSregressDiffSpec(
+            diffusePred.detach(),
+            specularPred.detach(),
+            imBatchSmall,
+            diffusePred, specularPred )
+
+        renderedImPred = torch.clamp(diffusePredScaled + specularPredScaled, 0, 1)
+
+        return_dict.update({'renderedImPred': renderedImPred, 'pixelNum_render': pixelNum_render}) 
+
+        return return_dict
     
     def print_net(self):
         count_grads = 0
@@ -343,26 +389,41 @@ class SemSeg_MatSeg_BRDF(nn.Module):
         self.logger.info(magenta('---> ALL %d params; %d trainable'%(len(list(self.named_parameters())), count_grads)))
         return count_grads
 
-    def load_pretrained_brdf(self, pretrained_brdf_name='check_cascade0_w320_h240'):
+    def load_pretrained_brdf(self, pretrained_pth_name='check_cascade0_w320_h240'):
         if self.opt.if_cluster:
-            pretrained_path = '/viscompfs/users/ruizhu/models_ckpt/' + pretrained_brdf_name
+            pretrained_path = '/viscompfs/users/ruizhu/models_ckpt/' + pretrained_pth_name
         else:
-            pretrained_path = '/home/ruizhu/Documents/Projects/semanticInverse/models_ckpt/' + pretrained_brdf_name
-        cascadeLevel = 0
-        epochIdFineTune = 13
-        # print('{0}/encoder{1}_{2}.pth'.format(pretrained_path, cascadeLevel, epochIdFineTune))
-        # print(torch.load('{0}/encoder{1}_{2}.pth'.format(pretrained_path, cascadeLevel, epochIdFineTune) ))
+            pretrained_path = '/home/ruizhu/Documents/Projects/semanticInverse/models_ckpt/' + pretrained_pth_name
         loaded_strings = []
         for saved_name in ['encoder', 'albedo', 'normal', 'rough', 'depth']:
             if saved_name == 'encoder':
                 module_name = saved_name
             else:
                 module_name = saved_name+'Decoder'
+            # pickle_path = '{0}/{1}{2}_{3}.pth'.format(pretrained_path, saved_name, cascadeLevel, epochIdFineTune) 
+            pickle_path = pretrained_path % saved_name
+            print('Loading ' + pickle_path)
             self.BRDF_Net[module_name].load_state_dict(
-                torch.load('{0}/{1}{2}_{3}.pth'.format(pretrained_path, saved_name, cascadeLevel, epochIdFineTune) ).state_dict())
+                torch.load(pickle_path).state_dict())
             loaded_strings.append(saved_name)
 
-        self.logger.info(magenta('Loaded pretrained BRDF from %s: %s'%(self.cfg.MODEL_BRDF.weights, '-'.join(loaded_strings))))
+        self.logger.info(magenta('Loaded pretrained BRDF from %s: %s'%(pretrained_pth_name, '+'.join(loaded_strings))))
+    
+    def load_pretrained_light(self, pretrained_pth_name='check_cascadeLight0_sg12_offset1.0'):
+        if self.opt.if_cluster:
+            pretrained_path = '/viscompfs/users/ruizhu/models_ckpt/' + pretrained_pth_name
+        else:
+            pretrained_path = '/home/ruizhu/Documents/Projects/semanticInverse/models_ckpt/' + pretrained_pth_name
+        loaded_strings = []
+        for saved_name in ['lightEncoder', 'axisDecoder', 'lambDecoder', 'weightDecoder', ]:
+            # pickle_path = '{0}/{1}{2}_{3}.pth'.format(pretrained_path, saved_name, cascadeLevel, epochIdFineTune) 
+            pickle_path = pretrained_path % saved_name
+            print('Loading ' + pickle_path)
+            self.LIGHT_Net[saved_name].load_state_dict(
+                torch.load(pickle_path).state_dict())
+            loaded_strings.append(saved_name)
+
+        self.logger.info(magenta('Loaded pretrained LIGHT from %s: %s'%(pretrained_pth_name, '+'.join(loaded_strings))))
 
     def load_pretrained_semseg(self):
         # self.print_net()

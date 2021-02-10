@@ -51,7 +51,8 @@ parser.add_argument('--albedoWeight', type=float, default=1.5, help='the weight 
 parser.add_argument('--normalWeight', type=float, default=1.0, help='the weight for the diffuse component')
 parser.add_argument('--roughWeight', type=float, default=0.5, help='the weight for the roughness component')
 parser.add_argument('--depthWeight', type=float, default=0.5, help='the weight for depth component')   
-
+parser.add_argument('--reconstWeight', type=float, default=10, help='the weight for reconstruction error' )
+parser.add_argument('--renderWeight', type=float, default=1.0, help='the weight for the rendering' )
 # Cascae Level
 parser.add_argument('--cascadeLevel', type=int, default=0, help='the casacade level')
 
@@ -138,7 +139,7 @@ if opt.distributed: # https://github.com/dougsouza/pytorch-sync-batchnorm-exampl
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 model.to(opt.device)
 if opt.cfg.MODEL_BRDF.load_pretrained_pth:
-    model.load_pretrained_brdf(opt.cfg.MODEL_BRDF.pretrained_pth_name)
+    model.load_pretrained_brdf(opt.cfg.MODEL_BRDF.weights)
 if opt.cfg.MODEL_SEMSEG.enable and opt.cfg.MODEL_SEMSEG.if_freeze:
     # model.turn_off_names(['UNet'])
     model.turn_off_names(['SEMSEG_Net'])
@@ -343,24 +344,29 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
             loss_keys_print.append('loss_matseg-push')
             loss_keys_print.append('loss_matseg-binary')
 
-        if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
-            loss_keys_backward.append('loss_brdf-ALL')
-            loss_keys_print.append('loss_brdf-ALL')
-            if 'al' in opt.cfg.MODEL_BRDF.enable_list:
-                loss_keys_print.append('loss_brdf-albedo') 
-            if 'no' in opt.cfg.MODEL_BRDF.enable_list:
-                loss_keys_print.append('loss_brdf-normal') 
-            if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
-                loss_keys_print.append('loss_brdf-rough') 
-            if 'de' in opt.cfg.MODEL_BRDF.enable_list:
-                loss_keys_print.append('loss_brdf-depth') 
-
         if (opt.cfg.MODEL_SEMSEG.enable and not opt.cfg.MODEL_SEMSEG.if_freeze) or (opt.cfg.MODEL_BRDF.enable_semseg_decoder):
             loss_keys_backward.append('loss_semseg-ALL')
             loss_keys_print.append('loss_semseg-ALL')
             if opt.cfg.MODEL_SEMSEG.enable:
                 loss_keys_print.append('loss_semseg-main') 
                 loss_keys_print.append('loss_semseg-aux') 
+
+        if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
+            if not(opt.cfg.MODEL_LIGHT.enable and opt.cfg.MODEL_LIGHT.freeze_BRDF_Net):
+                loss_keys_backward.append('loss_brdf-ALL')
+            loss_keys_print.append('loss_brdf-ALL')
+            if 'al' in opt.cfg.MODEL_BRDF.enable_list and 'al' in opt.cfg.MODEL_BRDF.loss_list:
+                loss_keys_print.append('loss_brdf-albedo') 
+            if 'no' in opt.cfg.MODEL_BRDF.enable_list and 'no' in opt.cfg.MODEL_BRDF.loss_list:
+                loss_keys_print.append('loss_brdf-normal') 
+            if 'ro' in opt.cfg.MODEL_BRDF.enable_list and 'ro' in opt.cfg.MODEL_BRDF.loss_list:
+                loss_keys_print.append('loss_brdf-rough') 
+            if 'de' in opt.cfg.MODEL_BRDF.enable_list and 'de' in opt.cfg.MODEL_BRDF.loss_list:
+                loss_keys_print.append('loss_brdf-depth') 
+
+        if opt.cfg.MODEL_LIGHT.enable:
+            loss_keys_backward.append('loss_light-ALL')
+            loss_keys_print.append('loss_light-ALL')
 
         loss = sum([loss_dict[loss_key] for loss_key in loss_keys_backward])
         if opt.is_master and tid % 20 == 0:
@@ -402,7 +408,8 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
                         writer.add_image('TRAIN_im_trainval_RGB_debug/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), data_batch['im_trainval_RGB'][sample_idx].numpy().squeeze().transpose(1, 2, 0), tid, dataformats='HWC')
                         writer.add_image('TRAIN_im_trainval_RGB_mask_pooled_mean/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), im_trainval_RGB_mask_pooled_mean, tid, dataformats='HWC')
                         logger.info('Added debug pooling sample')
-            
+        
+        # ===== Logging training summaries
         if tid % 2000 == 0:
             for sample_idx, (im_single, im_trainval_RGB, im_path) in enumerate(zip(data_batch['im'], data_batch['im_trainval_RGB'], data_batch['imPath'])):
                 im_single = im_single.numpy().squeeze().transpose(1, 2, 0)

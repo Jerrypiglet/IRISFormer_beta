@@ -45,7 +45,7 @@ _C.MODEL_BRDF.enable_list = 'al_no_de_ro'
 _C.MODEL_BRDF.enable_list_allowed = ['al', 'no', 'de', 'ro']
 _C.MODEL_BRDF.data_read_list = 'al_no_de_ro'
 _C.MODEL_BRDF.load_pretrained_pth = False
-_C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240'
+# _C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240'
 _C.MODEL_BRDF.albedoWeight = 1.5
 _C.MODEL_BRDF.normalWeight = 1.0
 _C.MODEL_BRDF.roughWeight = 0.5
@@ -55,7 +55,8 @@ _C.MODEL_BRDF.enable_BRDF_decoders = True
 # _C.MODEL_BRDF.is_all_light = True
 _C.MODEL_BRDF.enable_semseg_decoder = False
 _C.MODEL_BRDF.semseg_PPM = False
-_C.MODEL_BRDF.weights = 'models_ckpt/check_cascade0_w320_h240/%s0_13.pth'
+_C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240/%s0_13.pth'
+_C.MODEL_BRDF.loss_list = 'al_no_de_ro'
 
 # ===== per-pixel lighting
 _C.MODEL_LIGHT = CN()
@@ -65,9 +66,12 @@ _C.MODEL_LIGHT.envCol = 160
 _C.MODEL_LIGHT.envHeight = 8
 _C.MODEL_LIGHT.envWidth = 16
 _C.MODEL_LIGHT.SGNum = 12
-_C.MODEL_LIGHT.use_GT_brdf = True
-_C.MODEL_LIGHT.load_pretrained_BRDF = False
+_C.MODEL_LIGHT.offset = 1. # 'the offset for log error'
+_C.MODEL_LIGHT.use_GT_brdf = False
+_C.MODEL_LIGHT.load_pretrained_BRDF = True
+_C.MODEL_LIGHT.load_pretrained_LIGHT = False
 _C.MODEL_LIGHT.freeze_BRDF_Net = True
+_C.MODEL_LIGHT.pretrained_pth_name = 'check_cascadeLight0_sg12_offset1.0/%s0_9.pth'
 
 # ===== layout, obj, emitter
 _C.MODEL_LAYOUT_EMITTER = CN()
@@ -189,6 +193,7 @@ _C.TRAINING.MAX_CKPT_KEEP = 20
 
 _C.TEST = CN()
 _C.TEST.ims_per_batch = 16
+_C.TEST.vis_max_samples = 2
 
 _C.seed = 123
 # _C.num_gpus = 1

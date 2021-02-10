@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 from torch.autograd import Variable
-import models
+# import models
 import torch.nn.functional as F
 from tqdm import tqdm
 import statistics
@@ -16,6 +16,7 @@ from utils.utils_misc import *
 from utils.utils_semseg import intersectionAndUnionGPU
 import torchvision.utils as vutils
 import torch.distributed as dist
+import cv2
 
 from train_funcs_matseg import get_input_dict_matseg, postprocess_matseg, val_epoch_matseg
 from train_funcs_semseg import get_input_dict_semseg, postprocess_semseg
@@ -31,6 +32,7 @@ def get_time_meters_joint():
     time_meters['data_to_gpu'] = AverageMeter()
     time_meters['forward'] = AverageMeter()
     time_meters['loss_brdf'] = AverageMeter()
+    time_meters['loss_light'] = AverageMeter()
     time_meters['loss_matseg'] = AverageMeter()
     time_meters['loss_semseg'] = AverageMeter()
     time_meters['backward'] = AverageMeter()    
@@ -54,6 +56,13 @@ def get_brdf_meters(opt):
 
 def get_depth_meters(opt):
     return {metric: AverageMeter(metric) for metric in opt.depth_metrics}
+
+def get_light_meters(opt):
+    # render_error_meter = AverageMeter('render_error_meter')
+    # recon_error_meter = AverageMeter('recon_error_meter')
+    # light_meters = {'render_error_meter': render_error_meter, 'recon_error_meter': recon_error_meter}
+    light_meters = {}
+    return light_meters
 
 def get_input_dict_joint(data_batch, opt):
     input_dict = {'im_trainval_RGB': data_batch['im_trainval_RGB'].cuda(non_blocking=True)}
@@ -85,7 +94,7 @@ def get_input_dict_joint(data_batch, opt):
         input_dict_light = {}
         extra_dict_light = {}
     input_dict.update(input_dict_light)
-    input_dict.update({'extra_dict_light': extra_dict_light})
+    input_dict.update(extra_dict_light)
 
     # input_dict = {**input_dict_matseg, **input_dict_brdf}
     return input_dict
@@ -99,6 +108,11 @@ def forward_joint(input_dict, model, opt, time_meters):
 
     # Post-processing and computing losses
     loss_dict = {}
+
+    if opt.cfg.MODEL_SEMSEG.enable:
+        output_dict, loss_dict = postprocess_semseg(input_dict, output_dict, loss_dict, opt, time_meters)
+        time_meters['loss_semseg'].update(time.time() - time_meters['ts'])
+        time_meters['ts'] = time.time()
     
     if opt.cfg.MODEL_MATSEG.enable:
         output_dict, loss_dict = postprocess_matseg(input_dict, output_dict, loss_dict, opt, time_meters)
@@ -115,11 +129,6 @@ def forward_joint(input_dict, model, opt, time_meters):
         time_meters['loss_light'].update(time.time() - time_meters['ts'])
         time_meters['ts'] = time.time()
 
-    if opt.cfg.MODEL_SEMSEG.enable:
-        output_dict, loss_dict = postprocess_semseg(input_dict, output_dict, loss_dict, opt, time_meters)
-        time_meters['loss_semseg'].update(time.time() - time_meters['ts'])
-        time_meters['ts'] = time.time()
-    
     return output_dict, loss_dict
 
 def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
@@ -127,6 +136,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     ENABLE_SEMSEG = opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable
     ENABLE_MATSEG = opt.cfg.MODEL_MATSEG.enable
     ENABLE_BRDF = opt.cfg.MODEL_BRDF.enable
+    ENABLE_LIGHT = opt.cfg.MODEL_LIGHT.enable
 
     logger.info(red('===Evaluating for %d batches'%len(brdf_loader_val)))
 
@@ -142,6 +152,13 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             'loss_matseg-binary', 
         ]
 
+    if opt.cfg.MODEL_SEMSEG.enable:
+        loss_keys += [
+            'loss_semseg-ALL', 
+            'loss_semseg-main', 
+            'loss_semseg-aux', 
+        ]
+
     if opt.cfg.MODEL_BRDF.enable:
         loss_keys += [
             'loss_brdf-albedo', 
@@ -155,11 +172,11 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
             loss_keys += ['loss_semseg-ALL']
 
-    if opt.cfg.MODEL_SEMSEG.enable:
+    if opt.cfg.MODEL_LIGHT.enable:
         loss_keys += [
-            'loss_semseg-ALL', 
-            'loss_semseg-main', 
-            'loss_semseg-aux', 
+            'loss_light-ALL', 
+            'loss_light-reconstErr', 
+            'loss_light-renderErr', 
         ]
         
     loss_meters = {loss_key: AverageMeter() for loss_key in loss_keys}
@@ -168,6 +185,8 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         semseg_meters = get_semseg_meters()
     if ENABLE_BRDF:
         brdf_meters = get_brdf_meters(opt)
+    if ENABLE_LIGHT:
+        light_meters = get_light_meters(opt)
 
     with torch.no_grad():
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
@@ -188,10 +207,12 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             
             # ======= update loss
             for loss_key in loss_dict_reduced:
-                # print(loss_key)
                 loss_meters[loss_key].update(loss_dict_reduced[loss_key].item())
 
             # ======= Metering
+            if ENABLE_LIGHT:
+                pass
+
             if ENABLE_BRDF:
                 if 'de' in opt.cfg.MODEL_BRDF.enable_list:
                     depth_input = input_dict['depthBatch'].detach().cpu().numpy()
@@ -201,9 +222,9 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     # depth_mask = np.logical_and(np.logical_and(seg_obj != 0, depth_input < max_depth), depth_input > min_depth)
                     depth_output = depth_output * seg_obj
                     depth_input = depth_input * seg_obj
-                    np.save('depth_input_%d.npy'%(batch_id), depth_input)
-                    np.save('depth_output_%d.npy'%(batch_id), depth_output)
-                    np.save('seg_obj_%d.npy'%(batch_id), seg_obj)
+                    # np.save('depth_input_%d.npy'%(batch_id), depth_input)
+                    # np.save('depth_output_%d.npy'%(batch_id), depth_output)
+                    # np.save('seg_obj_%d.npy'%(batch_id), seg_obj)
 
                     depth_input[depth_input < min_depth] = min_depth
                     depth_output[depth_output < min_depth] = min_depth
@@ -321,13 +342,17 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     
     # opt.albedo_pooling_debug = True
 
+    # ===== Gather vis of N batches
     with torch.no_grad():
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
             batch_size = len(data_batch['imPath'])
 
+            if batch_size*batch_id >= opt.cfg.TEST.vis_max_samples:
+                break
+
             # print(batch_id, batch_size)
 
-            # if num_val_brdf_vis >= num_val_vis_MAX or sample_idx >= num_val_vis_MAX:
+            # if num_val_brdf_vis >= num_val_vis_MAX or sample_idx_batch >= num_val_vis_MAX:
             #     break
 
             input_dict = get_input_dict_joint(data_batch, opt)
@@ -346,80 +371,90 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable:
                 semseg_pred = output_dict['semseg_pred'].cpu().numpy()
 
-            for sample_idx,(im_single, im_path) in enumerate(zip(data_batch['im_SDR_RGB'], data_batch['imPath'])):
-                # if sample_idx >= num_val_vis_MAX:
-                #     break
+            for sample_idx_batch, (im_single, im_path) in enumerate(zip(data_batch['im_SDR_RGB'], data_batch['imPath'])):
+                sample_idx = sample_idx_batch+batch_size*batch_id
+                if sample_idx_batch >= opt.cfg.TEST.vis_max_samples:
+                    break
+
                 im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
                 # im_path = os.path.join('./tmp/', 'im_%d-%d_color.png'%(tid, im_index))
                 # color_path = os.path.join('./tmp/', 'im_%d-%d_semseg.png'%(tid, im_index))
                 # cv2.imwrite(im_path, im_single * 255.)
                 # semseg_color.save(color_path)
                 if opt.is_master:
-                    writer.add_image('VAL_im/%d'%(sample_idx+batch_size*batch_id), im_single, tid, dataformats='HWC')
+                    writer.add_image('VAL_im/%d'%(sample_idx), im_single, tid, dataformats='HWC')
                     if opt.cfg.MODEL_MATSEG.albedo_pooling_debug and not opt.if_cluster:
                         os.makedirs('tmp/demo_%s'%(opt.task_name), exist_ok=True)
-                        np.save('tmp/demo_%s/im_trainval_RGB_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id), im_single)
-                        print('Saved to' + 'tmp/demo_%s/im_trainval_RGB_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id))
+                        np.save('tmp/demo_%s/im_trainval_RGB_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), im_single)
+                        print('Saved to' + 'tmp/demo_%s/im_trainval_RGB_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx))
 
-                    writer.add_text('VAL_image_name/%d'%(sample_idx+batch_size*batch_id), im_path, tid)
-                    # print(sample_idx+batch_size*batch_id, im_path)
+                    writer.add_text('VAL_image_name/%d'%(sample_idx), im_path, tid)
+                    # print(sample_idx, im_path)
 
                 if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool or opt.cfg.MODEL_MATSEG.if_albedo_safenet) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
                     if opt.is_master:
                         if output_dict['im_trainval_RGB_mask_pooled_mean'] is not None:
-                            im_trainval_RGB_mask_pooled_mean = output_dict['im_trainval_RGB_mask_pooled_mean'][sample_idx]
+                            im_trainval_RGB_mask_pooled_mean = output_dict['im_trainval_RGB_mask_pooled_mean'][sample_idx_batch]
                             im_trainval_RGB_mask_pooled_mean = im_trainval_RGB_mask_pooled_mean.cpu().numpy().squeeze().transpose(1, 2, 0)
-                            writer.add_image('VAL_im_trainval_RGB_mask_pooled_mean/%d'%(sample_idx+batch_size*batch_id), im_trainval_RGB_mask_pooled_mean, tid, dataformats='HWC')
+                            writer.add_image('VAL_im_trainval_RGB_mask_pooled_mean/%d'%(sample_idx), im_trainval_RGB_mask_pooled_mean, tid, dataformats='HWC')
                         if not opt.if_cluster:
                             if 'kernel_list' in output_dict and not output_dict['kernel_list'] is None:
                                 kernel_list = output_dict['kernel_list']
                                 print(len(kernel_list), kernel_list[0].shape)
-                                np.save('tmp/demo_%s/kernel_list_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id), kernel_list[0].detach().cpu().numpy())
+                                np.save('tmp/demo_%s/kernel_list_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), kernel_list[0].detach().cpu().numpy())
                             if output_dict['im_trainval_RGB_mask_pooled_mean'] is not None:
-                                np.save('tmp/demo_%s/im_trainval_RGB_mask_pooled_mean_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id), im_trainval_RGB_mask_pooled_mean)
+                                np.save('tmp/demo_%s/im_trainval_RGB_mask_pooled_mean_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), im_trainval_RGB_mask_pooled_mean)
                             if 'embeddings' in output_dict and output_dict['embeddings'] is not None:
-                                np.save('tmp/demo_%s/embeddings_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id), output_dict['embeddings'].detach().cpu().numpy())
+                                np.save('tmp/demo_%s/embeddings_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), output_dict['embeddings'].detach().cpu().numpy())
                             if 'affinity' in output_dict:
                                 affinity = output_dict['affinity']
                                 sample_ij = output_dict['sample_ij']
                                 if affinity is not None:
-                                    np.save('tmp/demo_%s/affinity_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id), affinity[0].detach().cpu().numpy())
-                                    np.save('tmp/demo_%s/sample_ij_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id), sample_ij)
+                                    np.save('tmp/demo_%s/affinity_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), affinity[0].detach().cpu().numpy())
+                                    np.save('tmp/demo_%s/sample_ij_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), sample_ij)
 
                 # ======= Vis BRDFsemseg / semseg
                 if opt.cfg.DATA.load_semseg_gt:
-                    gray_GT = np.uint8(semseg_label[sample_idx])
+                    gray_GT = np.uint8(semseg_label[sample_idx_batch])
                     color_GT = np.array(colorize(gray_GT, colors).convert('RGB'))
                     if opt.is_master:
-                        writer.add_image('VAL_semseg_GT/%d'%(sample_idx+batch_size*batch_id), color_GT, tid, dataformats='HWC')
+                        writer.add_image('VAL_semseg_GT/%d'%(sample_idx), color_GT, tid, dataformats='HWC')
                 if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable:
-                    prediction = np.argmax(semseg_pred[sample_idx], 0)
+                    prediction = np.argmax(semseg_pred[sample_idx_batch], 0)
                     gray_pred = np.uint8(prediction)
                     color_pred = np.array(colorize(gray_pred, colors).convert('RGB'))
                     if opt.is_master:
-                        writer.add_image('VAL_semseg_PRED/%d'%(sample_idx+batch_size*batch_id), color_pred, tid, dataformats='HWC')
+                        writer.add_image('VAL_semseg_PRED/%d'%(sample_idx), color_pred, tid, dataformats='HWC')
 
             # ======= visualize clusters for mat-seg
             if opt.cfg.DATA.load_matseg_gt:
-                for sample_idx in range(input_dict['mat_aggre_map_cpu'].shape[0]):
-                    mat_aggre_map_GT_single = input_dict['mat_aggre_map_cpu'][sample_idx].numpy().squeeze()
+                for sample_idx_batch in range(batch_size):
+                    sample_idx = sample_idx_batch+batch_size*batch_id
+                    if sample_idx_batch >= opt.cfg.TEST.vis_max_samples:
+                        break
+
+                    mat_aggre_map_GT_single = input_dict['mat_aggre_map_cpu'][sample_idx_batch].numpy().squeeze()
                     matAggreMap_GT_single_vis = vis_index_map(mat_aggre_map_GT_single)
-                    mat_notlight_mask_single = input_dict['mat_notlight_mask_cpu'][sample_idx].numpy().squeeze()
+                    mat_notlight_mask_single = input_dict['mat_notlight_mask_cpu'][sample_idx_batch].numpy().squeeze()
                     if opt.is_master:
-                        writer.add_image('VAL_matseg-aggre_map_GT/%d'%(sample_idx+batch_size*batch_id), matAggreMap_GT_single_vis, tid, dataformats='HWC')
-                        writer.add_image('VAL_matseg-notlight_mask_GT/%d'%(sample_idx+batch_size*batch_id), mat_notlight_mask_single, tid, dataformats='HW')
+                        writer.add_image('VAL_matseg-aggre_map_GT/%d'%(sample_idx), matAggreMap_GT_single_vis, tid, dataformats='HWC')
+                        writer.add_image('VAL_matseg-notlight_mask_GT/%d'%(sample_idx), mat_notlight_mask_single, tid, dataformats='HW')
 
             if opt.cfg.MODEL_MATSEG.enable and opt.cfg.MODEL_MATSEG.embed_dims <= 4:
                 b, c, h, w = output_dict['logit'].size()
-                for sample_idx, (logit_single, embedding_single) in enumerate(zip(output_dict['logit'].detach(), output_dict['embedding'].detach())):
+                for sample_idx_batch, (logit_single, embedding_single) in enumerate(zip(output_dict['logit'].detach(), output_dict['embedding'].detach())):
 
-                    # if sample_idx >= num_val_vis_MAX:
+                    sample_idx = sample_idx_batch+batch_size*batch_id
+                    if sample_idx_batch >= opt.cfg.TEST.vis_max_samples:
+                        break
+
+                    # if sample_idx_batch >= num_val_vis_MAX:
                     #     break
                     ts_start_vis = time.time()
 
                     
                     # prob_single = torch.sigmoid(logit_single)
-                    prob_single = input_dict['mat_notlight_mask_cpu'][sample_idx].to(opt.device).float()
+                    prob_single = input_dict['mat_notlight_mask_cpu'][sample_idx_batch].to(opt.device).float()
                     # fast mean shift
 
                     if opt.bin_mean_shift_device == 'cpu':
@@ -436,8 +471,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
                     # greedy match of predict segmentation and ground truth segmentation using cross entropy
                     # to better visualization
-                    gt_plane_num = input_dict['num_mat_masks_batch'][sample_idx]
-                    matching = match_segmentatin(segmentation, prob_single.view(-1, 1), input_dict['instance'][sample_idx], gt_plane_num)
+                    gt_plane_num = input_dict['num_mat_masks_batch'][sample_idx_batch]
+                    matching = match_segmentatin(segmentation, prob_single.view(-1, 1), input_dict['instance'][sample_idx_batch], gt_plane_num)
 
                     # return cluster results
                     predict_segmentation = segmentation.cpu().numpy().argmax(axis=1) # reshape to [h, w]: [0, 1, ..., len(matching)-1]; use this for mask pooling!!!!
@@ -453,8 +488,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                         else:
                             used.add(a)
                     # np.save('tmp/predict_segmentation_ori_%d.npy'%(max_index), predict_segmentation)
-                    # np.save('tmp/instance_%d.npy'%(max_index), input_dict['instance'][sample_idx].cpu().numpy().squeeze())
-                    # np.save('tmp/gt_%d.npy'%(max_index), input_dict['mat_aggre_map_cpu'][sample_idx].numpy().squeeze())
+                    # np.save('tmp/instance_%d.npy'%(max_index), input_dict['instance'][sample_idx_batch].cpu().numpy().squeeze())
+                    # np.save('tmp/gt_%d.npy'%(max_index), input_dict['mat_aggre_map_cpu'][sample_idx_batch].numpy().squeeze())
                     # np.save('tmp/matching_%d.npy'%(max_index), matching)
                     predict_segmentation = matching[predict_segmentation] # matching GT: [0, 1, ... N-1]
                     # np.save('tmp/predict_segmentation_matched%d.npy'%(max_index), predict_segmentation)
@@ -465,21 +500,21 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     predict_segmentation[prob_single.cpu().squeeze().numpy() <= 0.1] = opt.invalid_index
 
                     # ===== vis
-                    # im_single = data_batch['im_not_hdr'][sample_idx].numpy().squeeze().transpose(1, 2, 0)
+                    # im_single = data_batch['im_not_hdr'][sample_idx_batch].numpy().squeeze().transpose(1, 2, 0)
 
                     # mat_aggre_map_pred_single = reindex_output_map(predict_segmentation.squeeze(), opt.invalid_index)
                     mat_aggre_map_pred_single = predict_segmentation.squeeze()
                     matAggreMap_pred_single_vis = vis_index_map(mat_aggre_map_pred_single)
 
                     if opt.is_master:
-                        writer.add_image('VAL_matseg-aggre_map_PRED/%d'%(sample_idx+batch_size*batch_id), matAggreMap_pred_single_vis, tid, dataformats='HWC')
+                        writer.add_image('VAL_matseg-aggre_map_PRED/%d'%(sample_idx), matAggreMap_pred_single_vis, tid, dataformats='HWC')
                         if opt.cfg.MODEL_MATSEG.albedo_pooling_debug and not opt.if_cluster:
-                            np.save('tmp/demo_%s/matseg_pred_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx+batch_size*batch_id), matAggreMap_pred_single_vis)
+                            np.save('tmp/demo_%s/matseg_pred_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), matAggreMap_pred_single_vis)
 
                     logger.info('Vis batch for %.2f seconds.'%(time.time()-ts_start_vis))
 
-
-            # ======= visualize clusters for mat-seg
+            
+            # ===== BRDF
             # print(((input_dict['albedoBatch'] ) ** (1.0/2.2) ).data.shape) # [b, 3, h, w]
             if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
                 # if opt.is_master:
@@ -508,8 +543,29 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     depthBatch_list.append(input_dict['depthBatch'])
                     depthPreds_list.append(output_dict['depthPreds'][n])
 
+            # ===== LIGHT
+            if opt.cfg.MODEL_LIGHT.enable:
+                envmapsPredScaledImage = output_dict['envmapsPredScaledImage'].detach().cpu().numpy()
+                envmapsBatch = input_dict['envmapsBatch'].detach().cpu().numpy()
+                renderedImPred = output_dict['renderedImPred'].detach().cpu().numpy()
+                imBatchSmall = output_dict['imBatchSmall'].detach().cpu().numpy()
+                for sample_idx_batch in range(batch_size):
+                    for I_hdr, name_tag in zip([envmapsPredScaledImage[sample_idx_batch], envmapsBatch[sample_idx_batch]], ['light_Pred', 'light_GT']):
+                        H_grid, W_grid, h, w = I_hdr.shape[1:]
+                        downsize_ratio = 4
+                        assert H_grid % downsize_ratio == 0
+                        assert W_grid % downsize_ratio == 0
+                        xx, yy = np.meshgrid(np.arange(0, H_grid, downsize_ratio), np.arange(0, W_grid, downsize_ratio))
+                        I_hdr_downsampled = I_hdr[:, xx.T, yy.T, :, :]
+                        I_hdr_downsampled = I_hdr_downsampled.transpose(1, 3, 2, 4, 0).reshape(H_grid*h//downsize_ratio, W_grid*w//downsize_ratio, 3)
+                        cv2.imwrite('{0}/{1}-{2}_{3}.hdr'.format(opt.summary_vis_path_task, tid, sample_idx_batch, name_tag) , I_hdr_downsampled[:, :, [2, 1, 0]])
+                    for I_png, name_tag in zip([renderedImPred[sample_idx_batch], imBatchSmall[sample_idx_batch]], ['renderedIm_Pred', 'imBatchSmall_GT']):
+                        I_png = (I_png.transpose(1, 2, 0) * 255.).astype(np.uint8)
+                        writer.add_image('VAL_light-%s/%d'%(name_tag, sample_idx_batch), I_png, tid, dataformats='HWC')
+
     synchronize()
 
+    # ===== logging top N to TB
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
         im_paths_list = flatten_list(im_paths_list)
         # print(im_paths_list)
