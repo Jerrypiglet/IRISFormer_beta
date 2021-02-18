@@ -60,7 +60,7 @@ _C.MODEL_BRDF.loss_list = 'al_no_de_ro'
 
 # ===== per-pixel lighting
 _C.MODEL_LIGHT = CN()
-_C.MODEL_LIGHT.enable = True
+_C.MODEL_LIGHT.enable = False
 _C.MODEL_LIGHT.envRow = 120
 _C.MODEL_LIGHT.envCol = 160
 _C.MODEL_LIGHT.envHeight = 8
@@ -152,7 +152,7 @@ _C.MODEL_SEMSEG.pretrained_pth = 'exp/openrooms/pspnet50V3_2gpu_100k/model/train
 # _C.MODEL_SEMSEG.configs = ()
 
 _C.DATASET = CN()
-_C.DATASET.mini = False
+_C.DATASET.mini = False # load mini OR from SSD to enable faster dataloading for debugging purposes etc.
 _C.DATASET.dataset_name = 'openrooms'
 _C.DATASET.dataset_path = ''
 _C.DATASET.dataset_path_local = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms'

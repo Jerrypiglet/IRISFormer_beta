@@ -37,10 +37,10 @@ def make_dataset(split='train', data_root=None, data_list=None, logger=None):
             else:
                 label_name = image_name  # just set place holder for label_name, not for use
         else:
-            if len(line_split) != 2:
+            if len(line_split) != 4:
                 raise (RuntimeError("Image list file read line error : " + line + "\n"))
-            image_name = os.path.join(data_root, line_split[0])
-            label_name = os.path.join(data_root, line_split[1])
+            image_name = os.path.join(data_root, line_split[2])
+            label_name = os.path.join(data_root, line_split[3])
         '''
         following check costs some time
         if is_image_file(image_name) and is_image_file(label_name) and os.path.isfile(image_name) and os.path.isfile(label_name):

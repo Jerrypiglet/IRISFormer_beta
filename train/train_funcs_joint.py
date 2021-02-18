@@ -17,6 +17,7 @@ from utils.utils_semseg import intersectionAndUnionGPU
 import torchvision.utils as vutils
 import torch.distributed as dist
 import cv2
+from PIL import Image
 
 from train_funcs_matseg import get_input_dict_matseg, postprocess_matseg, val_epoch_matseg
 from train_funcs_semseg import get_input_dict_semseg, postprocess_semseg
@@ -562,6 +563,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     for I_png, name_tag in zip([renderedImPred[sample_idx_batch], imBatchSmall[sample_idx_batch]], ['renderedIm_Pred', 'imBatchSmall_GT']):
                         I_png = (I_png.transpose(1, 2, 0) * 255.).astype(np.uint8)
                         writer.add_image('VAL_light-%s/%d'%(name_tag, sample_idx_batch), I_png, tid, dataformats='HWC')
+                        Image.fromarray(I_png).save('{0}/{1}-{2}_light-{3}.png'.format(opt.summary_vis_path_task, tid, sample_idx_batch, name_tag))
 
     synchronize()
 

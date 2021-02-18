@@ -258,6 +258,10 @@ def set_up_checkpointing(opt, model, optimizer, scheduler, logger):
             opt.resume = opt.task_name
         replace_kws = []
         replace_with_kws = []
+        print(opt.replaced_keys, opt.replacedby, )
+        assert len(opt.replaced_keys) == len(opt.replacedby)
+        replace_kws += opt.replaced_keys
+        replace_with_kws += opt.replacedby
         # if opt.task_split == 'train':
         # if 'train_POD_matseg_DDP' in opt.resume:
         #     replace_kws = ['hourglass_model.seq_L2.1', 'hourglass_model.seq_L2.3', 'hourglass_model.disp_res_pred_layer_L2']
