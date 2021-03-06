@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 
 metadata:
-  name: ruizhu-deployment
+  name: ruizhu-deployment2
   namespace: ucsd-ravigroup
   labels:
     user: ruizhu
@@ -25,9 +25,11 @@ spec:
           requests:
             cpu: "100m"
             memory: "100Mi"
+            nvidia.com/gpu: 1
           limits:
-            cpu: "1"
-            memory: "1Gi"
+            cpu: "16"
+            memory: "16Gi"
+            nvidia.com/gpu: 1
         volumeMounts:
         # - name: cephfs
         #   mountPath: /cephfs

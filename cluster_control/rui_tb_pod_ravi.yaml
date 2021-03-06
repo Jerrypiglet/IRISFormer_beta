@@ -30,11 +30,11 @@ spec:
       requests:
         cpu: "1"
         memory: "5Gi"
-        nvidia.com/gpu: 2
+        nvidia.com/gpu: 1
       limits:
-        cpu: "1"
-        memory: "5Gi"
-        nvidia.com/gpu: 2
+        cpu: "2"
+        memory: "12Gi"
+        nvidia.com/gpu: 1
     volumeMounts:
     - name: viscompfs
       mountPath: /viscompfs

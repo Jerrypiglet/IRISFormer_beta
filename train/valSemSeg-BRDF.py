@@ -264,6 +264,6 @@ if opt.if_vis:
     with torch.no_grad():
         vis_val_epoch_joint(brdf_loader_val_vis, model, bin_mean_shift, val_params)
     synchronize()                
-if opt.if_val:
-    with torch.no_grad():
-        val_epoch_joint(brdf_loader_val, model, bin_mean_shift, val_params)
+# if opt.if_val:
+#     with torch.no_grad():
+#         val_epoch_joint(brdf_loader_val, model, bin_mean_shift, val_params)
