@@ -17,7 +17,7 @@ PACNET_PATH = Path(pwdpath) / 'third-parties' / 'pacnet'
 sys.path.insert(0, str(PACNET_PATH))
 print(sys.path)
 
-from dataset_openroomsV3 import openrooms, collate_fn_OR
+from dataset_openroomsV4_total3d import openrooms, collate_fn_OR
 from train_funcs_joint import get_input_dict_joint, val_epoch_joint, vis_val_epoch_joint, forward_joint, get_time_meters_joint
 
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -279,7 +279,11 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
     if tid >= opt.max_iter and opt.max_iter != -1:
         break
 
-    for i, data_batch in enumerate(brdf_loader_train):
+    for i, data_batch in tqdm(enumerate(brdf_loader_train)):
+        if cfg.SOLVER.if_test_dataloader:
+            if i % 100 == 0:
+                print(data_batch.keys())
+            continue
         reset_tictoc = False
         # Evaluation for an epoch```
         if opt.eval_every_iter != -1 and (tid - tid_start) % opt.eval_every_iter == 0:

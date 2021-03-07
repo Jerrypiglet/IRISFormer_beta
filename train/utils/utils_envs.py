@@ -12,6 +12,7 @@ def set_up_envs(opt):
     opt.cfg.PATH.root = opt.cfg.PATH.root_cluster if opt.if_cluster else opt.cfg.PATH.root_local
     opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_cluster if opt.if_cluster else opt.cfg.DATASET.dataset_path_local
     opt.cfg.DATASET.layout_emitter_path = opt.cfg.DATASET.layout_emitter_path_cluster if opt.if_cluster else opt.cfg.DATASET.layout_emitter_path_local
+    opt.cfg.DATASET.png_path = opt.cfg.DATASET.png_path_cluster if opt.if_cluster else opt.cfg.DATASET.png_path_local
     if opt.data_root is not None:
         opt.cfg.DATASET.dataset_path = opt.data_root
 
@@ -23,8 +24,13 @@ def set_up_envs(opt):
     opt.cfg.PATH.semseg_colors_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.semseg_colors_path)
     opt.cfg.PATH.semseg_names_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.semseg_names_path)
     opt.cfg.PATH.total3D_colors_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.total3D_colors_path)
-    
+
+    # ===== data =====
+    opt.cfg.DATA.data_read_list = list(set(opt.cfg.DATA.data_read_list.split('_')))
+
     # ====== BRDF =====
+    if len(opt.cfg.MODEL_BRDF.enable_list) > 0:
+        opt.cfg.enable_BRDF_decoders = True
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
         opt.cfg.DATA.load_brdf_gt = True
         opt.depth_metrics = ['abs_rel', 'sq_rel', 'rmse', 'rmse_log', 'a1', 'a2', 'a3']
@@ -34,19 +40,23 @@ def set_up_envs(opt):
     if opt.cfg.MODEL_LIGHT.enable:
         opt.cfg.DATA.load_light_gt = True
         opt.cfg.DATA.load_brdf_gt = True
-        opt.cfg.MODEL_BRDF.data_read_list = 'al_no_de_ro'
+        opt.cfg.DATA.data_read_list += ['al_no_de_ro'].split('_')
         if opt.cfg.MODEL_LIGHT.use_GT_brdf:
             opt.cfg.MODEL_BRDF.enable = False
             opt.cfg.MODEL_BRDF.enable_list = ''
         else:
             opt.cfg.MODEL_BRDF.enable = True
-            opt.cfg.MODEL_BRDF.enable_list = 'al_no_de_ro'
+            opt.cfg.MODEL_BRDF.enable_list += 'al_no_de_ro'.split(['_'])
         opt.cfg.MODEL_BRDF.loss_list = ''
 
-    # ====== layout, obj, emitters =====
+    # ====== layout, emitters =====
     if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
+        opt.cfg.MODEL_LAYOUT_EMITTER.enable = True
         opt.cfg.DATA.load_layout_emitter_gt = True
-        assert opt.cfg.MODEL_LAYOUT_EMITTER.wall_prob_or_cell_prob in ['cell_prob', 'wall_prob']
+        opt.cfg.DATA.data_read_list += opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.split('_')
+        if opt.cfg.MODEL_LAYOUT_EMITTER.use_depth_as_input:
+            opt.cfg.DATA.data_read_list.append('de')
+        assert opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type in ['cell_prob', 'wall_prob', 'cell_info']
 
     # ====== semseg =====
     if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable or opt.cfg.MODEL_SEMSEG.use_as_input or opt.cfg.MODEL_MATSEG.use_semseg_as_input:
@@ -62,17 +72,21 @@ def set_up_envs(opt):
     if not opt.cfg.MODEL_SEMSEG.if_freeze:
         opt.cfg.MODEL_SEMSEG.fix_bn = False
 
+    # ===== check if flags are legal =====
+    check_if_in_list(opt.cfg.DATA.data_read_list, opt.cfg.DATA.data_read_list_allowed)
+
     opt.cfg.MODEL_BRDF.enable_list = opt.cfg.MODEL_BRDF.enable_list.split('_')
-    if opt.cfg.MODEL_BRDF.enable_list != ['']:
-        assert all(e in opt.cfg.MODEL_BRDF.enable_list_allowed for e in opt.cfg.MODEL_BRDF.enable_list), \
-            'Illegal MODEL_BRDF.enable_list of lenggth %d: %s'%(len(opt.cfg.MODEL_BRDF.enable_list), '_'.join(opt.cfg.MODEL_BRDF.enable_list))
-    opt.cfg.MODEL_BRDF.data_read_list = list(set(opt.cfg.MODEL_BRDF.data_read_list.split('_')))
-    if opt.cfg.MODEL_BRDF.data_read_list != ['']:
-        assert all(e in opt.cfg.MODEL_BRDF.enable_list_allowed for e in opt.cfg.MODEL_BRDF.data_read_list), \
-            'Illegal MODEL_BRDF.data_read_list of lenggth %d: %s'%(len(opt.cfg.MODEL_BRDF.data_read_list), '_'.join(opt.cfg.MODEL_BRDF.data_read_list))
-    if opt.cfg.MODEL_LAYOUT_EMITTER.load_depth:
-        opt.cfg.MODEL_BRDF.data_read_list.append('de')
     opt.cfg.MODEL_BRDF.loss_list = opt.cfg.MODEL_BRDF.loss_list.split('_')
+    check_if_in_list(opt.cfg.MODEL_BRDF.enable_list, opt.cfg.MODEL_BRDF.enable_list_allowed)
+    check_if_in_list(opt.cfg.MODEL_BRDF.loss_list, opt.cfg.MODEL_BRDF.enable_list_allowed)
+
+    opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.split('_')
+    if opt.cfg.MODEL_LAYOUT_EMITTER.loss_list == '':
+        opt.cfg.MODEL_LAYOUT_EMITTER.loss_list = opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
+    else:
+        opt.cfg.MODEL_LAYOUT_EMITTER.loss_list = opt.cfg.MODEL_LAYOUT_EMITTER.loss_list.split('_')
+    check_if_in_list(opt.cfg.MODEL_LAYOUT_EMITTER.enable_list, opt.cfg.MODEL_LAYOUT_EMITTER.enable_list_allowed)
+    check_if_in_list(opt.cfg.MODEL_LAYOUT_EMITTER.loss_list, opt.cfg.MODEL_LAYOUT_EMITTER.enable_list_allowed)
 
     # Guidance in general
     guidance_options = [opt.cfg.MODEL_MATSEG.if_albedo_pooling,opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv, \
@@ -111,6 +125,16 @@ def set_up_envs(opt):
     # export
     opt.cfg.PATH.torch_home_path = opt.cfg.PATH.torch_home_cluster if opt.if_cluster else opt.cfg.PATH.torch_home_local
     os.system('export TORCH_HOME=%s'%opt.cfg.PATH.torch_home_path)
+
+    # mis
+    if opt.cfg.SOLVER.if_test_dataloader:
+        opt.cfg.SOLVER.max_epoch = 1
+
+def check_if_in_list(list_to_check, list_allowed, module_name='Unknown Module'):
+    if len(list_to_check) == 0:
+        return
+    if not all(e in list_allowed for e in list_to_check):
+        print('Illegal %s of length %d: %s'%(module_name, len(list_to_check), '_'.join(list_to_check)))
 
 
 def set_up_logger(opt):
