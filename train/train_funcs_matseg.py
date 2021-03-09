@@ -14,10 +14,10 @@ from utils.utils_vis import vis_index_map, reindex_output_map
 from utils.utils_training import reduce_loss_dict, time_meters_to_string
 from utils.utils_misc import *
 
-def get_input_dict_matseg(data_batch, opt):
+def get_labels_dict_matseg(data_batch, opt):
     input_dict = {}
 
-    input_dict['im_paths'] = data_batch['imPath']
+    input_dict['im_paths'] = data_batch['image_path']
     input_dict['im_batch_matseg'] = data_batch['im_matseg_transformed_trainval'].cuda(non_blocking=True)
 
     # if opt.if_hdr_input_matseg:
@@ -105,7 +105,7 @@ def val_epoch_matseg(brdfLoaderVal, model, bin_mean_shift, params_mis):
         for i, data_batch in tqdm(enumerate(brdfLoaderVal)):
             ts_iter_start = time.time()
 
-            input_dict = get_input_dict_matseg(data_batch, opt)
+            input_dict = get_labels_dict_matseg(data_batch, opt)
             time_meters['data_to_gpu'].update(time.time() - ts_iter_start)
             time_meters['ts'] = time.time()
 
@@ -197,10 +197,10 @@ def val_epoch_matseg(brdfLoaderVal, model, bin_mean_shift, params_mis):
     logger.info('Evaluation timings: ' + time_meters_to_string(time_meters))
 
 
-def get_input_dict_matseg_combine(data_batch, opt):
-    input_dict_matseg = get_input_dict_matseg(data_batch, opt)
-    input_batch_brdf, input_dict_brdf, pre_batch_dict_brdf = get_input_dict_brdf(data_batch, opt)
-    input_dict = {**input_dict_matseg, **input_dict_brdf}
+def get_labels_dict_matseg_combine(data_batch, opt):
+    labels_dict_matseg = get_labels_dict_matseg(data_batch, opt)
+    input_batch_brdf, labels_dict_brdf, pre_batch_dict_brdf = get_labels_dict_brdf(data_batch, opt)
+    input_dict = {**labels_dict_matseg, **labels_dict_brdf}
     input_dict.update({'input_batch_brdf': input_batch_brdf, 'pre_batch_dict_brdf': pre_batch_dict_brdf})
     return input_dict
 
@@ -239,7 +239,7 @@ def val_epoch_combine(brdfLoaderVal, model, bin_mean_shift, params_mis):
         for i, data_batch in tqdm(enumerate(brdfLoaderVal)):
             ts_iter_start = time.time()
 
-            input_dict = get_input_dict_matseg(data_batch, opt)
+            input_dict = get_labels_dict_matseg(data_batch, opt)
             time_meters['data_to_gpu'].update(time.time() - ts_iter_start)
             time_meters['ts'] = time.time()
 

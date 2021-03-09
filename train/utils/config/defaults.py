@@ -28,6 +28,7 @@ _C.PATH.root_cluster = '.'
 _C.PATH.semseg_colors_path = 'data/openrooms/openrooms_colors.txt'
 _C.PATH.semseg_names_path = 'data/openrooms/openrooms_names.txt'
 _C.PATH.total3D_colors_path = 'data/openrooms/total3D_colors'
+_C.PATH.total3D_lists_path = 'data/openrooms/list_OR_V4full'
 _C.PATH.dcn_path = ''
 _C.PATH.dcn_cluster = '/viscompfs/users/ruizhu/lib/Deformable-Convolution-V2-PyTorch'
 _C.PATH.dcn_local = '/home/ruizhu/Documents/Projects/semanticInverse/third-parties_outside/Deformable-Convolution-V2-PyTorch'
@@ -36,6 +37,32 @@ _C.PATH.torch_home_local = '/home/ruizhu/Documents/Projects/semanticInverse/'
 _C.PATH.torch_home_cluster = '/viscompfs/users/ruizhu/'
 # _C.DATA.semseg_colors_path = 'data/openrooms/openrooms_colors.txt'
 # _C.DATA.semseg_names_path = 'data/openrooms/openrooms_names.txt'
+_C.PATH.OR4X_mapping_catInt_to_RGB = ['data/openrooms/total3D_colors/OR4X_mapping_catInt_to_RGB_light.pkl', 'data/openrooms/total3D_colors/OR4X_mapping_catInt_to_RGB_dark.pkl']
+_C.PATH.OR4X_mapping_catStr_to_RGB = ['data/openrooms/total3D_colors/OR4X_mapping_catStr_to_RGB_light.pkl', 'data/openrooms/total3D_colors/OR4X_mapping_catStr_to_RGB_dark.pkl']
+
+# ===== dataset
+
+_C.DATASET = CN()
+_C.DATASET.mini = False # load mini OR from SSD to enable faster dataloading for debugging purposes etc.
+_C.DATASET.dataset_name = 'openrooms'
+_C.DATASET.dataset_path = ''
+_C.DATASET.dataset_path_local = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms'
+_C.DATASET.dataset_path_cluster = '/siggraphasia20dataset/code/Routine/DatasetCreation/'
+_C.DATASET.layout_emitter_path = ''
+_C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-OR45_total3D_train_test_data'
+_C.DATASET.layout_emitter_path_cluster = ''
+_C.DATASET.png_path = ''
+_C.DATASET.png_path_local = '/data/ruizhu/OR-pngs'
+_C.DATASET.png_path_cluster = ''
+_C.DATASET.dataset_list = 'data/openrooms/list_ORfull/list'
+_C.DATASET.dataset_path_mini = '/data/ruizhu/openrooms_mini'
+_C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini/list'
+
+
+_C.DATASET.num_workers = 8
+_C.DATASET.if_val_dist = True
+
+# ===== data loading configs
 
 _C.DATA = CN()
 _C.DATA.if_load_png_not_hdr = False # load png as input image instead of hdr image
@@ -59,6 +86,7 @@ _C.MODEL_BRDF.enable = True
 _C.MODEL_BRDF.enable_list = '' # al_no_de_ro
 _C.MODEL_BRDF.enable_list_allowed = ['al', 'no', 'de', 'ro']
 _C.MODEL_BRDF.load_pretrained_pth = False
+_C.MODEL_BRDF.loss_list = ''
 # _C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240'
 _C.MODEL_BRDF.albedoWeight = 1.5
 _C.MODEL_BRDF.normalWeight = 1.0
@@ -70,7 +98,6 @@ _C.MODEL_BRDF.enable_BRDF_decoders = False
 _C.MODEL_BRDF.enable_semseg_decoder = False
 _C.MODEL_BRDF.semseg_PPM = False
 _C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240/%s0_13.pth'
-_C.MODEL_BRDF.loss_list = 'al_no_de_ro'
 
 # ===== per-pixel lighting
 _C.MODEL_LIGHT = CN()
@@ -93,14 +120,34 @@ _C.MODEL_LAYOUT_EMITTER.enable = False # enable model / modules
 _C.MODEL_LAYOUT_EMITTER.enable_list = 'lo_em' # enable model / modules
 _C.MODEL_LAYOUT_EMITTER.enable_list_allowed = ['lo', 'em']
 _C.MODEL_LAYOUT_EMITTER.loss_list = ''
-_C.MODEL_LAYOUT_EMITTER.OR = 'OR45'
-_C.MODEL_LAYOUT_EMITTER.grid_size = 8
 _C.MODEL_LAYOUT_EMITTER.use_depth_as_input = False
+
+_C.MODEL_LAYOUT_EMITTER.data = CN()
+_C.MODEL_LAYOUT_EMITTER.data.OR = 'OR45'
+_C.MODEL_LAYOUT_EMITTER.data.version = 'V4full'
+
 _C.MODEL_LAYOUT_EMITTER.emitter = CN()
+_C.MODEL_LAYOUT_EMITTER.emitter.grid_size = 8
 _C.MODEL_LAYOUT_EMITTER.emitter.est_type = 'cell_info'
 _C.MODEL_LAYOUT_EMITTER.emitter.relative_dir = True
+_C.MODEL_LAYOUT_EMITTER.emitter.loss_type = 'L2' # [L2, KL]
+_C.MODEL_LAYOUT_EMITTER.emitter.sigmoid = False
+_C.MODEL_LAYOUT_EMITTER.emitter.softmax = False
+_C.MODEL_LAYOUT_EMITTER.emitter.cls_agnostric = False
+_C.MODEL_LAYOUT_EMITTER.emitter.loss = CN()
+_C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_axis_global = 4.
+_C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_light_ratio = 100.
+_C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_cls = 10.
+_C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_intensity = 0.2
+_C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_lamb = 0.3
+
+_C.MODEL_LAYOUT_EMITTER.layout = CN()
+_C.MODEL_LAYOUT_EMITTER.layout.loss = CN()
+_C.MODEL_LAYOUT_EMITTER.layout.loss.cls_reg_ratio = 10
+_C.MODEL_LAYOUT_EMITTER.layout.loss.obj_cam_ratio = 1
 
 
+# ===== material segmentation
 _C.MODEL_MATSEG = CN()
 _C.MODEL_MATSEG.enable = False
 _C.MODEL_MATSEG.arch = 'resnet101'
@@ -140,10 +187,8 @@ _C.MODEL_MATSEG.if_albedo_pac_conv_DCN = False
 _C.MODEL_MATSEG.albedo_pac_conv_deform_layers = 'xin6'
 _C.MODEL_MATSEG.albedo_pac_conv_deform_layers_allowed = 'x6_xin1_xin2_xin3_xin4_xin5_xin6'
 
-
 _C.MODEL_MATSEG.albedo_pac_conv_mean_layers = 'xin6'
 _C.MODEL_MATSEG.albedo_pac_conv_mean_layers_allowed = 'x6_xin1_xin2_xin3_xin4_xin5_xin6'
-
 
 _C.MODEL_MATSEG.if_albedo_safenet = False
 _C.MODEL_MATSEG.if_albedo_safenet_keep_input = True
@@ -152,6 +197,8 @@ _C.MODEL_MATSEG.if_albedo_safenet_use_pacnet_affinity = False
 # _C.MODEL_MATSEG.if_albedo_safenet_mean = False # True: return mean of pooled tensors; False: return stacked
 _C.MODEL_MATSEG.albedo_safenet_affinity_layers = 'xin3'
 _C.MODEL_MATSEG.albedo_safenet_affinity_layers_allowed = 'x6_xin1_xin2_xin3_xin4_xin5_xin6'
+
+# ===== semantic segmentation
 
 _C.MODEL_SEMSEG = CN()
 _C.MODEL_SEMSEG.enable = False
@@ -167,29 +214,7 @@ _C.MODEL_SEMSEG.if_guide = False
 _C.MODEL_SEMSEG.load_pretrained_pth = False
 _C.MODEL_SEMSEG.pretrained_pth = 'exp/openrooms/pspnet50V3_2gpu_100k/model/train_epoch_23_tid_147000.pth'
 
-
-# _C.MODEL_SEMSEG.configs = ()
-
-_C.DATASET = CN()
-_C.DATASET.mini = False # load mini OR from SSD to enable faster dataloading for debugging purposes etc.
-_C.DATASET.dataset_name = 'openrooms'
-_C.DATASET.dataset_path = ''
-_C.DATASET.dataset_path_local = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms'
-_C.DATASET.dataset_path_cluster = '/siggraphasia20dataset/code/Routine/DatasetCreation/'
-_C.DATASET.layout_emitter_path = ''
-_C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-OR45_total3D_train_test_data'
-_C.DATASET.layout_emitter_path_cluster = ''
-_C.DATASET.png_path = ''
-_C.DATASET.png_path_local = '/data/ruizhu/OR-pngs'
-_C.DATASET.png_path_cluster = ''
-_C.DATASET.dataset_list = 'data/openrooms/list_ORfull/list'
-_C.DATASET.dataset_path_mini = '/data/ruizhu/openrooms_mini'
-_C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini/list'
-
-# _C.DATASET.batch_size = 16
-_C.DATASET.num_workers = 8
-_C.DATASET.if_val_dist = True
-# _C.DATASET.if_hdr = False
+# ===== solver
 
 _C.SOLVER = CN()
 _C.SOLVER.method = 'adam'

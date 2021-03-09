@@ -36,6 +36,10 @@ def green(text):
 def print_green(text):
     print(green(text))
 
+def yellow(text):
+    coloredd = colored(text, 'blue', 'on_yellow')
+    return coloredd
+
 # Model
 def magenta(text):
     coloredd = colored(text, 'white', 'on_magenta')

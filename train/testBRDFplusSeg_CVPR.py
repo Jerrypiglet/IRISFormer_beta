@@ -45,7 +45,7 @@ from utils.comm import synchronize, get_rank
 from utils.utils_training import get_optimizer, freeze_bn_in_module
 from utils.bin_mean_shift import Bin_Mean_Shift
 
-from train_funcs_joint import get_input_dict_joint, val_epoch_joint, vis_val_epoch_joint, forward_joint, get_time_meters_joint
+from train_funcs_joint import get_labels_dict_joint, val_epoch_joint, vis_val_epoch_joint, forward_joint, get_time_meters_joint
 
 from utils.logger import setup_logger, Logger, printer
 from utils.global_paths import SUMMARY_PATH, SUMMARY_VIS_PATH, CKPT_PATH
@@ -486,7 +486,7 @@ if opt.if_val and not opt.test_real:
 #             continue
 
 #         # ======= Load data from cpu to gpu
-#         input_dict = get_input_dict_joint(data_batch, opt)
+#         input_dict = get_labels_dict_joint(data_batch, opt)
 
 #         time_meters['data_to_gpu'].update(time.time() - ts_iter_start)
 #         time_meters['ts'] = time.time()
@@ -562,7 +562,7 @@ if opt.if_val and not opt.test_real:
 #             if opt.is_master and tid % 100 == 0:
 #                 usage_ratio = print_gpu_usage(handle, logger)
 #                 writer.add_scalar('training/GPU_usage_ratio', usage_ratio, tid)
-#                 writer.add_scalar('training/batch_size_per_gpu', len(data_batch['imPath']), tid)
+#                 writer.add_scalar('training/batch_size_per_gpu', len(data_batch['image_path']), tid)
 #                 writer.add_scalar('training/gpus', opt.num_gpus, tid)
 
 #         # if opt.is_master and tid % 100 == 0:

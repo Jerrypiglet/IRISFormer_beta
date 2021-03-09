@@ -6,6 +6,67 @@ parentdir = os.path.dirname(currentdir)
 sys.path.insert(0,parentdir) 
 # print(sys.path)
 from utils.utils_total3D.utils_OR_geo import isect_line_plane_v3
+import torch
+
+# ======= total3d
+
+def get_rotation_matix_result(bins_tensor, pitch_cls_gt, pitch_reg_result, roll_cls_gt, roll_reg_result):
+    '''
+    get rotation matrix from predicted camera pitch, roll angles.
+    '''
+
+    pitch_result = torch.gather(pitch_reg_result, 1,
+                              pitch_cls_gt.view(pitch_cls_gt.size(0), 1).expand(pitch_cls_gt.size(0), 1)).squeeze(1)
+    roll_result = torch.gather(roll_reg_result, 1,
+                               roll_cls_gt.view(roll_cls_gt.size(0), 1).expand(roll_cls_gt.size(0), 1)).squeeze(1)
+    pitch = num_from_bins(bins_tensor['pitch_bin'], pitch_cls_gt, pitch_result)
+    roll = num_from_bins(bins_tensor['roll_bin'], roll_cls_gt, roll_result)
+    cam_R = R_from_yaw_pitch_roll(torch.zeros_like(pitch), pitch, roll)
+    return cam_R
+
+def get_rotation_matrix_gt(bins_tensor, pitch_cls_gt, pitch_reg_gt, roll_cls_gt, roll_reg_gt):
+    '''
+    get rotation matrix from predicted camera pitch, roll angles.
+    '''
+    pitch = num_from_bins(bins_tensor['pitch_bin'], pitch_cls_gt, pitch_reg_gt)
+    roll = num_from_bins(bins_tensor['roll_bin'], roll_cls_gt, roll_reg_gt)
+    r_ex = R_from_yaw_pitch_roll(torch.zeros_like(pitch), pitch, roll)
+    return r_ex
+
+def num_from_bins(bins, cls, reg):
+    """
+    :param bins: b x 2 tensors
+    :param cls: b long tensors
+    :param reg: b tensors
+    :return: bin_center: b tensors
+    """
+    bin_width = (bins[0][1] - bins[0][0])
+    bin_center = (bins[cls, 0] + bins[cls, 1]) / 2
+    return bin_center + reg * bin_width
+
+def R_from_yaw_pitch_roll(yaw, pitch, roll):
+    '''
+    get rotation matrix from predicted camera yaw, pitch, roll angles.
+    :param yaw: batch_size x 1 tensor
+    :param pitch: batch_size x 1 tensor
+    :param roll: batch_size x 1 tensor
+    :return: camera rotation matrix
+    '''
+    n = yaw.size(0)
+    R = torch.zeros((n, 3, 3), device=yaw.device)
+    R[:, 0, 0] = torch.cos(yaw) * torch.cos(pitch)
+    R[:, 0, 1] = torch.sin(yaw) * torch.sin(roll) - torch.cos(yaw) * torch.cos(roll) * torch.sin(pitch)
+    R[:, 0, 2] = torch.cos(roll) * torch.sin(yaw) + torch.cos(yaw) * torch.sin(pitch) * torch.sin(roll)
+    R[:, 1, 0] = torch.sin(pitch)
+    R[:, 1, 1] = torch.cos(pitch) * torch.cos(roll)
+    R[:, 1, 2] = - torch.cos(pitch) * torch.sin(roll)
+    R[:, 2, 0] = - torch.cos(pitch) * torch.sin(yaw)
+    R[:, 2, 1] = torch.cos(yaw) * torch.sin(roll) + torch.cos(roll) * torch.sin(yaw) * torch.sin(pitch)
+    R[:, 2, 2] = torch.cos(yaw) * torch.cos(roll) - torch.sin(yaw) * torch.sin(pitch) * torch.sin(roll)
+
+    return R
+
+# ======= Rui
 
 def read_cam_params(camFile):
     assert osp.isfile(str(camFile))

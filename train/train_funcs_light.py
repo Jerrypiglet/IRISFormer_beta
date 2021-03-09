@@ -6,14 +6,14 @@ from tqdm import tqdm
 import statistics
 import torchvision.utils as vutils
 
-from train_funcs_brdf import get_input_dict_brdf
+from train_funcs_brdf import get_labels_dict_brdf
 
-def get_input_dict_light(data_batch, opt, list_from_brdf=None, return_inputBatch_as_list=True):
+def get_labels_dict_light(data_batch, opt, list_from_brdf=None, return_input_batch_as_list=True):
 
     if list_from_brdf is None:
-        inputBatch, input_dict, preBatchDict = get_input_dict_brdf(data_batch, opt, return_inputBatch_as_list=True)
+        input_batch, input_dict, preBatchDict = get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=True)
     else:
-        inputBatch, input_dict, preBatchDict = list_from_brdf
+        input_batch, input_dict, preBatchDict = list_from_brdf
         
     extra_dict = {}
 
@@ -48,7 +48,7 @@ def get_input_dict_light(data_batch, opt, list_from_brdf=None, return_inputBatch
 
             renderedImBatch = diffusePreBatch + specularPreBatch
 
-            inputBatch += [diffusePreBatch, specularPreBatch]
+            input_batch += [diffusePreBatch, specularPreBatch]
 
             preBatchDict.update({'diffusePreBatch': diffusePreBatch, 'specularPreBatch': specularPreBatch})
             preBatchDict['renderedImBatch'] = renderedImBatch
@@ -58,10 +58,10 @@ def get_input_dict_light(data_batch, opt, list_from_brdf=None, return_inputBatch
             input_dict['envmapsPreBatch'] = envmapsPreBatch
 
 
-    if not return_inputBatch_as_list:
-        inputBatch = torch.cat(inputBatch, dim=1)
+    if not return_input_batch_as_list:
+        input_batch = torch.cat(input_batch, dim=1)
 
-    return inputBatch, input_dict, preBatchDict, extra_dict
+    return input_batch, input_dict, preBatchDict, extra_dict
 
 def postprocess_light(input_dict, output_dict, loss_dict, opt, time_meters):
     # Compute the recontructed error
@@ -122,7 +122,7 @@ def postprocess_light(input_dict, output_dict, loss_dict, opt, time_meters):
 
 #     albedoPred, normalPred, roughPred, depthPred = output_dict['albedoPred'], output_dict['normalPred'], output_dict['roughPred'], output_dict['depthPred']
 #     # # Initial Prediction
-#     # x1, x2, x3, x4, x5, x6 = model['encoder'](inputBatch)
+#     # x1, x2, x3, x4, x5, x6 = model['encoder'](input_batch)
 #     # albedoPred = 0.5 * (model['albedoDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6) + 1)
 #     # normalPred = model['normalDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6)
 #     # roughPred = model['roughDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6)
@@ -193,9 +193,9 @@ def postprocess_light(input_dict, output_dict, loss_dict, opt, time_meters):
 #     loss_dict = {'loss_albedo': [], 'loss_normal': [], 'loss_rough': [], 'loss_depth': []}
 #     for i, data_batch in tqdm(enumerate(brdfLoaderVal)):
         
-#         inputBatch, input_dict, preBatchDict = get_input_dict_brdf(data_batch, opt)
+#         input_batch, input_dict, preBatchDict = get_labels_dict_brdf(data_batch, opt)
 
-#         errors = train_step(inputBatch, input_dict, preBatchDict, optimizer, model, opt)
+#         errors = train_step(input_batch, input_dict, preBatchDict, optimizer, model, opt)
 #         loss_dict['loss_albedo'].append(errors['albedoErrs'][0].item())
 #         loss_dict['loss_normal'].append(errors['normalErrs'][0].item())
 #         loss_dict['loss_rough'].append(errors['roughErrs'][0].item())

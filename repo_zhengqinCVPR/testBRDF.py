@@ -204,13 +204,13 @@ for i, dataBatch in enumerate(brdfLoader):
 
     # Initial Prediction
     if opt.cascadeLevel == 0:
-        inputBatch = imBatch
+        input_batch = imBatch
     elif opt.cascadeLevel > 0:
-        inputBatch = torch.cat([imBatch, albedoPreBatch,
+        input_batch = torch.cat([imBatch, albedoPreBatch,
             normalPreBatch, roughPreBatch, depthPreBatch,
             diffusePreBatch, specularPreBatch ], dim=1 )
 
-    x1, x2, x3, x4, x5, x6 = encoder(inputBatch )
+    x1, x2, x3, x4, x5, x6 = encoder(input_batch )
     albedoPred = 0.5 * (albedoDecoder(imBatch, x1, x2, x3, x4, x5, x6) + 1)
     normalPred = normalDecoder(imBatch, x1, x2, x3, x4, x5, x6)
     roughPred = roughDecoder(imBatch, x1, x2, x3, x4, x5, x6)

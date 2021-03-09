@@ -14,10 +14,10 @@ from utils.utils_vis import vis_index_map, reindex_output_map, colorize
 from utils.utils_training import reduce_loss_dict, time_meters_to_string
 from utils.utils_misc import *
 
-def get_input_dict_semseg(data_batch, opt):
+def get_labels_dict_semseg(data_batch, opt):
     input_dict = {}
 
-    input_dict['im_paths'] = data_batch['imPath']
+    input_dict['im_paths'] = data_batch['image_path']
     # if opt.if_hdr_input_mat_seg:
     #     im_cpu = data_batch['im']
     # else:

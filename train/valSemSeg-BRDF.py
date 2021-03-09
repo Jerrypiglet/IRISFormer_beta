@@ -20,7 +20,7 @@ print(sys.path)
 # from dataset_openrooms import openrooms
 from dataset_openroomsV2 import openrooms
 # from models_def.model_semseg_brdf import SemSeg_BRDF
-from train_funcs_joint import get_input_dict_joint, val_epoch_joint, vis_val_epoch_joint, forward_joint, get_time_meters_joint
+from train_funcs_joint import get_labels_dict_joint, val_epoch_joint, vis_val_epoch_joint, forward_joint, get_time_meters_joint
 
 from torch.nn.parallel import DistributedDataParallel as DDP
 from utils.config import cfg
@@ -122,7 +122,7 @@ opt.semseg_configs = semseg_configs
 
 opt.pwdpath = pwdpath
 
-from models_def.model_joint_all import SemSeg_MatSeg_BRDF as the_model
+from models_def.model_joint_all import Model_Joint as the_model
 
 # >>>>>>>>>>>>> A bunch of modularised set-ups
 # opt.gpuId = opt.deviceIds[0]

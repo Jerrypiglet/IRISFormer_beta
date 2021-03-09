@@ -101,14 +101,14 @@ def wrapperBRDFLight(dataBatch, opt,
     ########################################################
     # Build the cascade network architecture #
     if opt.cascadeLevel == 0:
-        inputBatch = imBatch
+        input_batch = imBatch
     elif opt.cascadeLevel > 0:
-        inputBatch = torch.cat([imBatch, albedoPreBatch,
+        input_batch = torch.cat([imBatch, albedoPreBatch,
             normalPreBatch, roughPreBatch, depthPreBatch,
             diffusePreBatch, specularPreBatch ], dim=1)
 
     # Initial Prediction
-    x1, x2, x3, x4, x5, x6 = encoder(inputBatch )
+    x1, x2, x3, x4, x5, x6 = encoder(input_batch )
     albedoPred = 0.5 * (albedoDecoder(imBatch, x1, x2, x3, x4, x5, x6) + 1)
     normalPred = normalDecoder(imBatch, x1, x2, x3, x4, x5, x6)
     roughPred = roughDecoder(imBatch, x1, x2, x3, x4, x5, x6)
@@ -152,13 +152,13 @@ def wrapperBRDFLight(dataBatch, opt,
     roughPredLarge = F.interpolate(roughPred, [480,640], mode='bilinear')
     depthPredLarge = F.interpolate(depthPred, [480, 640], mode='bilinear')
 
-    inputBatch = torch.cat([imBatchLarge, albedoPredLarge,
+    input_batch = torch.cat([imBatchLarge, albedoPredLarge,
         0.5*(normalPredLarge+1), 0.5 * (roughPredLarge+1), depthPredLarge ], dim=1 )
 
     if opt.cascadeLevel == 0:
-        x1, x2, x3, x4, x5, x6 = lightEncoder(inputBatch.detach() )
+        x1, x2, x3, x4, x5, x6 = lightEncoder(input_batch.detach() )
     elif opt.cascadeLevel > 0:
-        x1, x2, x3, x4, x5, x6 = lightEncoder(inputBatch.detach(), envmapsPreBatch.detach() )
+        x1, x2, x3, x4, x5, x6 = lightEncoder(input_batch.detach(), envmapsPreBatch.detach() )
 
     # Prediction
     axisPred = axisDecoder(x1, x2, x3, x4, x5, x6, envmapsBatch )

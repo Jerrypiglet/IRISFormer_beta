@@ -155,8 +155,8 @@ class openrooms(data.Dataset):
             
         # ====== layout, emitters =====
         if self.opt.cfg.DATA.load_layout_emitter_gt:
-            self.OR = self.cfg.MODEL_LAYOUT_EMITTER.OR
-            self.grid_size = self.cfg.MODEL_LAYOUT_EMITTER.grid_size
+            self.OR = self.cfg.MODEL_LAYOUT_EMITTER.data.OR
+            self.grid_size = self.cfg.MODEL_LAYOUT_EMITTER.emitter.grid_size
             self.OR_classes = OR4XCLASSES_dict[self.OR]
             # self.PNG_data_root = Path('/newfoundland2/ruizhu/siggraphasia20dataset/layout_labels_V4-ORfull/') if not opt.if_cluster else self.data_root
             # self.layout_emitter_im_width, self.layout_emitter_im_height = WIDTH_PATCH, HEIGHT_PATCH
@@ -197,6 +197,7 @@ class openrooms(data.Dataset):
             im_trainval_RGB = self.transforms(im_RGB_uint8) # not necessarily \in [0., 1.] [!!!!]
             # print(type(im_trainval_RGB), torch.max(im_trainval_RGB), torch.min(im_trainval_RGB), torch.mean(im_trainval_RGB))
             im_SDR_RGB = im_RGB_uint8.astype(np.float32) / 255.
+            im_trainval = im_SDR_RGB
 
             batch_dict = {'image_path': str(png_image_path)}
 
@@ -205,8 +206,8 @@ class openrooms(data.Dataset):
             # Read Image
             im_ori = self.loadHdr(hdr_image_path)
             # Random scale the image
-            im, scale = self.scaleHdr(im_ori, seg)
-            im_trainval_RGB = np.clip(im**(1.0/2.2), 0., 1.)
+            im_trainval, scale = self.scaleHdr(im_ori, seg)
+            im_trainval_RGB = np.clip(im_trainval**(1.0/2.2), 0., 1.)
 
             # == no random scaling:
             im_SDR_fixedscale, _ = self.scaleHdr(im_ori, seg, forced_fixed_scale=True)
@@ -216,7 +217,7 @@ class openrooms(data.Dataset):
             batch_dict = {'image_path': str(hdr_image_path)}
         
         # batch_dict = {'im': torch.from_numpy(im), 'image_path': str(image_path)}
-        batch_dict.update({'image_transformed_fixed': image_transformed_fixed, 'im_trainval_RGB': im_trainval_RGB, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
+        batch_dict.update({'image_transformed_fixed': image_transformed_fixed, 'im_trainval': torch.from_numpy(im_trainval), 'im_trainval_RGB': im_trainval_RGB, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
 
         # ====== BRDF =====
         image_path = batch_dict['image_path']
@@ -730,7 +731,6 @@ def collate_fn_OR(batch):
                 collated_batch[key] = default_collate([elem[key] for elem in batch])
             except TypeError:
                 print('[!!!!] Type error in collate_fn_OR: ', key)
-
 
     return collated_batch
 

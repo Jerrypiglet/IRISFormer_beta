@@ -18,7 +18,7 @@ sys.path.insert(0, str(PACNET_PATH))
 print(sys.path)
 
 from dataset_openroomsV4_total3d import openrooms, collate_fn_OR
-from train_funcs_joint import get_input_dict_joint, val_epoch_joint, vis_val_epoch_joint, forward_joint, get_time_meters_joint
+from train_funcs_joint_all import get_labels_dict_joint, val_epoch_joint, vis_val_epoch_joint, forward_joint, get_time_meters_joint
 
 from torch.nn.parallel import DistributedDataParallel as DDP
 from utils.config import cfg
@@ -106,18 +106,7 @@ os.environ['MASETER_PORT'] = str(find_free_port())
 cfg.merge_from_file(opt.config_file)
 # cfg.merge_from_list(opt.params)
 cfg = utils_config.merge_cfg_from_list(cfg, opt.params)
-
 opt.cfg = cfg
-set_up_envs(opt)
-opt.cfg.freeze()
-
-semseg_configs = utils_config.load_cfg_from_cfg_file(os.path.join(pwdpath, opt.cfg.MODEL_SEMSEG.config_file))
-semseg_configs = utils_config.merge_cfg_from_list(semseg_configs, opt.params)
-opt.semseg_configs = semseg_configs
-
-opt.pwdpath = pwdpath
-
-from models_def.model_joint_all import SemSeg_MatSeg_BRDF as the_model
 
 # >>>>>>>>>>>>> A bunch of modularised set-ups
 # opt.gpuId = opt.deviceIds[0]
@@ -129,9 +118,22 @@ set_up_folders(opt)
 
 from utils.utils_envs import set_up_logger
 logger, writer = set_up_logger(opt)
+
+opt.logger = logger
+set_up_envs(opt)
+opt.cfg.freeze()
 # <<<<<<<<<<<<< A bunch of modularised set-ups
 
-# >>>> MODEL AND OPTIMIZER
+semseg_configs = utils_config.load_cfg_from_cfg_file(os.path.join(pwdpath, opt.cfg.MODEL_SEMSEG.config_file))
+semseg_configs = utils_config.merge_cfg_from_list(semseg_configs, opt.params)
+opt.semseg_configs = semseg_configs
+
+opt.pwdpath = pwdpath
+
+from models_def.model_joint_all import Model_Joint as the_model
+
+
+# >>>>>>>>>>>>> MODEL AND OPTIMIZER
 # build model
 # model = MatSeg_BRDF(opt, logger)
 model = the_model(opt, logger)
@@ -158,8 +160,7 @@ if opt.distributed:
 
 logger.info(red('Optimizer: '+type(optimizer).__name__))
 scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=50, cooldown=0, verbose=True, threshold_mode='rel', threshold=0.01)
-
-# <<<< MODEL AND OPTIMIZER
+# <<<<<<<<<<<<< MODEL AND OPTIMIZER
 
 ENABLE_MATSEG = opt.cfg.MODEL_MATSEG.enable
 opt.bin_mean_shift_device = opt.device if opt.cfg.MODEL_MATSEG.embed_dims <= 4 else 'cpu'
@@ -175,7 +176,7 @@ else:
         device=opt.bin_mean_shift_device, invalid_index=opt.invalid_index, if_freeze=opt.cfg.MODEL_MATSEG.if_freeze)
 opt.bin_mean_shift = bin_mean_shift
 
-# >>>> DATASET
+# >>>>>>>>>>>>> DATASET
 from utils.utils_semseg import get_transform_semseg, get_transform_matseg
 transforms_train_semseg = get_transform_semseg('train', opt)
 transforms_val_semseg = get_transform_semseg('val', opt)
@@ -239,12 +240,12 @@ brdf_loader_val_vis = make_data_loader(
     # collate_fn=my_collate_seq_dataset if opt.if_padding else my_collate_seq_dataset_noPadding,
     if_distributed_override=False
 )
-# <<<< DATASET
+# <<<<<<<<<<<<< DATASET
 
 from utils.utils_envs import set_up_checkpointing
 checkpointer, tid_start, epoch_start = set_up_checkpointing(opt, model, optimizer, scheduler, logger)
 
-# >>>> TRANING
+# >>>>>>>>>>>>> TRANING
 
 tid = tid_start
 albedoErrsNpList = np.ones( [1, 1], dtype = np.float32 )
@@ -322,14 +323,14 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
 
 
         # ======= Load data from cpu to gpu
-        input_dict = get_input_dict_joint(data_batch, opt)
+        labels_dict = get_labels_dict_joint(data_batch, opt)
 
         time_meters['data_to_gpu'].update(time.time() - ts_iter_start)
         time_meters['ts'] = time.time()
 
         # ======= Forward
         optimizer.zero_grad()
-        output_dict, loss_dict = forward_joint(input_dict, model, opt, time_meters)
+        output_dict, loss_dict = forward_joint(labels_dict, model, opt, time_meters)
         synchronize()
         
         # print('=======loss_dict', loss_dict)
@@ -372,6 +373,14 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
             loss_keys_backward.append('loss_light-ALL')
             loss_keys_print.append('loss_light-ALL')
 
+        if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
+            if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
+                loss_keys_backward.append('loss_layout-ALL')
+                loss_keys_print.append('loss_layout-ALL')
+            if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
+                loss_keys_backward.append('loss_emitter-ALL')
+                loss_keys_print.append('loss_emitter-ALL')
+
         loss = sum([loss_dict[loss_key] for loss_key in loss_keys_backward])
         if opt.is_master and tid % 20 == 0:
             print('----loss_dict', loss_dict.keys())
@@ -400,7 +409,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
             if opt.is_master and tid % 100 == 0:
                 usage_ratio = print_gpu_usage(handle, logger)
                 writer.add_scalar('training/GPU_usage_ratio', usage_ratio, tid)
-                writer.add_scalar('training/batch_size_per_gpu', len(data_batch['imPath']), tid)
+                writer.add_scalar('training/batch_size_per_gpu', len(data_batch['image_path']), tid)
                 writer.add_scalar('training/gpus', opt.num_gpus, tid)
         # if opt.is_master:
 
@@ -413,17 +422,17 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
                         writer.add_image('TRAIN_im_trainval_RGB_mask_pooled_mean/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), im_trainval_RGB_mask_pooled_mean, tid, dataformats='HWC')
                         logger.info('Added debug pooling sample')
         
-        # ===== Logging training summaries
+        # ===== Logging summaries of training samples
         if tid % 2000 == 0:
-            for sample_idx, (im_single, im_trainval_RGB, im_path) in enumerate(zip(data_batch['im'], data_batch['im_trainval_RGB'], data_batch['imPath'])):
-                im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
+            for sample_idx, (im_single, im_trainval_RGB, im_path) in enumerate(zip(data_batch['im_trainval'], data_batch['im_trainval_RGB'], data_batch['image_path'])):
+                # im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
                 im_trainval_RGB = im_trainval_RGB.numpy().squeeze().transpose(1, 2, 0)
                 if opt.is_master:
-                    writer.add_image('TRAIN_im/%d'%sample_idx, im_single, tid, dataformats='HWC')
+                    # writer.add_image('TRAIN_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
                     writer.add_image('TRAIN_im_trainval_RGB/%d'%sample_idx, im_trainval_RGB, tid, dataformats='HWC')
                     writer.add_text('TRAIN_image_name/%d'%sample_idx, im_path, tid)
             if opt.cfg.DATA.load_matseg_gt:
-                for sample_idx, (im_single, mat_aggre_map) in enumerate(zip(data_batch['im_matseg_transformed_trainval'], input_dict['mat_aggre_map_cpu'])):
+                for sample_idx, (im_single, mat_aggre_map) in enumerate(zip(data_batch['im_matseg_transformed_trainval'], labels_dict['mat_aggre_map_cpu'])):
                     im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
                     mat_aggre_map = mat_aggre_map.numpy().squeeze()
                     if opt.is_master:

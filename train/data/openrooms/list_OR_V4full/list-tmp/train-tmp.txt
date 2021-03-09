@@ -1,0 +1,16 @@
+scene0509_00 1 mainDiffLight_xml1/scene0509_00/im_1.hdr main_xml1/scene0509_00/imsemLabel_1.npy VirtualObjectInsertion/data/demo0/im.png
+scene0509_00 1 mainDiffLight_xml1/scene0509_00/im_1.hdr main_xml1/scene0509_00/imsemLabel_1.npy VirtualObjectInsertion/data/demo1/im.png
+scene0509_00 1 mainDiffLight_xml1/scene0509_00/im_1.hdr main_xml1/scene0509_00/imsemLabel_1.npy VirtualObjectInsertion/data/demo2/im.png
+scene0509_00 1 mainDiffLight_xml1/scene0509_00/im_1.hdr main_xml1/scene0509_00/imsemLabel_1.npy VirtualObjectInsertion/data/demo3/im.png
+scene0509_00 1 mainDiffLight_xml1/scene0509_00/im_1.hdr main_xml1/scene0509_00/imsemLabel_1.npy VirtualObjectInsertion/data/Example1/im.png
+scene0509_00 1 mainDiffLight_xml1/scene0509_00/im_1.hdr main_xml1/scene0509_00/imsemLabel_1.npy VirtualObjectInsertion/data/Example2/im.png
+scene0509_00 1 mainDiffLight_xml1/scene0509_00/im_1.hdr main_xml1/scene0509_00/imsemLabel_1.npy VirtualObjectInsertion/data/Example3/im.png
+scene0509_00 1 mainDiffLight_xml1/scene0509_00/im_1.hdr main_xml1/scene0509_00/imsemLabel_1.npy VirtualObjectInsertion/data/Example4/im.png
+scene0509_00 1 mainDiffLight_xml1/scene0509_00/im_1.hdr main_xml1/scene0509_00/imsemLabel_1.npy VirtualObjectInsertion/data/Example5/im.png
+scene0509_00 1 mainDiffLight_xml1/scene0509_00/im_1.hdr main_xml1/scene0509_00/imsemLabel_1.npy VirtualObjectInsertion/data/Example6/im.png
+scene0509_00 1 mainDiffLight_xml1/scene0509_00/im_1.hdr main_xml1/scene0509_00/imsemLabel_1.npy VirtualObjectInsertion/data/Example7/im.png
+scene0509_00 1 mainDiffLight_xml1/scene0509_00/im_1.hdr main_xml1/scene0509_00/imsemLabel_1.npy VirtualObjectInsertion/data/Example8/im.png
+scene0509_00 1 mainDiffLight_xml1/scene0509_00/im_1.hdr main_xml1/scene0509_00/imsemLabel_1.npy VirtualObjectInsertion/data/Example9/im.png
+scene0509_00 1 mainDiffLight_xml1/scene0509_00/im_1.hdr main_xml1/scene0509_00/imsemLabel_1.npy VirtualObjectInsertion/data/Example10/im.png
+scene0509_00 1 mainDiffLight_xml1/scene0509_00/im_1.hdr main_xml1/scene0509_00/imsemLabel_1.npy VirtualObjectInsertion/data/Example11/im.png
+scene0509_00 1 mainDiffLight_xml1/scene0509_00/im_1.hdr main_xml1/scene0509_00/imsemLabel_1.npy VirtualObjectInsertion/data/Example12/im.png

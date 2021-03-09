@@ -13,10 +13,11 @@ import models_def.models_brdf_pac_pool as models_brdf_pac_pool
 import models_def.models_brdf_pac_conv as models_brdf_pac_conv
 import models_def.models_brdf_safenet as models_brdf_safenet
 import models_def.models_light as models_light 
+import models_def.models_layout_emitter as models_layout_emitter
 
-class SemSeg_MatSeg_BRDF(nn.Module):
+class Model_Joint(nn.Module):
     def __init__(self, opt, logger):
-        super(SemSeg_MatSeg_BRDF, self).__init__()
+        super(Model_Joint, self).__init__()
         self.opt = opt
         self.cfg = opt.cfg
         self.logger = logger
@@ -112,15 +113,14 @@ class SemSeg_MatSeg_BRDF(nn.Module):
                     self.turn_off_names(['BRDF_Net'])
                     freeze_bn_in_module(self.BRDF_Net)
 
+        if self.cfg.MODEL_LAYOUT_EMITTER.enable:
+            self.LAYOUT_EMITTER_NET = models_layout_emitter.decoder_layout_emitter(opt)
+
 
     def forward(self, input_dict):
         return_dict = {}
         input_dict_guide = None
         if self.cfg.MODEL_MATSEG.enable:
-            # if self.cfg.MODEL_MATSEG.if_freeze:
-            #     with torch.no_grad():
-            #         return_dict_matseg = self.forward_matseg(input_dict) # {'prob': prob, 'embedding': embedding, 'feats_mat_seg_dict': feats_mat_seg_dict}
-            # else:
             return_dict_matseg = self.forward_matseg(input_dict) # {'prob': prob, 'embedding': embedding, 'feats_mat_seg_dict': feats_mat_seg_dict}
             input_dict_guide_matseg = return_dict_matseg['feats_matseg_dict']
             input_dict_guide_matseg['guide_from'] = 'matseg'
@@ -131,10 +131,6 @@ class SemSeg_MatSeg_BRDF(nn.Module):
         return_dict.update(return_dict_matseg)
 
         if self.cfg.MODEL_SEMSEG.enable:
-            # if self.cfg.MODEL_SEMSEG.if_freeze:
-            #     with torch.no_grad():
-            #         return_dict_semseg = self.forward_semseg(input_dict) # {'prob': prob, 'embedding': embedding, 'feats_mat_seg_dict': feats_mat_seg_dict}
-            # else:
             return_dict_semseg = self.forward_semseg(input_dict) # {'prob': prob, 'embedding': embedding, 'feats_mat_seg_dict': feats_mat_seg_dict}
 
             input_dict_guide_semseg = return_dict_semseg['feats_semseg_dict']
@@ -152,7 +148,6 @@ class SemSeg_MatSeg_BRDF(nn.Module):
             if (self.cfg.MODEL_MATSEG.if_albedo_pooling and self.cfg.MODEL_MATSEG.albedo_pooling_from == 'pred') \
                 or self.cfg.MODEL_MATSEG.use_pred_as_input \
                 or self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool or self.cfg.MODEL_MATSEG.if_albedo_pac_conv or self.cfg.MODEL_MATSEG.if_albedo_safenet:
-                # print(return_dict_matseg.keys()) # dict_keys(['logit', 'embedding', 'feats_matseg_dict'])
                 input_dict_extra.update({'return_dict_matseg': return_dict_matseg})
 
             return_dict_brdf = self.forward_brdf(input_dict, input_dict_extra=input_dict_extra)
@@ -165,6 +160,14 @@ class SemSeg_MatSeg_BRDF(nn.Module):
         else:
             return_dict_light = {}
         return_dict.update(return_dict_light)
+
+        if self.cfg.MODEL_LAYOUT_EMITTER.enable:
+            encoder_outputs = return_dict_brdf['encoder_outputs']
+            return_dict_layout_emitter = self.LAYOUT_EMITTER_NET(input_feats_dict=encoder_outputs)
+        else:
+            return_dict_layout_emitter = {}
+        # print(return_dict_layout_emitter.keys()) # dict_keys(['layout_est_result', 'emitter_est_result'])
+        return_dict.update(return_dict_layout_emitter)
         
         return return_dict
 
@@ -222,12 +225,7 @@ class SemSeg_MatSeg_BRDF(nn.Module):
             input_dict_guide = input_dict_extra['input_dict_guide']
         else:
             input_dict_guide = None
-        # x1, x2, x3, x4, x5, x6 = self.BRDF_Net['encoder'](input_dict['input_batch_brdf']) # [16, 64, 96, 128], [16, 128, 48, 64], [16, 256, 24, 32], [16, 256, 12, 16], [16, 512, 6, 8]
-        # albedoPred = 0.5 * (self.BRDF_Net['albedoDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_guide=input_dict_guide) + 1)
 
-            # Initial Prediction
-        # print(input_dict['input_batch_brdf'].shape, input_dict['semseg_label'].unsqueeze(1).shape)
-        # print(input_dict['input_batch_brdf'].device, input_dict['semseg_label'].unsqueeze(1).device)
         input_list = [input_dict['input_batch_brdf']]
 
         if self.opt.cfg.MODEL_SEMSEG.use_as_input:
@@ -240,7 +238,7 @@ class SemSeg_MatSeg_BRDF(nn.Module):
             mat_notlight_mask_cpu = input_dict['mat_notlight_mask_cpu']
             _, _, predict_segmentation = logit_embedding_to_instance(mat_notlight_mask_cpu, matseg_logits, matseg_embeddings, self.opt)
             input_list.append(predict_segmentation.float().unsqueeze(1) / float(self.opt.cfg.DATA.semseg_classes))
-
+        
         input_tensor = torch.cat(input_list, 1)
         #     # a = input_dict['semseg_label'].float().unsqueeze(1) / float(self.opt.cfg.DATA.semseg_classes)
         #     # print(torch.max(a), torch.min(a), torch.median(a))
@@ -249,7 +247,7 @@ class SemSeg_MatSeg_BRDF(nn.Module):
         #     input_tensor = input_dict['input_batch_brdf']
         x1, x2, x3, x4, x5, x6 = self.BRDF_Net['encoder'](input_tensor)
 
-        return_dict = {}
+        return_dict = {'encoder_outputs': {'x1': x1, 'x2': x2, 'x3': x3, 'x4': x4, 'x5': x5, 'x6': x6}}
         albedo_output = {}
 
         if self.cfg.MODEL_BRDF.enable_BRDF_decoders:
@@ -327,14 +325,14 @@ class SemSeg_MatSeg_BRDF(nn.Module):
         normalPredLarge = F.interpolate(return_dict_brdf['normalPred'], [480, 640], mode='bilinear')
         roughPredLarge = F.interpolate(return_dict_brdf['roughPred'], [480,640], mode='bilinear')
 
-        inputBatch = torch.cat([imBatchLarge, albedoPredLarge,
+        input_batch = torch.cat([imBatchLarge, albedoPredLarge,
             0.5*(normalPredLarge+1), 0.5 * (roughPredLarge+1), depthPredLarge ], dim=1 )
 
         if self.opt.cascadeLevel == 0:
-            x1, x2, x3, x4, x5, x6 = self.LIGHT_Net['lightEncoder'](inputBatch.detach() )
+            x1, x2, x3, x4, x5, x6 = self.LIGHT_Net['lightEncoder'](input_batch.detach() )
         else:
             assert self.opt.cascadeLevel > 0
-            x1, x2, x3, x4, x5, x6 = self.LIGHT_Net['lightEncoder'](inputBatch.detach(), input_dict['envmapsPreBatch'].detach() )
+            x1, x2, x3, x4, x5, x6 = self.LIGHT_Net['lightEncoder'](input_batch.detach(), input_dict['envmapsPreBatch'].detach() )
 
         # Prediction
         axisPred = self.LIGHT_Net['axisDecoder'](x1, x2, x3, x4, x5, x6, input_dict['envmapsBatch'] )

@@ -19,3 +19,5 @@ pickle5
 trimesh
 numba
 numpy-quaternion
+seaborn
+sympy

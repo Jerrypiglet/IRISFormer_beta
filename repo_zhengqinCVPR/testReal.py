@@ -354,8 +354,8 @@ for imName in imList:
     cLights = []
 
     ################# BRDF Prediction ######################
-    inputBatch = imBatches[0]
-    x1, x2, x3, x4, x5, x6 = encoders[0](inputBatch )
+    input_batch = imBatches[0]
+    x1, x2, x3, x4, x5, x6 = encoders[0](input_batch )
 
     albedoPred = 0.5 * (albedoDecoders[0](imBatches[0], x1, x2, x3, x4, x5, x6) + 1)
     normalPred = normalDecoders[0](imBatches[0], x1, x2, x3, x4, x5, x6)
@@ -392,9 +392,9 @@ for imName in imList:
         depthPredLarge = F.interpolate(depthPreds[0], [imBatchSmall.size(2) *
             4, imBatchSmall.size(3) * 4], mode='bilinear')
 
-        inputBatch = torch.cat([imBatchLarge, albedoPredLarge,
+        input_batch = torch.cat([imBatchLarge, albedoPredLarge,
             0.5*(normalPredLarge+1), 0.5*(roughPredLarge+1), depthPredLarge ], dim=1 )
-        x1, x2, x3, x4, x5, x6 = lightEncoders[0](inputBatch )
+        x1, x2, x3, x4, x5, x6 = lightEncoders[0](input_batch )
 
         # Prediction
         axisPred = axisDecoders[0](x1, x2, x3, x4, x5, x6, imBatchSmall )
@@ -444,11 +444,11 @@ for imName in imList:
         diffusePredLarge = F.interpolate(diffusePred, [newImHeight[1], newImWidth[1] ], mode='bilinear')
         specularPredLarge = F.interpolate(specularPred, [newImHeight[1], newImWidth[1] ], mode='bilinear')
 
-        inputBatch = torch.cat([imBatches[1], albedoPredLarge,
+        input_batch = torch.cat([imBatches[1], albedoPredLarge,
             0.5 * (normalPredLarge+1), 0.5*(roughPredLarge+1), depthPredLarge,
             diffusePredLarge, specularPredLarge], dim=1)
 
-        x1, x2, x3, x4, x5, x6 = encoders[1](inputBatch )
+        x1, x2, x3, x4, x5, x6 = encoders[1](input_batch )
         albedoPred = 0.5 * (albedoDecoders[1](imBatches[1], x1, x2, x3, x4, x5, x6) + 1)
         normalPred = normalDecoders[1](imBatches[1], x1, x2, x3, x4, x5, x6)
         roughPred = roughDecoders[1](imBatches[1], x1, x2, x3, x4, x5, x6 )
@@ -485,9 +485,9 @@ for imName in imList:
         depthPredLarge = F.interpolate(depthPreds[1], [imBatchSmall.size(2) *
             4, imBatchSmall.size(3) * 4], mode='bilinear')
 
-        inputBatch = torch.cat([imBatchLarge, albedoPredLarge,
+        input_batch = torch.cat([imBatchLarge, albedoPredLarge,
             0.5*(normalPredLarge+1), 0.5*(roughPredLarge+1), depthPredLarge ], dim=1 )
-        x1, x2, x3, x4, x5, x6 = lightEncoders[1](inputBatch, envmapsPred )
+        x1, x2, x3, x4, x5, x6 = lightEncoders[1](input_batch, envmapsPred )
 
         # Prediction
         axisPred = axisDecoders[1](x1, x2, x3, x4, x5, x6, imBatchSmall )

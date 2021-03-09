@@ -40,7 +40,7 @@ from utils.comm import synchronize, get_rank
 from utils.misc import AverageMeter, get_optimizer, get_datetime
 from utils.bin_mean_shift import Bin_Mean_Shift
 
-from train_funcs import get_input_dict_brdf, train_step
+from train_funcs import get_labels_dict_brdf, train_step
 from train_funcs_mat_seg import get_input_dict_mat_seg, forward_mat_seg, val_epoch_mat_seg
 
 from utils.logger import setup_logger, Logger, printer
@@ -541,9 +541,9 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
 
 
         ############# BRDF tmp
-        input_batch_brdf, input_dict_brdf, pre_batch_dict_brdf = get_input_dict_brdf(data_batch, opt)
+        input_batch_brdf, labels_dict_brdf, pre_batch_dict_brdf = get_labels_dict_brdf(data_batch, opt)
         x1, x2, x3, x4, x5, x6 = model['BRDF_Net']['encoder'](input_batch_brdf)
-        albedoPred = 0.5 * (model['BRDF_Net']['albedoDecoder'](input_dict_brdf['imBatch'], x1, x2, x3, x4, x5, x6) + 1)
+        albedoPred = 0.5 * (model['BRDF_Net']['albedoDecoder'](labels_dict_brdf['imBatch'], x1, x2, x3, x4, x5, x6) + 1)
 
         # break
 
@@ -635,16 +635,16 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
 
     #     if opt.cascadeLevel == 0:
     #         if opt.isMatMaskInput:
-    #             inputBatch = torch.cat([im_batch, matMaskBatch], dim=1)
+    #             input_batch = torch.cat([im_batch, matMaskBatch], dim=1)
     #         else:
-    #             inputBatch = im_batch
+    #             input_batch = im_batch
     #     elif opt.cascadeLevel > 0:
-    #         inputBatch = torch.cat([im_batch, albedoPreBatch,
+    #         input_batch = torch.cat([im_batch, albedoPreBatch,
     #             normalPreBatch, roughPreBatch, depthPreBatch,
     #             diffusePreBatch, specularPreBatch], dim=1)
 
     #     # Initial Prediction
-    #     x1, x2, x3, x4, x5, x6 = encoder(inputBatch )
+    #     x1, x2, x3, x4, x5, x6 = encoder(input_batch )
     #     albedoPred = 0.5 * (albedoDecoder(im_batch, x1, x2, x3, x4, x5, x6) + 1)
     #     normalPred = normalDecoder(im_batch, x1, x2, x3, x4, x5, x6)
     #     roughPred = roughDecoder(im_batch, x1, x2, x3, x4, x5, x6)

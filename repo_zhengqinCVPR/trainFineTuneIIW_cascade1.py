@@ -328,9 +328,9 @@ for epoch in list(range(opt.nepochFineTune, opt.nepoch) ):
         roughPredLarge = F.interpolate(roughPred, [480,640], mode='bilinear')
         depthPredLarge = F.interpolate(depthPred, [480, 640], mode='bilinear')
 
-        inputBatch = torch.cat([imBatchLarge, albedoPredLarge,
+        input_batch = torch.cat([imBatchLarge, albedoPredLarge,
             0.5*(normalPredLarge+1), 0.5*(roughPredLarge+1), depthPredLarge ], dim=1 )
-        x1, x2, x3, x4, x5, x6 = lightEncoder(inputBatch )
+        x1, x2, x3, x4, x5, x6 = lightEncoder(input_batch )
 
         # Prediction
         imBatchSmall = F.adaptive_avg_pool2d(imBatch, (opt.envRow, opt.envCol) )
@@ -473,9 +473,9 @@ for epoch in list(range(opt.nepochFineTune, opt.nepoch) ):
         roughPredLarge = F.interpolate(roughPred, [480,640], mode='bilinear')
         depthPredLarge = F.interpolate(depthPred, [480, 640], mode='bilinear')
 
-        inputBatch = torch.cat([imBatchLarge, albedoPredLarge,
+        input_batch = torch.cat([imBatchLarge, albedoPredLarge,
             0.5*(normalPredLarge+1), 0.5*(roughPredLarge+1), depthPredLarge ], dim=1 )
-        x1, x2, x3, x4, x5, x6 = lightEncoder(inputBatch )
+        x1, x2, x3, x4, x5, x6 = lightEncoder(input_batch )
 
         # Prediction
         imBatchSmall = F.adaptive_avg_pool2d(imBatch, (opt.envRow, opt.envCol) )

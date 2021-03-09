@@ -199,9 +199,9 @@ for epoch in list(range(opt.epochIdFineTune+1, opt.nepoch) ):
             continue
 
         
-        inputBatch, inputDict, preBatchDict = get_inputBatch(dataBatch, opt)
+        input_batch, inputDict, preBatchDict = get_input_batch(dataBatch, opt)
 
-        errors = train_step(inputBatch, inputDict, preBatchDict, optimizer, model, opt)
+        errors = train_step(input_batch, inputDict, preBatchDict, optimizer, model, opt)
 
         # Output training error
         utils.writeErrToScreen('albedo', errors['albedoErrs'], epoch, j )

@@ -50,9 +50,9 @@ class encoderLight(nn.Module ):
         self.conv6 = nn.Conv2d(in_channels=512, out_channels=1024, kernel_size=3, stride=1, bias=True)
         self.gn6 = nn.GroupNorm(num_groups=64, num_channels=1024)
 
-    def forward(self, inputBatch, envs = None):
+    def forward(self, input_batch, envs = None):
 
-        input1 = self.preProcess(inputBatch )
+        input1 = self.preProcess(input_batch )
         input2 = envs
 
         if self.cascadeLevel == 0:

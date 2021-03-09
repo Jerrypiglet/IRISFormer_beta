@@ -6,6 +6,8 @@ from pathlib import Path
 from utils.utils_misc import *
 from utils.comm import synchronize, get_rank
 import os, sys
+from utils.utils_total3D.data_config import Dataset_Config
+from utils.utils_total3D.utils_OR_layout import to_dict_tensor
 
 
 def set_up_envs(opt):
@@ -24,6 +26,9 @@ def set_up_envs(opt):
     opt.cfg.PATH.semseg_colors_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.semseg_colors_path)
     opt.cfg.PATH.semseg_names_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.semseg_names_path)
     opt.cfg.PATH.total3D_colors_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.total3D_colors_path)
+    opt.cfg.PATH.total3D_lists_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.total3D_lists_path)
+    opt.cfg.PATH.OR4X_mapping_catInt_to_RGB = [os.path.join(opt.cfg.PATH.root, x) for x in opt.cfg.PATH.OR4X_mapping_catInt_to_RGB]
+    opt.cfg.PATH.OR4X_mapping_catStr_to_RGB = [os.path.join(opt.cfg.PATH.root, x) for x in opt.cfg.PATH.OR4X_mapping_catStr_to_RGB]
 
     # ===== data =====
     opt.cfg.DATA.data_read_list = list(set(opt.cfg.DATA.data_read_list.split('_')))
@@ -53,10 +58,15 @@ def set_up_envs(opt):
     if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
         opt.cfg.MODEL_LAYOUT_EMITTER.enable = True
         opt.cfg.DATA.load_layout_emitter_gt = True
+        opt.cfg.DATA.load_brdf_gt = True
         opt.cfg.DATA.data_read_list += opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.split('_')
         if opt.cfg.MODEL_LAYOUT_EMITTER.use_depth_as_input:
             opt.cfg.DATA.data_read_list.append('de')
         assert opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type in ['cell_prob', 'wall_prob', 'cell_info']
+
+        opt.dataset_config = Dataset_Config('OR', OR=opt.cfg.MODEL_LAYOUT_EMITTER.data.OR, version=opt.cfg.MODEL_LAYOUT_EMITTER.data.version, opt=opt)
+        opt.bins_tensor = to_dict_tensor(opt.dataset_config.bins, if_cuda=True)
+
 
     # ====== semseg =====
     if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable or opt.cfg.MODEL_SEMSEG.use_as_input or opt.cfg.MODEL_MATSEG.use_semseg_as_input:
@@ -133,8 +143,14 @@ def set_up_envs(opt):
 def check_if_in_list(list_to_check, list_allowed, module_name='Unknown Module'):
     if len(list_to_check) == 0:
         return
+    if isinstance(list_to_check, str):
+        list_to_check = list_to_check.split('_')
+    list_to_check = [x for x in list_to_check if x != '']
     if not all(e in list_allowed for e in list_to_check):
-        print('Illegal %s of length %d: %s'%(module_name, len(list_to_check), '_'.join(list_to_check)))
+        print(list_to_check, list_allowed)
+        error_str = red('Illegal %s of length %d: %s'%(module_name, len(list_to_check), '_'.join(list_to_check)))
+        raise ValueError(error_str)
+
 
 
 def set_up_logger(opt):
@@ -151,8 +167,8 @@ def set_up_logger(opt):
     logger.info(red("==[config]== cfg"))
     logger.info(opt.cfg)
     logger.info(red("==[config]== Loaded configuration file {}".format(opt.config_file)))
-    logger.info(red("==[opt.semseg_configs]=="))
-    logger.info(opt.semseg_configs)
+    # logger.info(red("==[opt.semseg_configs]=="))
+    # logger.info(opt.semseg_configs)
 
     with open(opt.config_file, "r") as cf:
         config_str = "\n" + cf.read()

@@ -67,7 +67,7 @@ class openrooms_real(data.Dataset):
                 'segObj': torch.ones((1, self.imHeight, self.imWidth)).float(),
                 'im': torch.from_numpy(image_ldr).float(),
                 'object_type_seg': torch.ones((self.imHeight, self.imWidth, 1)).float(), 
-                'imPath': self.imList[ind], 
+                'image_path': self.imList[ind], 
                 'mat_aggre_map': torch.ones((self.imHeight, self.imWidth, 1)).float(), 
                 'mat_aggre_map_reindex': torch.ones((self.imHeight, self.imWidth, 1)).float(), # gt_seg
                 'num_mat_masks': 0,  

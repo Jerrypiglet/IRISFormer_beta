@@ -253,9 +253,9 @@ class BilateralLayer(nn.Module):
         scale = torch.clamp(scale, 1e-5, 1)
         feature = feature / scale.expand_as(image )
 
-        inputBatch = torch.cat([image, pred ], dim=1).detach()
+        input_batch = torch.cat([image, pred ], dim=1).detach()
 
-        x1 = F.relu(self.gn1(self.conv1(self.pad1(inputBatch) ) ), True)
+        x1 = F.relu(self.gn1(self.conv1(self.pad1(input_batch) ) ), True)
         x2 = F.relu(self.gn2(self.conv2(self.pad2(x1) ) ), True)
 
         dx1 = F.relu(self.dgn1(self.dconv1(x2 ) ), True)
@@ -264,7 +264,7 @@ class BilateralLayer(nn.Module):
         xin2 = torch.cat([dx1, x1], dim=1)
         dx2 = F.relu(self.dgn2(self.dconv2(xin2 ) ), True) 
 
-        dx2 = F.interpolate(dx2, [inputBatch.size(2), inputBatch.size(3)],
+        dx2 = F.interpolate(dx2, [input_batch.size(2), input_batch.size(3)],
                 mode='bilinear' )
         conf = 0.5* (torch.tanh(self.dconvFinal(self.dpad3(dx2) ) ) + 1 )
         conf = conf / torch.clamp(conf.max(), min = 1e-5)

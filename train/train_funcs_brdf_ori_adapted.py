@@ -6,9 +6,9 @@ from tqdm import tqdm
 import statistics
 import torchvision.utils as vutils
 
-def get_inputBatch(dataBatch, opt):
+def get_input_batch(dataBatch, opt):
     inputDict = {}
-    inputDict['imPath'] = dataBatch['imPath']
+    inputDict['image_path'] = dataBatch['image_path']
     # Load data from cpu to gpu
     albedo_cpu = dataBatch['albedo']
     inputDict['albedoBatch'] = Variable(albedo_cpu ).cuda()
@@ -89,21 +89,21 @@ def get_inputBatch(dataBatch, opt):
     if opt.cascadeLevel == 0:
         if opt.ifMatMapInput:
             # matinputDict['maskBatch'] = inputDict['maskBatch'][:, 0:1, :, :]
-            inputBatch = torch.cat([inputDict['imBatch'], inputDict['matAggreMapBatch']], dim=1)
+            input_batch = torch.cat([inputDict['imBatch'], inputDict['matAggreMapBatch']], dim=1)
         else:
-            inputBatch = inputDict['imBatch']
+            input_batch = inputDict['imBatch']
     elif opt.cascadeLevel > 0:
-        inputBatch = torch.cat([inputDict['imBatch'], albedoPreBatch,
+        input_batch = torch.cat([inputDict['imBatch'], albedoPreBatch,
             normalPreBatch, roughPreBatch, depthPreBatch,
             diffusePreBatch, specularPreBatch], dim=1)
 
         preBatchDict.update({'albedoPreBatch': albedoPreBatch, 'normalPreBatch': normalPreBatch, 'roughPreBatch': roughPreBatch, 'depthPreBatch': depthPreBatch, 'diffusePreBatch': diffusePreBatch, 'specularPreBatch': specularPreBatch})
         preBatchDict['renderedImBatch'] = renderedImBatch
 
-    return inputBatch, inputDict, preBatchDict
+    return input_batch, inputDict, preBatchDict
 
     
-def train_step(inputBatch, inputDict, preBatchDict, optimizer, model, opt, if_train=True):
+def train_step(input_batch, inputDict, preBatchDict, optimizer, model, opt, if_train=True):
     if if_train:
         # Clear the gradient in optimizer
         optimizer['opEncoder'].zero_grad()
@@ -120,7 +120,7 @@ def train_step(inputBatch, inputDict, preBatchDict, optimizer, model, opt, if_tr
     depthPreds = []
 
     # Initial Prediction
-    x1, x2, x3, x4, x5, x6 = model['encoder'](inputBatch)
+    x1, x2, x3, x4, x5, x6 = model['encoder'](input_batch)
     albedoPred = 0.5 * (model['albedoDecoder'](inputDict['imBatch'], x1, x2, x3, x4, x5, x6) + 1)
     normalPred = model['normalDecoder'](inputDict['imBatch'], x1, x2, x3, x4, x5, x6)
     roughPred = model['roughDecoder'](inputDict['imBatch'], x1, x2, x3, x4, x5, x6)
@@ -192,16 +192,16 @@ def val_epoch(brdfLoaderVal, model, optimizer, writer, opt, tid):
     with torch.no_grad():
         for i, dataBatch in tqdm(enumerate(brdfLoaderVal)):
             
-            inputBatch, inputDict, preBatchDict = get_inputBatch(dataBatch, opt)
+            input_batch, inputDict, preBatchDict = get_input_batch(dataBatch, opt)
 
-            errors = train_step(inputBatch, inputDict, preBatchDict, optimizer, model, opt, if_train=False)
+            errors = train_step(input_batch, inputDict, preBatchDict, optimizer, model, opt, if_train=False)
             loss_dict['loss_albedo'].append(errors['albedoErrs'][0].item())
             loss_dict['loss_normal'].append(errors['normalErrs'][0].item())
             loss_dict['loss_rough'].append(errors['roughErrs'][0].item())
             loss_dict['loss_depth'].append(errors['depthErrs'][0].item())
 
             if i == 0:
-                print(inputDict['imPath'])
+                print(inputDict['image_path'])
                 # if j == 1 or j% 2000 == 0:
                 # Save the ground truth and the input
                 vutils.save_image(( (inputDict['albedoBatch'] ) ** (1.0/2.2) ).data,

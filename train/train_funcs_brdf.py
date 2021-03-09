@@ -6,12 +6,12 @@ from tqdm import tqdm
 import statistics
 import torchvision.utils as vutils
 
-def get_input_dict_brdf(data_batch, opt, return_inputBatch_as_list=False):
+def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
     input_dict = {}
     
-    input_dict['im_paths'] = data_batch['imPath']
+    input_dict['im_paths'] = data_batch['image_path']
     # Load the image from cpu to gpu
-    im_cpu = (data_batch['im'] )
+    im_cpu = (data_batch['im_trainval'].permute(0, 3, 1, 2) )
     input_dict['imBatch'] = Variable(im_cpu ).cuda(non_blocking=True)
 
     if opt.cfg.DATA.load_brdf_gt:
@@ -99,26 +99,21 @@ def get_input_dict_brdf(data_batch, opt, return_inputBatch_as_list=False):
 
         # if opt.cascadeLevel == 0:
         assert opt.cascadeLevel == 0
+        input_batch = [input_dict['imBatch']]
         if opt.ifMatMapInput:
-            # matinput_dict['maskBatch'] = input_dict['maskBatch'][:, 0:1, :, :]
-            if return_inputBatch_as_list:
-                inputBatch = [input_dict['imBatch'], input_dict['matAggreMapBatch']]
-            else:
-                inputBatch = torch.cat([input_dict['imBatch'], input_dict['matAggreMapBatch']], dim=1)
-        else:
-            if return_inputBatch_as_list:
-                inputBatch = [input_dict['imBatch']]
-            else:
-                inputBatch = input_dict['imBatch']
+            input_batch.append(input_dict['matAggreMapBatch'])
+        if not return_input_batch_as_list:
+            input_batch = torch.cat(input_batch, 1)
+
         # elif opt.cascadeLevel > 0:
-        #     inputBatch = torch.cat([input_dict['imBatch'], albedoPreBatch,
+        #     input_batch = torch.cat([input_dict['imBatch'], albedoPreBatch,
         #         normalPreBatch, roughPreBatch, depthPreBatch,
         #         diffusePreBatch, specularPreBatch], dim=1)
 
         #     preBatchDict.update({'albedoPreBatch': albedoPreBatch, 'normalPreBatch': normalPreBatch, 'roughPreBatch': roughPreBatch, 'depthPreBatch': depthPreBatch, 'diffusePreBatch': diffusePreBatch, 'specularPreBatch': specularPreBatch})
         #     preBatchDict['renderedImBatch'] = renderedImBatch
 
-    return inputBatch, input_dict, preBatchDict
+    return input_batch, input_dict, preBatchDict
 
 def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_module_list=[]):
     if opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
@@ -195,8 +190,6 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
 
     return output_dict, loss_dict
 
-    
-
 def train_step(input_dict, output_dict, preBatchDict, optimizer, opt, if_train=True):
     if if_train:
         # Clear the gradient in optimizer
@@ -217,7 +210,7 @@ def train_step(input_dict, output_dict, preBatchDict, optimizer, opt, if_train=T
 
     albedoPred, normalPred, roughPred, depthPred = output_dict['albedoPred'], output_dict['normalPred'], output_dict['roughPred'], output_dict['depthPred']
     # # Initial Prediction
-    # x1, x2, x3, x4, x5, x6 = model['encoder'](inputBatch)
+    # x1, x2, x3, x4, x5, x6 = model['encoder'](input_batch)
     # albedoPred = 0.5 * (model['albedoDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6) + 1)
     # normalPred = model['normalDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6)
     # roughPred = model['roughDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6)
@@ -288,9 +281,9 @@ def val_epoch_brdf(brdfLoaderVal, model, optimizer, writer, opt, tid):
     loss_dict = {'loss_albedo': [], 'loss_normal': [], 'loss_rough': [], 'loss_depth': []}
     for i, data_batch in tqdm(enumerate(brdfLoaderVal)):
         
-        inputBatch, input_dict, preBatchDict = get_input_dict_brdf(data_batch, opt)
+        input_batch, input_dict, preBatchDict = get_labels_dict_brdf(data_batch, opt)
 
-        errors = train_step(inputBatch, input_dict, preBatchDict, optimizer, model, opt)
+        errors = train_step(input_batch, input_dict, preBatchDict, optimizer, model, opt)
         loss_dict['loss_albedo'].append(errors['albedoErrs'][0].item())
         loss_dict['loss_normal'].append(errors['normalErrs'][0].item())
         loss_dict['loss_rough'].append(errors['roughErrs'][0].item())
