@@ -13,11 +13,11 @@ parser.add_argument('--mode', type=str, default='cs', help='type of material pre
 parser.add_argument('--rgbMode', type=str, default='imscannet', help='im or imscannet')
 parser.add_argument('--maskMode', type=str, default='default', help='default or mmap, for mapped mask')
 parser.add_argument('--gpuId', type=str, default='0')
+parser.add_argument('--machine', type=str, default='local')
 parser.add_argument('--isFast', action='store_true')
 opt = parser.parse_args()
 
-machine = 'cluster'
-if machine == 'cluster':
+if opt.machine == 'cluster':
     dataRoot = '/siggraphasia20dataset/code/Routine/DatasetCreation/'
     matOriDataRoot = '/siggraphasia20dataset/BRDFOriginDataset/'
     matDataRoot = '/eccv20dataset/BRDFScaledDatasetLatentW/'
@@ -27,13 +27,16 @@ if machine == 'cluster':
     #sceneRoot = '/eccv20dataset/OpenRoomScanNetView/scene%s' % opt.sceneId
     sceneRoot = '/siggraphasia20dataset/code/Routine/DatasetCreation/OpenRoomScanNetView/scene%s' % opt.sceneId
 
-elif machine == 'local':
-    dataRoot = '/home/yyyeh/Datasets/OpenRoomTest/'
-    matOriDataRoot = '/home/yyyeh/Datasets/BRDFOriginDataset/'
-    matDataRoot = '/home/yyyeh/Datasets/BRDFScaledDatasetLatentW/'
+elif opt.machine == 'local':
+    # dataRoot = '/home/yyyeh/Datasets/OpenRoomTest/'
+    dataRoot = '/newfoundland2/ruizhu/siggraphasia20dataset/code/Routine/DatasetCreation'
+    matOriDataRoot = '/newfoundland2/ruizhu/siggraphasia20dataset/BRDFOriginDataset/'
+    matDataRoot = '/home/ruizhu/Documents/data/BRDFScaledDatasetLatentW/'
     if opt.mode == 'w+n':
         matDataRoot = '/home/yyyeh/Datasets/BRDFScaledDatasetLatent/'
-    modelListRoot = '/home/yyyeh/Datasets/BRDFcode/models.txt'
+    modelListRoot = '/newfoundland2/ruizhu/siggraphasia20dataset/models.txt'
+    sceneRoot = '/newfoundland2/ruizhu/siggraphasia20dataset/code/Routine/DatasetCreation/OpenRoomScanNetView/scene%s' % opt.sceneId
+
 
 if opt.isFast:
     isFast = ' --isFast'

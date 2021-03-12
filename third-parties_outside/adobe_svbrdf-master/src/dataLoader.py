@@ -248,7 +248,7 @@ class BatchLoader(Dataset):
         t2 = timeit.default_timer() - startTime
         # Read material output
         if self.mode == 'cs':
-            matIdG1 = self.matIdG1List[self.perm[ind]] - 1z
+            matIdG1 = self.matIdG1List[self.perm[ind]] - 1
             scales = self.matScaleList[self.perm[ind]].split('_')
             matScale = np.array([float(scales[0]), float(
                 scales[1]), float(scales[2]), float(scales[3])]).astype(np.float32)
@@ -449,316 +449,316 @@ class BatchLoader(Dataset):
 
             return env, envInd
 
-# class EvalSceneLoader(Dataset):
-#     def __init__(self, sceneRoot, modelListRoot=None, 
-#                  imHeight=240, imWidth=320,
-#                  phase='TEST', rseed=None, rgbMode = 'im', mode = 'cs', maskMode = 'default', vId = '*'):
+class EvalSceneLoader(Dataset):
+    def __init__(self, sceneRoot, modelListRoot=None, 
+                 imHeight=240, imWidth=320,
+                 phase='TEST', rseed=None, rgbMode = 'im', mode = 'cs', maskMode = 'default', vId = '*'):
 
-#         ###  batch size is always 1, one batch contains 1 rgb + 1 depth + k part masks
-#         ###  # of batchs = # of samples per scene
-#         print('Initializing dataloader ...')
+        ###  batch size is always 1, one batch contains 1 rgb + 1 depth + k part masks
+        ###  # of batchs = # of samples per scene
+        print('Initializing dataloader ...')
 
-#         self.imHeight = imHeight
-#         self.imWidth = imWidth
-#         self.rgbMode = rgbMode
-#         self.phase = phase
-#         self.mode = mode
-#         self.maskMode = maskMode # 'default' or 'mmap'
-#         self.maskModeStr = maskMode if maskMode == 'mmap' else ''
+        self.imHeight = imHeight
+        self.imWidth = imWidth
+        self.rgbMode = rgbMode
+        self.phase = phase
+        self.mode = mode
+        self.maskMode = maskMode # 'default' or 'mmap'
+        self.maskModeStr = maskMode if maskMode == 'mmap' else ''
 
-#         self.imList = []
-#         self.vId = vId
+        self.imList = []
+        self.vId = vId
 
-#         if rgbMode == 'im':
-#             imNames = sorted(glob.glob(osp.join(sceneRoot, 'im_*.png')))
-#             imStr = 'im'
-#         elif rgbMode == 'imscannet':
-#             #imNames = sorted(glob.glob(osp.join(sceneRoot, 'imscannet_*.png')))
-#             imNames = sorted(glob.glob(osp.join(sceneRoot, 'imscannet_%s.png' % self.vId )))
-#             imStr = 'imscannet'
-#         else:
-#             assert(False)
-#         self.imList += imNames
+        if rgbMode == 'im':
+            imNames = sorted(glob.glob(osp.join(sceneRoot, 'im_*.png')))
+            imStr = 'im'
+        elif rgbMode == 'imscannet':
+            #imNames = sorted(glob.glob(osp.join(sceneRoot, 'imscannet_*.png')))
+            imNames = sorted(glob.glob(osp.join(sceneRoot, 'imscannet_%s.png' % self.vId )))
+            imStr = 'imscannet'
+        else:
+            assert(False)
+        self.imList += imNames
 
-#         # Input other than RGB
-#         self.depthList = [x.replace('%s_' % rgbMode, 'imdepth_').replace(
-#             'png', 'dat') for x in self.imList]
-#         self.depthList = [x.replace('DiffLight', '') for x in self.depthList]
-#         self.depthList = [x.replace('DiffMat', '') for x in self.depthList]
+        # Input other than RGB
+        self.depthList = [x.replace('%s_' % rgbMode, 'imdepth_').replace(
+            'png', 'dat') for x in self.imList]
+        self.depthList = [x.replace('DiffLight', '') for x in self.depthList]
+        self.depthList = [x.replace('DiffMat', '') for x in self.depthList]
 
-#         # self.segList = [x.replace('im_', 'immask_').replace(
-#         #     'hdr', 'png') for x in self.imList]
-#         # self.segList = [x.replace('DiffMat', '') for x in self.segList]
+        # self.segList = [x.replace('im_', 'immask_').replace(
+        #     'hdr', 'png') for x in self.imList]
+        # self.segList = [x.replace('DiffMat', '') for x in self.segList]
 
-#         # Read Model List
-#         modelListFile = open(modelListRoot, 'r')
-#         self.modelStrList = []
-#         for i, line in enumerate(modelListFile.readlines()):
-#             if i == 0:
-#                 continue
-#             item = line.strip().split(' ')
-#             self.modelStrList.append('%s_%s' % (item[0], item[1]))
+        # Read Model List
+        modelListFile = open(modelListRoot, 'r')
+        self.modelStrList = []
+        for i, line in enumerate(modelListFile.readlines()):
+            if i == 0:
+                continue
+            item = line.strip().split(' ')
+            self.modelStrList.append('%s_%s' % (item[0], item[1]))
 
-#         self.matSegDirList = []
-#         # Fetch part information from xml file
-#         self.xmlFile = osp.join(sceneRoot, 'main.xml')
-#         partIdDictPath = osp.join(sceneRoot, 'partIdDict.txt')
-#         objBaseDir = osp.dirname(modelListRoot) # assume layoutMesh located as same as models.txt
-#         if not osp.exists(partIdDictPath): # save part mask separately
-#             print('%s not exist!' % partIdDictPath)
-#             objPartDict = self.getPartDictFromXml(self.xmlFile, objBaseDir) 
-#             #print(objPartDict)
-#             # {objName: objParts} / xxx_yyy: [xxx_yyy_part0, xxx_yyy_part1]
-#             self.partIdDict = self.createPartIdDict(objPartDict, partIdDictPath) # {xxx_yyy_part0: 0, xxx_yyy_part1: 1, xxx_zzz_part0: 2}
-#             for im in imNames:
-#                 matPart = im.replace('%s_' % imStr, 'immatPart_').replace('png', 'dat')
-#                 matSegDir = matPart.replace('.dat', '')
-#                 os.system('mkdir -p %s' % matSegDir)
-#                 matSegFileList = []
-#                 matMap = self.loadBinary(matPart, channels = 3, dtype=np.int32, if_resize=False).squeeze() # [h, w, 3]
-#                 #h, w, c = matMap.shape
-#                 cadIdMap = matMap[:,:,0]
-#                 matIdMap = matMap[:,:,1]
-#                 cadIds = np.unique(cadIdMap)
-#                 for cadId in cadIds:
-#                     cadMask = cadIdMap == cadId
-#                     matIds = np.unique(matIdMap[cadMask])
-#                     if cadId == 0:
-#                         continue
-#                     for matId in matIds: # from 1
-#                         objStrId = self.modelStrList[cadId-1]
-#                         parts = objPartDict[objStrId]
-#                         bsdfStrId = parts[matId-1] # xxx_yyy_part0
-#                         partId = self.partIdDict[bsdfStrId]
-#                         # save separate mat seg
-#                         matMask = matIdMap == matId
-#                         matGlobalMask = cadMask * matMask
-#                         matSegFile = osp.join(matSegDir, '%d.png' % partId)
-#                         matSegFileList.append(matSegFile)
-#                         Image.fromarray(matGlobalMask.astype(np.uint8) * 255).save(matSegFile)
-#                 self.matSegDirList.append(matSegFileList)
-#         else:
-#             print('%s exist!' % partIdDictPath)
-#             self.partIdDict = self.loadPartIdDict(partIdDictPath)
-#             for im in imNames:
-#                 matPart = im.replace('%s_' % imStr, 'immatPart_').replace('png', 'dat')
-#                 matSegDir = matPart.replace('.dat', '')
-#                 matSegFileList = glob.glob(osp.join(matSegDir, '*.png') )
-#                 self.matSegDirList.append(matSegFileList)
+        self.matSegDirList = []
+        # Fetch part information from xml file
+        self.xmlFile = osp.join(sceneRoot, 'main.xml')
+        partIdDictPath = osp.join(sceneRoot, 'partIdDict.txt')
+        objBaseDir = osp.dirname(modelListRoot) # assume layoutMesh located as same as models.txt
+        if not osp.exists(partIdDictPath): # save part mask separately
+            print('%s not exist!' % partIdDictPath)
+            objPartDict = self.getPartDictFromXml(self.xmlFile, objBaseDir) 
+            #print(objPartDict)
+            # {objName: objParts} / xxx_yyy: [xxx_yyy_part0, xxx_yyy_part1]
+            self.partIdDict = self.createPartIdDict(objPartDict, partIdDictPath) # {xxx_yyy_part0: 0, xxx_yyy_part1: 1, xxx_zzz_part0: 2}
+            for im in imNames:
+                matPart = im.replace('%s_' % imStr, 'immatPart_').replace('png', 'dat')
+                matSegDir = matPart.replace('.dat', '')
+                os.system('mkdir -p %s' % matSegDir)
+                matSegFileList = []
+                matMap = self.loadBinary(matPart, channels = 3, dtype=np.int32, if_resize=False).squeeze() # [h, w, 3]
+                #h, w, c = matMap.shape
+                cadIdMap = matMap[:,:,0]
+                matIdMap = matMap[:,:,1]
+                cadIds = np.unique(cadIdMap)
+                for cadId in cadIds:
+                    cadMask = cadIdMap == cadId
+                    matIds = np.unique(matIdMap[cadMask])
+                    if cadId == 0:
+                        continue
+                    for matId in matIds: # from 1
+                        objStrId = self.modelStrList[cadId-1]
+                        parts = objPartDict[objStrId]
+                        bsdfStrId = parts[matId-1] # xxx_yyy_part0
+                        partId = self.partIdDict[bsdfStrId]
+                        # save separate mat seg
+                        matMask = matIdMap == matId
+                        matGlobalMask = cadMask * matMask
+                        matSegFile = osp.join(matSegDir, '%d.png' % partId)
+                        matSegFileList.append(matSegFile)
+                        Image.fromarray(matGlobalMask.astype(np.uint8) * 255).save(matSegFile)
+                self.matSegDirList.append(matSegFileList)
+        else:
+            print('%s exist!' % partIdDictPath)
+            self.partIdDict = self.loadPartIdDict(partIdDictPath)
+            for im in imNames:
+                matPart = im.replace('%s_' % imStr, 'immatPart_').replace('png', 'dat')
+                matSegDir = matPart.replace('.dat', '')
+                matSegFileList = glob.glob(osp.join(matSegDir, '*.png') )
+                self.matSegDirList.append(matSegFileList)
 
-#         print('Num of View in this scene: %d' % len(self.imList))
-#         ############
+        print('Num of View in this scene: %d' % len(self.imList))
+        ############
 
-#         # Permute the image list
-#         self.count = len(self.imList)
-#         self.perm = list(range(self.count))
+        # Permute the image list
+        self.count = len(self.imList)
+        self.perm = list(range(self.count))
 
-#         # if rseed is not None:
-#         #     random.seed(0)
-#         # random.shuffle(self.perm)
+        # if rseed is not None:
+        #     random.seed(0)
+        # random.shuffle(self.perm)
 
-#     def getPartDictFromXml(self, xmlFile, objBaseDir):
-#         if not osp.exists(xmlFile):
-#             assert(False)
-#         tree = ET.parse(xmlFile)
-#         root = tree.getroot()
-#         objPartDict = {} # {objName: objParts} / xxx_yyy: [xxx_yyy_part0, xxx_yyy_part1]
-#         objPathList = [] # layoutMesh/sceenXXXX_XX/XXX.obj
-#         for child in root: # Collect All object and part info per scene
-#             if child.tag == 'shape':
-#                 shapeStrId = child.attrib['id'] # cadcatID_objID_object
-#                 for child2 in child:
-#                     if child2.tag == 'string' and child2.attrib['name'] == 'filename':
-#                         objPath = child2.attrib['value'].replace('../../../../../', '')
-#                         break
-#                 cond1 = 'aligned_light.obj' in objPath
-#                 cond2 = 'container.obj' in objPath
-#                 cond3 = objPath in objPathList
-#                 if cond1 or cond2 or cond3:
-#                     continue
-#                 objPathFull = osp.join(objBaseDir, objPath)
-#                 if not osp.exists(objPathFull):
-#                     print('ObjFile %s not exist!' % objPathFull)
-#                     assert(False)
-#                 objParts = []
-#                 with open(objPathFull, 'r') as obj:
-#                     for line in obj.readlines():
-#                         if 'usemtl' not in line:
-#                             continue
-#                         objPartName = line.strip().split(' ')[1]
-#                         objParts.append(objPartName)
-#                 objPartDict[shapeStrId.replace('_object', '')] = objParts
-#                 objPathList.append(objPath)
+    def getPartDictFromXml(self, xmlFile, objBaseDir):
+        if not osp.exists(xmlFile):
+            assert(False)
+        tree = ET.parse(xmlFile)
+        root = tree.getroot()
+        objPartDict = {} # {objName: objParts} / xxx_yyy: [xxx_yyy_part0, xxx_yyy_part1]
+        objPathList = [] # layoutMesh/sceenXXXX_XX/XXX.obj
+        for child in root: # Collect All object and part info per scene
+            if child.tag == 'shape':
+                shapeStrId = child.attrib['id'] # cadcatID_objID_object
+                for child2 in child:
+                    if child2.tag == 'string' and child2.attrib['name'] == 'filename':
+                        objPath = child2.attrib['value'].replace('../../../../../', '')
+                        break
+                cond1 = 'aligned_light.obj' in objPath
+                cond2 = 'container.obj' in objPath
+                cond3 = objPath in objPathList
+                if cond1 or cond2 or cond3:
+                    continue
+                objPathFull = osp.join(objBaseDir, objPath)
+                if not osp.exists(objPathFull):
+                    print('ObjFile %s not exist!' % objPathFull)
+                    assert(False)
+                objParts = []
+                with open(objPathFull, 'r') as obj:
+                    for line in obj.readlines():
+                        if 'usemtl' not in line:
+                            continue
+                        objPartName = line.strip().split(' ')[1]
+                        objParts.append(objPartName)
+                objPartDict[shapeStrId.replace('_object', '')] = objParts
+                objPathList.append(objPath)
         
-#         return objPartDict # {objName: objParts} / xxx_yyy: [xxx_yyy_part0, xxx_yyy_part1]
+        return objPartDict # {objName: objParts} / xxx_yyy: [xxx_yyy_part0, xxx_yyy_part1]
 
-#     def createPartIdDict(self, objPartDict, savePath):
-#         keyList = sorted(objPartDict.keys())
-#         partId = 0
-#         partIdDict = {}
-#         with open(savePath, 'w') as f:
-#             for k in keyList:
-#                 parts = objPartDict[k]
-#                 for p in parts:
-#                     partIdDict[p] = partId
-#                     f.writelines('%s %d\n' % (p, partId))
-#                     partId += 1
-#         return partIdDict
+    def createPartIdDict(self, objPartDict, savePath):
+        keyList = sorted(objPartDict.keys())
+        partId = 0
+        partIdDict = {}
+        with open(savePath, 'w') as f:
+            for k in keyList:
+                parts = objPartDict[k]
+                for p in parts:
+                    partIdDict[p] = partId
+                    f.writelines('%s %d\n' % (p, partId))
+                    partId += 1
+        return partIdDict
 
-#     def loadPartIdDict(self, loadPath):
-#         partIdDict = {}
-#         with open(loadPath, 'r') as f:
-#             for line in f.readlines():
-#                 partName, partId = line.strip().split(' ')
-#                 partIdDict[partName] = int(partId)
-#         return partIdDict
+    def loadPartIdDict(self, loadPath):
+        partIdDict = {}
+        with open(loadPath, 'r') as f:
+            for line in f.readlines():
+                partName, partId = line.strip().split(' ')
+                partIdDict[partName] = int(partId)
+        return partIdDict
     
-#     def __len__(self):
-#         return len(self.perm)
+    def __len__(self):
+        return len(self.perm)
 
-#     def __getitem__(self, ind):
-#         # if self.rgbMode == 'im':
-#         #     # Read Image
-#         #     im = self.loadHdr(self.imList[self.perm[ind]]) # ~ 0.02 ms
-#         #     seg = np.ones_like(im)[0:1, :, :]
-#         #     # Random scale the image
-#         #     im, _ = self.scaleHdr(im, seg) # ~ 0.02 ms, mostly sorting operation
-#         # elif self.rgbMode == 'imscannet':
-#         im = self.loadImage(self.imList[self.perm[ind]], isGama=True)
+    def __getitem__(self, ind):
+        # if self.rgbMode == 'im':
+        #     # Read Image
+        #     im = self.loadHdr(self.imList[self.perm[ind]]) # ~ 0.02 ms
+        #     seg = np.ones_like(im)[0:1, :, :]
+        #     # Random scale the image
+        #     im, _ = self.scaleHdr(im, seg) # ~ 0.02 ms, mostly sorting operation
+        # elif self.rgbMode == 'imscannet':
+        im = self.loadImage(self.imList[self.perm[ind]], isGama=True)
 
-#         # Read depth
-#         depth = self.loadBinary(self.depthList[self.perm[ind]]) # ~ 0.02 ms
-#         depth = 1 / np.clip(depth + 1, 1e-6, 10)
+        # Read depth
+        depth = self.loadBinary(self.depthList[self.perm[ind]]) # ~ 0.02 ms
+        depth = 1 / np.clip(depth + 1, 1e-6, 10)
 
-#         # Read seg mask
-#         matSegFileList = self.matSegDirList[self.perm[ind]]
-#         numSegs = len(matSegFileList)
-#         segs = []
-#         partIds = []
-#         for matSegFile in matSegFileList:
-#             if self.maskMode == 'mmap':
-#                 basename = osp.basename(matSegFile)
-#                 matSegFileLoad = matSegFile.replace(basename, 'mapped_sn_mask_%s' % basename).replace('immatPart_', 'immatPartMapped_')
-#                 if not osp.exists(matSegFileLoad):
-#                     matSegFileLoad = matSegFile
-#             else:
-#                 matSegFileLoad = matSegFile
-#             seg = 0.5 * \
-#                 (self.loadImage(matSegFileLoad) + 1)[0:1, :, :] # ~ 0.007 ms
-#             segs.append(seg)
-#             partId = osp.basename(matSegFile).split('.')[0]
-#             partIds.append(partId)
+        # Read seg mask
+        matSegFileList = self.matSegDirList[self.perm[ind]]
+        numSegs = len(matSegFileList)
+        segs = []
+        partIds = []
+        for matSegFile in matSegFileList:
+            if self.maskMode == 'mmap':
+                basename = osp.basename(matSegFile)
+                matSegFileLoad = matSegFile.replace(basename, 'mapped_sn_mask_%s' % basename).replace('immatPart_', 'immatPartMapped_')
+                if not osp.exists(matSegFileLoad):
+                    matSegFileLoad = matSegFile
+            else:
+                matSegFileLoad = matSegFile
+            seg = 0.5 * \
+                (self.loadImage(matSegFileLoad) + 1)[0:1, :, :] # ~ 0.007 ms
+            segs.append(seg)
+            partId = osp.basename(matSegFile).split('.')[0]
+            partIds.append(partId)
         
-#         segs = np.stack(segs, axis=0) # nSegs x 1 x h x w
-#         ims = np.tile(im, (numSegs, 1, 1, 1)) # nSegs x 3 x h x w
-#         depths = np.tile(depth, (numSegs, 1, 1, 1)) # nSegs x 1 x h x w
-#         # partIds: list of nSegs items
+        segs = np.stack(segs, axis=0) # nSegs x 1 x h x w
+        ims = np.tile(im, (numSegs, 1, 1, 1)) # nSegs x 3 x h x w
+        depths = np.tile(depth, (numSegs, 1, 1, 1)) # nSegs x 1 x h x w
+        # partIds: list of nSegs items
 
-#         viewId = self.imList[self.perm[ind]].split('_')[-1].split('.')[0]
-#         xmlOutPath = osp.join(osp.dirname(self.imList[self.perm[ind]]), '%s%s%s_%s.xml' % (self.rgbMode, self.mode, self.maskModeStr, viewId) )
+        viewId = self.imList[self.perm[ind]].split('_')[-1].split('.')[0]
+        xmlOutPath = osp.join(osp.dirname(self.imList[self.perm[ind]]), '%s%s%s_%s.xml' % (self.rgbMode, self.mode, self.maskModeStr, viewId) )
 
-#         batchDict = {
-#             'im': ims,
-#             'depth': depths,
-#             'matMask': segs,
-#             'partId': partIds,
-#             'matPredDir': osp.join(osp.dirname(self.imList[self.perm[ind]]), '%s%s%smatPred_%s' % (self.rgbMode, self.mode, self.maskModeStr, viewId) ),
-#             'xmlOutPath': xmlOutPath
-#         }
-#         return batchDict
+        batchDict = {
+            'im': ims,
+            'depth': depths,
+            'matMask': segs,
+            'partId': partIds,
+            'matPredDir': osp.join(osp.dirname(self.imList[self.perm[ind]]), '%s%s%smatPred_%s' % (self.rgbMode, self.mode, self.maskModeStr, viewId) ),
+            'xmlOutPath': xmlOutPath
+        }
+        return batchDict
 
-#     def loadImage(self, imName, isGama=False):
-#         if not(osp.isfile(imName)):
-#             print(imName)
-#             assert(False)
+    def loadImage(self, imName, isGama=False):
+        if not(osp.isfile(imName)):
+            print(imName)
+            assert(False)
 
-#         #im = Image.open(imName)
-#         im = cv2.imread(imName, -1)
-#         #t0 = timeit.default_timer()
-#         im = cv2.resize(im, (self.imWidth, self.imHeight),
-#                         interpolation=cv2.INTER_AREA)
-#         #im = im.resize([self.imWidth, self.imHeight], Image.ANTIALIAS)
-#         #print('ImageResize hdr image: %.4f' % (timeit.default_timer() - t0) )
+        #im = Image.open(imName)
+        im = cv2.imread(imName, -1)
+        #t0 = timeit.default_timer()
+        im = cv2.resize(im, (self.imWidth, self.imHeight),
+                        interpolation=cv2.INTER_AREA)
+        #im = im.resize([self.imWidth, self.imHeight], Image.ANTIALIAS)
+        #print('ImageResize hdr image: %.4f' % (timeit.default_timer() - t0) )
 
-#         im = np.asarray(im, dtype=np.float32)
-#         if isGama:
-#             im = (im / 255.0) ** 2.2
-#             im = 2 * im - 1
-#         else:
-#             im = (im - 127.5) / 127.5
-#         if len(im.shape) == 2:
-#             im = im[..., np.newaxis]
-#         im = np.transpose(im, [2, 0, 1])
-#         im = im[::-1, :, :]
-#         return im
+        im = np.asarray(im, dtype=np.float32)
+        if isGama:
+            im = (im / 255.0) ** 2.2
+            im = 2 * im - 1
+        else:
+            im = (im - 127.5) / 127.5
+        if len(im.shape) == 2:
+            im = im[..., np.newaxis]
+        im = np.transpose(im, [2, 0, 1])
+        im = im[::-1, :, :]
+        return im
 
-#     def loadHdr(self, imName):
-#         if not(osp.isfile(imName)):
-#             print(imName)
-#             assert(False)
-#         im = cv2.imread(imName, -1) # 0.02~0.03 ms, bottleneck
-#         if im is None:
-#             print(imName)
-#             assert(False)
-#         im = cv2.resize(im, (self.imWidth, self.imHeight),
-#                         interpolation=cv2.INTER_AREA)
-#         im = np.asarray(im, dtype=np.float32)
-#         im = np.transpose(im, [2, 0, 1])
-#         im = im[::-1, :, :]
+    def loadHdr(self, imName):
+        if not(osp.isfile(imName)):
+            print(imName)
+            assert(False)
+        im = cv2.imread(imName, -1) # 0.02~0.03 ms, bottleneck
+        if im is None:
+            print(imName)
+            assert(False)
+        im = cv2.resize(im, (self.imWidth, self.imHeight),
+                        interpolation=cv2.INTER_AREA)
+        im = np.asarray(im, dtype=np.float32)
+        im = np.transpose(im, [2, 0, 1])
+        im = im[::-1, :, :]
 
-#         return im
+        return im
 
-#     def scaleHdr(self, hdr, seg):
-#         intensityArr = (hdr * seg).flatten()
-#         intensityArr.sort()
-#         if self.phase.upper() == 'TRAIN':
-#             scale = (0.95 - 0.1 * np.random.random()) / np.clip(
-#                 intensityArr[int(0.95 * self.imWidth * self.imHeight * 3)], 0.1, None)
-#         elif self.phase.upper() == 'TEST':
-#             scale = (0.95 - 0.05) / np.clip(
-#                 intensityArr[int(0.95 * self.imWidth * self.imHeight * 3)], 0.1, None)
-#         hdr = scale * hdr
+    def scaleHdr(self, hdr, seg):
+        intensityArr = (hdr * seg).flatten()
+        intensityArr.sort()
+        if self.phase.upper() == 'TRAIN':
+            scale = (0.95 - 0.1 * np.random.random()) / np.clip(
+                intensityArr[int(0.95 * self.imWidth * self.imHeight * 3)], 0.1, None)
+        elif self.phase.upper() == 'TEST':
+            scale = (0.95 - 0.05) / np.clip(
+                intensityArr[int(0.95 * self.imWidth * self.imHeight * 3)], 0.1, None)
+        hdr = scale * hdr
         
-#         return np.clip(hdr, 0, 1), scale
+        return np.clip(hdr, 0, 1), scale
 
-#     def loadBinary(self, imName, channels=1, dtype=np.float32, if_resize=True):
-#         assert dtype in [
-#             np.float32, np.int32], 'Invalid binary type outside (np.float32, np.int32)!'
-#         if not(osp.isfile(imName)):
-#             print(imName)
-#             assert(False)
-#         with open(imName, 'rb') as fIn:
-#             hBuffer = fIn.read(4)
-#             height = struct.unpack('i', hBuffer)[0]
-#             wBuffer = fIn.read(4)
-#             width = struct.unpack('i', wBuffer)[0]
-#             dBuffer = fIn.read(4 * channels * width * height)
-#             if dtype == np.float32:
-#                 decode_char = 'f'
-#             elif dtype == np.int32:
-#                 decode_char = 'i'
-#             depth = np.asarray(struct.unpack(
-#                 decode_char * channels * height * width, dBuffer), dtype=dtype) # 0.02 ms ~ 0.1 ms, slow
-#             depth = depth.reshape([height, width, channels])
+    def loadBinary(self, imName, channels=1, dtype=np.float32, if_resize=True):
+        assert dtype in [
+            np.float32, np.int32], 'Invalid binary type outside (np.float32, np.int32)!'
+        if not(osp.isfile(imName)):
+            print(imName)
+            assert(False)
+        with open(imName, 'rb') as fIn:
+            hBuffer = fIn.read(4)
+            height = struct.unpack('i', hBuffer)[0]
+            wBuffer = fIn.read(4)
+            width = struct.unpack('i', wBuffer)[0]
+            dBuffer = fIn.read(4 * channels * width * height)
+            if dtype == np.float32:
+                decode_char = 'f'
+            elif dtype == np.int32:
+                decode_char = 'i'
+            depth = np.asarray(struct.unpack(
+                decode_char * channels * height * width, dBuffer), dtype=dtype) # 0.02 ms ~ 0.1 ms, slow
+            depth = depth.reshape([height, width, channels])
 
-#             if if_resize:
-#                 #t0 = timeit.default_timer()
-#                 # print(self.imWidth, self.imHeight, width, height)
-#                 if dtype == np.float32:
-#                     depth = cv2.resize(
-#                         depth, (self.imWidth, self.imHeight), interpolation=cv2.INTER_AREA)
-#                     #print('Resize float binary: %.4f' % (timeit.default_timer() - t0) )
-#                 elif dtype == np.int32:
-#                     depth = cv2.resize(depth.astype(
-#                         np.float32), (self.imWidth, self.imHeight), interpolation=cv2.INTER_NEAREST)
-#                     depth = depth.astype(np.int32)
-#                     #print('Resize int32 binary: %.4f' % (timeit.default_timer() - t0) )
+            if if_resize:
+                #t0 = timeit.default_timer()
+                # print(self.imWidth, self.imHeight, width, height)
+                if dtype == np.float32:
+                    depth = cv2.resize(
+                        depth, (self.imWidth, self.imHeight), interpolation=cv2.INTER_AREA)
+                    #print('Resize float binary: %.4f' % (timeit.default_timer() - t0) )
+                elif dtype == np.int32:
+                    depth = cv2.resize(depth.astype(
+                        np.float32), (self.imWidth, self.imHeight), interpolation=cv2.INTER_NEAREST)
+                    depth = depth.astype(np.int32)
+                    #print('Resize int32 binary: %.4f' % (timeit.default_timer() - t0) )
 
-#             depth = np.squeeze(depth)
+            depth = np.squeeze(depth)
 
-#         return depth[np.newaxis, :, :]
+        return depth[np.newaxis, :, :]
 
-# class MatWLoader(Dataset):
+class MatWLoader(Dataset):
     def __init__(self, matDataRoot):
         self.matDataRoot = matDataRoot
         self.matNameList = glob.glob(osp.join(matDataRoot, 'Material*') )
