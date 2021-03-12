@@ -221,7 +221,7 @@ else:
         transforms_semseg = transforms_val_semseg, 
         transforms_matseg = transforms_val_matseg,
         transforms_resize = transforms_val_resize, 
-        cascadeLevel = opt.cascadeLevel, split = 'val', load_first = 20, logger=logger)
+        cascadeLevel = opt.cascadeLevel, split = 'val', load_first = opt.cfg.TEST.vis_max_samples, logger=logger)
 brdf_loader_val = make_data_loader(
     opt,
     brdf_dataset_val,

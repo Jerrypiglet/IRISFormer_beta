@@ -443,7 +443,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     with torch.no_grad():
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
             batch_size = len(data_batch['image_path'])
-
             if batch_size*batch_id >= opt.cfg.TEST.vis_max_samples:
                 break
 
@@ -470,7 +469,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
             for sample_idx_batch, (im_single, im_path) in enumerate(zip(data_batch['im_SDR_RGB'], data_batch['image_path'])):
                 sample_idx = sample_idx_batch+batch_size*batch_id
-                if sample_idx_batch >= opt.cfg.TEST.vis_max_samples:
+                if sample_idx >= opt.cfg.TEST.vis_max_samples:
                     break
 
                 im_single = im_single.numpy().squeeze()
@@ -544,7 +543,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             if opt.cfg.DATA.load_matseg_gt:
                 for sample_idx_batch in range(batch_size):
                     sample_idx = sample_idx_batch+batch_size*batch_id
-                    if sample_idx_batch >= opt.cfg.TEST.vis_max_samples:
+                    if sample_idx >= opt.cfg.TEST.vis_max_samples:
                         break
 
                     mat_aggre_map_GT_single = input_dict['mat_aggre_map_cpu'][sample_idx_batch].numpy().squeeze()
@@ -559,7 +558,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 for sample_idx_batch, (logit_single, embedding_single) in enumerate(zip(output_dict['logit'].detach(), output_dict['embedding'].detach())):
 
                     sample_idx = sample_idx_batch+batch_size*batch_id
-                    if sample_idx_batch >= opt.cfg.TEST.vis_max_samples:
+                    if sample_idx >= opt.cfg.TEST.vis_max_samples:
                         break
 
                     # if sample_idx_batch >= num_val_vis_MAX:
