@@ -29,6 +29,8 @@ _C.PATH.semseg_colors_path = 'data/openrooms/openrooms_colors.txt'
 _C.PATH.semseg_names_path = 'data/openrooms/openrooms_names.txt'
 _C.PATH.total3D_colors_path = 'data/openrooms/total3D_colors'
 _C.PATH.total3D_lists_path = 'data/openrooms/list_OR_V4full'
+_C.PATH.matcls_matIdG1_path = 'data/openrooms/matIdGlobal1.txt'
+_C.PATH.matcls_matIdG2_path = 'data/openrooms/matIdGlobal2.txt'
 _C.PATH.dcn_path = ''
 _C.PATH.dcn_cluster = '/viscompfs/users/ruizhu/lib/Deformable-Convolution-V2-PyTorch'
 _C.PATH.dcn_local = '/home/ruizhu/Documents/Projects/semanticInverse/third-parties_outside/Deformable-Convolution-V2-PyTorch'
@@ -48,16 +50,24 @@ _C.DATASET.dataset_name = 'openrooms'
 _C.DATASET.dataset_path = ''
 _C.DATASET.dataset_path_local = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms'
 _C.DATASET.dataset_path_cluster = '/siggraphasia20dataset/code/Routine/DatasetCreation/'
-_C.DATASET.layout_emitter_path = ''
-_C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-OR45_total3D_train_test_data'
-_C.DATASET.layout_emitter_path_cluster = ''
 _C.DATASET.png_path = ''
 _C.DATASET.png_path_local = '/data/ruizhu/OR-pngs'
 _C.DATASET.png_path_cluster = ''
+
+_C.DATASET.layout_emitter_path = ''
+_C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-OR45_total3D_train_test_data'
+_C.DATASET.layout_emitter_path_cluster = ''
+
+_C.DATASET.matpart_path = ''
+_C.DATASET.matpart_path_local = '/data/ruizhu/OR-matpart'
+_C.DATASET.matpart_path_cluster = '/siggraphasia20dataset/code/Routine/DatasetCreation/'
+_C.DATASET.matori_path = ''
+_C.DATASET.matori_path_local = '/newfoundland2/ruizhu/siggraphasia20dataset/BRDFOriginDataset/'
+_C.DATASET.matori_path_cluster = '/siggraphasia20dataset/BRDFOriginDataset/'
+
 _C.DATASET.dataset_list = 'data/openrooms/list_ORfull/list'
 _C.DATASET.dataset_path_mini = '/data/ruizhu/openrooms_mini'
 _C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini/list'
-
 
 _C.DATASET.num_workers = 8
 _C.DATASET.if_val_dist = True
@@ -66,6 +76,7 @@ _C.DATASET.if_val_dist = True
 
 _C.DATA = CN()
 _C.DATA.if_load_png_not_hdr = False # load png as input image instead of hdr image
+_C.DATA.if_augment_train = False
 _C.DATA.im_height = 240
 _C.DATA.im_width = 320
 _C.DATA.load_semseg_gt = False
@@ -78,10 +89,11 @@ _C.DATA.load_layout_emitter_gt = False
 _C.DATA.data_read_list = ''
 _C.DATA.data_read_list_allowed = ['al', 'no', 'de', 'ro', \
     'lo', 'em']
+_C.DATA.load_matcls_gt = False
 
 # ===== BRDF
 _C.MODEL_BRDF = CN()
-_C.MODEL_BRDF.enable = True
+_C.MODEL_BRDF.enable = False
 # _C.MODEL_BRDF.enable_list = ['al', 'no', 'de', 'ro', 'li']
 _C.MODEL_BRDF.enable_list = '' # al_no_de_ro
 _C.MODEL_BRDF.enable_list_allowed = ['al', 'no', 'de', 'ro']
@@ -145,6 +157,11 @@ _C.MODEL_LAYOUT_EMITTER.layout = CN()
 _C.MODEL_LAYOUT_EMITTER.layout.loss = CN()
 _C.MODEL_LAYOUT_EMITTER.layout.loss.cls_reg_ratio = 10
 _C.MODEL_LAYOUT_EMITTER.layout.loss.obj_cam_ratio = 1
+
+# ===== material cls (Yu-Ying)
+_C.MODEL_MATCLS = CN()
+_C.MODEL_MATCLS.enable = False
+_C.MODEL_MATCLS.num_classes = 886
 
 
 # ===== material segmentation

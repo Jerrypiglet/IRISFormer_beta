@@ -24,9 +24,12 @@ from train_funcs_semseg import get_labels_dict_semseg, postprocess_semseg
 from train_funcs_brdf import get_labels_dict_brdf, postprocess_brdf
 from train_funcs_light import get_labels_dict_light, postprocess_light
 from train_funcs_layout_emitter import get_labels_dict_layout_emitter, postprocess_layout_emitter
+from train_funcs_matcls import get_labels_dict_matcls, postprocess_matcls
 from utils.comm import synchronize
 
 from utils.utils_metrics import compute_errors_depth_nyu
+from train_funcs_matcls import getG1IdDict, getRescaledMatFromID
+
 
 def get_time_meters_joint():
     time_meters = {}
@@ -38,6 +41,7 @@ def get_time_meters_joint():
     time_meters['loss_layout_emitter'] = AverageMeter()
     time_meters['loss_matseg'] = AverageMeter()
     time_meters['loss_semseg'] = AverageMeter()
+    time_meters['loss_matcls'] = AverageMeter()
     time_meters['backward'] = AverageMeter()    
     return time_meters
 
@@ -70,7 +74,15 @@ def get_light_meters(opt):
     light_meters = {}
     return light_meters
 
+def get_matcls_meters(opt):
+    intersection_meter = AverageMeter()
+    union_meter = AverageMeter()
+    target_meter = AverageMeter()
+    matcls_meters = {'intersection_meter': intersection_meter, 'union_meter': union_meter, 'target_meter': target_meter}
+    return matcls_meters
+
 def get_labels_dict_joint(data_batch, opt):
+    # prepare input_dict from data_batch (from dataloader)
     labels_dict = {'im_trainval_RGB': data_batch['im_trainval_RGB'].cuda(non_blocking=True)}
     if opt.cfg.DATA.load_matseg_gt:
         labels_dict_matseg = get_labels_dict_matseg(data_batch, opt)
@@ -107,12 +119,18 @@ def get_labels_dict_joint(data_batch, opt):
     else:
         labels_dict_layout_emitter = {}
     labels_dict.update(labels_dict_layout_emitter)
-    # print(labels_dict_layout_emitter.keys()) # dict_keys(['layout_input', 'emitter_input'])
+
+    if opt.cfg.DATA.load_matcls_gt:
+        labels_dict_matcls = get_labels_dict_matcls(data_batch, opt)
+    else:
+        labels_dict_matcls = {}
+    labels_dict.update(labels_dict_matcls)
 
     # labels_dict = {**labels_dict_matseg, **labels_dict_brdf}
     return labels_dict
 
 def forward_joint(labels_dict, model, opt, time_meters, if_vis=False):
+    # forward model + compute losses
 
     # Forward model
     output_dict = model(labels_dict)
@@ -147,6 +165,11 @@ def forward_joint(labels_dict, model, opt, time_meters, if_vis=False):
         time_meters['loss_layout_emitter'].update(time.time() - time_meters['ts'])
         time_meters['ts'] = time.time()
 
+    if opt.cfg.MODEL_MATCLS.enable:
+        output_dict, loss_dict = postprocess_matcls(labels_dict, output_dict, loss_dict, opt, time_meters, if_vis=if_vis)
+        time_meters['loss_matcls'].update(time.time() - time_meters['ts'])
+        time_meters['ts'] = time.time()
+
     return output_dict, loss_dict
 
 def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
@@ -155,6 +178,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     ENABLE_MATSEG = opt.cfg.MODEL_MATSEG.enable
     ENABLE_BRDF = opt.cfg.MODEL_BRDF.enable
     ENABLE_LIGHT = opt.cfg.MODEL_LIGHT.enable
+    ENABLE_MATCLS = opt.cfg.MODEL_MATCLS.enable
 
     logger.info(red('===Evaluating for %d batches'%len(brdf_loader_val)))
 
@@ -216,6 +240,11 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             'loss_layout-lo_corner', 
             'loss_layout-ALL'
         ]
+
+    if opt.cfg.MODEL_MATCLS.enable:
+        loss_keys += [
+            'loss_matcls-ALL', ]
+
         
     loss_meters = {loss_key: AverageMeter() for loss_key in loss_keys}
     time_meters = get_time_meters_joint()
@@ -225,6 +254,9 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         brdf_meters = get_brdf_meters(opt)
     if ENABLE_LIGHT:
         light_meters = get_light_meters(opt)
+    if ENABLE_MATCLS:
+        matcls_meters = get_matcls_meters(opt)
+
 
     with torch.no_grad():
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
@@ -309,29 +341,52 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 semseg_meters['intersection_meter'].update(intersection), semseg_meters['union_meter'].update(union), semseg_meters['target_meter'].update(target)
                 # accuracy = sum(semseg_meters['intersection_meter'].val) / (sum(semseg_meters['target_meter'].val) + 1e-10)
 
+            if ENABLE_MATCLS:
+                output = output_dict['matcls_argmax']
+                target = input_dict['mat_label_batch']
+                intersection, union, target = intersectionAndUnionGPU(output, target, opt.cfg.MODEL_MATCLS.num_classes, -1)
+                if opt.distributed:
+                    dist.all_reduce(intersection), dist.all_reduce(union), dist.all_reduce(target)
+                intersection, union, target = intersection.cpu().numpy(), union.cpu().numpy(), target.cpu().numpy()
+                matcls_meters['intersection_meter'].update(intersection), matcls_meters['union_meter'].update(union), matcls_meters['target_meter'].update(target)
+
             print(batch_id)
 
             # synchronize()
 
     # ======= Metering
-    if ENABLE_SEMSEG:
-        iou_class = semseg_meters['intersection_meter'].sum / (semseg_meters['union_meter'].sum + 1e-10)
-        accuracy_class = semseg_meters['intersection_meter'].sum / (semseg_meters['target_meter'].sum + 1e-10)
-        mIoU = np.mean(iou_class)
-        mAcc = np.mean(accuracy_class)
-        allAcc = sum(semseg_meters['intersection_meter'].sum) / (sum(semseg_meters['target_meter'].sum) + 1e-10)
-
+        
     if opt.is_master:
         for loss_key in loss_dict_reduced:
             writer.add_scalar('loss_val/%s'%loss_key, loss_meters[loss_key].avg, tid)
             logger.info('Logged val loss for %s'%loss_key)
+
         if ENABLE_SEMSEG:
-            logger.info('Val result: mIoU/mAcc/allAcc {:.4f}/{:.4f}/{:.4f}.'.format(mIoU, mAcc, allAcc))
+            iou_class = semseg_meters['intersection_meter'].sum / (semseg_meters['union_meter'].sum + 1e-10)
+            accuracy_class = semseg_meters['intersection_meter'].sum / (semseg_meters['target_meter'].sum + 1e-10)
+            mIoU = np.mean(iou_class)
+            mAcc = np.mean(accuracy_class)
+            allAcc = sum(semseg_meters['intersection_meter'].sum) / (sum(semseg_meters['target_meter'].sum) + 1e-10)
+            logger.info('[SEMSEG] Val result: mIoU/mAcc/allAcc {:.4f}/{:.4f}/{:.4f}.'.format(mIoU, mAcc, allAcc))
             for i in range(opt.cfg.DATA.semseg_classes):
                 logger.info('Class_{} Result: iou/accuracy {:.4f}/{:.4f}.'.format(i, iou_class[i], accuracy_class[i]))
-            writer.add_scalar('VAL/mIoU_val', mIoU, tid)
-            writer.add_scalar('VAL/mAcc_val', mAcc, tid)
-            writer.add_scalar('VAL/allAcc_val', allAcc, tid)
+            writer.add_scalar('VAL/SEMSEG-mIoU_val', mIoU, tid)
+            writer.add_scalar('VAL/SEMSEG-mAcc_val', mAcc, tid)
+            writer.add_scalar('VAL/SEMSEG-allAcc_val', allAcc, tid)
+
+        if ENABLE_MATCLS:
+            iou_class = matcls_meters['intersection_meter'].sum / (matcls_meters['union_meter'].sum + 1e-10)
+            accuracy_class = matcls_meters['intersection_meter'].sum / (matcls_meters['target_meter'].sum + 1e-10)
+            mIoU = np.mean(iou_class)
+            mAcc = np.mean(accuracy_class)
+            allAcc = sum(matcls_meters['intersection_meter'].sum) / (sum(matcls_meters['target_meter'].sum) + 1e-10)
+            logger.info('[MATCLS] Val result: mIoU/mAcc/allAcc {:.4f}/{:.4f}/{:.4f}.'.format(mIoU, mAcc, allAcc))
+            # for i in range(opt.cfg.MODEL_MATCLS.num_classes):
+            #     logger.info('Class_{} Result: iou/accuracy {:.4f}/{:.4f}.'.format(i, iou_class[i], accuracy_class[i]))
+            writer.add_scalar('VAL/MATCLS-mIoU_val', mIoU, tid)
+            writer.add_scalar('VAL/MATCLS-mAcc_val', mAcc, tid)
+            writer.add_scalar('VAL/MATCLS-allAcc_val', allAcc, tid)
+
         if ENABLE_BRDF:
             # writer.add_scalar('VAL/BRDF-inv_depth_mean_val', brdf_meters['inv_depth_mean_error_meter'].avg, tid)
             # writer.add_scalar('VAL/BRDF-inv_depth_median_val', brdf_meters['inv_depth_median_error_meter'].get_median(), tid)
@@ -378,6 +433,10 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         roughPreds_list = []
         depthPreds_list = []
     
+    if opt.cfg.MODEL_MATCLS.enable:
+        matG1IdDict = getG1IdDict(opt.cfg.PATH.matcls_matIdG1_path)
+
+
     # opt.albedo_pooling_debug = True
 
     # ===== Gather vis of N batches
@@ -463,6 +522,17 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     color_pred = np.array(colorize(gray_pred, colors).convert('RGB'))
                     if opt.is_master:
                         writer.add_image('VAL_semseg_PRED/%d'%(sample_idx), color_pred, tid, dataformats='HWC')
+
+                # ======= Vis matcls
+                mats_pred_vis_list = getRescaledMatFromID(
+                    output_dict['matcls_argmax'].cpu().numpy(), np.ones((output_dict['matcls_argmax'].shape[0], 4), dtype=np.float32), opt.cfg.DATASET.matori_path, matG1IdDict, res=256)
+                mats_gt_vis_list = getRescaledMatFromID(
+                    input_dict['mat_label_batch'].cpu().numpy(), np.ones((input_dict['mat_label_batch'].shape[0], 4), dtype=np.float32), opt.cfg.DATASET.matori_path, matG1IdDict, res=256)
+                for mats_pred_vis, mats_gt_vis, mat_mask in zip(mats_pred_vis_list, mats_gt_vis_list, input_dict['mat_mask_batch']): # torch.Size([3, 768, 256])
+                    summary_cat = torch.cat([mats_pred_vis, mats_gt_vis], 2).permute(1, 2, 0)
+                    if opt.is_master:
+                        writer.add_image('VAL_matcls_PRED-GT/%d'%(sample_idx), summary_cat, tid, dataformats='HWC')
+                        writer.add_image('VAL_matcls_matmask/%d'%(sample_idx), mat_mask.squeeze(), tid, dataformats='HW')
 
             # ======= visualize clusters for mat-seg
             if opt.cfg.DATA.load_matseg_gt:

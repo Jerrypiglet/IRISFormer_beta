@@ -89,6 +89,7 @@ class BatchLoader(Dataset):
             self.matScaleList = []
 
         listFile = '%s_list_%s.txt' % (self.split, self.mode)
+        print('<<<<<<', listFile)
         if osp.exists(listFile):
             print('Loading training list from %s' % listFile)
             with open(listFile, 'r') as f:
@@ -104,7 +105,7 @@ class BatchLoader(Dataset):
                     self.matNameList.append(matName)
 
         else:
-            print('Creating training list ...')
+            print('List file %s does not exist! Creating training list ...'%listFile)
             for shape in tqdm(shapeList):
                 imNames = sorted(glob.glob(osp.join(shape, 'im_*.hdr')))
                 for im in imNames:

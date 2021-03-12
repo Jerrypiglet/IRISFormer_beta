@@ -80,13 +80,13 @@ class Normalize(object):
 class Resize(object):
     # Resize the input to the given size, 'size' is a 2-element tuple or list in the order of (h, w).
     def __init__(self, size):
-        assert (isinstance(size, collections.Iterable) and len(size) == 2)
+        assert (isinstance(size, collections.Iterable) and len(size) == 2) and isinstance(size, tuple)
         self.size = size
 
     def __call__(self, image, label=None):
-        image = cv2.resize(image, self.size[::-1], interpolation=cv2.INTER_LINEAR)
+        image = cv2.resize(image, self.size, interpolation=cv2.INTER_LINEAR)
         if label is not None:
-            label = cv2.resize(label, self.size[::-1], interpolation=cv2.INTER_NEAREST)
+            label = cv2.resize(label, self.size, interpolation=cv2.INTER_NEAREST)
             return image, label
         else:
             return image

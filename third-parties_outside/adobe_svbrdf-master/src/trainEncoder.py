@@ -473,15 +473,18 @@ def train(opt):
                 #print('4-2. time : {}'.format(timeit.default_timer() - startTime) )
                 
                 writer.add_image('%s/Train/matsPred' % opt.mode.upper(), vutils.make_grid(matsPred[:8], nrow=8), wStep)
-                vutils.save_image(matsPred, os.path.join(imgSavePath, 'train_matPred_%04d.png' % wStep))
+                save_path = os.path.join(imgSavePath, 'train_matPred_%04d.png' % wStep)
+                vutils.save_image(matsPred, save_path)
+                print('>>>>>', save_path)
                 
                 #print('4-3. time : {}'.format(timeit.default_timer() - startTime) )
-                albedoBatch = dataBatch['albedo'] ** (1.0/2.2)
-                normalBatch = (dataBatch['normal'] + 1) * 0.5
-                roughBatch = (dataBatch['rough'] + 1) * 0.5
-                matsScene = torch.cat([dsF(albedoBatch), dsF(normalBatch), to3C(dsF(roughBatch) )], dim=2)
-                writer.add_image('%s/Train/matsScene' % opt.mode.upper(), vutils.make_grid(matsScene[:8], nrow=8), wStep)
-                vutils.save_image(matsScene, os.path.join(imgSavePath, 'train_matScene_%04d.png' % wStep))
+                if 'albedo' in dataBatch:
+                    albedoBatch = dataBatch['albedo'] ** (1.0/2.2)
+                    normalBatch = (dataBatch['normal'] + 1) * 0.5
+                    roughBatch = (dataBatch['rough'] + 1) * 0.5
+                    matsScene = torch.cat([dsF(albedoBatch), dsF(normalBatch), to3C(dsF(roughBatch) )], dim=2)
+                    writer.add_image('%s/Train/matsScene' % opt.mode.upper(), vutils.make_grid(matsScene[:8], nrow=8), wStep)
+                    vutils.save_image(matsScene, os.path.join(imgSavePath, 'train_matScene_%04d.png' % wStep))
             #print('5. time : {}'.format(timeit.default_timer() - startTime) )
             #if i == 5:
             #    assert(False)

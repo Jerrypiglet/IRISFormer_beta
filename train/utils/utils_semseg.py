@@ -62,6 +62,40 @@ def get_transform_semseg(split, opt):
         val_transform = transform.Compose(transform_semseg_list_val)
     return val_transform
 
+def get_transform_resize(split, opt):
+    assert split in ['train', 'val', 'test']
+    value_scale = 255
+    mean = [0.485, 0.456, 0.406]
+    mean = [item * value_scale for item in mean]
+    std = [0.229, 0.224, 0.225]
+    std = [item * value_scale for item in std]
+
+    if split == 'train':
+        transform_resize_list_train = [
+            transform.Resize((opt.cfg.DATA.im_width, opt.cfg.DATA.im_height)), 
+            transform.ToTensor(),
+            transform.Normalize(mean=mean, std=std)
+        ]
+        if opt.cfg.DATA.if_augment_train:
+            # transform_resize_list_train = [
+            #     transform.RandScale([opt.semseg_configs.scale_min, opt.semseg_configs.scale_max]),
+            #     transform.RandRotate([opt.semseg_configs.rotate_min, opt.semseg_configs.rotate_max], padding=mean, ignore_label=opt.semseg_configs.ignore_label),
+            #     transform.RandomGaussianBlur(),
+            #     transform.RandomHorizontalFlip(),
+
+            # ]
+            assert False, 'Not implemented!'
+        train_transform = transform.Compose(transform_resize_list_train)
+        return train_transform
+    else:
+        transform_resize_list_val = [
+            transform.Resize((opt.cfg.DATA.im_width, opt.cfg.DATA.im_height)), 
+            transform.ToTensor(),
+            transform.Normalize(mean=mean, std=std)
+            ]
+        val_transform = transform.Compose(transform_resize_list_val)
+    return val_transform
+
 
 def get_transform_matseg(split, opt):
     assert split in ['train', 'val', 'test']

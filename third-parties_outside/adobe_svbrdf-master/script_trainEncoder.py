@@ -11,11 +11,11 @@ parser.add_argument('--mode', type=str, default='cs', help='type of material pre
 parser.add_argument('--gpuId', type=str, default='0')
 opt = parser.parse_args()
 
-dataRoot = '/home/yyyeh/Datasets/OpenRoom/'
+dataRoot = '/newfoundland2/ruizhu/siggraphasia20dataset/code/Routine/DatasetCreation/'
 #dataRoot = '/siggraphasia20dataset/code/Routine/DatasetCreation/'
-matOriDataRoot = '/home/yyyeh/Datasets/BRDFOriginDataset/'
+matOriDataRoot = '/newfoundland2/ruizhu/siggraphasia20dataset/BRDFOriginDataset/'
 #matOriDataRoot = '/siggraphasia20dataset/BRDFOriginDataset/'
-matDataRoot = '/home/yyyeh/Datasets/BRDFScaledDatasetLatentW/'
+matDataRoot = '/home/ruizhu/Documents/data/BRDFScaledDatasetLatentW/'
 #matDataRoot = '/eccv20dataset/BRDFScaledDatasetLatentW/'
 mode = 'cs'  # cs, w, w+, w+n
 if mode == 'w+n':

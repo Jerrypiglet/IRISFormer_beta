@@ -427,7 +427,9 @@ def test(opt):
                 matsPred.append(mP)
             matsPred = torch.cat(matsPred, dim=0)
             #matsPred = getMatFromStyle(genObj, output['material'].detach(), opt.mode)
-        vutils.save_image(matsPred, os.path.join(imgSavePath, 'eval_matPred_%04d.png' % i))
+        save_path = os.path.join(imgSavePath, 'eval_matPred_%04d.png' % i)
+        vutils.save_image(matsPred, save_path)
+        print('>>>>>>>', save_path)
 
         # Save predicted material maps and 
         print('partIdBatch: ', dataBatch['partId'])
