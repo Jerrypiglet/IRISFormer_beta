@@ -10,3 +10,6 @@
 [submodule "train/third-parties/deformable-convolution-pytorch"]
 	path = train/third-parties/deformable-convolution-pytorch
 	url = https://github.com/1zb/deformable-convolution-pytorch.git
+[submodule "third-parties_outside/photoshape"]
+	path = third-parties_outside/photoshape
+	url = https://github.com/Jerrypiglet/photoshape.git

@@ -1,0 +1,15 @@
+__pycache__/
+.ipynb_checkpoints/
+backup/
+data/
+tmp/
+test_out/
+runs/
+higan/
+check_w_cw1_sw1_bn64/
+*.pyc
+sampleStyle/
+check_cs_cw1_sw1_bn64/
+*.swp
+.bashrc
+results.tar.gz
