@@ -111,9 +111,10 @@ class BatchLoader(Dataset):
                 imNames = sorted(glob.glob(osp.join(shape, 'im_*.hdr')))
                 for im in imNames:
                     # print(im)
-                    im2 = im.replace('/newfoundland2/ruizhu/siggraphasia20dataset/code/Routine/DatasetCreation/', '/data/ruizhu/OR-matpart/')
-                    Path(im2).parent.mkdir(exist_ok=True, parents=True)
-                    matG2IdFile = im2.replace('im_', 'immatPartGlobal2Ids_').replace('hdr', 'npy')
+                    # im2 = im.replace('/newfoundland2/ruizhu/siggraphasia20dataset/code/Routine/DatasetCreation/', '/data/ruizhu/OR-matpart/')
+                    # Path(im2).parent.mkdir(exist_ok=True, parents=True)
+                    # matG2IdFile = im2.replace('im_', 'immatPartGlobal2Ids_').replace('hdr', 'npy')
+                    matG2IdFile = im.replace('im_', 'immatPartGlobal2Ids_').replace('hdr', 'npy')
                     if osp.exists(matG2IdFile):
                         matG2Ids = list(np.load(matG2IdFile) )
                     else:

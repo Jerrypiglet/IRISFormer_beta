@@ -105,7 +105,7 @@ def make_dataset(split='train', data_root=None, data_list=None, logger=None):
 
 class openrooms(data.Dataset):
     def __init__(self, opt, data_list=None, logger=basic_logger(), transforms_fixed=None, transforms_semseg=None, transforms_matseg=None, transforms_resize=None, 
-            split='train', load_first = -1, rseed = None, 
+            split='train', load_first = -1, rseed = 1, 
             cascadeLevel = 0,
             # is_light = False, is_all_light = False,
             envHeight = 8, envWidth = 16, envRow = 120, envCol = 160, 
@@ -117,6 +117,7 @@ class openrooms(data.Dataset):
         self.opt = opt
         self.cfg = self.opt.cfg
         self.logger = logger
+        self.rseed = rseed
         self.dataset_name = self.cfg.DATASET.dataset_name
         self.split = split
         assert self.split in ['train', 'val', 'test']
@@ -381,36 +382,56 @@ class openrooms(data.Dataset):
         # ====== layout, obj, emitters =====
         if self.opt.cfg.DATA.load_layout_emitter_gt:
             scene_total3d_Path = Path(self.cfg.DATASET.layout_emitter_path) / meta_split / scene_name
-            layout_emitter_dict = self.load_layout_emitter_gt(frame_info=(scene_total3d_Path, frame_id))
+            layout_emitter_dict = self.load_layout_emitter_gt(frame_info=(scene_total3d_Path, frame_id), if_gen_on_the_fly=True)
             batch_dict.update(layout_emitter_dict)
         
         return batch_dict
 
-    def load_mat_cls(self, hdr_image_path=None, frame_info=None):
+    def load_mat_cls(self, hdr_image_path=None, frame_info=None, if_gen_on_the_fly=True):
         if hdr_image_path is not None:
             maskG2_path = hdr_image_path.replace('im_', 'immatPartGlobal2_').replace('hdr', 'npy')
             matG2IdFile = hdr_image_path.replace('im_', 'immatPartGlobal2Ids_').replace('hdr', 'npy')
             matG1IdFile = hdr_image_path.replace('im_', 'immatPartGlobal1Ids_').replace('hdr', 'npy')
+            seed = hdr_image_path
         else:
             assert frame_info is not None
             maskG2_path = frame_info[0] / ('immatPartGlobal2_%d.npy'%frame_info[1])
             matG2IdFile = frame_info[0] / ('immatPartGlobal2Ids_%d.npy'%frame_info[1])
             matG1IdFile = frame_info[0] / ('immatPartGlobal1Ids_%d.npy'%frame_info[1])
+            seed = str(maskG2_path)
 
         matG2IdMap = self.loadNPY(maskG2_path)
 
-        matG2Ids = list(np.load(matG2IdFile) )
+        if if_gen_on_the_fly:
+            matG2Ids = sorted(list(np.unique(matG2IdMap) ) ) # !!!!!
+            if matG2Ids[0] == 0:
+                matG2Ids = matG2Ids[1:]
+            matNameCurr = [self.matG2Dict[matG2Id] for matG2Id in matG2Ids]
+        else:
+            matG2Ids = list(np.load(matG2IdFile) ) # [!!!] can be wrong! -> debug
+            matNameCurr = [self.matG2Dict[matG2Id] for matG2Id in matG2Ids]
 
-        matNameCurr = [self.matG2Dict[matG2Id] for matG2Id in matG2Ids]
 
         if self.split != 'train':
-            random.seed(hdr_image_path)
+            assert seed is not None
+            random.seed(seed)
+            # print(yellow('Seed ' + str(hdr_image_path)))
 
         idNum = len(matG2Ids)
-        frame_sampled = random.randint(0, idNum-1)
-        matIdG2 = matG2Ids[frame_sampled] # with scale
-        matMask = (matG2IdMap == matIdG2)[np.newaxis, :, :]
-        matName = matNameCurr[frame_sampled]
+
+        valid_pixel_ratio = 0.
+        attempts = 0
+        thres = 0.02
+        while valid_pixel_ratio <= thres and attempts < 100: # skip very small material segments
+            frame_sampled = random.randint(0, idNum-1)
+            matIdG2 = matG2Ids[frame_sampled] # with scale
+            matMask = (matG2IdMap == matIdG2)[np.newaxis, :, :]
+            matName = matNameCurr[frame_sampled]
+            valid_pixel_ratio = np.sum(matMask).astype(np.float32) / float(matMask.shape[1]*matMask.shape[2])
+            attempts += 1
+        if valid_pixel_ratio < thres:
+            print(valid_pixel_ratio, matG2IdFile)
+            print(attempts, frame_sampled, idNum, '%.3f'%valid_pixel_ratio, np.sum(matMask).astype(np.float32), float(matMask.shape[1]*matMask.shape[2]))
 
         matG1Ids = list(np.load(matG1IdFile))
         matIdG1 = matG1Ids[frame_sampled] - 1
