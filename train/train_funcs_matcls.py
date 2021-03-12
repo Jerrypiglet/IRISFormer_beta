@@ -90,7 +90,8 @@ def getRescaledMatFromID(matIds, matScales, oriMatRoot, matG1IdDict, res=128):
         # albedos.append(th.from_numpy(np.transpose(albedo, [2, 0, 1])))
         # normals.append(th.from_numpy(np.transpose(normal, [2, 0, 1])))
         # roughs.append(th.from_numpy(np.transpose(rough, [2, 0, 1])))
-        mat = np.concatenate([albedo, normal, rough], axis=0)
+        # print(albedo.shape) # [256, 256, 3]
+        mat = np.concatenate([albedo, normal, rough], axis=1) # [D, 3D, 3]
         mats.append(torch.from_numpy(np.transpose(mat, [2, 0, 1])))
 
     return mats

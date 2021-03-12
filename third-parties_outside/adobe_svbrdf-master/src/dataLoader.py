@@ -15,6 +15,7 @@ import torch
 import timeit
 import xml.etree.ElementTree as ET
 import os
+from pathlib import Path
 
 class BatchLoader(Dataset):
     def __init__(self, dataRoot, matDataRoot=None, dirs=['main_xml', 'main_xml1',
@@ -109,7 +110,10 @@ class BatchLoader(Dataset):
             for shape in tqdm(shapeList):
                 imNames = sorted(glob.glob(osp.join(shape, 'im_*.hdr')))
                 for im in imNames:
-                    matG2IdFile = im.replace('im_', 'immatPartGlobal2Ids_').replace('hdr', 'npy')
+                    # print(im)
+                    im2 = im.replace('/newfoundland2/ruizhu/siggraphasia20dataset/code/Routine/DatasetCreation/', '/data/ruizhu/OR-matpart/')
+                    Path(im2).parent.mkdir(exist_ok=True, parents=True)
+                    matG2IdFile = im2.replace('im_', 'immatPartGlobal2Ids_').replace('hdr', 'npy')
                     if osp.exists(matG2IdFile):
                         matG2Ids = list(np.load(matG2IdFile) )
                     else:
@@ -120,6 +124,12 @@ class BatchLoader(Dataset):
                         if matG2Ids[0] == 0:
                             matG2Ids = matG2Ids[1:]
                         np.save(matG2IdFile, np.array(matG2Ids))
+                        print('>>>', matG2IdFile)
+
+                        # Path(matG2IdFile).parent.mkdir(exist_ok=True, parents=True)
+                        # matG2IdFile2 = matG2IdFile.replace('/newfoundland2/ruizhu/siggraphasia20dataset/code/Routine/DatasetCreation/', '/data/ruizhu/OR-matpart/')
+                        # print('>>>', matG2IdFile2)
+                        # np.save(matG2IdFile2, np.array(matG2Ids))
 
                     idNum = len(matG2Ids)
                     self.imList += ([im] * idNum)
@@ -149,6 +159,7 @@ class BatchLoader(Dataset):
                             self.matIdG1List += matG1Ids
                             assert len(self.matIdG2List) == len(self.matIdG1List)
                             np.save(matG1IdFile, np.array(matG1Ids))
+                            print('>>>', matG1IdFile)
                         with open(listFile, 'a') as f:
                             for idx in range(idNum):
                                 f.writelines('%s %d %s %s %d\n' % (im, matG2Ids[idx], matNameCurr[idx], matScaleCurr[idx], matG1Ids[idx]) )

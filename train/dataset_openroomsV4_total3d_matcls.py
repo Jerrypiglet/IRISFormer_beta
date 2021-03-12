@@ -413,7 +413,7 @@ class openrooms(data.Dataset):
         matName = matNameCurr[frame_sampled]
 
         matG1Ids = list(np.load(matG1IdFile))
-        matIdG1 = matG1Ids[frame_sampled]
+        matIdG1 = matG1Ids[frame_sampled] - 1
         
         batch_dict = {
             'matMask': matMask,

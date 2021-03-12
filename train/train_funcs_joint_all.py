@@ -350,7 +350,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 intersection, union, target = intersection.cpu().numpy(), union.cpu().numpy(), target.cpu().numpy()
                 matcls_meters['intersection_meter'].update(intersection), matcls_meters['union_meter'].update(union), matcls_meters['target_meter'].update(target)
 
-            print(batch_id)
+            # print(batch_id)
 
             # synchronize()
 
@@ -523,16 +523,22 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     if opt.is_master:
                         writer.add_image('VAL_semseg_PRED/%d'%(sample_idx), color_pred, tid, dataformats='HWC')
 
-                # ======= Vis matcls
-                mats_pred_vis_list = getRescaledMatFromID(
-                    output_dict['matcls_argmax'].cpu().numpy(), np.ones((output_dict['matcls_argmax'].shape[0], 4), dtype=np.float32), opt.cfg.DATASET.matori_path, matG1IdDict, res=256)
-                mats_gt_vis_list = getRescaledMatFromID(
-                    input_dict['mat_label_batch'].cpu().numpy(), np.ones((input_dict['mat_label_batch'].shape[0], 4), dtype=np.float32), opt.cfg.DATASET.matori_path, matG1IdDict, res=256)
-                for mats_pred_vis, mats_gt_vis, mat_mask in zip(mats_pred_vis_list, mats_gt_vis_list, input_dict['mat_mask_batch']): # torch.Size([3, 768, 256])
-                    summary_cat = torch.cat([mats_pred_vis, mats_gt_vis], 2).permute(1, 2, 0)
-                    if opt.is_master:
-                        writer.add_image('VAL_matcls_PRED-GT/%d'%(sample_idx), summary_cat, tid, dataformats='HWC')
-                        writer.add_image('VAL_matcls_matmask/%d'%(sample_idx), mat_mask.squeeze(), tid, dataformats='HW')
+            # ======= Vis matcls
+            mats_pred_vis_list = getRescaledMatFromID(
+                output_dict['matcls_argmax'].cpu().numpy(), np.ones((output_dict['matcls_argmax'].shape[0], 4), dtype=np.float32), opt.cfg.DATASET.matori_path, matG1IdDict, res=256)
+            mats_gt_vis_list = getRescaledMatFromID(
+                input_dict['mat_label_batch'].cpu().numpy(), np.ones((input_dict['mat_label_batch'].shape[0], 4), dtype=np.float32), opt.cfg.DATASET.matori_path, matG1IdDict, res=256)
+            for sample_idx_batch, (mats_pred_vis, mats_gt_vis, mat_mask) in enumerate(zip(mats_pred_vis_list, mats_gt_vis_list, input_dict['mat_mask_batch'])): # torch.Size([3, 768, 256])
+                # print(mats_pred_vis.shape) # torch.Size([3, 256, 768])
+                summary_cat = torch.cat([mats_pred_vis, mats_gt_vis], 1).permute(1, 2, 0)
+                if opt.is_master:
+                    sample_idx = sample_idx_batch+batch_size*batch_id
+                    writer.add_image('VAL_matcls_PRED-GT/%d'%(sample_idx), summary_cat, tid, dataformats='HWC')
+                    writer.add_image('VAL_matcls_matmask/%d'%(sample_idx), mat_mask.squeeze(), tid, dataformats='HW')
+                    im_single = data_batch['im_SDR_RGB'][sample_idx_batch].detach().cpu()
+                    mat_mask = mat_mask.permute(1, 2, 0).cpu().float()
+                    matmask_overlay = im_single * mat_mask + im_single * 0.2 * (1. - mat_mask)
+                    writer.add_image('VAL_matcls_matmask-overlay/%d'%(sample_idx), matmask_overlay, tid, dataformats='HWC')
 
             # ======= visualize clusters for mat-seg
             if opt.cfg.DATA.load_matseg_gt:

@@ -222,7 +222,7 @@ class netCS(nn.Module):
 
         return output
 
-class netW(nn.Module):a
+class netW(nn.Module):
     # Use PhotoShape material classifier architecture
     def __init__(self, inChannels=5, num_dims=512, base_model=resnet.resnet18):
         super(netW,  self).__init__()
