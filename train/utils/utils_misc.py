@@ -7,7 +7,7 @@ from tqdm import tqdm
 import shutil, errno
 from pathlib import Path
 import statistics
-
+import torch
 import logging
 
 def basic_logger(name='basic_logger'):
@@ -192,6 +192,41 @@ class AverageMeter(object):
 
     def get_median(self):
         return statistics.median(self.all_list)
+
+class ListMeter(object):
+
+    def __init__(self, meter_name='N/A'):
+        self.meter_name = meter_name
+        # self.val = None
+        # self.avg = None
+        # self.median = None
+        # self.sum = None
+        self.count = None
+        self.all_list = []
+        self.reset()
+
+    def reset(self):
+        # self.val = 0
+        # self.avg = 0
+        # self.median = 0
+        # self.sum = 0
+        self.count = 0
+        self.all_list = []
+
+    def update(self, val, n=1):
+        # if self.meter_name == 'inv_depth_median_error_meter':
+        #     print('>>>>>>> val: ', val)
+        # self.val = val
+        # self.sum += val * n
+        self.count += n
+        # self.avg = self.sum / self.count
+        self.all_list.append(val)
+        # if self.meter_name == 'inv_depth_median_error_meter':
+        #     print('-------', self.all_list)
+
+    def concat(self):
+        return torch.cat(self.all_list)
+
 
 # def get_time_meters():
 #     time_meters = {}

@@ -111,10 +111,12 @@ class BatchLoader(Dataset):
                 imNames = sorted(glob.glob(osp.join(shape, 'im_*.hdr')))
                 for im in imNames:
                     # print(im)
-                    # im2 = im.replace('/newfoundland2/ruizhu/siggraphasia20dataset/code/Routine/DatasetCreation/', '/data/ruizhu/OR-matpart/')
-                    # Path(im2).parent.mkdir(exist_ok=True, parents=True)
-                    # matG2IdFile = im2.replace('im_', 'immatPartGlobal2Ids_').replace('hdr', 'npy')
-                    matG2IdFile = im.replace('im_', 'immatPartGlobal2Ids_').replace('hdr', 'npy')
+                    im2 = im.replace('/newfoundland2/ruizhu/siggraphasia20dataset/code/Routine/DatasetCreation/', '/data/ruizhu/OR-matpart/')
+                    # im2 = im.replace('/newfoundland2/ruizhu/siggraphasia20dataset/code/Routine/DatasetCreation/', '/newfoundland2/tmp/')
+                    Path(im2).parent.mkdir(exist_ok=True, parents=True)
+                    matG2IdFile = im2.replace('im_', 'immatPartGlobal2Ids_').replace('hdr', 'npy')
+                    # matG2IdFile = im.replace('im_', 'immatPartGlobal2Ids_').replace('hdr', 'npy')
+                    Path(matG2IdFile).unlink()
                     if osp.exists(matG2IdFile):
                         matG2Ids = list(np.load(matG2IdFile) )
                     else:
@@ -143,6 +145,7 @@ class BatchLoader(Dataset):
                         self.matScaleList += matScaleCurr
                         #self.matScaleList.append(self.matG2ScaleDict[matG2Id])
                         matG1IdFile = im.replace('im_', 'immatPartGlobal1Ids_').replace('hdr', 'npy')
+                        Path(matG1IdFile).unlink()
                         if osp.exists(matG1IdFile):
                             matG1Ids = list(np.load(matG1IdFile))
                             self.matIdG1List += matG1Ids
@@ -169,7 +172,8 @@ class BatchLoader(Dataset):
                             for idx in range(idNum):
                                 f.writelines('%s %d %s\n' % (im, matG2Ids[idx], matNameCurr[idx]) )
 
-            print('Pre-processed list is saved at %s' % listFile)                
+            print('Pre-processed list is saved at %s' % listFile)   
+            assert False             
 
         print('Data Pair Num: %d' % len(self.imList))
 

@@ -29,7 +29,7 @@ from utils.comm import synchronize
 
 from utils.utils_metrics import compute_errors_depth_nyu
 from train_funcs_matcls import getG1IdDict, getRescaledMatFromID
-
+from pytorch_lightning.metrics import Precision, Recall, F1, Accuracy
 
 def get_time_meters_joint():
     time_meters = {}
@@ -49,7 +49,7 @@ def get_semseg_meters():
     intersection_meter = AverageMeter()
     union_meter = AverageMeter()
     target_meter = AverageMeter()
-    semseg_meters = {'intersection_meter': intersection_meter, 'union_meter': union_meter, 'target_meter': target_meter}
+    semseg_meters = {'intersection_meter': intersection_meter, 'union_meter': union_meter, 'target_meter': target_meter,}
     return semseg_meters
 
 def get_brdf_meters(opt):
@@ -75,10 +75,7 @@ def get_light_meters(opt):
     return light_meters
 
 def get_matcls_meters(opt):
-    intersection_meter = AverageMeter()
-    union_meter = AverageMeter()
-    target_meter = AverageMeter()
-    matcls_meters = {'intersection_meter': intersection_meter, 'union_meter': union_meter, 'target_meter': target_meter}
+    matcls_meters = {'pred_labels_list': ListMeter(), 'gt_labels_list': ListMeter()}
     return matcls_meters
 
 def get_labels_dict_joint(data_batch, opt):
@@ -344,11 +341,14 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             if ENABLE_MATCLS:
                 output = output_dict['matcls_argmax']
                 target = input_dict['mat_label_batch']
-                intersection, union, target = intersectionAndUnionGPU(output, target, opt.cfg.MODEL_MATCLS.num_classes, -1)
-                if opt.distributed:
-                    dist.all_reduce(intersection), dist.all_reduce(union), dist.all_reduce(target)
-                intersection, union, target = intersection.cpu().numpy(), union.cpu().numpy(), target.cpu().numpy()
-                matcls_meters['intersection_meter'].update(intersection), matcls_meters['union_meter'].update(union), matcls_meters['target_meter'].update(target)
+                # intersection, union, target = intersectionAndUnionGPU(output, target, opt.cfg.MODEL_MATCLS.num_classes, -1)
+                # if opt.distributed:
+                #     dist.all_reduce(intersection), dist.all_reduce(union), dist.all_reduce(target)
+                # intersection, union, target = intersection.cpu().numpy(), union.cpu().numpy(), target.cpu().numpy()
+                # matcls_meters['intersection_meter'].update(intersection), matcls_meters['union_meter'].update(union), matcls_meters['target_meter'].update(target)
+                matcls_meters['pred_labels_list'].update(output.cpu().flatten())
+                matcls_meters['gt_labels_list'].update(target.cpu().flatten())
+
 
             # print(batch_id)
 
@@ -375,17 +375,29 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             writer.add_scalar('VAL/SEMSEG-allAcc_val', allAcc, tid)
 
         if ENABLE_MATCLS:
-            iou_class = matcls_meters['intersection_meter'].sum / (matcls_meters['union_meter'].sum + 1e-10)
-            accuracy_class = matcls_meters['intersection_meter'].sum / (matcls_meters['target_meter'].sum + 1e-10)
-            mIoU = np.mean(iou_class)
-            mAcc = np.mean(accuracy_class)
-            allAcc = sum(matcls_meters['intersection_meter'].sum) / (sum(matcls_meters['target_meter'].sum) + 1e-10)
-            logger.info('[MATCLS] Val result: mIoU/mAcc/allAcc {:.4f}/{:.4f}/{:.4f}.'.format(mIoU, mAcc, allAcc))
-            # for i in range(opt.cfg.MODEL_MATCLS.num_classes):
-            #     logger.info('Class_{} Result: iou/accuracy {:.4f}/{:.4f}.'.format(i, iou_class[i], accuracy_class[i]))
-            writer.add_scalar('VAL/MATCLS-mIoU_val', mIoU, tid)
-            writer.add_scalar('VAL/MATCLS-mAcc_val', mAcc, tid)
-            writer.add_scalar('VAL/MATCLS-allAcc_val', allAcc, tid)
+            # iou_class = matcls_meters['intersection_meter'].sum / (matcls_meters['union_meter'].sum + 1e-10)
+            # accuracy_class = matcls_meters['intersection_meter'].sum / (matcls_meters['target_meter'].sum + 1e-10)
+            # mIoU = np.mean(iou_class)
+            # mAcc = np.mean(accuracy_class)
+            # allAcc = sum(matcls_meters['intersection_meter'].sum) / (sum(matcls_meters['target_meter'].sum) + 1e-10)
+            # logger.info('[MATCLS] Val result: mIoU/mAcc/allAcc {:.4f}/{:.4f}/{:.4f}.'.format(mIoU, mAcc, allAcc))
+            # # for i in range(opt.cfg.MODEL_MATCLS.num_classes):
+            # #     logger.info('Class_{} Result: iou/accuracy {:.4f}/{:.4f}.'.format(i, iou_class[i], accuracy_class[i]))
+            # writer.add_scalar('VAL/MATCLS-mIoU_val', mIoU, tid)
+            # writer.add_scalar('VAL/MATCLS-mAcc_val', mAcc, tid)
+            # writer.add_scalar('VAL/MATCLS-allAcc_val', allAcc, tid)
+            pred_labels = matcls_meters['pred_labels_list'].concat().flatten()
+            gt_labels = matcls_meters['gt_labels_list'].concat().flatten()
+            # https://pytorch-lightning.readthedocs.io/en/0.8.5/metrics.html
+            accuracy = Accuracy()(pred_labels, gt_labels)
+            prec = Precision(num_classes=opt.cfg.MODEL_MATCLS.num_classes)(pred_labels, gt_labels)
+            recall = Recall(num_classes=opt.cfg.MODEL_MATCLS.num_classes)(pred_labels, gt_labels)
+            f1 = F1(num_classes=opt.cfg.MODEL_MATCLS.num_classes)(pred_labels, gt_labels)
+            writer.add_scalar('VAL/MATCLS-precision_val', prec, tid)
+            writer.add_scalar('VAL/MATCLS-accuracy_val', accuracy, tid)
+            writer.add_scalar('VAL/MATCLS-recall_val', recall, tid)
+            writer.add_scalar('VAL/MATCLS-F1_val', f1, tid)
+
 
         if ENABLE_BRDF:
             # writer.add_scalar('VAL/BRDF-inv_depth_mean_val', brdf_meters['inv_depth_mean_error_meter'].avg, tid)

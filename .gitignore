@@ -21,3 +21,4 @@ cluster_control/yamls/
 a.pkl
 tmp
 third-parties_outside/adobe_svbrdf-master/train_list_cs.txt
+tmp.py
