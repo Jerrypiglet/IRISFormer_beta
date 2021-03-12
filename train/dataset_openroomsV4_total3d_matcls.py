@@ -173,18 +173,27 @@ class openrooms(data.Dataset):
             self.SGNum = SGNum
 
         # ===== matcls =====
-        matG2File = self.opt.cfg.PATH.matcls_matIdG2_path
-        matG2Dict = {}
-        matG2ScaleDict = {}
-        with open(matG2File, 'r') as f:
+        # matG2File = self.opt.cfg.PATH.matcls_matIdG2_path
+        # matG2Dict = {}
+        # matG2ScaleDict = {}
+        # with open(matG2File, 'r') as f:
+        #     for line in f.readlines():
+        #         if 'Material__' not in line:
+        #             continue
+        #         matName, r, g, b, rough, mId = line.strip().split(' ')
+        #         matG2Dict[int(mId)] = matName
+        #         matG2ScaleDict[int(mId)] = '%s_%s_%s_%s' % (r, g, b, rough)
+        # self.matG2Dict = matG2Dict
+        # self.matG2ScaleDict = matG2ScaleDict
+        matG1File = self.opt.cfg.PATH.matcls_matIdG1_path
+        matG1Dict = {}
+        with open(matG1File, 'r') as f:
             for line in f.readlines():
                 if 'Material__' not in line:
                     continue
-                matName, r, g, b, rough, mId = line.strip().split(' ')
-                matG2Dict[int(mId)] = matName
-                matG2ScaleDict[int(mId)] = '%s_%s_%s_%s' % (r, g, b, rough)
-        self.matG2Dict = matG2Dict
-        self.matG2ScaleDict = matG2ScaleDict
+                matName, mId = line.strip().split(' ')
+                matG1Dict[int(mId)] = matName
+        self.matG1Dict = matG1Dict
 
     def __len__(self):
         return len(self.data_list)
@@ -388,67 +397,58 @@ class openrooms(data.Dataset):
         return batch_dict
 
     def load_mat_cls(self, hdr_image_path=None, frame_info=None, if_gen_on_the_fly=False, if_validate=False):
+        #$ load only G1
         if hdr_image_path is not None:
             maskG1_path = hdr_image_path.replace('im_', 'immatPartGlobal1_').replace('hdr', 'npy')
-            maskG2_path = hdr_image_path.replace('im_', 'immatPartGlobal2_').replace('hdr', 'npy')
             matG1IdFile = hdr_image_path.replace('im_', 'immatPartGlobal1Ids_').replace('hdr', 'npy')
-            matG2IdFile = hdr_image_path.replace('im_', 'immatPartGlobal2Ids_').replace('hdr', 'npy')
             seed = hdr_image_path
         else:
             assert frame_info is not None
             maskG1_path = frame_info[0] / ('immatPartGlobal1_%d.npy'%frame_info[1])
-            maskG2_path = frame_info[0] / ('immatPartGlobal2_%d.npy'%frame_info[1])
             matG1IdFile = frame_info[0] / ('immatPartGlobal1Ids_%d.npy'%frame_info[1])
-            matG2IdFile = frame_info[0] / ('immatPartGlobal2Ids_%d.npy'%frame_info[1])
-            seed = str(maskG2_path)
+            seed = str(matG1IdFile)
 
-
-        matG2IdMap = self.loadNPY(maskG2_path) # includes resizing!
-        matG2Ids = sorted(list(np.load(matG2IdFile) )) # [!!!] can be wrong! -> debug
-        matG2Ids = [x for x in matG2Ids if x != 0]
-        if if_gen_on_the_fly:
-            matG2IdMap_oriSize = np.load(maskG2_path)
-            matG2Ids_fromMap = sorted(list(np.unique(matG2IdMap_oriSize) ) ) # !!!!!
-            matG2Ids_fromMap = [x for x in matG2Ids_fromMap if x != 0]
-            if if_validate:
-                if matG2Ids_fromMap != matG2Ids:
-                    print('====', matG2Ids, matG2Ids_fromMap, matG2IdFile)
-            matG2Ids = matG2Ids_fromMap
-
-        matNameCurr = [self.matG2Dict[matG2Id] for matG2Id in matG2Ids]
+        matG1IdMap = self.loadNPY(maskG1_path) # includes resizing!
+        matG1Ids = sorted(list(np.unique(matG1IdMap) ) )
+        matG1Ids = [x for x in matG1Ids if x != 0]
+        # matG1Ids = list(np.load(matG1IdFile))
+        # matG1Ids = list(set(matG1Ids))
+        mat_name_dict_G1= [self.matG1Dict[matG1Id] for matG1Id in matG1Ids]
+        # matG1IdMap_oriSize = np.load(maskG1_path)
 
         if self.split != 'train':
             assert seed is not None
             random.seed(seed)
             # print(yellow('Seed ' + str(hdr_image_path)))
 
-        idNum = len(matG2Ids)
+        idNum = len(matG1Ids)
+
+        # if if_validate:
+        #     valid_pixel_ratio_list =[]
+        #     for frame_sampled in range(idNum):
+        #         matIdG1 = matG1Ids[frame_sampled] # with scale
+        #         matMask = (matG1IdMap == matIdG1)[np.newaxis, :, :]
+        #         valid_pixel_ratio = np.sum(matMask).astype(np.float32) / float(matMask.shape[1]*matMask.shape[2])
+        #         valid_pixel_ratio_list.append([matIdG1, '%.2f'%valid_pixel_ratio, valid_pixel_ratio])
+        #     print('----', matG1IdFile)
+        #     print(sum([float(x[2]) for x in valid_pixel_ratio_list]), [x[:2] for x in valid_pixel_ratio_list])
 
         valid_pixel_ratio = 0.
         attempts = 0
         thres = 0.01
         while valid_pixel_ratio <= thres and attempts < 100: # skip very small material segments
             frame_sampled = random.randint(0, idNum-1)
-            matIdG2 = matG2Ids[frame_sampled] # with scale
-            matMask = (matG2IdMap == matIdG2)[np.newaxis, :, :]
-            matName = matNameCurr[frame_sampled]
+            matIdG1 = matG1Ids[frame_sampled] # with scale
+            matMask = (matG1IdMap == matIdG1)[np.newaxis, :, :]
             valid_pixel_ratio = np.sum(matMask).astype(np.float32) / float(matMask.shape[1]*matMask.shape[2])
             attempts += 1
         if valid_pixel_ratio < thres:
-            print(valid_pixel_ratio, matG2IdFile)
+            print(valid_pixel_ratio, matG1IdFile)
             print(attempts, frame_sampled, idNum, '%.3f'%valid_pixel_ratio, np.sum(matMask).astype(np.float32), float(matMask.shape[1]*matMask.shape[2]))
 
-        matG1Ids = list(np.load(matG1IdFile))
+        matName = mat_name_dict_G1[frame_sampled]
         matIdG1 = matG1Ids[frame_sampled] - 1
-        if if_gen_on_the_fly:
-            matG1IdMap_oriSize = np.load(maskG1_path)
-            matMask_oriSize = (matG2IdMap_oriSize == matIdG2)[np.newaxis, :, :]
-            matG1Id_fromMap = np.unique(matG1IdMap_oriSize.flatten()[matMask_oriSize.flatten()])[0] - 1
-            if if_validate:
-                if matG1Id_fromMap != matG1Id_fromMap:
-                    print(matG1Id_fromMap, matG1Id_fromMap, matG1IdFile)
-            matIdG1 = matG1Id_fromMap
-        
+
         batch_dict = {
             'matMask': matMask,
             'matName': matName,
@@ -456,6 +456,84 @@ class openrooms(data.Dataset):
         }
 
         return batch_dict
+
+
+    # def load_mat_cls(self, hdr_image_path=None, frame_info=None, if_gen_on_the_fly=False, if_validate=False):
+    #     if hdr_image_path is not None:
+    #         maskG1_path = hdr_image_path.replace('im_', 'immatPartGlobal1_').replace('hdr', 'npy')
+    #         maskG2_path = hdr_image_path.replace('im_', 'immatPartGlobal2_').replace('hdr', 'npy')
+    #         matG1IdFile = hdr_image_path.replace('im_', 'immatPartGlobal1Ids_').replace('hdr', 'npy')
+    #         matG2IdFile = hdr_image_path.replace('im_', 'immatPartGlobal2Ids_').replace('hdr', 'npy')
+    #         seed = hdr_image_path
+    #     else:
+    #         assert frame_info is not None
+    #         maskG1_path = frame_info[0] / ('immatPartGlobal1_%d.npy'%frame_info[1])
+    #         maskG2_path = frame_info[0] / ('immatPartGlobal2_%d.npy'%frame_info[1])
+    #         matG1IdFile = frame_info[0] / ('immatPartGlobal1Ids_%d.npy'%frame_info[1])
+    #         matG2IdFile = frame_info[0] / ('immatPartGlobal2Ids_%d.npy'%frame_info[1])
+    #         seed = str(maskG2_path)
+
+    #     matG2IdMap = self.loadNPY(maskG2_path) # includes resizing!
+    #     matG2Ids = sorted(list(np.load(matG2IdFile) ))
+    #     matG2Ids = [x for x in matG2Ids if x != 0]
+    #     matG1Ids = list(np.load(matG1IdFile))
+    #     if len(matG1Ids) != len(matG2Ids):
+    #        if_gen_on_the_fly = True 
+
+    #     if if_gen_on_the_fly:
+    #         matG2IdMap_oriSize = np.load(maskG2_path)
+    #         matG2Ids_fromMap = sorted(list(np.unique(matG2IdMap_oriSize) ) ) # !!!!!
+    #         matG2Ids_fromMap = [x for x in matG2Ids_fromMap if x != 0]
+    #         if if_validate:
+    #             if matG2Ids_fromMap != matG2Ids:
+    #                 print('====', matG2Ids, matG2Ids_fromMap, matG2IdFile)
+    #         matG2Ids = matG2Ids_fromMap
+
+    #     matNameCurr = [self.matG2Dict[matG2Id] for matG2Id in matG2Ids]
+
+    #     if self.split != 'train':
+    #         assert seed is not None
+    #         random.seed(seed)
+    #         # print(yellow('Seed ' + str(hdr_image_path)))
+
+    #     idNum = len(matG2Ids)
+
+    #     valid_pixel_ratio = 0.
+    #     attempts = 0
+    #     thres = 0.01
+    #     while valid_pixel_ratio <= thres and attempts < 100: # skip very small material segments
+    #         frame_sampled = random.randint(0, idNum-1)
+    #         matIdG2 = matG2Ids[frame_sampled] # with scale
+    #         matMask = (matG2IdMap == matIdG2)[np.newaxis, :, :]
+    #         matName = matNameCurr[frame_sampled]
+    #         valid_pixel_ratio = np.sum(matMask).astype(np.float32) / float(matMask.shape[1]*matMask.shape[2])
+    #         attempts += 1
+    #     if valid_pixel_ratio < thres:
+    #         print(valid_pixel_ratio, matG2IdFile)
+    #         print(attempts, frame_sampled, idNum, '%.3f'%valid_pixel_ratio, np.sum(matMask).astype(np.float32), float(matMask.shape[1]*matMask.shape[2]))
+
+    #     matIdG1 = matG1Ids[frame_sampled] - 1
+
+    #     if if_gen_on_the_fly:
+    #         matG1IdMap_oriSize = np.load(maskG1_path)
+    #         matMask_oriSize = (matG2IdMap_oriSize == matIdG2)[np.newaxis, :, :]
+    #         matG1Id_fromMap = np.unique(matG1IdMap_oriSize.flatten()[matMask_oriSize.flatten()])
+    #         assert len(matG1Id_fromMap.tolist())==1
+    #         matG1Id_fromMap = matG1Id_fromMap[0] - 1
+    #         if if_validate:
+    #             if matG1Id_fromMap != matIdG1:
+    #                 print(matG1Id_fromMap, matIdG1, matG1IdFile)
+    #             # else:
+    #             #     print('G1 is correct.')
+    #         matIdG1 = matG1Id_fromMap
+        
+    #     batch_dict = {
+    #         'matMask': matMask,
+    #         'matName': matName,
+    #         'matLabel': matIdG1
+    #     }
+
+    #     return batch_dict
 
     def load_sem_seg(self, im_RGB_uint8, semseg_label_path):
         semseg_label = np.load(semseg_label_path).astype(np.uint8)

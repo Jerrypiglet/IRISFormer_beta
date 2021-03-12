@@ -158,7 +158,9 @@ class BatchLoader(Dataset):
                                     'im_', 'immatPartGlobal2_').replace('hdr', 'npy'))
                             for matG2Id in matG2Ids:
                                 matMask = matG2IdMap == matG2Id
-                                matG1Id = np.unique(matG1IdMap.flatten()[matMask.flatten()])[0]
+                                matG1Id = np.unique(matG1IdMap.flatten()[matMask.flatten()])
+                                assert len(matG1Id.tolist) == 1
+                                matG1Id = matG1Id[0]
                                 matG1Ids.append(matG1Id)
                             self.matIdG1List += matG1Ids
                             assert len(self.matIdG2List) == len(self.matIdG1List)
