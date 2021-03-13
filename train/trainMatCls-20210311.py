@@ -382,6 +382,10 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         if opt.cfg.MODEL_MATCLS.enable:
             loss_keys_backward.append('loss_matcls-ALL')
             loss_keys_print.append('loss_matcls-ALL')
+            loss_keys_print.append('loss_matcls-cls')
+            if opt.cfg.MODEL_MATCLS.if_est_sup:
+                loss_keys_print.append('loss_matcls-supcls')
+
 
         if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
             if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:

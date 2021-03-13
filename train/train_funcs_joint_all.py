@@ -76,6 +76,8 @@ def get_light_meters(opt):
 
 def get_matcls_meters(opt):
     matcls_meters = {'pred_labels_list': ListMeter(), 'gt_labels_list': ListMeter()}
+    if opt.cfg.MODEL_MATCLS.num_classes_sup:
+        matcls_meters.update({'pred_labels_sup_list': ListMeter(), 'gt_labels_sup_list': ListMeter()})
     return matcls_meters
 
 def get_labels_dict_joint(data_batch, opt):
@@ -240,7 +242,11 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
     if opt.cfg.MODEL_MATCLS.enable:
         loss_keys += [
-            'loss_matcls-ALL', ]
+            'loss_matcls-ALL',
+            'loss_matcls-cls', ]
+        if opt.cfg.MODEL_MATCLS.if_est_sup:
+            loss_keys += [
+            'loss_matcls-supcls',]
 
         
     loss_meters = {loss_key: AverageMeter() for loss_key in loss_keys}
@@ -273,6 +279,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             # loss = loss_dict['loss_all']
             
             # ======= update loss
+            print(loss_dict_reduced.keys())
             for loss_key in loss_dict_reduced:
                 loss_meters[loss_key].update(loss_dict_reduced[loss_key].item())
 
@@ -341,13 +348,13 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             if ENABLE_MATCLS:
                 output = output_dict['matcls_argmax']
                 target = input_dict['mat_label_batch']
-                # intersection, union, target = intersectionAndUnionGPU(output, target, opt.cfg.MODEL_MATCLS.num_classes, -1)
-                # if opt.distributed:
-                #     dist.all_reduce(intersection), dist.all_reduce(union), dist.all_reduce(target)
-                # intersection, union, target = intersection.cpu().numpy(), union.cpu().numpy(), target.cpu().numpy()
-                # matcls_meters['intersection_meter'].update(intersection), matcls_meters['union_meter'].update(union), matcls_meters['target_meter'].update(target)
                 matcls_meters['pred_labels_list'].update(output.cpu().flatten())
                 matcls_meters['gt_labels_list'].update(target.cpu().flatten())
+                if opt.cfg.MODEL_MATCLS.num_classes_sup:
+                    output = output_dict['matcls_sup_argmax']
+                    target = input_dict['mat_label_sup_batch']
+                    matcls_meters['pred_labels_sup_list'].update(output.cpu().flatten())
+                    matcls_meters['gt_labels_sup_list'].update(target.cpu().flatten())
 
 
             # print(batch_id)
@@ -397,6 +404,18 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             writer.add_scalar('VAL/MATCLS-accuracy_val', accuracy, tid)
             writer.add_scalar('VAL/MATCLS-recall_val', recall, tid)
             writer.add_scalar('VAL/MATCLS-F1_val', f1, tid)
+
+            pred_labels = matcls_meters['pred_labels_sup_list'].concat().flatten()
+            gt_labels = matcls_meters['gt_labels_sup_list'].concat().flatten()
+            # https://pytorch-lightning.readthedocs.io/en/0.8.5/metrics.html
+            accuracy = Accuracy()(pred_labels, gt_labels)
+            prec = Precision(ignore_index=0, num_classes=opt.cfg.MODEL_MATCLS.num_classes_sup+1)(pred_labels, gt_labels)
+            recall = Recall(ignore_index=0, num_classes=opt.cfg.MODEL_MATCLS.num_classes_sup+1)(pred_labels, gt_labels)
+            f1 = F1(num_classes=opt.cfg.MODEL_MATCLS.num_classes_sup+1)(pred_labels, gt_labels)
+            writer.add_scalar('VAL/MATCLS-sup_precision_val', prec, tid)
+            writer.add_scalar('VAL/MATCLS-sup_accuracy_val', accuracy, tid)
+            writer.add_scalar('VAL/MATCLS-sup_recall_val', recall, tid)
+            writer.add_scalar('VAL/MATCLS-sup_F1_val', f1, tid)
 
 
         if ENABLE_BRDF:

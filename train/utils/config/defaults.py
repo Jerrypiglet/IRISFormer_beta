@@ -162,7 +162,9 @@ _C.MODEL_LAYOUT_EMITTER.layout.loss.obj_cam_ratio = 1
 _C.MODEL_MATCLS = CN()
 _C.MODEL_MATCLS.enable = False
 _C.MODEL_MATCLS.num_classes = 886
-
+_C.MODEL_MATCLS.num_classes_sup = 9 # (+ 1 for unlabelled)
+_C.MODEL_MATCLS.if_est_sup = False # substance loss
+_C.MODEL_MATCLS.loss_sup_weight = 0.5
 
 # ===== material segmentation
 _C.MODEL_MATSEG = CN()

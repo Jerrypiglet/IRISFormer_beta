@@ -195,6 +195,29 @@ class openrooms(data.Dataset):
                 matG1Dict[int(mId)] = matName
         self.matG1Dict = matG1Dict
 
+        sup_mat_lists_path = Path('/newfoundland2/ruizhu/siggraphasia20dataset/code/Routine/DatasetCreation/MatLists')
+        sup_mat_lists = [x for x in sup_mat_lists_path.iterdir() if '.txt' in str(x)]
+        self.sup_mat_dicts = {}
+        for sup_mat_list in sorted(sup_mat_lists):
+        #     print(sup_mat_list.name)
+            with open(str(sup_mat_list), 'r') as fIn:
+                lines = fIn.readlines()
+                lines = [x.strip() for x in lines]
+            self.sup_mat_dicts[sup_mat_list.stem] = lines
+            
+        valid_sup_classes = ['fabric', 'leather', 'metal', 'paint', 'plastic', 'rough_stone', 'rubber', 'specular_stone', 'wood']
+        self.sup_mat_dicts = {x: self.sup_mat_dicts[x] for x in self.sup_mat_dicts if x in valid_sup_classes}
+        assert opt.cfg.MODEL_MATCLS.num_classes_sup == len(self.sup_mat_dicts.keys())
+
+        self.mat_to_supcls_dict = {}
+        for supcls_id, supcls_name in enumerate(self.sup_mat_dicts.keys()):
+            for mat in self.sup_mat_dicts[supcls_name]:
+        #         print(supcls_id, supcls, mat)
+                self.mat_to_supcls_dict[mat] = [supcls_id+1, supcls_name] # supcls==0 for unlabelled
+        self.mat_to_supcls_dict_keys =list(self.mat_to_supcls_dict.keys())
+                
+        # print(len(self.mat_to_supcls_dict.keys()))
+
     def __len__(self):
         return len(self.data_list)
         
@@ -452,8 +475,18 @@ class openrooms(data.Dataset):
         batch_dict = {
             'matMask': matMask,
             'matName': matName,
-            'matLabel': matIdG1
+            'matLabel': matIdG1,
         }
+
+        if matName in self.mat_to_supcls_dict_keys:
+            matLabelSup, matNameSup = self.mat_to_supcls_dict[matName]
+        else:
+            matLabelSup, matNameSup = 0, 'Unlabelled'
+            if '.' not in matName:
+                print(matName)
+        if matLabelSup > self.opt.cfg.MODEL_MATCLS.num_classes_sup:
+            print(matName, matLabelSup, matNameSup)
+        batch_dict.update({'matLabelSup': matLabelSup, 'matNameSup': matNameSup})
 
         return batch_dict
 

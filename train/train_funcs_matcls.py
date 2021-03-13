@@ -14,6 +14,7 @@ from utils.utils_misc import *
 from PIL import Image
 
 ceLoss = nn.CrossEntropyLoss()
+ceLoss_sup = nn.CrossEntropyLoss(ignore_index=0) # ignore mat cls sup == 0 for unlabelled and homogeneous materials
 
 def get_labels_dict_matcls(data_batch, opt):
     input_dict = {}
@@ -24,6 +25,8 @@ def get_labels_dict_matcls(data_batch, opt):
     input_dict['mat_mask_batch'] = Variable(data_batch['matMask']).cuda(non_blocking=True)
     input_dict['mat_label_batch'] = Variable(data_batch['matLabel']).cuda(non_blocking=True)
 
+    if opt.cfg.MODEL_MATCLS.if_est_sup:
+        input_dict['mat_label_sup_batch'] = Variable(data_batch['matLabelSup']).cuda(non_blocking=True)
     return input_dict
 
 def postprocess_matcls(input_dict, output_dict, loss_dict, opt, time_meters, if_vis=False):
@@ -32,9 +35,15 @@ def postprocess_matcls(input_dict, output_dict, loss_dict, opt, time_meters, if_
     # ======= Calculate loss
     classErr = ceLoss(matcls_output, input_dict['mat_label_batch'].long())
     loss_dict['loss_matcls-ALL'] = classErr
-    # loss_dict['loss_matcls-cls'] = torch.mean(torch.stack(loss_pull_list))
+    loss_dict['loss_matcls-cls'] = classErr
     # loss_dict['loss_matseg-push'] = torch.mean(torch.stack(loss_push_list))
     # loss_dict['loss_matseg-binary'] = torch.mean(torch.stack(loss_binary_list))
+
+    if opt.cfg.MODEL_MATCLS.if_est_sup:
+        matcls_sup_output, matcls_sup_argmax = output_dict['matcls_sup_output'], output_dict['matcls_sup_argmax']
+        classErr_sup = ceLoss_sup(matcls_sup_output, input_dict['mat_label_sup_batch'].long())
+        loss_dict['loss_matcls-ALL'] += classErr_sup * opt.cfg.MODEL_MATCLS.loss_sup_weight
+        loss_dict['loss_matcls-supcls'] = classErr_sup
 
     return output_dict, loss_dict
 

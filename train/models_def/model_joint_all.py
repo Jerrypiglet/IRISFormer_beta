@@ -120,7 +120,7 @@ class Model_Joint(nn.Module):
             self.LAYOUT_EMITTER_NET = models_layout_emitter.decoder_layout_emitter(opt)
 
         if self.cfg.MODEL_MATCLS.enable:
-            self.MATCLS_NET = model_matcls.netCS(inChannels=4, base_model=resnet.resnet34, if_est_scale=False)
+            self.MATCLS_NET = model_matcls.netCS(opt=opt, inChannels=4, base_model=resnet.resnet34, if_est_scale=False, if_est_sup = opt.cfg.MODEL_MATCLS.if_est_sup)
 
 
     def forward(self, input_dict):
@@ -392,6 +392,9 @@ class Model_Joint(nn.Module):
         output = self.MATCLS_NET(input_batch)
         _, matcls_argmax = torch.max(output['material'], 1)
         return_dict = {'matcls_output': output['material'], 'matcls_argmax': matcls_argmax}
+        if self.opt.cfg.MODEL_MATCLS.if_est_sup:
+            _, matcls_sup_argmax = torch.max(output['material_sup'], 1)
+            return_dict.update({'matcls_sup_output': output['material_sup'], 'matcls_sup_argmax': matcls_sup_argmax})
         return return_dict
 
     def print_net(self):
