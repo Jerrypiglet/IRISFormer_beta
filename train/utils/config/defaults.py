@@ -165,6 +165,7 @@ _C.MODEL_MATCLS.num_classes = 886
 _C.MODEL_MATCLS.num_classes_sup = 9 # (+ 1 for unlabelled)
 _C.MODEL_MATCLS.if_est_sup = False # substance loss
 _C.MODEL_MATCLS.loss_sup_weight = 0.5
+_C.MODEL_MATCLS.real_images_list = '/newfoundland2/ruizhu/yyyeh/OpenRoomScanNetView/real_images_list.txt'
 
 # ===== material segmentation
 _C.MODEL_MATSEG = CN()

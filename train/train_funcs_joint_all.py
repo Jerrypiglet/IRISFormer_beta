@@ -434,13 +434,18 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         logger.info(red('Evaluation timings: ' + time_meters_to_string(time_meters)))
 
 
-def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
+def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batch_size):
 
     writer, logger, opt, tid = params_mis['writer'], params_mis['logger'], params_mis['opt'], params_mis['tid']
     logger.info(red('=== [vis_val_epoch_joint] Visualizing for %d batches on rank %d'%(len(brdf_loader_val), opt.rank)))
 
     model.eval()
     opt.if_vis_debug_pac = True
+
+    if opt.test_real:
+        if opt.cfg.MODEL_MATCLS.enable:
+            matcls_results_path = opt.cfg.MODEL_MATCLS.real_images_list.replace('.txt', '-results.txt')
+            f_matcls_results = open(matcls_results_path, 'w')
 
     time_meters = get_time_meters_joint()
 
@@ -474,7 +479,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     # ===== Gather vis of N batches
     with torch.no_grad():
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
-            batch_size = len(data_batch['image_path'])
             if batch_size*batch_id >= opt.cfg.TEST.vis_max_samples:
                 break
 
@@ -501,6 +505,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
             for sample_idx_batch, (im_single, im_path) in enumerate(zip(data_batch['im_SDR_RGB'], data_batch['image_path'])):
                 sample_idx = sample_idx_batch+batch_size*batch_id
+                print('Visualizing %d sample...'%sample_idx, batch_id, sample_idx_batch)
                 if sample_idx >= opt.cfg.TEST.vis_max_samples:
                     break
 
@@ -559,9 +564,19 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 output_dict['matcls_argmax'].cpu().numpy(), np.ones((output_dict['matcls_argmax'].shape[0], 4), dtype=np.float32), opt.cfg.DATASET.matori_path, matG1IdDict, res=256)
             mats_gt_vis_list = getRescaledMatFromID(
                 input_dict['mat_label_batch'].cpu().numpy(), np.ones((input_dict['mat_label_batch'].shape[0], 4), dtype=np.float32), opt.cfg.DATASET.matori_path, matG1IdDict, res=256)
-            for sample_idx_batch, (mats_pred_vis, mats_gt_vis, mat_mask) in enumerate(zip(mats_pred_vis_list, mats_gt_vis_list, input_dict['mat_mask_batch'])): # torch.Size([3, 768, 256])
+            mat_label_batch = input_dict['mat_label_batch'].cpu().numpy()
+            mat_pred_batch = output_dict['matcls_argmax'].cpu().numpy()
+            for sample_idx_batch, (mats_pred_vis, mats_gt_vis, mat_mask, mat_label, mat_pred) in enumerate(zip(mats_pred_vis_list, mats_gt_vis_list, input_dict['mat_mask_batch'], mat_label_batch, mat_pred_batch)): # torch.Size([3, 768, 256])
                 # print(mats_pred_vis.shape) # torch.Size([3, 256, 768])
-                summary_cat = torch.cat([mats_pred_vis, mats_gt_vis], 1).permute(1, 2, 0)
+                mat_label = mat_label.item()
+                mat_pred = mat_pred.item()
+                im_path = data_batch['image_path'][sample_idx_batch]
+
+                if not opt.test_real:
+                    summary_cat = torch.cat([mats_pred_vis, mats_gt_vis], 1).permute(1, 2, 0)
+                else:
+                    summary_cat = mats_pred_vis.permute(1, 2, 0) # not showing GT if GT label is 0
+                
                 if opt.is_master:
                     sample_idx = sample_idx_batch+batch_size*batch_id
                     writer.add_image('VAL_matcls_PRED-GT/%d'%(sample_idx), summary_cat, tid, dataformats='HWC')
@@ -570,6 +585,11 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     mat_mask = mat_mask.permute(1, 2, 0).cpu().float()
                     matmask_overlay = im_single * mat_mask + im_single * 0.2 * (1. - mat_mask)
                     writer.add_image('VAL_matcls_matmask-overlay/%d'%(sample_idx), matmask_overlay, tid, dataformats='HWC')
+                    if opt.test_real and opt.cfg.MODEL_MATCLS.enable:
+                        f_matcls_results.write(' '.join([im_path, opt.matG1Dict[mat_pred+1]]))
+                        f_matcls_results.write('\n')
+
+                    
 
             # ======= visualize clusters for mat-seg
             if opt.cfg.DATA.load_matseg_gt:
