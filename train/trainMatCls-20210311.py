@@ -84,6 +84,10 @@ parser.add_argument("--mini_val", type=str2bool, nargs='?', const=True, default=
 # to get rid of
 parser.add_argument('--test_real', action='store_true', help='')
 
+
+parser.add_argument('--replaced_keys', nargs='+', help='Replace those keys in the model', required=False)
+parser.add_argument('--replacedby', nargs='+', help='... with those keys from ckpt. Must be in the same length as ``replace_leys``', required=False)
+
 parser.add_argument(
     "--config-file",
     default=os.path.join(pwdpath, "configs/config.yaml"),

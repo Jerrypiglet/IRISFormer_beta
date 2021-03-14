@@ -29,7 +29,8 @@ from utils.comm import synchronize
 
 from utils.utils_metrics import compute_errors_depth_nyu
 from train_funcs_matcls import getG1IdDict, getRescaledMatFromID
-from pytorch_lightning.metrics import Precision, Recall, F1, Accuracy
+# from pytorch_lightning.metrics import Precision, Recall, F1, Accuracy
+from pytorch_lightning.metrics import Accuracy
 
 def get_time_meters_joint():
     time_meters = {}
@@ -279,7 +280,6 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             # loss = loss_dict['loss_all']
             
             # ======= update loss
-            print(loss_dict_reduced.keys())
             for loss_key in loss_dict_reduced:
                 loss_meters[loss_key].update(loss_dict_reduced[loss_key].item())
 
@@ -350,7 +350,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 target = input_dict['mat_label_batch']
                 matcls_meters['pred_labels_list'].update(output.cpu().flatten())
                 matcls_meters['gt_labels_list'].update(target.cpu().flatten())
-                if opt.cfg.MODEL_MATCLS.num_classes_sup:
+                if opt.cfg.MODEL_MATCLS.if_est_sup:
                     output = output_dict['matcls_sup_argmax']
                     target = input_dict['mat_label_sup_batch']
                     matcls_meters['pred_labels_sup_list'].update(output.cpu().flatten())
@@ -397,25 +397,26 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             gt_labels = matcls_meters['gt_labels_list'].concat().flatten()
             # https://pytorch-lightning.readthedocs.io/en/0.8.5/metrics.html
             accuracy = Accuracy()(pred_labels, gt_labels)
-            prec = Precision(num_classes=opt.cfg.MODEL_MATCLS.num_classes)(pred_labels, gt_labels)
-            recall = Recall(num_classes=opt.cfg.MODEL_MATCLS.num_classes)(pred_labels, gt_labels)
-            f1 = F1(num_classes=opt.cfg.MODEL_MATCLS.num_classes)(pred_labels, gt_labels)
-            writer.add_scalar('VAL/MATCLS-precision_val', prec, tid)
+            # prec = Precision(num_classes=opt.cfg.MODEL_MATCLS.num_classes)(pred_labels, gt_labels)
+            # recall = Recall(num_classes=opt.cfg.MODEL_MATCLS.num_classes)(pred_labels, gt_labels)
+            # f1 = F1(num_classes=opt.cfg.MODEL_MATCLS.num_classes)(pred_labels, gt_labels)
+            # writer.add_scalar('VAL/MATCLS-precision_val', prec, tid)
             writer.add_scalar('VAL/MATCLS-accuracy_val', accuracy, tid)
-            writer.add_scalar('VAL/MATCLS-recall_val', recall, tid)
-            writer.add_scalar('VAL/MATCLS-F1_val', f1, tid)
+            # writer.add_scalar('VAL/MATCLS-recall_val', recall, tid)
+            # writer.add_scalar('VAL/MATCLS-F1_val', f1, tid)
 
-            pred_labels = matcls_meters['pred_labels_sup_list'].concat().flatten()
-            gt_labels = matcls_meters['gt_labels_sup_list'].concat().flatten()
-            # https://pytorch-lightning.readthedocs.io/en/0.8.5/metrics.html
-            accuracy = Accuracy()(pred_labels, gt_labels)
-            prec = Precision(ignore_index=0, num_classes=opt.cfg.MODEL_MATCLS.num_classes_sup+1)(pred_labels, gt_labels)
-            recall = Recall(ignore_index=0, num_classes=opt.cfg.MODEL_MATCLS.num_classes_sup+1)(pred_labels, gt_labels)
-            f1 = F1(num_classes=opt.cfg.MODEL_MATCLS.num_classes_sup+1)(pred_labels, gt_labels)
-            writer.add_scalar('VAL/MATCLS-sup_precision_val', prec, tid)
-            writer.add_scalar('VAL/MATCLS-sup_accuracy_val', accuracy, tid)
-            writer.add_scalar('VAL/MATCLS-sup_recall_val', recall, tid)
-            writer.add_scalar('VAL/MATCLS-sup_F1_val', f1, tid)
+            if opt.cfg.MODEL_MATCLS.if_est_sup:
+                pred_labels = matcls_meters['pred_labels_sup_list'].concat().flatten()
+                gt_labels = matcls_meters['gt_labels_sup_list'].concat().flatten()
+                # https://pytorch-lightning.readthedocs.io/en/0.8.5/metrics.html
+                accuracy = Accuracy()(pred_labels, gt_labels)
+                # prec = Precision(ignore_index=0, num_classes=opt.cfg.MODEL_MATCLS.num_classes_sup+1)(pred_labels, gt_labels)
+                # recall = Recall(ignore_index=0, num_classes=opt.cfg.MODEL_MATCLS.num_classes_sup+1)(pred_labels, gt_labels)
+                # f1 = F1(num_classes=opt.cfg.MODEL_MATCLS.num_classes_sup+1)(pred_labels, gt_labels)
+                # writer.add_scalar('VAL/MATCLS-sup_precision_val', prec, tid)
+                writer.add_scalar('VAL/MATCLS-sup_accuracy_val', accuracy, tid)
+                # writer.add_scalar('VAL/MATCLS-sup_recall_val', recall, tid)
+                # writer.add_scalar('VAL/MATCLS-sup_F1_val', f1, tid)
 
 
         if ENABLE_BRDF:
