@@ -560,9 +560,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
                         writer.add_image('VAL_semseg_PRED/%d'%(sample_idx), color_pred, tid, dataformats='HWC')
 
             # ======= Vis matcls
-            mats_pred_vis_list = getRescaledMatFromID(
+            mats_pred_vis_list, prop_list_pred = getRescaledMatFromID(
                 output_dict['matcls_argmax'].cpu().numpy(), np.ones((output_dict['matcls_argmax'].shape[0], 4), dtype=np.float32), opt.cfg.DATASET.matori_path, matG1IdDict, res=256)
-            mats_gt_vis_list = getRescaledMatFromID(
+            mats_gt_vis_list, prop_list_gt = getRescaledMatFromID(
                 input_dict['mat_label_batch'].cpu().numpy(), np.ones((input_dict['mat_label_batch'].shape[0], 4), dtype=np.float32), opt.cfg.DATASET.matori_path, matG1IdDict, res=256)
             mat_label_batch = input_dict['mat_label_batch'].cpu().numpy()
             mat_pred_batch = output_dict['matcls_argmax'].cpu().numpy()
@@ -588,7 +588,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
                     if opt.test_real and opt.cfg.MODEL_MATCLS.enable:
                         f_matcls_results.write(' '.join([im_path, opt.matG1Dict[mat_pred+1]]))
                         f_matcls_results.write('\n')
-
                     
 
             # ======= visualize clusters for mat-seg

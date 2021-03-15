@@ -65,6 +65,7 @@ def getRescaledMatFromID(matIds, matScales, oriMatRoot, matG1IdDict, res=128):
     normals = []
     roughs = []
     mats = []
+    prop_list = []
     for i, matId in enumerate(matIds):
         matName = matG1IdDict[matId+1]
         rgbScale = matScales[i, :3]
@@ -78,30 +79,36 @@ def getRescaledMatFromID(matIds, matScales, oriMatRoot, matG1IdDict, res=128):
             albedo = np.clip(
                 (albedo ** 2.2) * rgbScale[np.newaxis, np.newaxis, :], 0.0, 1.0) ** (1/2.2)
             # albedo = Image.fromarray(np.uint8(albedo * 255))
+            normalFile = albedoFile.replace('diffuse', 'normal')
             normal = np.asarray(Image.open(
-                albedoFile.replace('diffuse', 'normal') ).resize((res, res), Image.ANTIALIAS) ) / 255.0
+                normalFile ).resize((res, res), Image.ANTIALIAS) ) / 255.0
 
-            rough = Image.open(albedoFile.replace(
-                'diffuse', 'rough')).convert('L').resize((res, res), Image.ANTIALIAS)
+            roughFile = albedoFile.replace(
+                'diffuse', 'rough')
+            rough = Image.open(roughFile).convert('L').resize((res, res), Image.ANTIALIAS)
             rough = np.asarray(rough) / 255.0
             rough = np.clip(rough * roughScale, 0.0, 1.0)
             rough = np.tile(rough[:,:,np.newaxis], (1, 1, 3))
             # rough = Image.fromarray(np.uint8(rough * 255))
+            prop_dict = {'albedoFile': albedoFile, 'normalFile': normalFile, 'roughFile': roughFile, 'is_homo': False}
         else:  # is homogeneous brdf
             _, vals = matName.split('__')
-            r, g, b, rough = vals.split('_')
+            r, g, b, rough_value = vals.split('_')
             rgb = np.array([float(r), float(g), float(b)])
             rgb = np.clip(rgb * rgbScale, 0.0, 1.0) ** (1/2.2)
             albedo = np.tile(rgb, (res, res, 1))
             normal = np.tile(np.array([0.5, 0.5, 1]), [res, res, 1])
-            rough = np.clip(float(rough) * roughScale, 0.0, 1.0)
+            rough = np.clip(float(rough_value) * roughScale, 0.0, 1.0)
             rough = np.tile(rough, (res, res, 3))
+            prop_dict = {'r': r, 'g': g, 'b': b, 'rough': rough_value, 'is_homo': True}
+
         # albedos.append(th.from_numpy(np.transpose(albedo, [2, 0, 1])))
         # normals.append(th.from_numpy(np.transpose(normal, [2, 0, 1])))
         # roughs.append(th.from_numpy(np.transpose(rough, [2, 0, 1])))
         # print(albedo.shape) # [256, 256, 3]
         mat = np.concatenate([albedo, normal, rough], axis=1) # [D, 3D, 3]
         mats.append(torch.from_numpy(np.transpose(mat, [2, 0, 1])))
+        prop_list.append(prop_dict)
 
-    return mats
+    return mats, prop_list
 
