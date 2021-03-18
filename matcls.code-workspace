@@ -1,0 +1,10 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"python.analysis.extraPaths": ["train", "third-parties_outside/adobe_svbrdf-master/src"]
+	}
+}

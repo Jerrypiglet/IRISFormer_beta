@@ -24,9 +24,13 @@ from train_funcs_semseg import get_labels_dict_semseg, postprocess_semseg
 from train_funcs_brdf import get_labels_dict_brdf, postprocess_brdf
 from train_funcs_light import get_labels_dict_light, postprocess_light
 from train_funcs_layout_emitter import get_labels_dict_layout_emitter, postprocess_layout_emitter
+from train_funcs_matcls import get_labels_dict_matcls, postprocess_matcls
 from utils.comm import synchronize
 
 from utils.utils_metrics import compute_errors_depth_nyu
+from train_funcs_matcls import getG1IdDict, getRescaledMatFromID
+# from pytorch_lightning.metrics import Precision, Recall, F1, Accuracy
+from pytorch_lightning.metrics import Accuracy
 
 def get_time_meters_joint():
     time_meters = {}
@@ -38,6 +42,7 @@ def get_time_meters_joint():
     time_meters['loss_layout_emitter'] = AverageMeter()
     time_meters['loss_matseg'] = AverageMeter()
     time_meters['loss_semseg'] = AverageMeter()
+    time_meters['loss_matcls'] = AverageMeter()
     time_meters['backward'] = AverageMeter()    
     return time_meters
 
@@ -45,7 +50,7 @@ def get_semseg_meters():
     intersection_meter = AverageMeter()
     union_meter = AverageMeter()
     target_meter = AverageMeter()
-    semseg_meters = {'intersection_meter': intersection_meter, 'union_meter': union_meter, 'target_meter': target_meter}
+    semseg_meters = {'intersection_meter': intersection_meter, 'union_meter': union_meter, 'target_meter': target_meter,}
     return semseg_meters
 
 def get_brdf_meters(opt):
@@ -70,7 +75,14 @@ def get_light_meters(opt):
     light_meters = {}
     return light_meters
 
+def get_matcls_meters(opt):
+    matcls_meters = {'pred_labels_list': ListMeter(), 'gt_labels_list': ListMeter()}
+    if opt.cfg.MODEL_MATCLS.num_classes_sup:
+        matcls_meters.update({'pred_labels_sup_list': ListMeter(), 'gt_labels_sup_list': ListMeter()})
+    return matcls_meters
+
 def get_labels_dict_joint(data_batch, opt):
+    # prepare input_dict from data_batch (from dataloader)
     labels_dict = {'im_trainval_RGB': data_batch['im_trainval_RGB'].cuda(non_blocking=True)}
     if opt.cfg.DATA.load_matseg_gt:
         labels_dict_matseg = get_labels_dict_matseg(data_batch, opt)
@@ -107,12 +119,18 @@ def get_labels_dict_joint(data_batch, opt):
     else:
         labels_dict_layout_emitter = {}
     labels_dict.update(labels_dict_layout_emitter)
-    # print(labels_dict_layout_emitter.keys()) # dict_keys(['layout_input', 'emitter_input'])
+
+    if opt.cfg.DATA.load_matcls_gt:
+        labels_dict_matcls = get_labels_dict_matcls(data_batch, opt)
+    else:
+        labels_dict_matcls = {}
+    labels_dict.update(labels_dict_matcls)
 
     # labels_dict = {**labels_dict_matseg, **labels_dict_brdf}
     return labels_dict
 
 def forward_joint(labels_dict, model, opt, time_meters, if_vis=False):
+    # forward model + compute losses
 
     # Forward model
     output_dict = model(labels_dict)
@@ -147,6 +165,11 @@ def forward_joint(labels_dict, model, opt, time_meters, if_vis=False):
         time_meters['loss_layout_emitter'].update(time.time() - time_meters['ts'])
         time_meters['ts'] = time.time()
 
+    if opt.cfg.MODEL_MATCLS.enable:
+        output_dict, loss_dict = postprocess_matcls(labels_dict, output_dict, loss_dict, opt, time_meters, if_vis=if_vis)
+        time_meters['loss_matcls'].update(time.time() - time_meters['ts'])
+        time_meters['ts'] = time.time()
+
     return output_dict, loss_dict
 
 def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
@@ -155,6 +178,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     ENABLE_MATSEG = opt.cfg.MODEL_MATSEG.enable
     ENABLE_BRDF = opt.cfg.MODEL_BRDF.enable
     ENABLE_LIGHT = opt.cfg.MODEL_LIGHT.enable
+    ENABLE_MATCLS = opt.cfg.MODEL_MATCLS.enable
 
     logger.info(red('===Evaluating for %d batches'%len(brdf_loader_val)))
 
@@ -216,6 +240,15 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             'loss_layout-lo_corner', 
             'loss_layout-ALL'
         ]
+
+    if opt.cfg.MODEL_MATCLS.enable:
+        loss_keys += [
+            'loss_matcls-ALL',
+            'loss_matcls-cls', ]
+        if opt.cfg.MODEL_MATCLS.if_est_sup:
+            loss_keys += [
+            'loss_matcls-supcls',]
+
         
     loss_meters = {loss_key: AverageMeter() for loss_key in loss_keys}
     time_meters = get_time_meters_joint()
@@ -225,6 +258,9 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         brdf_meters = get_brdf_meters(opt)
     if ENABLE_LIGHT:
         light_meters = get_light_meters(opt)
+    if ENABLE_MATCLS:
+        matcls_meters = get_matcls_meters(opt)
+
 
     with torch.no_grad():
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
@@ -309,29 +345,80 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 semseg_meters['intersection_meter'].update(intersection), semseg_meters['union_meter'].update(union), semseg_meters['target_meter'].update(target)
                 # accuracy = sum(semseg_meters['intersection_meter'].val) / (sum(semseg_meters['target_meter'].val) + 1e-10)
 
-            print(batch_id)
+            if ENABLE_MATCLS:
+                output = output_dict['matcls_argmax']
+                target = input_dict['mat_label_batch']
+                matcls_meters['pred_labels_list'].update(output.cpu().flatten())
+                matcls_meters['gt_labels_list'].update(target.cpu().flatten())
+                if opt.cfg.MODEL_MATCLS.if_est_sup:
+                    output = output_dict['matcls_sup_argmax']
+                    target = input_dict['mat_label_sup_batch']
+                    matcls_meters['pred_labels_sup_list'].update(output.cpu().flatten())
+                    matcls_meters['gt_labels_sup_list'].update(target.cpu().flatten())
+
+
+            # print(batch_id)
 
             # synchronize()
 
     # ======= Metering
-    if ENABLE_SEMSEG:
-        iou_class = semseg_meters['intersection_meter'].sum / (semseg_meters['union_meter'].sum + 1e-10)
-        accuracy_class = semseg_meters['intersection_meter'].sum / (semseg_meters['target_meter'].sum + 1e-10)
-        mIoU = np.mean(iou_class)
-        mAcc = np.mean(accuracy_class)
-        allAcc = sum(semseg_meters['intersection_meter'].sum) / (sum(semseg_meters['target_meter'].sum) + 1e-10)
-
+        
     if opt.is_master:
         for loss_key in loss_dict_reduced:
             writer.add_scalar('loss_val/%s'%loss_key, loss_meters[loss_key].avg, tid)
             logger.info('Logged val loss for %s'%loss_key)
+
         if ENABLE_SEMSEG:
-            logger.info('Val result: mIoU/mAcc/allAcc {:.4f}/{:.4f}/{:.4f}.'.format(mIoU, mAcc, allAcc))
+            iou_class = semseg_meters['intersection_meter'].sum / (semseg_meters['union_meter'].sum + 1e-10)
+            accuracy_class = semseg_meters['intersection_meter'].sum / (semseg_meters['target_meter'].sum + 1e-10)
+            mIoU = np.mean(iou_class)
+            mAcc = np.mean(accuracy_class)
+            allAcc = sum(semseg_meters['intersection_meter'].sum) / (sum(semseg_meters['target_meter'].sum) + 1e-10)
+            logger.info('[SEMSEG] Val result: mIoU/mAcc/allAcc {:.4f}/{:.4f}/{:.4f}.'.format(mIoU, mAcc, allAcc))
             for i in range(opt.cfg.DATA.semseg_classes):
                 logger.info('Class_{} Result: iou/accuracy {:.4f}/{:.4f}.'.format(i, iou_class[i], accuracy_class[i]))
-            writer.add_scalar('VAL/mIoU_val', mIoU, tid)
-            writer.add_scalar('VAL/mAcc_val', mAcc, tid)
-            writer.add_scalar('VAL/allAcc_val', allAcc, tid)
+            writer.add_scalar('VAL/SEMSEG-mIoU_val', mIoU, tid)
+            writer.add_scalar('VAL/SEMSEG-mAcc_val', mAcc, tid)
+            writer.add_scalar('VAL/SEMSEG-allAcc_val', allAcc, tid)
+
+        if ENABLE_MATCLS:
+            # iou_class = matcls_meters['intersection_meter'].sum / (matcls_meters['union_meter'].sum + 1e-10)
+            # accuracy_class = matcls_meters['intersection_meter'].sum / (matcls_meters['target_meter'].sum + 1e-10)
+            # mIoU = np.mean(iou_class)
+            # mAcc = np.mean(accuracy_class)
+            # allAcc = sum(matcls_meters['intersection_meter'].sum) / (sum(matcls_meters['target_meter'].sum) + 1e-10)
+            # logger.info('[MATCLS] Val result: mIoU/mAcc/allAcc {:.4f}/{:.4f}/{:.4f}.'.format(mIoU, mAcc, allAcc))
+            # # for i in range(opt.cfg.MODEL_MATCLS.num_classes):
+            # #     logger.info('Class_{} Result: iou/accuracy {:.4f}/{:.4f}.'.format(i, iou_class[i], accuracy_class[i]))
+            # writer.add_scalar('VAL/MATCLS-mIoU_val', mIoU, tid)
+            # writer.add_scalar('VAL/MATCLS-mAcc_val', mAcc, tid)
+            # writer.add_scalar('VAL/MATCLS-allAcc_val', allAcc, tid)
+            pred_labels = matcls_meters['pred_labels_list'].concat().flatten()
+            gt_labels = matcls_meters['gt_labels_list'].concat().flatten()
+            # https://pytorch-lightning.readthedocs.io/en/0.8.5/metrics.html
+            accuracy = Accuracy()(pred_labels, gt_labels)
+            # prec = Precision(num_classes=opt.cfg.MODEL_MATCLS.num_classes)(pred_labels, gt_labels)
+            # recall = Recall(num_classes=opt.cfg.MODEL_MATCLS.num_classes)(pred_labels, gt_labels)
+            # f1 = F1(num_classes=opt.cfg.MODEL_MATCLS.num_classes)(pred_labels, gt_labels)
+            # writer.add_scalar('VAL/MATCLS-precision_val', prec, tid)
+            writer.add_scalar('VAL/MATCLS-accuracy_val', accuracy, tid)
+            # writer.add_scalar('VAL/MATCLS-recall_val', recall, tid)
+            # writer.add_scalar('VAL/MATCLS-F1_val', f1, tid)
+
+            if opt.cfg.MODEL_MATCLS.if_est_sup:
+                pred_labels = matcls_meters['pred_labels_sup_list'].concat().flatten()
+                gt_labels = matcls_meters['gt_labels_sup_list'].concat().flatten()
+                # https://pytorch-lightning.readthedocs.io/en/0.8.5/metrics.html
+                accuracy = Accuracy()(pred_labels, gt_labels)
+                # prec = Precision(ignore_index=0, num_classes=opt.cfg.MODEL_MATCLS.num_classes_sup+1)(pred_labels, gt_labels)
+                # recall = Recall(ignore_index=0, num_classes=opt.cfg.MODEL_MATCLS.num_classes_sup+1)(pred_labels, gt_labels)
+                # f1 = F1(num_classes=opt.cfg.MODEL_MATCLS.num_classes_sup+1)(pred_labels, gt_labels)
+                # writer.add_scalar('VAL/MATCLS-sup_precision_val', prec, tid)
+                writer.add_scalar('VAL/MATCLS-sup_accuracy_val', accuracy, tid)
+                # writer.add_scalar('VAL/MATCLS-sup_recall_val', recall, tid)
+                # writer.add_scalar('VAL/MATCLS-sup_F1_val', f1, tid)
+
+
         if ENABLE_BRDF:
             # writer.add_scalar('VAL/BRDF-inv_depth_mean_val', brdf_meters['inv_depth_mean_error_meter'].avg, tid)
             # writer.add_scalar('VAL/BRDF-inv_depth_median_val', brdf_meters['inv_depth_median_error_meter'].get_median(), tid)
@@ -347,13 +434,18 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         logger.info(red('Evaluation timings: ' + time_meters_to_string(time_meters)))
 
 
-def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
+def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batch_size):
 
     writer, logger, opt, tid = params_mis['writer'], params_mis['logger'], params_mis['opt'], params_mis['tid']
     logger.info(red('=== [vis_val_epoch_joint] Visualizing for %d batches on rank %d'%(len(brdf_loader_val), opt.rank)))
 
     model.eval()
     opt.if_vis_debug_pac = True
+
+    if opt.test_real:
+        if opt.cfg.MODEL_MATCLS.enable:
+            matcls_results_path = opt.cfg.MODEL_MATCLS.real_images_list.replace('.txt', '-results.txt')
+            f_matcls_results = open(matcls_results_path, 'w')
 
     time_meters = get_time_meters_joint()
 
@@ -378,13 +470,15 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         roughPreds_list = []
         depthPreds_list = []
     
+    if opt.cfg.MODEL_MATCLS.enable:
+        matG1IdDict = getG1IdDict(opt.cfg.PATH.matcls_matIdG1_path)
+
+
     # opt.albedo_pooling_debug = True
 
     # ===== Gather vis of N batches
     with torch.no_grad():
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
-            batch_size = len(data_batch['image_path'])
-
             if batch_size*batch_id >= opt.cfg.TEST.vis_max_samples:
                 break
 
@@ -411,7 +505,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
             for sample_idx_batch, (im_single, im_path) in enumerate(zip(data_batch['im_SDR_RGB'], data_batch['image_path'])):
                 sample_idx = sample_idx_batch+batch_size*batch_id
-                if sample_idx_batch >= opt.cfg.TEST.vis_max_samples:
+                print('Visualizing %d sample...'%sample_idx, batch_id, sample_idx_batch)
+                if sample_idx >= opt.cfg.TEST.vis_max_samples:
                     break
 
                 im_single = im_single.numpy().squeeze()
@@ -464,11 +559,45 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     if opt.is_master:
                         writer.add_image('VAL_semseg_PRED/%d'%(sample_idx), color_pred, tid, dataformats='HWC')
 
+            # ======= Vis matcls
+            mats_pred_vis_list, prop_list_pred = getRescaledMatFromID(
+                output_dict['matcls_argmax'].cpu().numpy(), np.ones((output_dict['matcls_argmax'].shape[0], 4), dtype=np.float32), opt.cfg.DATASET.matori_path, matG1IdDict, res=256)
+            mats_gt_vis_list, prop_list_gt = getRescaledMatFromID(
+                input_dict['mat_label_batch'].cpu().numpy(), np.ones((input_dict['mat_label_batch'].shape[0], 4), dtype=np.float32), opt.cfg.DATASET.matori_path, matG1IdDict, res=256)
+            mat_label_batch = input_dict['mat_label_batch'].cpu().numpy()
+            mat_pred_batch = output_dict['matcls_argmax'].cpu().numpy()
+            print(output_dict.keys())
+            mat_sup_pred_batch = output_dict['matcls_sup_argmax'].cpu().numpy()
+            for sample_idx_batch, (mats_pred_vis, mats_gt_vis, mat_mask, mat_label, mat_pred, mat_sup_pred) in enumerate(zip(mats_pred_vis_list, mats_gt_vis_list, input_dict['mat_mask_batch'], mat_label_batch, mat_pred_batch, mat_sup_pred_batch)): # torch.Size([3, 768, 256])
+                # print(mats_pred_vis.shape) # torch.Size([3, 256, 768])
+                mat_label = mat_label.item()
+                mat_pred = mat_pred.item()
+                mat_sup_pred = mat_sup_pred.item()
+                im_path = data_batch['image_path'][sample_idx_batch]
+
+                if not opt.test_real:
+                    summary_cat = torch.cat([mats_pred_vis, mats_gt_vis], 1).permute(1, 2, 0)
+                else:
+                    summary_cat = mats_pred_vis.permute(1, 2, 0) # not showing GT if GT label is 0
+                
+                if opt.is_master:
+                    sample_idx = sample_idx_batch+batch_size*batch_id
+                    writer.add_image('VAL_matcls_PRED-GT/%d'%(sample_idx), summary_cat, tid, dataformats='HWC')
+                    writer.add_image('VAL_matcls_matmask/%d'%(sample_idx), mat_mask.squeeze(), tid, dataformats='HW')
+                    im_single = data_batch['im_SDR_RGB'][sample_idx_batch].detach().cpu()
+                    mat_mask = mat_mask.permute(1, 2, 0).cpu().float()
+                    matmask_overlay = im_single * mat_mask + im_single * 0.2 * (1. - mat_mask)
+                    writer.add_image('VAL_matcls_matmask-overlay/%d'%(sample_idx), matmask_overlay, tid, dataformats='HWC')
+                    if opt.test_real and opt.cfg.MODEL_MATCLS.enable:
+                        f_matcls_results.write(' '.join([im_path, opt.matG1Dict[mat_pred+1], opt.valid_sup_classes_dict[mat_sup_pred]]))
+                        f_matcls_results.write('\n')
+                    
+
             # ======= visualize clusters for mat-seg
             if opt.cfg.DATA.load_matseg_gt:
                 for sample_idx_batch in range(batch_size):
                     sample_idx = sample_idx_batch+batch_size*batch_id
-                    if sample_idx_batch >= opt.cfg.TEST.vis_max_samples:
+                    if sample_idx >= opt.cfg.TEST.vis_max_samples:
                         break
 
                     mat_aggre_map_GT_single = input_dict['mat_aggre_map_cpu'][sample_idx_batch].numpy().squeeze()
@@ -483,7 +612,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 for sample_idx_batch, (logit_single, embedding_single) in enumerate(zip(output_dict['logit'].detach(), output_dict['embedding'].detach())):
 
                     sample_idx = sample_idx_batch+batch_size*batch_id
-                    if sample_idx_batch >= opt.cfg.TEST.vis_max_samples:
+                    if sample_idx >= opt.cfg.TEST.vis_max_samples:
                         break
 
                     # if sample_idx_batch >= num_val_vis_MAX:

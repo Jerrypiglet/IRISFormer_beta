@@ -6,6 +6,8 @@ from utils.utils_misc import *
 # import pac
 from utils.utils_training import freeze_bn_in_module
 import torch.nn.functional as F
+from torchvision.models import resnet
+
 from models_def.model_matseg import logit_embedding_to_instance
 
 import models_def.models_brdf as models_brdf # basic model
@@ -14,6 +16,7 @@ import models_def.models_brdf_pac_conv as models_brdf_pac_conv
 import models_def.models_brdf_safenet as models_brdf_safenet
 import models_def.models_light as models_light 
 import models_def.models_layout_emitter as models_layout_emitter
+import models_def.model_matcls as model_matcls
 
 class Model_Joint(nn.Module):
     def __init__(self, opt, logger):
@@ -116,6 +119,9 @@ class Model_Joint(nn.Module):
         if self.cfg.MODEL_LAYOUT_EMITTER.enable:
             self.LAYOUT_EMITTER_NET = models_layout_emitter.decoder_layout_emitter(opt)
 
+        if self.cfg.MODEL_MATCLS.enable:
+            self.MATCLS_NET = model_matcls.netCS(opt=opt, inChannels=4, base_model=resnet.resnet34, if_est_scale=False, if_est_sup = opt.cfg.MODEL_MATCLS.if_est_sup)
+
 
     def forward(self, input_dict):
         return_dict = {}
@@ -169,6 +175,10 @@ class Model_Joint(nn.Module):
         # print(return_dict_layout_emitter.keys()) # dict_keys(['layout_est_result', 'emitter_est_result'])
         return_dict.update(return_dict_layout_emitter)
         
+        if self.cfg.MODEL_MATCLS.enable:
+            return_dict_matcls = self.forward_matcls(input_dict)
+            return_dict.update(return_dict_matcls)
+
         return return_dict
 
     def forward_matseg(self, input_dict):
@@ -377,6 +387,16 @@ class Model_Joint(nn.Module):
 
         return return_dict
     
+    def forward_matcls(self, input_dict):
+        input_batch = torch.cat([input_dict['imBatch'], input_dict['mat_mask_batch'].to(torch.float32)], 1)
+        output = self.MATCLS_NET(input_batch)
+        _, matcls_argmax = torch.max(output['material'], 1)
+        return_dict = {'matcls_output': output['material'], 'matcls_argmax': matcls_argmax}
+        if self.opt.cfg.MODEL_MATCLS.if_est_sup:
+            _, matcls_sup_argmax = torch.max(output['material_sup'], 1)
+            return_dict.update({'matcls_sup_output': output['material_sup'], 'matcls_sup_argmax': matcls_sup_argmax})
+        return return_dict
+
     def print_net(self):
         count_grads = 0
         for name, param in self.named_parameters():

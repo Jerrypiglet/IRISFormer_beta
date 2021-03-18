@@ -19,10 +19,10 @@ def get_labels_dict_light(data_batch, opt, list_from_brdf=None, return_input_bat
 
     if opt.cfg.DATA.load_light_gt:
         envmaps_cpu = data_batch['envmaps']
-        envmapsBatch = Variable(envmaps_cpu ).cuda()
+        envmapsBatch = Variable(envmaps_cpu ).cuda(non_blocking=True)
 
         envmapsInd_cpu = data_batch['envmapsInd']
-        envmapsIndBatch = Variable(envmapsInd_cpu ).cuda()
+        envmapsIndBatch = Variable(envmapsInd_cpu ).cuda(non_blocking=True)
 
         extra_dict.update({'envmapsBatch': envmapsBatch, 'envmapsIndBatch': envmapsIndBatch})
 
@@ -54,7 +54,7 @@ def get_labels_dict_light(data_batch, opt, list_from_brdf=None, return_input_bat
             preBatchDict['renderedImBatch'] = renderedImBatch
 
             envmapsPre_cpu = data_batch['envmapsPre']
-            envmapsPreBatch = Variable(envmapsPre_cpu ).cuda()
+            envmapsPreBatch = Variable(envmapsPre_cpu ).cuda(non_blocking=True)
             input_dict['envmapsPreBatch'] = envmapsPreBatch
 
 
