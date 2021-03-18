@@ -1,0 +1,10 @@
+check_w_cw1_sw1_bn64
+check_cs_cw1_sw1_bn64
+runs
+higan
+test_out
+data
+sampleStyle
+*.tar.gz
+*.pyc
+*.swp
