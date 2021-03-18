@@ -206,6 +206,10 @@ class openrooms(data.Dataset):
             self.sup_mat_dicts[sup_mat_list.stem] = lines
             
         valid_sup_classes = ['fabric', 'leather', 'metal', 'paint', 'plastic', 'rough_stone', 'rubber', 'specular_stone', 'wood']
+        self.valid_sup_classes_dict = {idx+1: valid_sup_classes[idx] for idx in range(len(valid_sup_classes))}
+        self.valid_sup_classes_dict.update({0: 'N/A'})
+        opt.valid_sup_classes_dict = self.valid_sup_classes_dict
+
         self.sup_mat_dicts = {x: self.sup_mat_dicts[x] for x in self.sup_mat_dicts if x in valid_sup_classes}
         assert opt.cfg.MODEL_MATCLS.num_classes_sup == len(self.sup_mat_dicts.keys())
 

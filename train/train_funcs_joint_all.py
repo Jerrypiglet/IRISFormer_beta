@@ -566,10 +566,13 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
                 input_dict['mat_label_batch'].cpu().numpy(), np.ones((input_dict['mat_label_batch'].shape[0], 4), dtype=np.float32), opt.cfg.DATASET.matori_path, matG1IdDict, res=256)
             mat_label_batch = input_dict['mat_label_batch'].cpu().numpy()
             mat_pred_batch = output_dict['matcls_argmax'].cpu().numpy()
-            for sample_idx_batch, (mats_pred_vis, mats_gt_vis, mat_mask, mat_label, mat_pred) in enumerate(zip(mats_pred_vis_list, mats_gt_vis_list, input_dict['mat_mask_batch'], mat_label_batch, mat_pred_batch)): # torch.Size([3, 768, 256])
+            print(output_dict.keys())
+            mat_sup_pred_batch = output_dict['matcls_sup_argmax'].cpu().numpy()
+            for sample_idx_batch, (mats_pred_vis, mats_gt_vis, mat_mask, mat_label, mat_pred, mat_sup_pred) in enumerate(zip(mats_pred_vis_list, mats_gt_vis_list, input_dict['mat_mask_batch'], mat_label_batch, mat_pred_batch, mat_sup_pred_batch)): # torch.Size([3, 768, 256])
                 # print(mats_pred_vis.shape) # torch.Size([3, 256, 768])
                 mat_label = mat_label.item()
                 mat_pred = mat_pred.item()
+                mat_sup_pred = mat_sup_pred.item()
                 im_path = data_batch['image_path'][sample_idx_batch]
 
                 if not opt.test_real:
@@ -586,7 +589,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
                     matmask_overlay = im_single * mat_mask + im_single * 0.2 * (1. - mat_mask)
                     writer.add_image('VAL_matcls_matmask-overlay/%d'%(sample_idx), matmask_overlay, tid, dataformats='HWC')
                     if opt.test_real and opt.cfg.MODEL_MATCLS.enable:
-                        f_matcls_results.write(' '.join([im_path, opt.matG1Dict[mat_pred+1]]))
+                        f_matcls_results.write(' '.join([im_path, opt.matG1Dict[mat_pred+1], opt.valid_sup_classes_dict[mat_sup_pred]]))
                         f_matcls_results.write('\n')
                     
 
