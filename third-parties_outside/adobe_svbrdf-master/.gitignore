@@ -14,3 +14,4 @@ check_cs_cw1_sw1_bn64/
 *.tar.gz
 .bashrc
 results.tar.gz
+train_list_cs.txt
