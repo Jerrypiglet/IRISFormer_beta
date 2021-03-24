@@ -30,7 +30,7 @@ import matplotlib.patches as patches
 from utils.utils_total3D.utils_OR_geo import bb_intersection_over_union
 
 from utils.utils_misc import *
-from utils.utils_total3D.utils_rui import vis_axis_xyz, Arrow3D, vis_axis, vis_cube_plt, vis_axis_xyz
+from utils.utils_total3D.utils_rui import vis_axis_xyz, Arrow3D, vis_axis, vis_cube_plt
 from utils.utils_total3D.utils_OR_vis_labels import set_axes_equal
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from utils.utils_misc import yellow

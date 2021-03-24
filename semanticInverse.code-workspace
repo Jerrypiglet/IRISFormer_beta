@@ -5,6 +5,8 @@
 		}
 	],
 	"settings": {
-		"python.analysis.extraPaths": ["train"]
+		"python.analysis.extraPaths": [
+			"train", 
+			"SimpleLayout"]
 	}, 
 }
