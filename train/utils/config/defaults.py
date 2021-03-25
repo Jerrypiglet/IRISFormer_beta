@@ -82,8 +82,6 @@ _C.DATA.im_width = 320
 _C.DATA.load_semseg_gt = False
 _C.DATA.load_matseg_gt = False
 _C.DATA.load_brdf_gt = False
-_C.DATA.semseg_ignore_label = 0
-_C.DATA.semseg_classes = 46
 _C.DATA.load_light_gt = False
 _C.DATA.load_layout_emitter_gt = False
 _C.DATA.data_read_list = ''
@@ -108,7 +106,7 @@ _C.MODEL_BRDF.if_debug_arch = False
 _C.MODEL_BRDF.enable_BRDF_decoders = False
 # _C.MODEL_BRDF.is_all_light = True
 _C.MODEL_BRDF.enable_semseg_decoder = False
-_C.MODEL_BRDF.semseg_PPM = False
+_C.MODEL_BRDF.semseg_PPM = True
 _C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240/%s0_13.pth'
 
 # ===== per-pixel lighting
@@ -223,6 +221,7 @@ _C.MODEL_MATSEG.albedo_safenet_affinity_layers_allowed = 'x6_xin1_xin2_xin3_xin4
 _C.MODEL_SEMSEG = CN()
 _C.MODEL_SEMSEG.enable = False
 _C.MODEL_SEMSEG.use_as_input = False
+_C.MODEL_SEMSEG.wallseg_only = False
 _C.MODEL_SEMSEG.semseg_path = ''
 _C.MODEL_SEMSEG.semseg_path_local = '/home/ruizhu/Documents/Projects/semseg'
 _C.MODEL_SEMSEG.semseg_path_cluster = '/viscompfs/users/ruizhu/semseg/'
@@ -233,6 +232,9 @@ _C.MODEL_SEMSEG.fix_bn = False
 _C.MODEL_SEMSEG.if_guide = False
 _C.MODEL_SEMSEG.load_pretrained_pth = False
 _C.MODEL_SEMSEG.pretrained_pth = 'exp/openrooms/pspnet50V3_2gpu_100k/model/train_epoch_23_tid_147000.pth'
+_C.MODEL_SEMSEG.semseg_ignore_label = 0
+_C.MODEL_SEMSEG.semseg_classes = 46
+_C.MODEL_SEMSEG.pspnet_version = 50 # [50, 101]
 
 # ===== solver
 

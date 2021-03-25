@@ -18,6 +18,7 @@ from utils.utils_misc import *
 from pathlib import Path
 # import pickle
 import pickle5 as pickle
+from icecream import ic
 
 # import math
 
@@ -145,6 +146,8 @@ class openrooms(data.Dataset):
         self.transforms_fixed = transforms_fixed
         self.transforms_resize = transforms_resize
         self.transforms_matseg = transforms_matseg
+        self.transforms_semseg = transforms_semseg
+
         self.logger = logger
         # self.target_hw = (cfg.DATA.im_height, cfg.DATA.im_width) # if split in ['train', 'val', 'test'] else (args.test_h, args.test_w)
         self.im_width, self.im_height = self.cfg.DATA.im_width, self.cfg.DATA.im_height
@@ -152,6 +155,9 @@ class openrooms(data.Dataset):
         if self.opt.cfg.MODEL_SEMSEG.enable:
             self.semseg_colors = np.loadtxt(self.cfg.PATH.semseg_colors_path).astype('uint8')
             self.semseg_names = [line.rstrip('\n') for line in open(self.cfg.PATH.semseg_names_path)]
+            if self.opt.cfg.MODEL_SEMSEG.wallseg_only:
+                self.semseg_colors = np.array([[0, 0, 0], [0, 80, 100]], dtype=np.uint8)
+                self.semseg_names = ['unlabeled', 'wall_43']
             assert len(self.semseg_colors) == len(self.semseg_names)
             
         # ====== layout, emitters =====
@@ -399,14 +405,14 @@ class openrooms(data.Dataset):
                 batch_dict['diffusePre'] = diffusePre
                 batch_dict['specularPre'] = specularPre
         
-        # ====== semseg =====
+        # ====== matseg =====
         if self.opt.cfg.DATA.load_matseg_gt:
-            mat_seg_dict = self.load_mat_seg(mask, im_RGB_uint8)
+            mat_seg_dict = self.load_matseg(mask, im_RGB_uint8)
             batch_dict.update(mat_seg_dict)
 
-        # ====== matseg =====
+        # ====== semseg =====
         if self.opt.cfg.DATA.load_semseg_gt:
-            sem_seg_dict = self.load_mat_seg(im_RGB_uint8, semseg_label_path)
+            sem_seg_dict = self.load_semseg(im_RGB_uint8, semseg_label_path)
             batch_dict.update(sem_seg_dict)
 
         # ====== matseg =====
@@ -572,15 +578,20 @@ class openrooms(data.Dataset):
 
     #     return batch_dict
 
-    def load_sem_seg(self, im_RGB_uint8, semseg_label_path):
+    def load_semseg(self, im_RGB_uint8, semseg_label_path):
         semseg_label = np.load(semseg_label_path).astype(np.uint8)
         semseg_label = cv2.resize(semseg_label, (self.im_width, self.im_height), interpolation=cv2.INTER_NEAREST)
         # Transform images
         im_semseg_transformed_trainval, semseg_label = self.transforms_semseg(im_RGB_uint8, semseg_label) # augmented
         # semseg_label[semseg_label==0] = 31
+        if self.opt.cfg.MODEL_SEMSEG.wallseg_only:
+            semseg_label[semseg_label!=43] = 0
+            semseg_label[semseg_label==43] = 1
+
+        # ic(semseg_label.long().shape)
         return {'semseg_label': semseg_label.long(), 'im_semseg_transformed_trainval': im_semseg_transformed_trainval}
 
-    def load_mat_seg(self, mask, im_RGB_uint8):
+    def load_matseg(self, mask, im_RGB_uint8):
         # >>>> Rui: Read obj mask
         mat_aggre_map, num_mat_masks = self.get_map_aggre_map(mask) # 0 for invalid region
         im_matseg_transformed_trainval, mat_aggre_map_transformed = self.transforms_matseg(im_RGB_uint8, mat_aggre_map.squeeze()) # augmented

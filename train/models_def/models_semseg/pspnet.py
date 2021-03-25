@@ -87,6 +87,7 @@ class PSPNet(nn.Module):
         assert (x_size[2]-1) % 8 == 0 and (x_size[3]-1) % 8 == 0, 'size[2] %d, size[3]%d'%(x_size[2], x_size[3])
         h = int((x_size[2] - 1) / 8 * self.zoom_factor + 1)
         w = int((x_size[3] - 1) / 8 * self.zoom_factor + 1)
+        # print(h, w) # (241, 321)
 
         feat_dict = {}
         # print('Input: ', h, w, x.shape) # Input:  473 473 torch.Size([2, 3, 473, 473])
@@ -131,6 +132,7 @@ class PSPNet(nn.Module):
         aux = self.aux(x_tmp)
         if self.zoom_factor != 1:
             aux = F.interpolate(aux, size=(h, w), mode='bilinear', align_corners=True)
+        # print(x.shape, y.shape) # torch.Size([16, 2, 241, 321]) torch.Size([16, 241, 321])
         main_loss = self.criterion(x, y)
         aux_loss = self.criterion(aux, y)
         # return x.max(1)[1], main_loss, aux_loss

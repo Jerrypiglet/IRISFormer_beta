@@ -46,7 +46,7 @@ class BRDFplusSemSeg(nn.Module):
                 }
             )
         if self.cfg.MODEL_BRDF.enable_semseg_decoder:
-            self.BRDF_Net.update({'semsegDecoder': models_brdf.decoder0(opt, mode=-1, out_channel=self.cfg.DATA.semseg_classes, if_PPM=self.cfg.MODEL_BRDF.semseg_PPM)})
+            self.BRDF_Net.update({'semsegDecoder': models_brdf.decoder0(opt, mode=-1, out_channel=self.cfg.MODEL_SEMSEG.semseg_classes, if_PPM=self.cfg.MODEL_BRDF.semseg_PPM)})
             # self.BRDF_Net.update({'semsegDecoder': models_brdf.decoder0(opt, mode=-1, out_channel=self.cfg.MODEL_BRDF.semseg_classes, \
                 # in_C=[1024, 1024, 512, 512, 256, 192], out_C=[512, 256, 256, 128, 128, 128], group_C=[32, 16, 16, 8, 8, 8], if_PPM=self.cfg.MODEL_BRDF.semseg_PPM)})
         # self.guide_net = guideNet(opt)

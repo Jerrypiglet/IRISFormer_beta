@@ -33,7 +33,7 @@ class Model_Joint(nn.Module):
             if self.opt.cfg.MODEL_MATSEG.load_pretrained_pth:
                 self.load_pretrained_matseg()
 
-        if self.cfg.MODEL_SEMSEG.enable:
+        if self.cfg.MODEL_SEMSEG.enable and (not self.cfg.MODEL_BRDF.enable_semseg_decoder):
             # value_scale = 255
             # mean = [0.485, 0.456, 0.406]
             # mean = [item * value_scale for item in mean]
@@ -90,7 +90,7 @@ class Model_Joint(nn.Module):
                     self.BRDF_Net.update({'depthDecoder': self.decoder_to_use(opt, mode=4)})
                     
             if self.cfg.MODEL_BRDF.enable_semseg_decoder:
-                self.BRDF_Net.update({'semsegDecoder': self.decoder_to_use(opt, mode=-1, out_channel=self.cfg.DATA.semseg_classes, if_PPM=self.cfg.MODEL_BRDF.semseg_PPM)})
+                self.BRDF_Net.update({'semsegDecoder': self.decoder_to_use(opt, mode=-1, out_channel=self.cfg.MODEL_SEMSEG.semseg_classes, if_PPM=self.cfg.MODEL_BRDF.semseg_PPM)})
 
         # self.guide_net = guideNet(opt)
 
@@ -184,7 +184,7 @@ class Model_Joint(nn.Module):
     def forward_matseg(self, input_dict):
         input_list = [input_dict['im_batch_matseg']]
         if self.cfg.MODEL_MATSEG.use_semseg_as_input:
-            input_list.append(input_dict['semseg_label'].float().unsqueeze(1) / float(self.opt.cfg.DATA.semseg_classes))
+            input_list.append(input_dict['semseg_label'].float().unsqueeze(1) / float(self.opt.cfg.MODEL_SEMSEG.semseg_classes))
 
         if self.cfg.MODEL_MATSEG.if_freeze:
             self.MATSEG_Net.eval()
@@ -239,7 +239,7 @@ class Model_Joint(nn.Module):
         input_list = [input_dict['input_batch_brdf']]
 
         if self.opt.cfg.MODEL_SEMSEG.use_as_input:
-            input_list.append(input_dict['semseg_label'].float().unsqueeze(1) / float(self.opt.cfg.DATA.semseg_classes))
+            input_list.append(input_dict['semseg_label'].float().unsqueeze(1) / float(self.opt.cfg.MODEL_SEMSEG.semseg_classes))
         if self.opt.cfg.MODEL_MATSEG.use_as_input:
             input_list.append(input_dict['matAggreMapBatch'].float() / float(255.))
         if self.opt.cfg.MODEL_MATSEG.use_pred_as_input:
@@ -247,10 +247,10 @@ class Model_Joint(nn.Module):
             matseg_embeddings = input_dict_extra['return_dict_matseg']['embedding']
             mat_notlight_mask_cpu = input_dict['mat_notlight_mask_cpu']
             _, _, predict_segmentation = logit_embedding_to_instance(mat_notlight_mask_cpu, matseg_logits, matseg_embeddings, self.opt)
-            input_list.append(predict_segmentation.float().unsqueeze(1) / float(self.opt.cfg.DATA.semseg_classes))
+            input_list.append(predict_segmentation.float().unsqueeze(1) / float(self.opt.cfg.MODEL_SEMSEG.semseg_classes))
         
         input_tensor = torch.cat(input_list, 1)
-        #     # a = input_dict['semseg_label'].float().unsqueeze(1) / float(self.opt.cfg.DATA.semseg_classes)
+        #     # a = input_dict['semseg_label'].float().unsqueeze(1) / float(self.opt.cfg.MODEL_SEMSEG.semseg_classes)
         #     # print(torch.max(a), torch.min(a), torch.median(a))
         #     # print('--', torch.max(input_dict['input_batch_brdf']), torch.min(input_dict['input_batch_brdf']), torch.median(input_dict['input_batch_brdf']))
         # else:
@@ -302,7 +302,7 @@ class Model_Joint(nn.Module):
             # return_dict.update({'albedoPred': albedosPred, 'normalPred': normalPred, 'roughPred': roughPred, 'depthPred': depthPred})
 
         if self.cfg.MODEL_BRDF.enable_semseg_decoder:
-            semsegPred = self.BRDF_Net['semsegDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6)
+            semsegPred = self.BRDF_Net['semsegDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6)['x_out']
             return_dict.update({'semseg_pred': semsegPred})
             
         if self.cfg.MODEL_MATSEG.if_albedo_pooling or self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool or self.cfg.MODEL_MATSEG.if_albedo_safenet:

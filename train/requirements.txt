@@ -21,3 +21,4 @@ numba
 numpy-quaternion
 seaborn
 sympy
+icecream

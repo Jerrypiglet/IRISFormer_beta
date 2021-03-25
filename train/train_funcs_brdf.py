@@ -5,6 +5,7 @@ import torch.nn.functional as F
 from tqdm import tqdm
 import statistics
 import torchvision.utils as vutils
+from icecream import ic
 
 def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
     input_dict = {}
@@ -186,6 +187,7 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
     if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
         semsegPred = output_dict['semseg_pred']
         semsegLabel = input_dict['semseg_label']
+        # ic(semsegPred.shape, semsegLabel.shape)
         loss_dict['loss_semseg-ALL'] = opt.semseg_criterion(semsegPred, semsegLabel)
 
     return output_dict, loss_dict

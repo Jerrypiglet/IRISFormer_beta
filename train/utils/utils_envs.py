@@ -71,12 +71,20 @@ def set_up_envs(opt):
         opt.dataset_config = Dataset_Config('OR', OR=opt.cfg.MODEL_LAYOUT_EMITTER.data.OR, version=opt.cfg.MODEL_LAYOUT_EMITTER.data.version, opt=opt)
         opt.bins_tensor = to_dict_tensor(opt.dataset_config.bins, if_cuda=True)
 
-
     # ====== semseg =====
     if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable or opt.cfg.MODEL_SEMSEG.use_as_input or opt.cfg.MODEL_MATSEG.use_semseg_as_input:
+        opt.cfg.DATA.load_brdf_gt = True
         opt.cfg.DATA.load_semseg_gt = True
-        opt.semseg_criterion = nn.CrossEntropyLoss(ignore_index=opt.cfg.DATA.semseg_ignore_label)
-    
+        opt.semseg_criterion = nn.CrossEntropyLoss(ignore_index=opt.cfg.MODEL_SEMSEG.semseg_ignore_label)
+        assert opt.cfg.MODEL_SEMSEG.pspnet_version in [50, 101]
+        opt.semseg_configs.layers = 50 if opt.cfg.MODEL_SEMSEG.pspnet_version == 50 else 101
+        if opt.cfg.MODEL_SEMSEG.wallseg_only:
+            opt.cfg.MODEL_SEMSEG.semseg_classes = 2
+            opt.semseg_configs.classes = 2
+            if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
+                opt.semseg_configs.train_w = opt.cfg.DATA.im_width
+                opt.semseg_configs.train_h = opt.cfg.DATA.im_height
+
     if opt.cfg.MODEL_MATSEG.enable or opt.cfg.MODEL_MATSEG.use_as_input or opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool:
         opt.cfg.DATA.load_matseg_gt = True
     

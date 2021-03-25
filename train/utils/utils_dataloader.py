@@ -84,7 +84,7 @@ def make_data_loader(opt, dataset, is_train=True, start_iter=0, is_for_period=Fa
     )
     logger.info(white_blue('[utils_dataloader] %s-%s with bs %d*%d: len(dataset) %d, len(sampler) %d, len(batch_sampler) %d, len(data_loader) %d, is_train %s, is_distributed %s:' % \
                 (dataset.dataset_name, dataset.split, images_per_gpu, num_gpus, len(dataset), len(sampler), len(batch_sampler), len(data_loader), is_train, is_distributed)))
-    return data_loader
+    return data_loader, images_per_gpu
 
 def iterator_coco_combine_alternate(iterator_A, iterator_B):
     flag = True

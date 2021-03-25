@@ -114,6 +114,10 @@ opt.cfg = cfg
 
 # >>>>>>>>>>>>> A bunch of modularised set-ups
 # opt.gpuId = opt.deviceIds[0]
+semseg_configs = utils_config.load_cfg_from_cfg_file(os.path.join(pwdpath, opt.cfg.MODEL_SEMSEG.config_file))
+semseg_configs = utils_config.merge_cfg_from_list(semseg_configs, opt.params)
+opt.semseg_configs = semseg_configs
+
 from utils.utils_envs import set_up_dist
 handle = set_up_dist(opt)
 
@@ -128,9 +132,6 @@ set_up_envs(opt)
 opt.cfg.freeze()
 # <<<<<<<<<<<<< A bunch of modularised set-ups
 
-semseg_configs = utils_config.load_cfg_from_cfg_file(os.path.join(pwdpath, opt.cfg.MODEL_SEMSEG.config_file))
-semseg_configs = utils_config.merge_cfg_from_list(semseg_configs, opt.params)
-opt.semseg_configs = semseg_configs
 
 opt.pwdpath = pwdpath
 
@@ -196,7 +197,7 @@ brdf_dataset_train = openrooms(opt,
     transforms_matseg = transforms_train_matseg,
     transforms_resize = transforms_train_resize, 
     cascadeLevel = opt.cascadeLevel, split = 'train', logger=logger)
-brdf_loader_train = make_data_loader(
+brdf_loader_train, _ = make_data_loader(
     opt,
     brdf_dataset_train,
     is_train=True,
@@ -226,7 +227,7 @@ else:
         transforms_matseg = transforms_val_matseg,
         transforms_resize = transforms_val_resize, 
         cascadeLevel = opt.cascadeLevel, split = 'val', load_first = opt.cfg.TEST.vis_max_samples, logger=logger)
-brdf_loader_val = make_data_loader(
+brdf_loader_val, _ = make_data_loader(
     opt,
     brdf_dataset_val,
     is_train=False,
@@ -237,7 +238,7 @@ brdf_loader_val = make_data_loader(
     # collate_fn=my_collate_seq_dataset if opt.if_padding else my_collate_seq_dataset_noPadding,
     if_distributed_override=opt.cfg.DATASET.if_val_dist and opt.distributed
 )
-brdf_loader_val_vis = make_data_loader(
+brdf_loader_val_vis, batch_size_val_vis = make_data_loader(
     opt,
     brdf_dataset_val_vis,
     is_train=False,
@@ -301,7 +302,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
             val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid}
             if opt.if_vis:
                 with torch.no_grad():
-                    vis_val_epoch_joint(brdf_loader_val_vis, model, bin_mean_shift, val_params)
+                    vis_val_epoch_joint(brdf_loader_val_vis, model, bin_mean_shift, val_params, batch_size_val_vis)
                 synchronize()                
             if opt.if_val:
                 with torch.no_grad():
@@ -460,17 +461,20 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
             if opt.cfg.DATA.load_semseg_gt:
                 for sample_idx, (im_single, semseg_label, semseg_pred) in enumerate(zip(data_batch['im_semseg_transformed_trainval'], data_batch['semseg_label'], output_dict['semseg_pred'].detach().cpu())):
                     im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
-                    colors = np.loadtxt(os.path.join(opt.pwdpath, opt.cfg.PATH.semseg_colors_path)).astype('uint8')
+                    semseg_colors = np.loadtxt(os.path.join(opt.pwdpath, opt.cfg.PATH.semseg_colors_path)).astype('uint8')
+                    if opt.cfg.MODEL_SEMSEG.wallseg_only:
+                        semseg_colors = np.array([[0, 0, 0], [0, 80, 100]], dtype=np.uint8)
+
                     semseg_label = np.uint8(semseg_label.numpy().squeeze())
                     from utils.utils_vis import colorize
-                    semseg_label_color = np.array(colorize(semseg_label, colors).convert('RGB'))
+                    semseg_label_color = np.array(colorize(semseg_label, semseg_colors).convert('RGB'))
                     if opt.is_master:
                         writer.add_image('TRAIN_semseg_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
                         writer.add_image('TRAIN_semseg_label_trainval/%d'%sample_idx, semseg_label_color, tid, dataformats='HWC')
 
                     prediction = np.argmax(semseg_pred.numpy().squeeze(), 0)
                     gray_pred = np.uint8(prediction)
-                    color_pred = np.array(colorize(gray_pred, colors).convert('RGB'))
+                    color_pred = np.array(colorize(gray_pred, semseg_colors).convert('RGB'))
                     if opt.is_master:
                         writer.add_image('TRAIN_semseg_PRED/%d'%sample_idx, color_pred, tid, dataformats='HWC')
 

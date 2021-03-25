@@ -416,7 +416,7 @@ synchronize()
 print('=======2', opt.rank)
 
 if cfg.MODEL_BRDF.enable_semseg_decoder:
-    opt.semseg_criterion = nn.CrossEntropyLoss(ignore_index=opt.cfg.DATA.semseg_ignore_label)
+    opt.semseg_criterion = nn.CrossEntropyLoss(ignore_index=opt.cfg.MODEL_SEMSEG.semseg_ignore_label)
 
 
 val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid}

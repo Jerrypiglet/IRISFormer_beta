@@ -32,6 +32,8 @@ from train_funcs_matcls import getG1IdDict, getRescaledMatFromID
 # from pytorch_lightning.metrics import Precision, Recall, F1, Accuracy
 from pytorch_lightning.metrics import Accuracy
 
+from icecream import ic
+
 def get_time_meters_joint():
     time_meters = {}
     time_meters['ts'] = 0.
@@ -338,7 +340,9 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             if ENABLE_SEMSEG:
                 output = output_dict['semseg_pred'].max(1)[1]
                 target = input_dict['semseg_label']
-                intersection, union, target = intersectionAndUnionGPU(output, target, opt.cfg.DATA.semseg_classes, opt.cfg.DATA.semseg_ignore_label)
+                # print(output_dict['semseg_pred'].shape)
+                # print(torch.max(target), torch.min(target))
+                intersection, union, target = intersectionAndUnionGPU(output, target, opt.cfg.MODEL_SEMSEG.semseg_classes, opt.cfg.MODEL_SEMSEG.semseg_ignore_label)
                 if opt.distributed:
                     dist.all_reduce(intersection), dist.all_reduce(union), dist.all_reduce(target)
                 intersection, union, target = intersection.cpu().numpy(), union.cpu().numpy(), target.cpu().numpy()
@@ -356,11 +360,6 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     matcls_meters['pred_labels_sup_list'].update(output.cpu().flatten())
                     matcls_meters['gt_labels_sup_list'].update(target.cpu().flatten())
 
-
-            # print(batch_id)
-
-            # synchronize()
-
     # ======= Metering
         
     if opt.is_master:
@@ -375,7 +374,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             mAcc = np.mean(accuracy_class)
             allAcc = sum(semseg_meters['intersection_meter'].sum) / (sum(semseg_meters['target_meter'].sum) + 1e-10)
             logger.info('[SEMSEG] Val result: mIoU/mAcc/allAcc {:.4f}/{:.4f}/{:.4f}.'.format(mIoU, mAcc, allAcc))
-            for i in range(opt.cfg.DATA.semseg_classes):
+            for i in range(opt.cfg.MODEL_SEMSEG.semseg_classes):
                 logger.info('Class_{} Result: iou/accuracy {:.4f}/{:.4f}.'.format(i, iou_class[i], accuracy_class[i]))
             writer.add_scalar('VAL/SEMSEG-mIoU_val', mIoU, tid)
             writer.add_scalar('VAL/SEMSEG-mAcc_val', mAcc, tid)
@@ -550,6 +549,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
                 if opt.cfg.DATA.load_semseg_gt:
                     gray_GT = np.uint8(semseg_label[sample_idx_batch])
                     color_GT = np.array(colorize(gray_GT, colors).convert('RGB'))
+                    # print(gray_GT.shape, color_GT.shape) # (241, 321) (241, 321, 3)
                     if opt.is_master:
                         writer.add_image('VAL_semseg_GT/%d'%(sample_idx), color_GT, tid, dataformats='HWC')
                 if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable:
@@ -558,39 +558,45 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
                     color_pred = np.array(colorize(gray_pred, colors).convert('RGB'))
                     if opt.is_master:
                         writer.add_image('VAL_semseg_PRED/%d'%(sample_idx), color_pred, tid, dataformats='HWC')
+                        im_single = data_batch['im_SDR_RGB'][sample_idx_batch].detach().cpu().numpy().astype(np.float32)
+                        im_single = cv2.resize(im_single, (color_pred.shape[1], color_pred.shape[0]), interpolation=cv2.INTER_NEAREST)
+                        color_pred = color_pred.astype(np.float32) / 255.
+                        semseg_pred_overlay = im_single * color_pred + im_single * 0.2 * (1. - color_pred)
+                        writer.add_image('VAL_semseg_PRED-overlay/%d'%(sample_idx), semseg_pred_overlay, tid, dataformats='HWC')
+
 
             # ======= Vis matcls
-            mats_pred_vis_list, prop_list_pred = getRescaledMatFromID(
-                output_dict['matcls_argmax'].cpu().numpy(), np.ones((output_dict['matcls_argmax'].shape[0], 4), dtype=np.float32), opt.cfg.DATASET.matori_path, matG1IdDict, res=256)
-            mats_gt_vis_list, prop_list_gt = getRescaledMatFromID(
-                input_dict['mat_label_batch'].cpu().numpy(), np.ones((input_dict['mat_label_batch'].shape[0], 4), dtype=np.float32), opt.cfg.DATASET.matori_path, matG1IdDict, res=256)
-            mat_label_batch = input_dict['mat_label_batch'].cpu().numpy()
-            mat_pred_batch = output_dict['matcls_argmax'].cpu().numpy()
-            print(output_dict.keys())
-            mat_sup_pred_batch = output_dict['matcls_sup_argmax'].cpu().numpy()
-            for sample_idx_batch, (mats_pred_vis, mats_gt_vis, mat_mask, mat_label, mat_pred, mat_sup_pred) in enumerate(zip(mats_pred_vis_list, mats_gt_vis_list, input_dict['mat_mask_batch'], mat_label_batch, mat_pred_batch, mat_sup_pred_batch)): # torch.Size([3, 768, 256])
-                # print(mats_pred_vis.shape) # torch.Size([3, 256, 768])
-                mat_label = mat_label.item()
-                mat_pred = mat_pred.item()
-                mat_sup_pred = mat_sup_pred.item()
-                im_path = data_batch['image_path'][sample_idx_batch]
+            if opt.cfg.MODEL_MATCLS.enable:
+                mats_pred_vis_list, prop_list_pred = getRescaledMatFromID(
+                    output_dict['matcls_argmax'].cpu().numpy(), np.ones((output_dict['matcls_argmax'].shape[0], 4), dtype=np.float32), opt.cfg.DATASET.matori_path, matG1IdDict, res=256)
+                mats_gt_vis_list, prop_list_gt = getRescaledMatFromID(
+                    input_dict['mat_label_batch'].cpu().numpy(), np.ones((input_dict['mat_label_batch'].shape[0], 4), dtype=np.float32), opt.cfg.DATASET.matori_path, matG1IdDict, res=256)
+                mat_label_batch = input_dict['mat_label_batch'].cpu().numpy()
+                mat_pred_batch = output_dict['matcls_argmax'].cpu().numpy()
+                mat_sup_pred_batch = output_dict['matcls_sup_argmax'].cpu().numpy()
+                for sample_idx_batch, (mats_pred_vis, mats_gt_vis, mat_mask, mat_label, mat_pred, mat_sup_pred) in enumerate(zip(mats_pred_vis_list, mats_gt_vis_list, input_dict['mat_mask_batch'], mat_label_batch, mat_pred_batch, mat_sup_pred_batch)): # torch.Size([3, 768, 256])
+                    # print(mats_pred_vis.shape) # torch.Size([3, 256, 768])
+                    mat_label = mat_label.item()
+                    mat_pred = mat_pred.item()
+                    mat_sup_pred = mat_sup_pred.item()
+                    im_path = data_batch['image_path'][sample_idx_batch]
 
-                if not opt.test_real:
-                    summary_cat = torch.cat([mats_pred_vis, mats_gt_vis], 1).permute(1, 2, 0)
-                else:
-                    summary_cat = mats_pred_vis.permute(1, 2, 0) # not showing GT if GT label is 0
-                
-                if opt.is_master:
-                    sample_idx = sample_idx_batch+batch_size*batch_id
-                    writer.add_image('VAL_matcls_PRED-GT/%d'%(sample_idx), summary_cat, tid, dataformats='HWC')
-                    writer.add_image('VAL_matcls_matmask/%d'%(sample_idx), mat_mask.squeeze(), tid, dataformats='HW')
-                    im_single = data_batch['im_SDR_RGB'][sample_idx_batch].detach().cpu()
-                    mat_mask = mat_mask.permute(1, 2, 0).cpu().float()
-                    matmask_overlay = im_single * mat_mask + im_single * 0.2 * (1. - mat_mask)
-                    writer.add_image('VAL_matcls_matmask-overlay/%d'%(sample_idx), matmask_overlay, tid, dataformats='HWC')
-                    if opt.test_real and opt.cfg.MODEL_MATCLS.enable:
-                        f_matcls_results.write(' '.join([im_path, opt.matG1Dict[mat_pred+1], opt.valid_sup_classes_dict[mat_sup_pred]]))
-                        f_matcls_results.write('\n')
+                    if not opt.test_real:
+                        summary_cat = torch.cat([mats_pred_vis, mats_gt_vis], 1).permute(1, 2, 0)
+                    else:
+                        summary_cat = mats_pred_vis.permute(1, 2, 0) # not showing GT if GT label is 0
+                    
+                    if opt.is_master:
+                        sample_idx = sample_idx_batch+batch_size*batch_id
+                        writer.add_image('VAL_matcls_PRED-GT/%d'%(sample_idx), summary_cat, tid, dataformats='HWC')
+                        writer.add_image('VAL_matcls_matmask/%d'%(sample_idx), mat_mask.squeeze(), tid, dataformats='HW')
+                        im_single = data_batch['im_SDR_RGB'][sample_idx_batch].detach().cpu()
+                        mat_mask = mat_mask.permute(1, 2, 0).cpu().float()
+                        matmask_overlay = im_single * mat_mask + im_single * 0.2 * (1. - mat_mask)
+                        writer.add_image('VAL_matcls_matmask-overlay/%d'%(sample_idx), matmask_overlay, tid, dataformats='HWC')
+                        if opt.test_real and opt.cfg.MODEL_MATCLS.enable:
+                            f_matcls_results.write(' '.join([im_path, opt.matG1Dict[mat_pred+1], opt.valid_sup_classes_dict[mat_sup_pred]]))
+                            f_matcls_results.write('\n')
                     
 
             # ======= visualize clusters for mat-seg

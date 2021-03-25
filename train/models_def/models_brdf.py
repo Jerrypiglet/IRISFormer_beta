@@ -7,6 +7,7 @@ import numpy as np
 # import pac
 import pac_simplified as pac
 from models_def.model_matseg import logit_embedding_to_instance
+from icecream import ic
 
 class PPM(nn.Module):
     def __init__(self, in_dim, reduction_dim, bins):
@@ -157,7 +158,7 @@ class encoder0(nn.Module):
 
 class decoder0_guide(nn.Module):
     def __init__(self, opt, mode=-1, out_channel=3, in_C = [1024, 1024, 512, 512, 256, 128], out_C = [512, 256, 256, 128, 64, 64], group_C = [32, 16, 16, 8, 4, 4],  if_PPM=False):
-        super(decoder0, self).__init__()
+        super(decoder0_guide, self).__init__()
         self.opt = opt
         self.mode = mode
         self.if_PPM = if_PPM
@@ -325,10 +326,11 @@ class decoder0_guide(nn.Module):
         return x_out
 
 class decoder0(nn.Module):
-    def __init__(self, opt, mode=-1, out_channel=3, input_dict_guide=None):
+    def __init__(self, opt, mode=-1, out_channel=3, input_dict_guide=None,  if_PPM=False):
         super(decoder0, self).__init__()
         self.mode = mode
         self.opt = opt
+        self.if_PPM = if_PPM
 
         self.if_albedo_pooling = self.opt.cfg.MODEL_MATSEG.if_albedo_pooling
         self.if_albedo_asso_pool_conv = self.opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv
@@ -351,6 +353,13 @@ class decoder0(nn.Module):
 
         self.dconv6 = nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3, stride=1, padding = 1, bias=True)
         self.dgn6 = nn.GroupNorm(num_groups=4, num_channels=64 )
+
+        fea_dim = 64
+        if self.if_PPM:
+            bins=(1, 2, 3, 6)
+            self.ppm = PPM(fea_dim, int(fea_dim/len(bins)), bins)
+            fea_dim *= 2
+
 
         if self.if_albedo_asso_pool_conv:
             self.acco_pool_1 = pac.PacPool2d(kernel_size=3, stride=1, padding=1, dilation=1)
@@ -397,6 +406,8 @@ class decoder0(nn.Module):
         self.dpadFinal = nn.ReplicationPad2d(1)
 
         dconv_final_in_channels = 64
+        if self.if_PPM:
+            dconv_final_in_channels = 128
         if self.if_albedo_pooling:
             dconv_final_in_channels = 128
         if self.if_albedo_asso_pool_conv:
@@ -513,11 +524,16 @@ class decoder0(nn.Module):
             else:
                 dx6 = dx6_pool_mean
 
-
         if dx6.size(3) != im.size(3) or dx6.size(2) != im.size(2):
             dx6 = F.interpolate(dx6, [im.size(2), im.size(3)], mode='bilinear')
-        x_orig = self.dconvFinal(self.dpadFinal(dx6 ) )
 
+        if self.if_PPM:
+            # ic(dx6.shape)
+            dx6 = self.ppm(dx6)
+            # ic(dx6.shape)
+
+        x_orig = self.dconvFinal(self.dpadFinal(dx6 ) )
+        # ic(x_orig.shape)
         # print(x1, x2, x3, x4, x5, x6)
         
         # print(x6.shape, dx1.shape, dx2.shape, dx3.shape, dx4.shape, dx5.shape, dx6.shape, x_orig.shape) 
@@ -538,6 +554,8 @@ class decoder0(nn.Module):
         elif self.mode == 4:
             x_orig = torch.mean(x_orig, dim=1).unsqueeze(1)
             x_out = torch.clamp(1.01 * torch.tanh(x_orig ), -1, 1)
+        else:
+            x_out = x_orig
 
         return_dict = {'x_out': x_out}
         # if self.if_albedo_pooling:
