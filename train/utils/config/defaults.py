@@ -249,7 +249,7 @@ _C.SOLVER.if_test_dataloader = False
 
 
 _C.TRAINING = CN()
-_C.TRAINING.MAX_CKPT_KEEP = 20
+_C.TRAINING.MAX_CKPT_KEEP = 5
 
 _C.TEST = CN()
 _C.TEST.ims_per_batch = 16

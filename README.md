@@ -5,6 +5,12 @@ Zhengqin Li, Mohammad Shafiei, Ravi Ramamoorthi, Kalyan Sunkavalli, Manmohan Cha
 
 > pip install notebook
 
+To resume a task, put FULL original task name in --task_name, and use 'resume' for --resume:
+
+```
+--task_name 20210324-113325--semseg_WALL_psp50 --resume resume
+```
+
 ## Useful links:
 * Project page: http://cseweb.ucsd.edu/~visco…/projects/CVPR20InverseIndoor/
 * Trained models: http://cseweb.ucsd.edu/~viscomp/projects/CVPR20InverseIndoor/models.zip

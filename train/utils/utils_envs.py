@@ -8,7 +8,7 @@ from utils.comm import synchronize, get_rank
 import os, sys
 from utils.utils_total3D.data_config import Dataset_Config
 from utils.utils_total3D.utils_OR_layout import to_dict_tensor
-
+from icecream import ic
 
 def set_up_envs(opt):
     opt.cfg.PATH.root = opt.cfg.PATH.root_cluster if opt.if_cluster else opt.cfg.PATH.root_local
@@ -229,7 +229,10 @@ def set_up_folders(opt):
         opt.SUMMARY_VIS_PATH = opt.home_path / SUMMARY_VIS_PATH
 
     if not opt.if_cluster:
-        opt.task_name = get_datetime() + '-' + opt.task_name
+        if opt.resume != 'resume':
+            opt.task_name = get_datetime() + '-' + opt.task_name
+        # else:
+        #     opt.task_name = opt.resume
         # print(opt.cfg)
     #     opt.root = opt.cfg.PATH.root_local
     # else:
@@ -257,12 +260,14 @@ def set_up_folders(opt):
                 if opt.reset_latest_ckpt:
                     os.system('rm %s'%(os.path.join(opt.checkpoints_path_task, 'last_checkpoint')))
                     print(green('Removed last_checkpoint shortcut for %s'%opt.resume))
-
-            #     if opt.resume == 'NoCkpt':
-            #         if_delete = 'y'
-            # else:
-            #     if_delete = input(colored('Summary path %s already exists. Delete? [y/n] '%opt.summary_p[ath_task, 'white', 'on_blue'))
-                # if_delete = 'y'
+            else:
+                if opt.resume == 'NoCkpt':
+                    if_delete = 'y'
+                elif opt.resume == 'resume':
+                    if_delete = 'n'
+                else:
+                    if_delete = input(colored('Summary path %s already exists. Delete? [y/n] '%opt.summary_path_task, 'white', 'on_blue'))
+                    # if_delete = 'y'
             if if_delete == 'y':
                 for save_folder in save_folders:
                     os.system('rm -rf %s'%save_folder)
@@ -311,6 +316,7 @@ def set_up_checkpointing(opt, model, optimizer, scheduler, logger):
     tid_start = 0
     epoch_start = 0
     if opt.resume != 'NoCkpt':
+        ic(opt.resume, opt.task_name)
         if opt.resume == 'resume':
             opt.resume = opt.task_name
         replace_kws = []

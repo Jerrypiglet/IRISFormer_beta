@@ -84,7 +84,7 @@ class Checkpointer(object):
         if not f:
             # no checkpoint could be found
             self.logger.error("No checkpoint found. Initializing model from scratch")
-            raise ValueError('No checkpoint found!')
+            raise ValueError('No checkpoint found for task_name %s!'%task_name)
             return {}
         self.logger.info(colored("Loading checkpoint from %s."%f, 'white', 'on_magenta'))
         checkpoint = self._load_file(f)
