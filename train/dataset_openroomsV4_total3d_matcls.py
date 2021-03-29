@@ -286,51 +286,51 @@ class openrooms(data.Dataset):
         batch_dict.update({'image_transformed_fixed': image_transformed_fixed, 'im_trainval': torch.from_numpy(im_trainval), 'im_trainval_RGB': im_trainval_RGB, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
 
         # ====== BRDF =====
-        image_path = batch_dict['image_path']
+        # image_path = batch_dict['image_path']
         if self.opt.cfg.DATA.load_brdf_gt:
             #  or len(self.opt.cfg.DATA.data_read_list) != 0:
             # Get paths for BRDF params
             if 'al' in self.cfg.MODEL_BRDF.enable_list:
-                albedo_path = image_path.replace('im_', 'imbaseColor_').replace('hdr', 'png') 
+                albedo_path = hdr_image_path.replace('im_', 'imbaseColor_').replace('hdr', 'png') 
                 # Read albedo
                 albedo = self.loadImage(albedo_path, isGama = False)
                 albedo = (0.5 * (albedo + 1) ) ** 2.2
                 batch_dict.update({'albedo': torch.from_numpy(albedo)})
 
             if 'no' in self.cfg.MODEL_BRDF.enable_list:
-                normal_path = image_path.replace('im_', 'imnormal_').replace('hdr', 'png').replace('DiffLight', '')
+                normal_path = hdr_image_path.replace('im_', 'imnormal_').replace('hdr', 'png').replace('DiffLight', '')
                 # normalize the normal vector so that it will be unit length
                 normal = self.loadImage(normal_path )
                 normal = normal / np.sqrt(np.maximum(np.sum(normal * normal, axis=0), 1e-5) )[np.newaxis, :]
                 batch_dict.update({'normal': torch.from_numpy(normal),})
 
             if 'ro' in self.cfg.MODEL_BRDF.enable_list:
-                rough_path = image_path.replace('im_', 'imroughness_').replace('hdr', 'png')
+                rough_path = hdr_image_path.replace('im_', 'imroughness_').replace('hdr', 'png')
                 # Read roughness
                 rough = self.loadImage(rough_path )[0:1, :, :]
                 batch_dict.update({'rough': torch.from_numpy(rough),})
 
             if 'de' in self.cfg.MODEL_BRDF.enable_list or 'de' in self.cfg.DATA.data_read_list:
-                depth_path = image_path.replace('im_', 'imdepth_').replace('hdr', 'dat').replace('DiffLight', '').replace('DiffMat', '')
+                depth_path = hdr_image_path.replace('im_', 'imdepth_').replace('hdr', 'dat').replace('DiffLight', '').replace('DiffMat', '')
                 # Read depth
                 depth = self.loadBinary(depth_path)
                 batch_dict.update({'depth': torch.from_numpy(depth),})
 
             if self.cascadeLevel == 0:
                 if self.opt.cfg.MODEL_LIGHT.enable:
-                    env_path = image_path.replace('im_', 'imenv_')
+                    env_path = hdr_image_path.replace('im_', 'imenv_')
             else:
                 if self.opt.cfg.MODEL_LIGHT.enable:
-                    env_path = image_path.replace('im_', 'imenv_')
-                    envPre_path = image_path.replace('im_', 'imenv_').replace('.hdr', '_%d.h5'  % (self.cascadeLevel -1) )
+                    env_path = hdr_image_path.replace('im_', 'imenv_')
+                    envPre_path = hdr_image_path.replace('im_', 'imenv_').replace('.hdr', '_%d.h5'  % (self.cascadeLevel -1) )
                 
-                albedoPre_path = image_path.replace('im_', 'imbaseColor_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
-                normalPre_path = image_path.replace('im_', 'imnormal_').replace('.hdr', '_%d.h5' % (self.cascadeLevel-1) )
-                roughPre_path = image_path.replace('im_', 'imroughness_').replace('.hdr', '_%d.h5' % (self.cascadeLevel-1) )
-                depthPre_path = image_path.replace('im_', 'imdepth_').replace('.hdr', '_%d.h5' % (self.cascadeLevel-1) )
+                albedoPre_path = hdr_image_path.replace('im_', 'imbaseColor_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
+                normalPre_path = hdr_image_path.replace('im_', 'imnormal_').replace('.hdr', '_%d.h5' % (self.cascadeLevel-1) )
+                roughPre_path = hdr_image_path.replace('im_', 'imroughness_').replace('.hdr', '_%d.h5' % (self.cascadeLevel-1) )
+                depthPre_path = hdr_image_path.replace('im_', 'imdepth_').replace('.hdr', '_%d.h5' % (self.cascadeLevel-1) )
 
-                diffusePre_path = image_path.replace('im_', 'imdiffuse_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
-                specularPre_path = image_path.replace('im_', 'imspecular_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
+                diffusePre_path = hdr_image_path.replace('im_', 'imdiffuse_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
+                specularPre_path = hdr_image_path.replace('im_', 'imspecular_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
 
             segArea = np.logical_and(seg > 0.49, seg < 0.51 ).astype(np.float32 )
             segEnv = (seg < 0.1).astype(np.float32 )

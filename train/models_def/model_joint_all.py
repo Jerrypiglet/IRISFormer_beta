@@ -53,7 +53,7 @@ class Model_Joint(nn.Module):
 
             if self.opt.cfg.MODEL_SEMSEG.load_pretrained_pth:
                 self.load_pretrained_semseg()
-        
+
         if self.cfg.MODEL_BRDF.enable:
             in_channels = 3
             if self.opt.cfg.MODEL_MATSEG.use_as_input:
@@ -87,6 +87,7 @@ class Model_Joint(nn.Module):
                 if 'ro' in self.cfg.MODEL_BRDF.enable_list:
                     self.BRDF_Net.update({'roughDecoder': self.decoder_to_use(opt, mode=2)})
                 if 'de' in self.cfg.MODEL_BRDF.enable_list:
+                    print('>>>>>>>>')
                     self.BRDF_Net.update({'depthDecoder': self.decoder_to_use(opt, mode=4)})
                     
             if self.cfg.MODEL_BRDF.enable_semseg_decoder:

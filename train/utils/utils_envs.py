@@ -8,6 +8,7 @@ from utils.comm import synchronize, get_rank
 import os, sys
 from utils.utils_total3D.data_config import Dataset_Config
 from utils.utils_total3D.utils_OR_layout import to_dict_tensor
+from utils.utils_misc import only1true
 from icecream import ic
 
 def set_up_envs(opt):
@@ -38,8 +39,11 @@ def set_up_envs(opt):
     opt.cfg.DATA.data_read_list = list(set(opt.cfg.DATA.data_read_list.split('_')))
 
     # ====== BRDF =====
+    opt.cfg.MODEL_BRDF.enable_list = opt.cfg.MODEL_BRDF.enable_list.split('_')
+    opt.cfg.MODEL_BRDF.loss_list = opt.cfg.MODEL_BRDF.loss_list.split('_')
+
     if len(opt.cfg.MODEL_BRDF.enable_list) > 0:
-        opt.cfg.enable_BRDF_decoders = True
+        opt.cfg.MODEL_BRDF.enable_BRDF_decoders = True
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
         opt.cfg.DATA.load_brdf_gt = True
         opt.depth_metrics = ['abs_rel', 'sq_rel', 'rmse', 'rmse_log', 'a1', 'a2', 'a3']
@@ -101,9 +105,6 @@ def set_up_envs(opt):
 
     # ===== check if flags are legal =====
     check_if_in_list(opt.cfg.DATA.data_read_list, opt.cfg.DATA.data_read_list_allowed)
-
-    opt.cfg.MODEL_BRDF.enable_list = opt.cfg.MODEL_BRDF.enable_list.split('_')
-    opt.cfg.MODEL_BRDF.loss_list = opt.cfg.MODEL_BRDF.loss_list.split('_')
     check_if_in_list(opt.cfg.MODEL_BRDF.enable_list, opt.cfg.MODEL_BRDF.enable_list_allowed)
     check_if_in_list(opt.cfg.MODEL_BRDF.loss_list, opt.cfg.MODEL_BRDF.enable_list_allowed)
 
@@ -119,7 +120,6 @@ def set_up_envs(opt):
     guidance_options = [opt.cfg.MODEL_MATSEG.if_albedo_pooling,opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv, \
         opt.cfg.MODEL_MATSEG.if_albedo_pac_pool, opt.cfg.MODEL_MATSEG.if_albedo_pac_conv, \
         opt.cfg.MODEL_MATSEG.if_albedo_safenet]
-    from utils.utils_misc import only1true
     assert only1true(guidance_options) or nonetrue(guidance_options), 'Only ONE of the guidance methods canbe true at the same time!'
 
     assert opt.cfg.MODEL_MATSEG.albedo_pooling_from in ['gt', 'pred']

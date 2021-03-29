@@ -871,7 +871,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
                 rough_pred_batch_vis_sdr_numpy = rough_pred_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
             if 'de' in opt.cfg.MODEL_BRDF.enable_list:
                 depth_pred_batch_vis_sdr_numpy = depth_pred_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
-            for image_idx in range(albedo_pred_batch_vis_sdr.shape[0]):
+            for image_idx in range(im_batch_vis_sdr.shape[0]):
                 if 'al' in opt.cfg.MODEL_BRDF.enable_list:
                     writer.add_image('VAL_brdf-albedo_PRED/%d'%image_idx, albedo_pred_batch_vis_sdr_numpy[image_idx], tid, dataformats='HWC')
                 if 'no' in opt.cfg.MODEL_BRDF.enable_list:

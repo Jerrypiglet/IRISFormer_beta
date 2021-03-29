@@ -197,7 +197,7 @@ brdf_dataset_val_vis = openrooms(opt,
     transforms_resize = transforms_val_resize, 
     cascadeLevel = opt.cascadeLevel, split = 'val', load_first = opt.cfg.TEST.vis_max_samples, logger=logger)
 
-brdf_loader_val_vis = make_data_loader(
+brdf_loader_val_vis, _ = make_data_loader(
     opt,
     brdf_dataset_val_vis,
     is_train=False,
