@@ -33,6 +33,7 @@ from train_funcs_matcls import getG1IdDict, getRescaledMatFromID
 from pytorch_lightning.metrics import Accuracy
 
 from icecream import ic
+import pickle
 
 def get_time_meters_joint():
     time_meters = {}
@@ -564,6 +565,12 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
                         semseg_pred_overlay = im_single * color_pred + im_single * 0.2 * (1. - color_pred)
                         writer.add_image('VAL_semseg_PRED-overlay/%d'%(sample_idx), semseg_pred_overlay, tid, dataformats='HWC')
 
+                        pickle_save_path = Path(opt.summary_vis_path_task) / ('results_semseg_%d.pickle'%sample_idx)
+                        save_dict = {'semseg_pred': semseg_pred[sample_idx_batch], }
+                        with open(str(pickle_save_path),"wb") as f:
+                            pickle.dump(save_dict, f)
+
+
 
             # ======= Vis matcls
             if opt.cfg.MODEL_MATCLS.enable:
@@ -871,15 +878,20 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
                 rough_pred_batch_vis_sdr_numpy = rough_pred_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
             if 'de' in opt.cfg.MODEL_BRDF.enable_list:
                 depth_pred_batch_vis_sdr_numpy = depth_pred_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
-            for image_idx in range(im_batch_vis_sdr.shape[0]):
+            for sample_idx in range(im_batch_vis_sdr.shape[0]):
                 if 'al' in opt.cfg.MODEL_BRDF.enable_list:
-                    writer.add_image('VAL_brdf-albedo_PRED/%d'%image_idx, albedo_pred_batch_vis_sdr_numpy[image_idx], tid, dataformats='HWC')
+                    writer.add_image('VAL_brdf-albedo_PRED/%d'%sample_idx, albedo_pred_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                 if 'no' in opt.cfg.MODEL_BRDF.enable_list:
-                    writer.add_image('VAL_brdf-normal_PRED/%d'%image_idx, normal_pred_batch_vis_sdr_numpy[image_idx], tid, dataformats='HWC')
+                    writer.add_image('VAL_brdf-normal_PRED/%d'%sample_idx, normal_pred_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                 if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
-                    writer.add_image('VAL_brdf-rough_PRED/%d'%image_idx, rough_pred_batch_vis_sdr_numpy[image_idx], tid, dataformats='HWC')
+                    writer.add_image('VAL_brdf-rough_PRED/%d'%sample_idx, rough_pred_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                 if 'de' in opt.cfg.MODEL_BRDF.enable_list:
-                    writer.add_image('VAL_brdf-depth_PRED/%d'%image_idx, vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[image_idx].squeeze()), tid, dataformats='HWC')
+                    writer.add_image('VAL_brdf-depth_PRED/%d'%sample_idx, vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze()), tid, dataformats='HWC')
+                    pickle_save_path = Path(opt.summary_vis_path_task) / ('results_depth_%d.pickle'%sample_idx)
+                    save_dict = {'depthPreds_vis': depthPreds_vis[sample_idx].detach().cpu().squeeze().numpy()}
+                    with open(str(pickle_save_path),"wb") as f:
+                        pickle.dump(save_dict, f)
+
 
     logger.info(red('Evaluation VIS timings: ' + time_meters_to_string(time_meters)))
 

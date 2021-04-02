@@ -83,8 +83,8 @@ def set_up_envs(opt):
         assert opt.cfg.MODEL_SEMSEG.pspnet_version in [50, 101]
         opt.semseg_configs.layers = 50 if opt.cfg.MODEL_SEMSEG.pspnet_version == 50 else 101
         if opt.cfg.MODEL_SEMSEG.wallseg_only:
-            opt.cfg.MODEL_SEMSEG.semseg_classes = 2
-            opt.semseg_configs.classes = 2
+            opt.cfg.MODEL_SEMSEG.semseg_classes = 1
+            opt.semseg_configs.classes = 1
             if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
                 opt.semseg_configs.train_w = opt.cfg.DATA.im_width
                 opt.semseg_configs.train_h = opt.cfg.DATA.im_height

@@ -585,8 +585,9 @@ class openrooms(data.Dataset):
         im_semseg_transformed_trainval, semseg_label = self.transforms_semseg(im_RGB_uint8, semseg_label) # augmented
         # semseg_label[semseg_label==0] = 31
         if self.opt.cfg.MODEL_SEMSEG.wallseg_only:
-            semseg_label[semseg_label!=43] = 0
-            semseg_label[semseg_label==43] = 1
+            wallseg_mask = torch.logical_or(torch.logical_or(semseg_label==43, semseg_label==44), semseg_label==44)
+            semseg_label[torch.logical_not(wallseg_mask)] = 0
+            semseg_label[wallseg_mask] = 1
 
         # ic(semseg_label.long().shape)
         return {'semseg_label': semseg_label.long(), 'im_semseg_transformed_trainval': im_semseg_transformed_trainval}
