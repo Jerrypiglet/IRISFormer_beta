@@ -52,7 +52,7 @@ _C.DATASET.dataset_path_local = '/home/ruizhu/Documents/Projects/semanticInverse
 _C.DATASET.dataset_path_cluster = '/siggraphasia20dataset/code/Routine/DatasetCreation/'
 _C.DATASET.png_path = ''
 _C.DATASET.png_path_local = '/data/ruizhu/OR-pngs'
-_C.DATASET.png_path_cluster = ''
+_C.DATASET.png_path_cluster = '/siggraphasia20dataset/pngs'
 
 _C.DATASET.layout_emitter_path = ''
 _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-OR45_total3D_train_test_data'

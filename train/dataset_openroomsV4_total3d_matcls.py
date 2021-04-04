@@ -191,43 +191,42 @@ class openrooms(data.Dataset):
         #         matG2ScaleDict[int(mId)] = '%s_%s_%s_%s' % (r, g, b, rough)
         # self.matG2Dict = matG2Dict
         # self.matG2ScaleDict = matG2ScaleDict
-        matG1File = self.opt.cfg.PATH.matcls_matIdG1_path
-        matG1Dict = {}
-        with open(matG1File, 'r') as f:
-            for line in f.readlines():
-                if 'Material__' not in line:
-                    continue
-                matName, mId = line.strip().split(' ')
-                matG1Dict[int(mId)] = matName
-        self.matG1Dict = matG1Dict
+        if self.opt.cfg.MODEL_MATCLS.enable:
+            matG1File = self.opt.cfg.PATH.matcls_matIdG1_path
+            matG1Dict = {}
+            with open(matG1File, 'r') as f:
+                for line in f.readlines():
+                    if 'Material__' not in line:
+                        continue
+                    matName, mId = line.strip().split(' ')
+                    matG1Dict[int(mId)] = matName
+            self.matG1Dict = matG1Dict
 
-        sup_mat_lists_path = Path('/newfoundland2/ruizhu/siggraphasia20dataset/code/Routine/DatasetCreation/MatLists')
-        sup_mat_lists = [x for x in sup_mat_lists_path.iterdir() if '.txt' in str(x)]
-        self.sup_mat_dicts = {}
-        for sup_mat_list in sorted(sup_mat_lists):
-        #     print(sup_mat_list.name)
-            with open(str(sup_mat_list), 'r') as fIn:
-                lines = fIn.readlines()
-                lines = [x.strip() for x in lines]
-            self.sup_mat_dicts[sup_mat_list.stem] = lines
-            
-        valid_sup_classes = ['fabric', 'leather', 'metal', 'paint', 'plastic', 'rough_stone', 'rubber', 'specular_stone', 'wood']
-        self.valid_sup_classes_dict = {idx+1: valid_sup_classes[idx] for idx in range(len(valid_sup_classes))}
-        self.valid_sup_classes_dict.update({0: 'N/A'})
-        opt.valid_sup_classes_dict = self.valid_sup_classes_dict
-
-        self.sup_mat_dicts = {x: self.sup_mat_dicts[x] for x in self.sup_mat_dicts if x in valid_sup_classes}
-        assert opt.cfg.MODEL_MATCLS.num_classes_sup == len(self.sup_mat_dicts.keys())
-
-        self.mat_to_supcls_dict = {}
-        for supcls_id, supcls_name in enumerate(self.sup_mat_dicts.keys()):
-            for mat in self.sup_mat_dicts[supcls_name]:
-        #         print(supcls_id, supcls, mat)
-                self.mat_to_supcls_dict[mat] = [supcls_id+1, supcls_name] # supcls==0 for unlabelled
-        self.mat_to_supcls_dict_keys =list(self.mat_to_supcls_dict.keys())
+            sup_mat_lists_path = Path('/newfoundland2/ruizhu/siggraphasia20dataset/code/Routine/DatasetCreation/MatLists')
+            sup_mat_lists = [x for x in sup_mat_lists_path.iterdir() if '.txt' in str(x)]
+            self.sup_mat_dicts = {}
+            for sup_mat_list in sorted(sup_mat_lists):
+            #     print(sup_mat_list.name)
+                with open(str(sup_mat_list), 'r') as fIn:
+                    lines = fIn.readlines()
+                    lines = [x.strip() for x in lines]
+                self.sup_mat_dicts[sup_mat_list.stem] = lines
                 
-        # print(len(self.mat_to_supcls_dict.keys()))
+            valid_sup_classes = ['fabric', 'leather', 'metal', 'paint', 'plastic', 'rough_stone', 'rubber', 'specular_stone', 'wood']
+            self.valid_sup_classes_dict = {idx+1: valid_sup_classes[idx] for idx in range(len(valid_sup_classes))}
+            self.valid_sup_classes_dict.update({0: 'N/A'})
+            opt.valid_sup_classes_dict = self.valid_sup_classes_dict
 
+            self.sup_mat_dicts = {x: self.sup_mat_dicts[x] for x in self.sup_mat_dicts if x in valid_sup_classes}
+            assert opt.cfg.MODEL_MATCLS.num_classes_sup == len(self.sup_mat_dicts.keys())
+
+            self.mat_to_supcls_dict = {}
+            for supcls_id, supcls_name in enumerate(self.sup_mat_dicts.keys()):
+                for mat in self.sup_mat_dicts[supcls_name]:
+            #         print(supcls_id, supcls, mat)
+                    self.mat_to_supcls_dict[mat] = [supcls_id+1, supcls_name] # supcls==0 for unlabelled
+            self.mat_to_supcls_dict_keys =list(self.mat_to_supcls_dict.keys())
+                
     def __len__(self):
         return len(self.data_list)
         
@@ -241,8 +240,8 @@ class openrooms(data.Dataset):
             # Read segmentation
             seg = 0.5 * (self.loadImage(seg_path ) + 1)[0:1, :, :]
             semantics_path = hdr_image_path.replace('DiffMat', '').replace('DiffMat', '').replace('DiffLight', '')
-            # mask_path = semantics_path.replace('im_', 'imcadmatobj_').replace('hdr', 'dat')
-            mask_path = semantics_path.replace('im_', 'immatPart_').replace('hdr', 'dat')
+            mask_path = semantics_path.replace('im_', 'imcadmatobj_').replace('hdr', 'dat')
+            # mask_path = semantics_path.replace('im_', 'immatPart_').replace('hdr', 'dat')
             mask = self.loadBinary(mask_path, channels = 3, dtype=np.int32, if_resize=True).squeeze() # [h, w, 3]
 
         if self.opt.cfg.DATA.if_load_png_not_hdr:
@@ -275,6 +274,9 @@ class openrooms(data.Dataset):
             im_RGB_uint8 = (255. * im_SDR_RGB).transpose(1, 2, 0).astype(np.uint8)
             image_transformed_fixed = self.transforms_fixed(im_RGB_uint8)
             batch_dict = {'image_path': str(hdr_image_path)}
+
+            im_trainval = np.transpose(im_trainval, (1, 2, 0))
+            im_SDR_RGB = np.transpose(im_SDR_RGB, (1, 2, 0))
         
         # image_transformed_fixed: normalized, not augmented [only needed in semseg]
 
@@ -283,6 +285,10 @@ class openrooms(data.Dataset):
         # im_trainval_RGB: normalized, augmented; LDR
         # im_SDR_RGB: normalized, NOT augmented; LDR
         # im_RGB_uint8: im_SDR_RGB -> 255
+
+        # print('------', image_transformed_fixed.shape, im_trainval.shape, im_trainval_RGB.shape, im_SDR_RGB.shape, im_RGB_uint8.shape, )
+        # png: ------ torch.Size([3, 240, 320]) (240, 320, 3) torch.Size([3, 240, 320]) (240, 320, 3) (240, 320, 3)
+        # hdr: ------ torch.Size([3, 240, 320]) (3, 240, 320) (3, 240, 320) (3, 240, 320) (240, 320, 3)
         batch_dict.update({'image_transformed_fixed': image_transformed_fixed, 'im_trainval': torch.from_numpy(im_trainval), 'im_trainval_RGB': im_trainval_RGB, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
 
         # ====== BRDF =====
@@ -499,84 +505,6 @@ class openrooms(data.Dataset):
         batch_dict.update({'matLabelSup': matLabelSup, 'matNameSup': matNameSup})
 
         return batch_dict
-
-
-    # def load_mat_cls(self, hdr_image_path=None, frame_info=None, if_gen_on_the_fly=False, if_validate=False):
-    #     if hdr_image_path is not None:
-    #         maskG1_path = hdr_image_path.replace('im_', 'immatPartGlobal1_').replace('hdr', 'npy')
-    #         maskG2_path = hdr_image_path.replace('im_', 'immatPartGlobal2_').replace('hdr', 'npy')
-    #         matG1IdFile = hdr_image_path.replace('im_', 'immatPartGlobal1Ids_').replace('hdr', 'npy')
-    #         matG2IdFile = hdr_image_path.replace('im_', 'immatPartGlobal2Ids_').replace('hdr', 'npy')
-    #         seed = hdr_image_path
-    #     else:
-    #         assert frame_info is not None
-    #         maskG1_path = frame_info[0] / ('immatPartGlobal1_%d.npy'%frame_info[1])
-    #         maskG2_path = frame_info[0] / ('immatPartGlobal2_%d.npy'%frame_info[1])
-    #         matG1IdFile = frame_info[0] / ('immatPartGlobal1Ids_%d.npy'%frame_info[1])
-    #         matG2IdFile = frame_info[0] / ('immatPartGlobal2Ids_%d.npy'%frame_info[1])
-    #         seed = str(maskG2_path)
-
-    #     matG2IdMap = self.loadNPY(maskG2_path) # includes resizing!
-    #     matG2Ids = sorted(list(np.load(matG2IdFile) ))
-    #     matG2Ids = [x for x in matG2Ids if x != 0]
-    #     matG1Ids = list(np.load(matG1IdFile))
-    #     if len(matG1Ids) != len(matG2Ids):
-    #        if_gen_on_the_fly = True 
-
-    #     if if_gen_on_the_fly:
-    #         matG2IdMap_oriSize = np.load(maskG2_path)
-    #         matG2Ids_fromMap = sorted(list(np.unique(matG2IdMap_oriSize) ) ) # !!!!!
-    #         matG2Ids_fromMap = [x for x in matG2Ids_fromMap if x != 0]
-    #         if if_validate:
-    #             if matG2Ids_fromMap != matG2Ids:
-    #                 print('====', matG2Ids, matG2Ids_fromMap, matG2IdFile)
-    #         matG2Ids = matG2Ids_fromMap
-
-    #     matNameCurr = [self.matG2Dict[matG2Id] for matG2Id in matG2Ids]
-
-    #     if self.split != 'train':
-    #         assert seed is not None
-    #         random.seed(seed)
-    #         # print(yellow('Seed ' + str(hdr_image_path)))
-
-    #     idNum = len(matG2Ids)
-
-    #     valid_pixel_ratio = 0.
-    #     attempts = 0
-    #     thres = 0.01
-    #     while valid_pixel_ratio <= thres and attempts < 100: # skip very small material segments
-    #         frame_sampled = random.randint(0, idNum-1)
-    #         matIdG2 = matG2Ids[frame_sampled] # with scale
-    #         matMask = (matG2IdMap == matIdG2)[np.newaxis, :, :]
-    #         matName = matNameCurr[frame_sampled]
-    #         valid_pixel_ratio = np.sum(matMask).astype(np.float32) / float(matMask.shape[1]*matMask.shape[2])
-    #         attempts += 1
-    #     if valid_pixel_ratio < thres:
-    #         print(valid_pixel_ratio, matG2IdFile)
-    #         print(attempts, frame_sampled, idNum, '%.3f'%valid_pixel_ratio, np.sum(matMask).astype(np.float32), float(matMask.shape[1]*matMask.shape[2]))
-
-    #     matIdG1 = matG1Ids[frame_sampled] - 1
-
-    #     if if_gen_on_the_fly:
-    #         matG1IdMap_oriSize = np.load(maskG1_path)
-    #         matMask_oriSize = (matG2IdMap_oriSize == matIdG2)[np.newaxis, :, :]
-    #         matG1Id_fromMap = np.unique(matG1IdMap_oriSize.flatten()[matMask_oriSize.flatten()])
-    #         assert len(matG1Id_fromMap.tolist())==1
-    #         matG1Id_fromMap = matG1Id_fromMap[0] - 1
-    #         if if_validate:
-    #             if matG1Id_fromMap != matIdG1:
-    #                 print(matG1Id_fromMap, matIdG1, matG1IdFile)
-    #             # else:
-    #             #     print('G1 is correct.')
-    #         matIdG1 = matG1Id_fromMap
-        
-    #     batch_dict = {
-    #         'matMask': matMask,
-    #         'matName': matName,
-    #         'matLabel': matIdG1
-    #     }
-
-    #     return batch_dict
 
     def load_semseg(self, im_RGB_uint8, semseg_label_path):
         semseg_label = np.load(semseg_label_path).astype(np.uint8)
@@ -858,8 +786,7 @@ class openrooms(data.Dataset):
     def loadBinary(self, imName, channels = 1, dtype=np.float32, if_resize=True):
         assert dtype in [np.float32, np.int32], 'Invalid binary type outside (np.float32, np.int32)!'
         if not(osp.isfile(imName ) ):
-            print(imName )
-            assert(False )
+            assert(False ), '%s doesnt exist!'%imName
         with open(imName, 'rb') as fIn:
             hBuffer = fIn.read(4)
             height = struct.unpack('i', hBuffer)[0]

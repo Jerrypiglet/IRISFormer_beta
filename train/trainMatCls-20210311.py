@@ -111,6 +111,7 @@ cfg.merge_from_file(opt.config_file)
 # cfg.merge_from_list(opt.params)
 cfg = utils_config.merge_cfg_from_list(cfg, opt.params)
 opt.cfg = cfg
+opt.pwdpath = pwdpath
 
 # >>>>>>>>>>>>> A bunch of modularised set-ups
 # opt.gpuId = opt.deviceIds[0]
@@ -133,7 +134,6 @@ opt.cfg.freeze()
 # <<<<<<<<<<<<< A bunch of modularised set-ups
 
 
-opt.pwdpath = pwdpath
 
 from models_def.model_joint_all import Model_Joint as the_model
 

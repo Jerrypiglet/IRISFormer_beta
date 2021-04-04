@@ -138,13 +138,4 @@ for dir_ in tqdm(dirs):
 #     label_list = frame_paths_all_dict['label_semseg']
 
     
-#     output_list_path = Path(list_path) / Path('list')
-#     output_list_path.mkdir(parents=True, exist_ok=True)
-#     output_txt_file = output_list_path / Path('%s.txt'%split)
-#     # output_txt_file = output_txt_file.replace('.txt', '_%s.txt'%subsample_rario_name_dict[subsample_ratio])
-
-#     with open(str(output_txt_file), 'w') as text_file:
-#         for path_cam0, path_label in zip(frame_paths_all_dict['im_RGB'], frame_paths_all_dict['label_semseg']):
-#             text_file.write('%s %s\n'%(path_cam0, path_label))
-#     print('Wrote %d entries to %s'%(len(frame_paths_all_dict['im_RGB']), output_txt_file))
     

@@ -301,7 +301,6 @@ def tb(args):
     dump_yaml(tmp_yaml_filaname, yaml_content)
     print('============ YAML file dumped to %s'%tmp_yaml_filaname)
 
-
     create_job_from_yaml(tmp_yaml_filaname)
 
 def main():

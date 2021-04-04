@@ -231,6 +231,7 @@ class renderingLayer():
 
         self.up = torch.Tensor([0,1,0] )
 
+        # azimuth & elevation angles -> dir vector for each pixel
         Az = ( (np.arange(envWidth) + 0.5) / envWidth - 0.5 )* 2 * np.pi
         El = ( (np.arange(envHeight) + 0.5) / envHeight) * np.pi / 2.0
         Az, El = np.meshgrid(Az, El)
@@ -240,7 +241,7 @@ class renderingLayer():
 
         ly = np.sin(El) * np.sin(Az)
         lz = np.cos(El)
-        ls = np.concatenate((lx, ly, lz), axis = 1)
+        ls = np.concatenate((lx, ly, lz), axis = 1) # dir vector for each pixel (local coords)
 
         envWeight = np.sin(El ) * np.pi * np.pi / envWidth / envHeight
 
@@ -275,7 +276,8 @@ class renderingLayer():
         camyProj = torch.einsum('b,abcd->acd',(self.up, normalPred)).unsqueeze(1).expand_as(normalPred) * normalPred
         camy = F.normalize(self.up.unsqueeze(0).unsqueeze(-1).unsqueeze(-1).expand_as(camyProj) - camyProj, dim=1)
         camx = -F.normalize(torch.cross(camy, normalPred,dim=1), p=1, dim=1)
-
+        
+        # ls (local coords), l (cam coords)
         l = ldirections[:, :, 0:1, :, :] * camx.unsqueeze(1) \
                 + ldirections[:, :, 1:2, :, :] * camy.unsqueeze(1) \
                 + ldirections[:, :, 2:3, :, :] * normalPred.unsqueeze(1)
@@ -296,24 +298,24 @@ class renderingLayer():
 
         ndv = torch.clamp(torch.sum(normalPred * self.v.expand_as(normalPred), dim = 1), 0, 1).unsqueeze(1).unsqueeze(2)
         ndh = torch.clamp(torch.sum(normalPred.unsqueeze(1) * h, dim = 2), 0, 1).unsqueeze(2)
-        ndl = torch.clamp(torch.sum(normalPred.unsqueeze(1) * l, dim = 2), 0, 1).unsqueeze(2)
+        ndl = torch.clamp(torch.sum(normalPred.unsqueeze(1) * l, dim = 2), 0, 1).unsqueeze(2) # cos in rendering function
 
         frac = alpha2.unsqueeze(1).expand_as(frac0) * frac0
         nom0 = ndh * ndh * (alpha2.unsqueeze(1).expand_as(ndh) - 1) + 1
         nom1 = ndv * (1 - k.unsqueeze(1).expand_as(ndh) ) + k.unsqueeze(1).expand_as(ndh)
         nom2 = ndl * (1 - k.unsqueeze(1).expand_as(ndh) ) + k.unsqueeze(1).expand_as(ndh)
         nom = torch.clamp(4*np.pi*nom0*nom0*nom1*nom2, 1e-6, 4*np.pi)
-        specPred = frac / nom
+        specPred = frac / nom # f_s
 
         envmap = envmap.view([bn, 3, envR, envC, self.envWidth * self.envHeight ] )
         envmap = envmap.permute([0, 4, 1, 2, 3] )
 
         brdfDiffuse = diffuseBatch.unsqueeze(1).expand([bn, self.envWidth * self.envHeight, 3, envR, envC] ) * \
                     ndl.expand([bn, self.envWidth * self.envHeight, 3, envR, envC] )
-        colorDiffuse = torch.sum(brdfDiffuse * envmap * self.envWeight.expand_as(brdfDiffuse), dim=1)
+        colorDiffuse = torch.sum(brdfDiffuse * envmap * self.envWeight.expand_as(brdfDiffuse), dim=1) # I_d
 
         brdfSpec = specPred.expand([bn, self.envWidth * self.envHeight, 3, envR, envC ] ) * \
                     ndl.expand([bn, self.envWidth * self.envHeight, 3, envR, envC] )
-        colorSpec = torch.sum(brdfSpec * envmap * self.envWeight.expand_as(brdfSpec), dim=1)
+        colorSpec = torch.sum(brdfSpec * envmap * self.envWeight.expand_as(brdfSpec), dim=1) # I_s
 
         return colorDiffuse, colorSpec
