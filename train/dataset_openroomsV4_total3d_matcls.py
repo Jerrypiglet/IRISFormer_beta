@@ -171,7 +171,7 @@ class openrooms(data.Dataset):
                 self.OR_mapping_catInt_to_RGB = pickle.load(f)[self.OR]
 
         # ====== per-pixel lighting =====
-        if self.opt.cfg.MODEL_LIGHT.enable:
+        if self.opt.cfg.DATA.load_light_gt:
             self.envWidth = envWidth
             self.envHeight = envHeight
             self.envRow = envRow
@@ -323,12 +323,10 @@ class openrooms(data.Dataset):
                 batch_dict.update({'depth': torch.from_numpy(depth),})
 
             if self.cascadeLevel == 0:
-                if self.opt.cfg.MODEL_LIGHT.enable:
-                    env_path = hdr_image_path.replace('im_', 'imenv_')
+                env_path = hdr_image_path.replace('im_', 'imenv_')
             else:
-                if self.opt.cfg.MODEL_LIGHT.enable:
-                    env_path = hdr_image_path.replace('im_', 'imenv_')
-                    envPre_path = hdr_image_path.replace('im_', 'imenv_').replace('.hdr', '_%d.h5'  % (self.cascadeLevel -1) )
+                env_path = hdr_image_path.replace('im_', 'imenv_')
+                envPre_path = hdr_image_path.replace('im_', 'imenv_').replace('.hdr', '_%d.h5'  % (self.cascadeLevel -1) )
                 
                 albedoPre_path = hdr_image_path.replace('im_', 'imbaseColor_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
                 normalPre_path = hdr_image_path.replace('im_', 'imnormal_').replace('.hdr', '_%d.h5' % (self.cascadeLevel-1) )
@@ -350,7 +348,7 @@ class openrooms(data.Dataset):
 
             segObj = segObj.astype(np.float32 )
 
-            if self.opt.cfg.MODEL_LIGHT.enable:
+            if self.opt.cfg.DATA.load_light_gt:
                 envmaps, envmapsInd = self.loadEnvmap(env_path )
                 envmaps = envmaps * scale 
                 if self.cascadeLevel > 0: 
@@ -707,7 +705,6 @@ class openrooms(data.Dataset):
 
         return return_dict
 
-    
     def get_map_aggre_map(self, objMask):
         cad_map = objMask[:, :, 0]
         mat_idx_map = objMask[:, :, 1]        

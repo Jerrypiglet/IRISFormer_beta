@@ -64,10 +64,15 @@ def set_up_envs(opt):
 
     # ====== layout, emitters =====
     if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
-        opt.cfg.MODEL_LAYOUT_EMITTER.enable = True
-        opt.cfg.MODEL_BRDF.enable = True
-        opt.cfg.DATA.load_layout_emitter_gt = True
+        if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.lightnet.enable:
+            opt.cfg.DATA.load_light_gt = True
+            opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = 'em'
+            opt.cfg.DATA.data_read_list.append('de') # used to get 3d points
+        else:
+            opt.cfg.MODEL_BRDF.enable = True
         opt.cfg.DATA.load_brdf_gt = True
+        opt.cfg.DATA.load_layout_emitter_gt = True
+        opt.cfg.DATA.data_read_list += ['lo']
         opt.cfg.DATA.data_read_list += opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.split('_')
         if opt.cfg.MODEL_LAYOUT_EMITTER.use_depth_as_input:
             opt.cfg.DATA.data_read_list.append('de')
@@ -75,6 +80,7 @@ def set_up_envs(opt):
 
         opt.dataset_config = Dataset_Config('OR', OR=opt.cfg.MODEL_LAYOUT_EMITTER.data.OR, version=opt.cfg.MODEL_LAYOUT_EMITTER.data.version, opt=opt)
         opt.bins_tensor = to_dict_tensor(opt.dataset_config.bins, if_cuda=True)
+
 
     # ====== semseg =====
     if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable or opt.cfg.MODEL_SEMSEG.use_as_input or opt.cfg.MODEL_MATSEG.use_semseg_as_input:

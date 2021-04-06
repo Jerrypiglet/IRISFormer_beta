@@ -298,9 +298,6 @@ class Box(Scene3D):
                 # plt.imshow(mask_list[3][1])
                 plt.show()
 
-
-
-
         if not self.if_mute_print:
             print("[draw_projected_depth] Returned.")
 

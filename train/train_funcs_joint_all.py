@@ -582,7 +582,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
 
                 scene_box_list, layout_info_dict_list, emitter_info_dict_list = output_vis_dict['scene_box_list'], output_vis_dict['layout_info_dict_list'], output_vis_dict['emitter_info_dict_list']
                 if opt.is_master:
-                    logger.info('emitter_layout -------> ' + str(Path(opt.summary_vis_path_task))
+                    logger.info('emitter_layout -------> ' + str(Path(opt.summary_vis_path_task)))
                     for sample_idx_batch, (scene_box, layout_info_dict, emitter_info_dict) in enumerate(zip(scene_box_list, layout_info_dict_list, emitter_info_dict_list)):
                         sample_idx = sample_idx_batch+batch_size*batch_id
                         save_prefix = ('results_LABEL_tid%d-%d'%(tid, sample_idx))

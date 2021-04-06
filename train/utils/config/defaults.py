@@ -150,6 +150,8 @@ _C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_light_ratio = 100.
 _C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_cls = 10.
 _C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_intensity = 0.2
 _C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_lamb = 0.3
+_C.MODEL_LAYOUT_EMITTER.emitter.lightnet = CN()
+_C.MODEL_LAYOUT_EMITTER.emitter.lightnet.enable = False # enable spatial-encoding network from per-pixel lighting, instead of image encoder-decoder
 
 _C.MODEL_LAYOUT_EMITTER.layout = CN()
 _C.MODEL_LAYOUT_EMITTER.layout.loss = CN()
