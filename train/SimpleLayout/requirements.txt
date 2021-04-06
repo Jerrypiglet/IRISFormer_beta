@@ -1,3 +1,0 @@
-ipympl
-ipywidgets
-shapely
