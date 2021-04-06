@@ -34,6 +34,9 @@ from pytorch_lightning.metrics import Accuracy
 
 from icecream import ic
 import pickle
+import matplotlib.pyplot as plt
+
+from train_funcs_layout_emitter import vis_layout_emitter
 
 def get_time_meters_joint():
     time_meters = {}
@@ -205,15 +208,16 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         ]
 
     if opt.cfg.MODEL_BRDF.enable:
-        loss_keys += [
-            'loss_brdf-albedo', 
-            'loss_brdf-normal', 
-            'loss_brdf-rough', 
-            'loss_brdf-depth', 
-            'loss_brdf-ALL', 
-            'loss_brdf-rough-paper', 
-            'loss_brdf-depth-paper'
-        ]
+        if opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
+            loss_keys += [
+                'loss_brdf-albedo', 
+                'loss_brdf-normal', 
+                'loss_brdf-rough', 
+                'loss_brdf-depth', 
+                'loss_brdf-ALL', 
+                'loss_brdf-rough-paper', 
+                'loss_brdf-depth-paper'
+            ]
         if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
             loss_keys += ['loss_semseg-ALL']
 
@@ -565,10 +569,53 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
                         semseg_pred_overlay = im_single * color_pred + im_single * 0.2 * (1. - color_pred)
                         writer.add_image('VAL_semseg_PRED-overlay/%d'%(sample_idx), semseg_pred_overlay, tid, dataformats='HWC')
 
-                        pickle_save_path = Path(opt.summary_vis_path_task) / ('results_semseg_%d.pickle'%sample_idx)
+                        pickle_save_path = Path(opt.summary_vis_path_task) / ('results_semseg_tid%d-%d.pickle'%(tid, sample_idx))
                         save_dict = {'semseg_pred': semseg_pred[sample_idx_batch], }
                         with open(str(pickle_save_path),"wb") as f:
                             pickle.dump(save_dict, f)
+
+            if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
+                output_vis_dict = vis_layout_emitter(input_dict, output_dict, opt, time_meters)
+                # output_dict['output_layout_emitter_vis_dict'] = output_vis_dict
+                if_real_image = False
+                draw_mode = 'both' if not if_real_image else 'prediction'
+
+                scene_box_list, layout_info_dict_list, emitter_info_dict_list = output_vis_dict['scene_box_list'], output_vis_dict['layout_info_dict_list'], output_vis_dict['emitter_info_dict_list']
+                if opt.is_master:
+                    logger.info('emitter_layout -------> ' + str(Path(opt.summary_vis_path_task))
+                    for sample_idx_batch, (scene_box, layout_info_dict, emitter_info_dict) in enumerate(zip(scene_box_list, layout_info_dict_list, emitter_info_dict_list)):
+                        sample_idx = sample_idx_batch+batch_size*batch_id
+                        save_prefix = ('results_LABEL_tid%d-%d'%(tid, sample_idx))
+
+                        if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+                            output_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'layout') + '.png')
+                            fig_2d, _ = scene_box.draw_projected_layout(draw_mode, return_plt=True, if_use_plt=True) # with plt plotting
+                            fig_2d.savefig(str(output_path))
+                            plt.close(fig_2d)
+                            pickle_save_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'layout_info') + '.pickle')
+                            save_dict = {'rgb_img_path': data_batch['image_path'][sample_idx_batch],  'bins_tensor': opt.bins_tensor}
+                            save_dict.update(layout_info_dict)
+                            with open(str(pickle_save_path),"wb") as f:
+                                pickle.dump(save_dict, f)
+
+                        # if if_vis_obj:
+                        #     output_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'obj') + '.png')
+                        #     fig_2d = scene_box.draw_projected_bdb3d(draw_mode, return_plt=True, if_use_plt=True)
+                        #     fig_2d.savefig(str(output_path))
+                        #     plt.close(fig_2d)
+
+                        if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+                            output_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'emitter') + '.png')
+                            fig_3d, ax_3ds = scene_box.draw_3D_scene_plt(draw_mode, if_return_cells_vis_info=True, if_show_emitter=not(if_real_image))
+                            fig_3d.savefig(str(output_path))
+                            plt.close(fig_3d)
+                            cells_vis_info_list = ax_3ds[-1]
+                            save_dict = {'cells_vis_info_list': cells_vis_info_list}
+                            save_dict.update(emitter_info_dict)
+                            pickle_save_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'cells_vis_info_list') + '.pickle')
+                            with open(str(pickle_save_path),"wb") as f:
+                                pickle.dump(save_dict, f)
+
 
 
 
@@ -774,7 +821,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
 
 
         if opt.is_master:
-            print('Saving to ', '{0}/{1}_albedoGt.png'.format(opt.summary_vis_path_task, tid))
+            print('Saving vis to ', '{0}'.format(opt.summary_vis_path_task, tid))
             # Save the ground truth and the input
             # albedoBatch_vis_sdr = ( (albedoBatch_vis ) ** (1.0/2.2) ).data # torch.Size([16, 3, 192, 256]) 
             im_batch_vis_sdr = ( (imBatch_vis)**(1.0/2.2) ).data

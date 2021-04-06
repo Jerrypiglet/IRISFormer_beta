@@ -35,6 +35,7 @@ import utils.utils_config as utils_config
 from utils.utils_envs import set_up_envs
 
 from utils.utils_vis import vis_index_map
+from icecream import ic
 
 parser = argparse.ArgumentParser()
 # The locationi of training set
@@ -131,6 +132,7 @@ logger, writer = set_up_logger(opt)
 opt.logger = logger
 set_up_envs(opt)
 opt.cfg.freeze()
+
 # <<<<<<<<<<<<< A bunch of modularised set-ups
 
 

@@ -94,6 +94,34 @@ def format_bboxes(box, type):
 
     return boxes
 
+def format_layout(layout_data):
+
+    layout_bdb = {}
+
+    centroid = (layout_data.max(0) + layout_data.min(0)) / 2.
+
+    vector_z = (layout_data[1] - layout_data[0]) / 2.
+    coeff_z = np.linalg.norm(vector_z)
+    basis_z = vector_z/coeff_z
+
+    vector_x = (layout_data[2] - layout_data[1]) / 2.
+    coeff_x = np.linalg.norm(vector_x)
+    basis_x = vector_x/coeff_x
+
+    vector_y = (layout_data[0] - layout_data[4]) / 2.
+    coeff_y = np.linalg.norm(vector_y)
+    basis_y = vector_y/coeff_y
+
+    basis = np.array([basis_x, basis_y, basis_z])
+    coeffs = np.array([coeff_x, coeff_y, coeff_z])
+
+    layout_bdb['coeffs'] = coeffs
+    layout_bdb['centroid'] = centroid
+    layout_bdb['basis'] = basis
+
+    return layout_bdb
+
+
 
 class Box(Scene3D):
 

@@ -53,8 +53,8 @@ spec:
             mountPath: /siggraphasia20dataset
           - name: ruidata
             mountPath: /ruidata
-          - name: cephfs
-            mountPath: /cephfs
+          # - name: cephfs
+          #   mountPath: /cephfs
 
       volumes:
       - name: dshm  # shared memory
@@ -79,8 +79,8 @@ spec:
       - name: ruidata
         persistentVolumeClaim:
             claimName: ruidata
-      - name: cephfs
-        persistentVolumeClaim:
-          claimName: haosulab-cephfs
+      # - name: cephfs
+      #   persistentVolumeClaim:
+      #     claimName: haosulab-cephfs
       restartPolicy: Never
   backoffLimit: 2

@@ -226,7 +226,7 @@ class renderingLayer():
         v = v / np.sqrt(np.maximum(np.sum(v*v, axis=1), 1e-12)[:, np.newaxis, :, :] )
         v = v.astype(dtype = np.float32)
 
-        self.v = Variable(torch.from_numpy(v) )
+        self.v = Variable(torch.from_numpy(v) ) # # virtual camera plane 3D coords (x-y-z with -z forward)
         self.pCoord = Variable(torch.from_numpy(self.pCoord) )
 
         self.up = torch.Tensor([0,1,0] )
@@ -238,7 +238,6 @@ class renderingLayer():
         Az = Az.reshape(-1, 1)
         El = El.reshape(-1, 1)
         lx = np.sin(El) * np.cos(Az)
-
         ly = np.sin(El) * np.sin(Az)
         lz = np.cos(El)
         ls = np.concatenate((lx, ly, lz), axis = 1) # dir vector for each pixel (local coords)
@@ -256,14 +255,37 @@ class renderingLayer():
             self.ls = self.ls.cuda()
             self.envWeight = self.envWeight.cuda()
 
-    def forwardEnv(self, diffusePred, normalPred, roughPred, envmap):
+    def forwardEnv(self, normalPred, envmap, diffusePred=None, roughPred=None, if_normal_only=False):
         envR, envC = envmap.size(2), envmap.size(3)
-        bn = diffusePred.size(0)
-
-        diffusePred = F.adaptive_avg_pool2d(diffusePred, (envR, envC) )
+        
         normalPred = F.adaptive_avg_pool2d(normalPred, (envR, envC) )
         normalPred = normalPred / torch.sqrt( torch.clamp(
             torch.sum(normalPred * normalPred, dim=1 ), 1e-6, 1).unsqueeze(1) )
+
+        ldirections = self.ls.unsqueeze(0).unsqueeze(-1).unsqueeze(-1) # torch.Size([1, 128, 3, 1, 1])
+
+        camyProj = torch.einsum('b,abcd->acd',(self.up, normalPred)).unsqueeze(1).expand_as(normalPred) * normalPred # project camera up to normalPred direction https://en.wikipedia.org/wiki/Vector_projection
+        camy = F.normalize(self.up.unsqueeze(0).unsqueeze(-1).unsqueeze(-1).expand_as(camyProj) - camyProj, dim=1)
+        camx = -F.normalize(torch.cross(camy, normalPred,dim=1), p=1, dim=1) # torch.Size([1, 3, 120, 160])
+
+        # ls (local coords), l (cam coords)
+        # \sum [1, 128, 1, 1, 1] * [1, 1, 3, 120, 160] -> [1, 128, 3, 120, 160]
+        # single vec: \sum [1, 1, 1, 1, 1] * [1, 1, 3, 1, 1] -> [1, 1, 3, 1, 1]
+        l = ldirections[:, :, 0:1, :, :] * camx.unsqueeze(1) \
+                + ldirections[:, :, 1:2, :, :] * camy.unsqueeze(1) \
+                + ldirections[:, :, 2:3, :, :] * normalPred.unsqueeze(1)
+        # print(l.shape) # torch.Size([1, 128, 3, 120, 160])
+        # print(ldirections[:, 20, :, :, :].flatten())
+        # l_ = ldirections[:, 20:21, 0:1, :, :] * camx.unsqueeze(1)[:, :, :, 100:101, 150:151] \
+        # + ldirections[:, 20:21, 1:2, :, :] * camy.unsqueeze(1)[:, :, :, 100:101, 150:151] \
+        # + ldirections[:, 20:21, 2:3, :, :] * normalPred.unsqueeze(1)[:, :, :, 100:101, 150:151]
+        # print(l_)
+
+        if if_normal_only:
+            return l, camx, camy, normalPred
+
+        bn = diffusePred.size(0)
+        diffusePred = F.adaptive_avg_pool2d(diffusePred, (envR, envC) )
         roughPred = F.adaptive_avg_pool2d(roughPred, (envR, envC ) )
 
         temp = Variable(torch.FloatTensor(1, 1, 1, 1,1) )
@@ -271,16 +293,6 @@ class renderingLayer():
 
         if self.isCuda:
             temp = temp.cuda()
-
-        ldirections = self.ls.unsqueeze(0).unsqueeze(-1).unsqueeze(-1)
-        camyProj = torch.einsum('b,abcd->acd',(self.up, normalPred)).unsqueeze(1).expand_as(normalPred) * normalPred
-        camy = F.normalize(self.up.unsqueeze(0).unsqueeze(-1).unsqueeze(-1).expand_as(camyProj) - camyProj, dim=1)
-        camx = -F.normalize(torch.cross(camy, normalPred,dim=1), p=1, dim=1)
-        
-        # ls (local coords), l (cam coords)
-        l = ldirections[:, :, 0:1, :, :] * camx.unsqueeze(1) \
-                + ldirections[:, :, 1:2, :, :] * camy.unsqueeze(1) \
-                + ldirections[:, :, 2:3, :, :] * normalPred.unsqueeze(1)
 
         h = (self.v.unsqueeze(1) + l) / 2;
         h = h / torch.sqrt(torch.clamp(torch.sum(h*h, dim=2), min = 1e-6).unsqueeze(2) )

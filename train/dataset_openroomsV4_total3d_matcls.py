@@ -548,7 +548,7 @@ class openrooms(data.Dataset):
         }
 
     def load_layout_emitter_gt(self, frame_info):
-        scene_total3d_path = frame_info[0]
+        scene_total3d_path, frame_id = frame_info[0], frame_info[1]
         pickle_path = str(scene_total3d_path / ('layout_obj_%d.pkl'%frame_info[1]))
         pickle_path_reindexed = pickle_path.replace('.pkl', '_reindexed.pkl')
         with open(pickle_path, 'rb') as f:

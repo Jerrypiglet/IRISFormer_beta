@@ -144,6 +144,8 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
 
 
     scene_box_list = []
+    layout_info_dict_list = []
+    emitter_info_dict_list = []
     for sample_idx in range(batch_size):
         # print('--- Visualizing sample %d ---'%sample_idx)
         
@@ -247,8 +249,15 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
             grid_size = grid_size)
 
         scene_box_list.append(scene_box)
+        layout_info_dict_list.append({'est_data': None, 'gt_cam_R': gt_cam_R, 'cam_K': cam_K, 'gt_layout': gt_layout, 'pre_layout': pre_layout, 'pre_cam_R': pre_cam_R, 'image': image})
+        emitter_info_dict_list.append({'cell_info_grid_GT': cell_info_grid_GT, 'cell_info_grid_PRED': cell_info_grid_PRED, \
+                                'emitter_cls_prob_PRED': emitter_cls_result_postprocessed_np, 'emitter_cls_prob_GT': emitter_cls_prob_GT_np, \
+                                'pre_layout_data': pre_layout_data, 'pre_layout': pre_layout, 'pre_cam_R': pre_cam_R})
 
     output_vis_dict['scene_box_list'] = scene_box_list
+    output_vis_dict['layout_info_dict_list'] = layout_info_dict_list
+    output_vis_dict['emitter_info_dict_list'] = layout_info_dict_list
+
     return output_vis_dict
 
 
@@ -258,9 +267,9 @@ def postprocess_layout_emitter(labels_dict, output_dict, loss_dict, opt, time_me
     if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
         output_dict, loss_dict = postprocess_layout(labels_dict, output_dict, loss_dict, opt, time_meters)
 
-    if if_vis:
-        output_vis_dict = vis_layout_emitter(labels_dict, output_dict, opt, time_meters)
-        output_dict['output_vis_dict'] = output_vis_dict
+    # if if_vis:
+    #     output_vis_dict = vis_layout_emitter(labels_dict, output_dict, opt, time_meters)
+    #     output_dict['output_vis_dict'] = output_vis_dict
 
     return output_dict, loss_dict
 

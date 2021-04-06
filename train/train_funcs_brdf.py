@@ -126,7 +126,8 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
         if opt.cfg.MODEL_LIGHT.enable:
             extra_dict = []
 
-        loss_dict['loss_brdf-ALL'] = 0.
+        if opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
+            loss_dict['loss_brdf-ALL'] = 0.
 
         if 'al' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
             albedoPreds = []

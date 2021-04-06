@@ -36,14 +36,14 @@ def set_up_envs(opt):
     opt.cfg.PATH.matcls_matIdG2_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.matcls_matIdG2_path)
 
     # ===== data =====
-    opt.cfg.DATA.data_read_list = list(set(opt.cfg.DATA.data_read_list.split('_')))
+    opt.cfg.DATA.data_read_list = [x for x in list(set(opt.cfg.DATA.data_read_list.split('_'))) if x != '']
 
     # ====== BRDF =====
-    opt.cfg.MODEL_BRDF.enable_list = opt.cfg.MODEL_BRDF.enable_list.split('_')
-    opt.cfg.MODEL_BRDF.loss_list = opt.cfg.MODEL_BRDF.loss_list.split('_')
+    opt.cfg.MODEL_BRDF.enable_list = [x for x in opt.cfg.MODEL_BRDF.enable_list.split('_') if x != '']
+    opt.cfg.MODEL_BRDF.loss_list = [x for x in opt.cfg.MODEL_BRDF.loss_list.split('_') if x != '']
 
-    if len(opt.cfg.MODEL_BRDF.enable_list) > 0:
-        opt.cfg.MODEL_BRDF.enable_BRDF_decoders = True
+    opt.cfg.MODEL_BRDF.enable_BRDF_decoders = len(opt.cfg.MODEL_BRDF.enable_list) > 0
+
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
         opt.cfg.DATA.load_brdf_gt = True
         opt.depth_metrics = ['abs_rel', 'sq_rel', 'rmse', 'rmse_log', 'a1', 'a2', 'a3']
@@ -65,6 +65,7 @@ def set_up_envs(opt):
     # ====== layout, emitters =====
     if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
         opt.cfg.MODEL_LAYOUT_EMITTER.enable = True
+        opt.cfg.MODEL_BRDF.enable = True
         opt.cfg.DATA.load_layout_emitter_gt = True
         opt.cfg.DATA.load_brdf_gt = True
         opt.cfg.DATA.data_read_list += opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.split('_')
@@ -317,7 +318,6 @@ def set_up_checkpointing(opt, model, optimizer, scheduler, logger):
     tid_start = 0
     epoch_start = 0
     if opt.resume != 'NoCkpt':
-        ic(opt.resume, opt.task_name)
         if opt.resume == 'resume':
             opt.resume = opt.task_name
         replace_kws = []
