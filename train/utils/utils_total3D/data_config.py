@@ -100,12 +100,15 @@ cls_reg_ratio = 10
 obj_cam_ratio = 1
 
 class Dataset_Config(object):
-    def __init__(self, dataset, opt, OR=None, version='V3', task_name=None):
+    def __init__(self, dataset, opt=None, OR=None, version='V3', task_name=None, paths={}):
         """
         Configuration of data paths.
         """
         self.dataset = dataset
-        self.logger = opt.logger if opt.logger is not None else basic_logger()
+        if opt is not None and opt.logger is not None:
+            self.logger = opt.logger
+        else:
+            self.logger = basic_logger()
 
 
         if self.dataset == 'sunrgbd':
@@ -125,7 +128,7 @@ class Dataset_Config(object):
             # self.data_RAW_path = Path('/newfoundland2/ruizhu/siggraphasia20dataset/layout_labels_%s'%version)
             # self.process_data_root = Path('utils_OR/openrooms') / ('list_%s_%s'%(dataset, version))
             # self.process_data_root = Path(opt.cfg.PATH.total3D_lists_path) / ('list_%s_%s'%(dataset, version))
-            self.process_data_root = Path(opt.cfg.PATH.total3D_lists_path)
+            self.process_data_root = Path(opt.cfg.PATH.total3D_lists_path) if opt is not None else Path(paths['total3D_lists_path'])
             self.avg_file_path = self.process_data_root / ('preprocessed_%s'%self.OR)
             self.size_avg_file = self.avg_file_path / ('size_avg_category_%s.pkl'%(self.OR))
             self.layout_avg_file = self.avg_file_path / ('layout_avg_file_%s.pkl'%(self.OR))
@@ -133,7 +136,7 @@ class Dataset_Config(object):
             self.split_file_path = self.process_data_root / 'list'
 
             # self.train_test_data_path = '/data/ruizhu/OR-%s-%s_total3D_train_test_data'%(version, self.OR)
-            self.train_test_data_path = opt.cfg.DATASET.layout_emitter_path
+            self.train_test_data_path = opt.cfg.DATASET.layout_emitter_path if opt is not None else Path(paths['layout_emitter_path'])
 
             if os.path.exists(self.layout_avg_file):
                 self.bins = self.__initiate_bins()

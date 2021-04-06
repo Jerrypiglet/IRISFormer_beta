@@ -35,6 +35,8 @@ from utils.utils_total3D.utils_OR_vis_labels import set_axes_equal
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
 from utils.utils_misc import yellow
 
+from SimpleLayout.utils_SL import SimpleScene
+
 
 def get_bdb_form_from_corners(corners):
     vec_0 = (corners[:, 2, :] - corners[:, 1, :]) / 2.
@@ -125,12 +127,12 @@ def format_layout(layout_data):
 
 class Box(Scene3D):
 
-    def __init__(self, opt, img_map, depth_map, cam_K, gt_cam_R, pre_cam_R, gt_layout, pre_layout, gt_boxes, pre_boxes, type, output_mesh, \
-                    dataset='OR', hide_invalid_cats=True, description='', if_mute_print=False, OR=None, \
+    def __init__(self, img_map, depth_map, cam_K, gt_cam_R, pre_cam_R, gt_layout, pre_layout, gt_boxes, pre_boxes, type, output_mesh=None, \
+                    opt=None, dataset='OR', hide_invalid_cats=True, description='', if_mute_print=False, OR=None, \
                     cam_fromt_axis_id=0, emitters_obj_list=None, \
                     emitter2wall_assign_info_list=None, emitter_cls_prob_PRED=None, emitter_cls_prob_GT=None, \
                     cell_info_grid_GT=None, cell_info_grid_PRED=None, \
-                    grid_size=4, transform_R=None, transform_t=None):
+                    grid_size=4, transform_R=None, transform_t=None, paths={}):
         super(Scene3D, self).__init__()
         self._cam_K = cam_K
         self.gt_cam_R = gt_cam_R
@@ -156,7 +158,7 @@ class Box(Scene3D):
             assert OR is not None
             self.classes = OR4XCLASSES_dict[OR]
             self.valid_class_ids = RECON_3D_CLS_OR_dict[OR]
-            self.color_file = opt.cfg.PATH.OR4X_mapping_catInt_to_RGB[0]
+            self.color_file = opt.cfg.PATH.OR4X_mapping_catInt_to_RGB[0] if opt is not None else paths['color_file']
             with (open(self.color_file, "rb")) as f:
                 OR4X_mapping_catInt_to_RGB_light = pickle.load(f)
             self.color_palette = OR4X_mapping_catInt_to_RGB_light[OR]
@@ -212,6 +214,97 @@ class Box(Scene3D):
     def save_img(self, save_path):
         img_map = Image.fromarray(self.img_map[:])
         img_map.save(str(save_path))
+
+    def draw_projected_depth(self, type = 'prediction', return_plt = False, if_save = True, save_path='', if_vis=True, if_use_plt=False, fig_or_ax=None, cam_K_override=None, if_original_lim=True, override_img=None):
+        if cam_K_override is not None:
+            cam_K = cam_K_override
+        else:
+            cam_K = self.cam_K
+            
+        if override_img is None:
+            im_uint8 = self.img_map[:]
+        else:
+            im_uint8 = override_img
+        im_height, im_width = im_uint8.shape[:2]
+
+        # if fig_or_ax is None:
+        #     fig_2d = plt.figure(figsize=(15, 8))
+        #     ax_2d = fig_2d.gca()
+        # else:
+        #     ax_2d = fig_or_ax
+        # ax_2d.imshow(im_uint8)
+        # if not if_original_lim:
+        #     ax_2d.set_xlim([-im_width*0.5, im_width*1.5])
+        #     ax_2d.set_ylim([im_height*1.5, -im_height*0.5])
+        # else:
+        #     ax_2d.set_xlim([0, im_width])
+        #     ax_2d.set_ylim([im_height, 0])
+
+        if type == 'prediction':
+            boxes = [self.pre_layout]
+            cam_Rs = [self.pre_cam_R]
+            colors = [[1., 0., 0.]]
+            line_widths = [5]
+            linestyles = ['-']
+        elif type == 'both':
+            boxes = [self.pre_layout, self.gt_layout]
+            cam_Rs = [self.pre_cam_R, self.gt_cam_R]
+            colors = [[1., 0., 0.], [0., 0., 1.]]
+            line_widths = [5, 3]
+            linestyles = ['-', '--']
+        elif type == 'GT':
+            boxes = [self.gt_layout]
+            cam_Rs = [self.gt_cam_R]
+            colors = [[0., 0., 1.]]
+            line_widths = [3]
+            linestyles = ['--']
+        else:
+            assert False, 'not valid Type!'
+
+        for box, cam_R, color, line_width, linestyle in zip(boxes, cam_Rs, colors, line_widths, linestyles):
+            if box is None:
+                print('[draw_projected_layout] box is None for vis type: %s; skipped'%type)
+                continue
+            if not isinstance(box, dict):
+                box = format_layout(box)
+            coeffs, centroid, class_id, basis  = box['coeffs'], box['centroid'], -1, box['basis']
+            bdb3d_corners = get_corners_of_bb3d_no_index(basis, coeffs, centroid)
+
+            cam_dict = {'origin': np.array([0., 0., 0.]), 'cam_axes': cam_R.T, 'f_x': cam_K[0][0], 'f_y': cam_K[1][1], 'width': im_width, 'height': im_height}
+            simpleScene = SimpleScene(cam_dict, bdb3d_corners)
+            edges_front_list, face_edges_list, face_verts_list = simpleScene.get_edges_front(bdb3d_corners, ax_3d=None, if_vis=False)
+            mask_combined, mask_list, mask_conflict = simpleScene.poly_to_masks(face_verts_list)
+
+            ax_3d = simpleScene.vis_3d(bdb3d_corners)
+            ax_2d = simpleScene.vis_2d_bbox_proj(bdb3d_corners, edge_list=[x[0] for x in edges_front_list], if_show=True)
+            simpleScene.vis_mask_combined(mask_combined, ax_2d=ax_2d)
+
+            invd_list = simpleScene.param_planes()
+            depth_masked_list = [face_idx_mask[1]/invd_list[face_idx_mask[0]] for face_idx_mask in mask_list]
+            depth_combined = np.sum(np.stack(depth_masked_list), 0)
+
+            if if_vis:
+                fig = plt.figure(figsize=(15, 4))
+                plt.subplot(121)
+                plt.imshow(depth_combined, cmap='jet')
+                plt.colorbar()
+                plt.subplot(122)
+                plt.imshow(mask_conflict, cmap='jet')
+                plt.colorbar()
+                # plt.subplot(143)
+                # plt.imshow(invd_list[3], cmap='jet')
+                # plt.colorbar()
+                # plt.subplot(144)
+                # plt.imshow(mask_list[3][1])
+                plt.show()
+
+
+
+
+        if not self.if_mute_print:
+            print("[draw_projected_depth] Returned.")
+
+        return depth_combined, mask_conflict
 
     def draw_3D_scene_plt(self, type = 'prediction', if_save = True, save_path='', fig_or_ax=None,  which_to_vis='cell_info', if_show_emitter=True, if_show_objs=True, if_return_cells_vis_info=False):
         assert type in ['prediction', 'GT', 'both']

@@ -14,5 +14,5 @@
 	path = third-parties_outside/photoshape
 	url = https://github.com/Jerrypiglet/photoshape.git
 [submodule "SimpleLayout"]
-	path = SimpleLayout
+	path = train/SimpleLayout
 	url = https://github.com/Jerrypiglet/SimpleLayout.git

@@ -237,8 +237,8 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
         gt_boxes, pre_boxes = None, None
         save_prefix = ''
 
-        scene_box = Box(opt, image, None, cam_K, gt_cam_R, pre_cam_R, gt_layout, reindex_layout(pre_layout, pre_cam_R), gt_boxes, pre_boxes, 'prediction', output_mesh = None, \
-            dataset='OR', description=save_prefix, if_mute_print=True, OR=opt.cfg.MODEL_LAYOUT_EMITTER.data.OR, \
+        scene_box = Box(image, None, cam_K, gt_cam_R, pre_cam_R, gt_layout, reindex_layout(pre_layout, pre_cam_R), gt_boxes, pre_boxes, 'prediction', output_mesh = None, \
+            opt=opt, dataset='OR', description=save_prefix, if_mute_print=True, OR=opt.cfg.MODEL_LAYOUT_EMITTER.data.OR, \
             emitter2wall_assign_info_list = emitter2wall_assign_info_list, 
             emitters_obj_list = emitters_obj_list, 
             # gt_layout_RAW = gt_layout_RAW, 
