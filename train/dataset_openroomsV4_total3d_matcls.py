@@ -392,7 +392,7 @@ class openrooms(data.Dataset):
                     })
             # if self.transform is not None and not self.opt.if_hdr:
 
-            if self.opt.cfg.MODEL_LIGHT.enable:
+            if self.opt.cfg.DATA.load_light_gt:
                 batch_dict['envmaps'] = envmaps
                 batch_dict['envmapsInd'] = envmapsInd
                 # print(envmaps.shape, envmapsInd.shape)

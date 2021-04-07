@@ -9,7 +9,7 @@ if_cluster = True
 
 scene_list = ['scene0017_02', 'scene0053_00', 'scene0088_01', 'scene0120_00', 'scene0157_01', 'scene0195_01', 'scene0231_02', 'scene0269_00', 'scene0304_00', 'scene0344_01', 'scene0377_02', 'scene0414_00', 'scene0449_02', 'scene0483_00', 'scene0524_01', 'scene0562_00', 'scene0593_01']
 dest_path_mini = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms_mini'
-list_path = '/home/ruizhu/Documents/Projects/semanticInverse/train/data/mini'
+list_path = '/home/ruizhu/Documents/Projects/semanticInverse/train/data/openrooms/list_ORmini'
 
 dataset_path_dict = {}
 if if_cluster:
@@ -26,13 +26,13 @@ dirs = ['main_xml', 'main_xml1',
 subset_to_prefix = {'im_RGB': 'im_', 'label_semseg': 'imsemLabel_'}
 
 # ------ copy files
-for dir_ in tqdm(dirs):
-    for scene in scene_list:
-        src_path = Path(dataset_path_dict['train']) / dir_ / scene
-        dest_path = Path(dest_path_mini) / dir_ / scene
-        dest_path.parent.mkdir(parents=True, exist_ok=True)
-        result = shutil.copytree(src_path, dest_path)
-        print('Copied from %s to %s'%(src_path, dest_path))
+# for dir_ in tqdm(dirs):
+#     for scene in scene_list:
+#         src_path = Path(dataset_path_dict['train']) / dir_ / scene
+#         dest_path = Path(dest_path_mini) / dir_ / scene
+#         dest_path.parent.mkdir(parents=True, exist_ok=True)
+#         result = shutil.copytree(src_path, dest_path)
+#         print('Copied from %s to %s'%(src_path, dest_path))
 
 # ------ create lists
 for split in ['train', 'val']:
@@ -98,7 +98,9 @@ for split in ['train', 'val']:
 
     with open(str(output_txt_file), 'w') as text_file:
         for path_cam0, path_label in zip(frame_paths_all_dict['im_RGB'], frame_paths_all_dict['label_semseg']):
-            text_file.write('%s %s\n'%(path_cam0, path_label))
+            scene_name = path_cam0.split('/')[1]
+            frame_id = path_cam0.split('/')[2].split('.')[0].split('_')[1]
+            text_file.write('%s %s %s %s\n'%(scene_name, frame_id, path_cam0, path_label))
     print('Wrote %d entries to %s'%(len(frame_paths_all_dict['im_RGB']), output_txt_file))
 
 
