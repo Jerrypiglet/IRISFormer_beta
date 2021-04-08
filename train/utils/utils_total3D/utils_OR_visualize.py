@@ -303,29 +303,36 @@ class Box(Scene3D):
 
         return depth_combined, mask_conflict
 
-    def draw_3D_scene_plt(self, type = 'prediction', if_save = True, save_path='', fig_or_ax=None,  which_to_vis='cell_info', if_show_emitter=True, if_show_objs=True, if_return_cells_vis_info=False):
+    def draw_3D_scene_plt(self, type = 'prediction', if_save = True, save_path='', fig_or_ax=[None, None],  which_to_vis='cell_info', if_show_emitter=True, if_show_objs=True, if_return_cells_vis_info=False, hide_cells=True):
         assert type in ['prediction', 'GT', 'both']
+        figs_to_draw = {'prediction': ['prediction'], 'GT': ['GT'],'both': ['predcition', 'GT']}
+        figs_to_draw = figs_to_draw[type]
         cells_vis_info_list_pred = []
         cells_vis_info_list_GT = []
 
-        if fig_or_ax is None:
+        ax_3d_GT, ax_3d_PRED = fig_or_ax[0], fig_or_ax[1]
+
+        if_new_fig = ax_3d_GT is None and ax_3d_PRED is None
+        if if_new_fig:
             fig = plt.figure(figsize=(15, 8))
-            ax_3d_GT = fig.add_subplot(121, projection='3d')
-            ax_3d_GT = fig.gca(projection='3d')
+
+        if 'GT' in figs_to_draw:
+            if if_new_fig:
+                ax_3d_GT = fig.add_subplot(121, projection='3d')
+                # ax_3d_GT = fig.gca(projection='3d')
             ax_3d_GT.set_proj_type('ortho')
             ax_3d_GT.set_aspect("auto")
             ax_3d_GT.view_init(elev=-42, azim=111)
-
             ax_3d_GT.set_title('GT')
-            ax_3d_PRED = fig.add_subplot(122, projection='3d')
-            ax_3d_PRED = fig.gca(projection='3d')
+
+        if 'prediction' in figs_to_draw:
+            if if_new_fig:
+                ax_3d_PRED = fig.add_subplot(122, projection='3d')
+                # ax_3d_PRED = fig.gca(projection='3d')
             ax_3d_PRED.set_proj_type('ortho')
             ax_3d_PRED.set_aspect("auto")
             ax_3d_PRED.view_init(elev=-42, azim=111)
-
             ax_3d_PRED.set_title('PRED')
-        else:
-            ax_3d_GT, ax_3d_PRED = fig_or_ax[0], fig_or_ax[1]
 
         # === draw layout, camera and axis
 
@@ -404,6 +411,13 @@ class Box(Scene3D):
                             lw=2, arrowstyle="-|>", facecolor=intensity_scaled, edgecolor='k')
                         ax_3d.add_artist(a_light)
 
+        if fig_or_ax != [None, None]:
+            for ax_3d in [ax_3d_GT, ax_3d_PRED]:
+                if ax_3d is not None:
+                    ax_3d.set_box_aspect([1,1,1])
+                    set_axes_equal(ax_3d) # IMPORTANT - this is also required
+            return
+
         # === draw objs
         cell_info_grid_dict = {'GT': self.cell_info_grid_GT, 'prediction': self.cell_info_grid_PRED}
         if type == 'prediction':
@@ -469,7 +483,10 @@ class Box(Scene3D):
         #     return None, None
 
         # === draw emitter patches
-        if self.emitter2wall_assign_info_list is not None:
+        # if_vis_lightnet_cells = lightnet_array_GT is not None
+        # if if_vis_lightnet_cells:
+        #     assert lightnet_array_GT.shape == (6, self.grid_size, self.grid_size, 3)
+        if self.emitter2wall_assign_info_list is not None and not hide_cells:
             # basis_indexes = [(1, 0, 2, 3), (4, 5, 7, 6), (0, 1, 4, 5), (1, 5, 2, 6), (3, 2, 7, 6), (4, 0, 7, 3)]
             # constant_axes = [1, 1, 2, 0, 2, 0]
             basis_v_indexes = [(3, 2, 0), (7, 6, 4), (4, 5, 0), (6, 2, 5), (7, 6, 3), (7, 3, 4)]
@@ -502,6 +519,7 @@ class Box(Scene3D):
                     x_i1j1 = basis_1 * (i+1) + basis_2 * (j+1) + origin_0
                     x_ij1 = basis_1 * i + basis_2 * (j+1) + origin_0
                     verts = [[list(x_ij), list(x_i1j), list(x_i1j1), list(x_ij1)]]
+
                     if which_to_vis == 'cell_info' and cell_info['obj_type'] is None:
                         continue
 
@@ -545,8 +563,14 @@ class Box(Scene3D):
                     if color == 'm':
                         # alpha = alpha / 4.
                         alpha = 0.
-                    if alpha != 0:
-                        cell_vis['poly'].set_alpha(alpha / 1.2)
+
+                    if_draw_cell = alpha != 0
+
+                    if if_draw_cell:
+                        if if_vis_lightnet_cells:
+                            cell_vis['poly'].set_alpha(0.8)
+                        else:
+                            cell_vis['poly'].set_alpha(alpha / 1.2)
                         if type0 == 'GT':
                             ax_3d_GT.add_collection3d(cell_vis['poly'])
                         else:
@@ -580,13 +604,41 @@ class Box(Scene3D):
 
 
         for ax_3d in [ax_3d_GT, ax_3d_PRED]:
-            ax_3d.set_box_aspect([1,1,1])
-            set_axes_equal(ax_3d) # IMPORTANT - this is also required
+            if ax_3d is not None:
+                ax_3d.set_box_aspect([1,1,1])
+                set_axes_equal(ax_3d) # IMPORTANT - this is also required
 
-        if fig_or_ax is None:
+        if fig_or_ax == [None, None]    :
             return fig, [ax_3d_GT, ax_3d_PRED, [cells_vis_info_list_pred, cells_vis_info_list_GT]]
         else:
             return ax_3d, [ax_3d_GT, ax_3d_PRED, [cells_vis_info_list_pred, cells_vis_info_list_GT]]
+
+    def draw_all_cells(self, ax_3d, layout, lightnet_array_GT, alpha=0.5):
+        assert lightnet_array_GT.shape == (6, self.grid_size, self.grid_size, 3)
+        basis_v_indexes = [(3, 2, 0), (7, 6, 4), (4, 5, 0), (6, 2, 5), (7, 6, 3), (7, 3, 4)]
+
+        for wall_idx in range(6):
+            for i in range(self.grid_size):                    
+                for j in range(self.grid_size):                    
+                    origin_v1_v2 = basis_v_indexes[wall_idx]
+                    basis_1 = (layout[origin_v1_v2[1]] - layout[origin_v1_v2[0]]) / self.grid_size
+                    basis_2 = (layout[origin_v1_v2[2]] - layout[origin_v1_v2[0]]) / self.grid_size
+                    origin_0 = layout[origin_v1_v2[0]]
+                    
+                    x_ij = basis_1 * i + basis_2 * j + origin_0
+                    x_i1j = basis_1 * (i+1) + basis_2 * j + origin_0
+                    x_i1j1 = basis_1 * (i+1) + basis_2 * (j+1) + origin_0
+                    x_ij1 = basis_1 * i + basis_2 * (j+1) + origin_0
+                    verts = [[list(x_ij), list(x_i1j), list(x_i1j1), list(x_ij1)]]
+
+                    verts = np.array(verts).squeeze()
+                    verts = [verts.tolist()]
+                    poly = Poly3DCollection(verts, facecolor=lightnet_array_GT[wall_idx, i, j, :].flatten().tolist(), edgecolor='k')
+
+                    cell_vis = {}
+                    cell_vis.update({'poly': poly})
+                    cell_vis['poly'].set_alpha(alpha)
+                    ax_3d.add_collection3d(cell_vis['poly'])
 
 
     def draw_projected_layout(self, type = 'prediction', return_plt = False, if_save = True, save_path='', if_use_plt=False, fig_or_ax=None, cam_K_override=None, if_original_lim=False, override_img=None):
