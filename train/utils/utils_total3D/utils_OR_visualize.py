@@ -303,9 +303,9 @@ class Box(Scene3D):
 
         return depth_combined, mask_conflict
 
-    def draw_3D_scene_plt(self, type = 'prediction', if_save = True, save_path='', fig_or_ax=[None, None],  which_to_vis='cell_info', if_show_emitter=True, if_show_objs=True, if_return_cells_vis_info=False, hide_cells=True):
+    def draw_3D_scene_plt(self, type = 'prediction', if_save = True, save_path='', fig_or_ax=[None, None],  which_to_vis='cell_info', if_show_emitter=True, if_show_objs=True, if_return_cells_vis_info=False, hide_cells=False):
         assert type in ['prediction', 'GT', 'both']
-        figs_to_draw = {'prediction': ['prediction'], 'GT': ['GT'],'both': ['predcition', 'GT']}
+        figs_to_draw = {'prediction': ['prediction'], 'GT': ['GT'],'both': ['prediction', 'GT']}
         figs_to_draw = figs_to_draw[type]
         cells_vis_info_list_pred = []
         cells_vis_info_list_GT = []
@@ -350,11 +350,12 @@ class Box(Scene3D):
             cam_Rs = [self.pre_cam_R, self.gt_cam_R]
 
         for ax_3d, layout, cam_R in zip(axes, boxes, cam_Rs):
+            if ax_3d is None:
+                continue
             cam_xaxis, cam_yaxis, cam_zaxis = np.split(cam_R, 3, axis=1)
             cam_up = cam_yaxis
             cam_origin = np.zeros_like(cam_up)
             cam_lookat = cam_origin + cam_xaxis
-
             vis_axis_xyz(ax_3d, cam_xaxis.flatten(), cam_yaxis.flatten(), cam_zaxis.flatten(), cam_origin.flatten(), suffix='_c')
             a = Arrow3D([cam_origin[0][0], cam_lookat[0][0]*2-cam_origin[0][0]], [cam_origin[1][0], cam_lookat[1][0]*2-cam_origin[1][0]], [cam_origin[2][0], cam_lookat[2][0]*2-cam_origin[2][0]], mutation_scale=20,
                             lw=1, arrowstyle="->", color="b")
@@ -366,7 +367,7 @@ class Box(Scene3D):
 
             # === draw layout
             assert layout is not None
-            vis_cube_plt(layout, ax_3d, 'k', '--', if_face_idx_text=True, if_vertex_idx_text=True)
+            vis_cube_plt(layout, ax_3d, 'k', '--', if_face_idx_text=True, if_vertex_idx_text=True, highlight_faces=[0]) # highlight ceiling (face 0) edges
 
             # === draw emitters
             if self.emitters_obj_list is not None and if_show_emitter:
@@ -567,10 +568,7 @@ class Box(Scene3D):
                     if_draw_cell = alpha != 0
 
                     if if_draw_cell:
-                        if if_vis_lightnet_cells:
-                            cell_vis['poly'].set_alpha(0.8)
-                        else:
-                            cell_vis['poly'].set_alpha(alpha / 1.2)
+                        cell_vis['poly'].set_alpha(alpha / 1.2)
                         if type0 == 'GT':
                             ax_3d_GT.add_collection3d(cell_vis['poly'])
                         else:
@@ -586,8 +584,10 @@ class Box(Scene3D):
                                     light_dir_abs = light_dir_offset + normal_outside
                                 cell_center = extra_info['cell_center'].flatten()
                                 if 'intensity_scalelog' in extra_info['emitter_info']:
+                                    # print('111    11')
                                     intensity_scalelog = extra_info['emitter_info']['intensity_scalelog'] / 3. + 0.5 # add 0.5 for vis (otherwise could be too short)
                                 else:
+                                    # print('2')
                                     intensity = extra_info['emitter_info']['intensity_scale'] * np.array(extra_info['emitter_info']['intensity_scaled']) * 255.
                                     intensity_scalelog = np.log(np.clip(np.linalg.norm(intensity.flatten()) + 1., 1., np.inf)) / 3. + 0.5 # add 0.5 for vis (otherwise could be too short)
 

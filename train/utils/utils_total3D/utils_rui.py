@@ -40,7 +40,7 @@ def clip(subjectPolygon, clipPolygon):
       cp1 = cp2
    return(outputList)
 
-def vis_cube_plt(Xs, ax, color=None, linestyle='-', label=None, if_face_idx_text=False, if_vertex_idx_text=False, text_shift=[0., 0., 0.], fontsize_scale=1.):
+def vis_cube_plt(Xs, ax, color=None, linestyle='-', label=None, if_face_idx_text=False, if_vertex_idx_text=False, text_shift=[0., 0., 0.], fontsize_scale=1., highlight_faces=[]):
    # https://stackoverflow.com/questions/11140163/plotting-a-3d-cube-a-sphere-and-a-vector-in-matplotlib
    index1 = [0, 1, 2, 3, 0, 4, 5, 6, 7, 4]
    index2 = [[1, 5], [2, 6], [3, 7]]
@@ -65,6 +65,13 @@ def vis_cube_plt(Xs, ax, color=None, linestyle='-', label=None, if_face_idx_text
          ax.scatter3D(X_center[0], X_center[1], X_center[2], color=[0.8, 0.8, 0.8], s=30)
          for cross_index in [[index[0], index[2]], [index[1], index[3]]]:
             ax.plot3D(Xs[cross_index, 0], Xs[cross_index, 1], Xs[cross_index, 2], color=[0.8, 0.8, 0.8], linestyle='--', linewidth=1)
+   for face_idx in highlight_faces:
+      vertex_idxes = index3[face_idx]
+      edge_idxes = [(vertex_idxes[x], vertex_idxes[(x+2)%4-1]) for x in range(len(vertex_idxes))]
+      for (edge_start, edge_end) in edge_idxes:
+         ax.plot3D(Xs[[edge_start, edge_end], 0], Xs[[edge_start, edge_end], 1], Xs[[edge_start, edge_end], 2], color='r', linestyle='-', linewidth=2)
+
+
 
 
    

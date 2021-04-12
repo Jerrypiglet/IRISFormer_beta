@@ -16,6 +16,7 @@ import models_def.models_brdf_pac_conv as models_brdf_pac_conv
 import models_def.models_brdf_safenet as models_brdf_safenet
 import models_def.models_light as models_light 
 import models_def.models_layout_emitter as models_layout_emitter
+import models_def.models_layout_emitter_lightAccu as models_layout_emitter_lightAccu
 import models_def.model_matcls as model_matcls
 
 class Model_Joint(nn.Module):
@@ -118,7 +119,11 @@ class Model_Joint(nn.Module):
                     freeze_bn_in_module(self.BRDF_Net)
 
         if self.cfg.MODEL_LAYOUT_EMITTER.enable:
-            self.LAYOUT_EMITTER_NET = models_layout_emitter.decoder_layout_emitter(opt)
+            if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
+                self.EMITTER_LIGHT_ACCU_NET = models_layout_emitter_lightAccu.emitter_lightAccu(opt)
+                self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu(opt)
+            else:
+                self.LAYOUT_EMITTER_NET = models_layout_emitter.decoder_layout_emitter(opt)
 
         if self.cfg.MODEL_MATCLS.enable:
             self.MATCLS_NET = model_matcls.netCS(opt=opt, inChannels=4, base_model=resnet.resnet34, if_est_scale=False, if_est_sup = opt.cfg.MODEL_MATCLS.if_est_sup)
@@ -169,8 +174,13 @@ class Model_Joint(nn.Module):
         return_dict.update(return_dict_light)
 
         if self.cfg.MODEL_LAYOUT_EMITTER.enable:
-            encoder_outputs = return_dict_brdf['encoder_outputs']
-            return_dict_layout_emitter = self.LAYOUT_EMITTER_NET(input_feats_dict=encoder_outputs)
+            if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
+                assert self.cfg.MODEL_LAYOUT_EMITTER.enable_list == ['em']
+                return_dict_layout_emitter = self.forward_emitter_lightAccu(input_dict)
+                return_dict_layout_emitter.update({'layout_est_result': {}})
+            else:
+                encoder_outputs = return_dict_brdf['encoder_outputs']
+                return_dict_layout_emitter = self.LAYOUT_EMITTER_NET(input_feats_dict=encoder_outputs)
         else:
             return_dict_layout_emitter = {}
         # print(return_dict_layout_emitter.keys()) # dict_keys(['layout_est_result', 'emitter_est_result'])
@@ -318,23 +328,55 @@ class Model_Joint(nn.Module):
 
         return return_dict
 
+    def forward_emitter_lightAccu(self, input_dict):
+        normalBatch = input_dict['normalBatch']
+        depthBatch = input_dict['depthBatch'].squeeze(1)
+        envmapsBatch = input_dict['envmapsBatch']
+        cam_K_batch = input_dict['layout_labels']['cam_K']
+        cam_R_gt_batch = input_dict['layout_labels']['cam_R_gt']
+        layout_gt_batch = input_dict['layout_labels']['lo_bdb3D']
+        # print(depthBatch.shape, normalBatch.shape, envmapsBatch.shape, cam_K_batch.shape, cam_R_gt_batch.shape, layout_gt_batch.shape)
+
+        input_dict = {'normalPred_lightAccu':normalBatch, 'depthPred_lightAccu': depthBatch, 'envmapsPredImage_lightAccu': envmapsBatch, 'cam_K': cam_K_batch, 'cam_R': cam_R_gt_batch, 'layout': layout_gt_batch}
+
+        return_dict = self.EMITTER_LIGHT_ACCU_NET(input_dict)
+        envmap_lightAccu_mean = return_dict['envmap_lightAccu_mean'].view(-1, 6, 8, 8, 3).permute(0, 1, 4, 2, 3)
+        
+        return_dict_layout_emitter = self.EMITTER_NET(envmap_lightAccu_mean)
+
+        return_dict_layout_emitter['emitter_est_result'].update({'envmap_lightAccu_mean': envmap_lightAccu_mean})
+
+        # print(return_dict_layout_emitter.keys())
+
+        return return_dict_layout_emitter
+
+
     def forward_light(self, input_dict, return_dict_brdf):
         # Normalize Albedo and depth
-        bn, ch, nrow, ncol = return_dict_brdf['albedoPred'].size()
-        albedoPred = return_dict_brdf['albedoPred'].view(bn, -1)
-        albedoPred = albedoPred / torch.clamp(torch.mean(albedoPred, dim=1), min=1e-10).unsqueeze(1) / 3.0
-        albedoPred = albedoPred.view(bn, ch, nrow, ncol)
+        if self.cfg.MODEL_LIGHT.use_GT_brdf:
+            bn, ch, nrow, ncol = return_dict_brdf['albedoPred'].size()
+            albedoPred = return_dict_brdf['albedoPred'].view(bn, -1)
+            albedoPred = albedoPred / torch.clamp(torch.mean(albedoPred, dim=1), min=1e-10).unsqueeze(1) / 3.0
+            albedoPred = albedoPred.view(bn, ch, nrow, ncol)
 
-        bn, ch, nrow, ncol = return_dict_brdf['depthPred'].size()
-        depthPred = return_dict_brdf['depthPred'].view(bn, -1)
-        depthPred = depthPred / torch.clamp(torch.mean(depthPred, dim=1), min=1e-10).unsqueeze(1) / 3.0
-        depthPred = depthPred.view(bn, ch, nrow, ncol)
+            bn, ch, nrow, ncol = return_dict_brdf['depthPred'].size()
+            depthPred = return_dict_brdf['depthPred'].view(bn, -1)
+            depthPred = depthPred / torch.clamp(torch.mean(depthPred, dim=1), min=1e-10).unsqueeze(1) / 3.0
+            depthPred = depthPred.view(bn, ch, nrow, ncol)
+
+            normalPred = return_dict_brdf['normalPred']
+            roughPred = return_dict_brdf['roughPred']
+        else:
+            albedoPred = input_dict['albedoBatch']
+            depthPred = input_dict['depthBatch']
+            normalPred = input_dict['normalBatch']
+            roughPred = input_dict['roughBatch']
 
         imBatchLarge = F.interpolate(input_dict['imBatch'], [480, 640], mode='bilinear')
         albedoPredLarge = F.interpolate(albedoPred, [480, 640], mode='bilinear')
         depthPredLarge = F.interpolate(depthPred, [480, 640], mode='bilinear')
-        normalPredLarge = F.interpolate(return_dict_brdf['normalPred'], [480, 640], mode='bilinear')
-        roughPredLarge = F.interpolate(return_dict_brdf['roughPred'], [480,640], mode='bilinear')
+        normalPredLarge = F.interpolate(normalPred, [480, 640], mode='bilinear')
+        roughPredLarge = F.interpolate(roughPred, [480,640], mode='bilinear')
 
         input_batch = torch.cat([imBatchLarge, albedoPredLarge,
             0.5*(normalPredLarge+1), 0.5 * (roughPredLarge+1), depthPredLarge ], dim=1 )
@@ -421,7 +463,9 @@ class Model_Joint(nn.Module):
                 module_name = saved_name+'Decoder'
             # pickle_path = '{0}/{1}{2}_{3}.pth'.format(pretrained_path, saved_name, cascadeLevel, epochIdFineTune) 
             pickle_path = pretrained_path % saved_name
-            print('Loading ' + pickle_path)
+            # print('----- Loading %s  for module %s'%(pickle_path, module_name))
+            # print(self.opt.cfg.MODEL_BRDF.enable_list, self.cfg.MODEL_BRDF.enable_BRDF_decoders)
+            # self.print_net()
             self.BRDF_Net[module_name].load_state_dict(
                 torch.load(pickle_path).state_dict())
             loaded_strings.append(saved_name)

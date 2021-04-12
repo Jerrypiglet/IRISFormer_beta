@@ -616,7 +616,23 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
                             with open(str(pickle_save_path),"wb") as f:
                                 pickle.dump(save_dict, f)
 
+                            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
+                                fig_3d, ax_3d = scene_box.draw_3D_scene_plt('GT', )
+                                ax_3d[1] = fig_3d.add_subplot(122, projection='3d')
+                                scene_box.draw_3D_scene_plt('GT', fig_or_ax=[ax_3d[1], ax_3d[0]], hide_cells=True)
+                                
+                                lightAccu_color_array_GT = emitter_info_dict['envmap_lightAccu_mean_vis_GT'].transpose(0, 2, 3, 1) # -> [6, 8, 8, 3]
+                                scene_box.draw_all_cells(ax_3d[1], scene_box.gt_layout, lightnet_array_GT=lightAccu_color_array_GT, alpha=1.)
 
+                                output_path = Path(opt.summary_vis_path_task) / (('results_LABEL-%d'%(sample_idx)).replace('LABEL', 'lightAccu_view1') + '.png')
+                                fig_3d.savefig(str(output_path))
+
+                                ax_3d[0].view_init(elev=-59, azim=-131)
+                                ax_3d[1].view_init(elev=-59, azim=-131)
+                                output_path = str(output_path).replace('lightAccu_view1', 'lightAccu_view2')
+                                fig_3d.savefig(str(output_path))
+
+                                plt.close(fig_3d)
 
 
             # ======= Vis matcls

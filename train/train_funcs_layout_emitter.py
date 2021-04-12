@@ -62,11 +62,11 @@ def get_labels_dict_layout_emitter(data_batch, opt):
         pitch_cls = data_batch['camera']['pitch_cls'].long().cuda(non_blocking=True)
         roll_reg = data_batch['camera']['roll_reg'].float().cuda(non_blocking=True)
         roll_cls = data_batch['camera']['roll_cls'].long().cuda(non_blocking=True)
-        lo_ori_reg = data_batch['layout']['ori_reg'].float().cuda(non_blocking=True)
-        lo_ori_cls = data_batch['layout']['ori_cls'].long().cuda(non_blocking=True)
-        lo_centroid = data_batch['layout']['centroid_reg'].float().cuda(non_blocking=True)
-        lo_coeffs = data_batch['layout']['coeffs_reg'].float().cuda(non_blocking=True)
-        lo_bdb3D = data_batch['layout']['bdb3D'].float().cuda(non_blocking=True)
+        lo_ori_reg = data_batch['layout_reindexed']['ori_reg'].float().cuda(non_blocking=True)
+        lo_ori_cls = data_batch['layout_reindexed']['ori_cls'].long().cuda(non_blocking=True)
+        lo_centroid = data_batch['layout_reindexed']['centroid_reg'].float().cuda(non_blocking=True)
+        lo_coeffs = data_batch['layout_reindexed']['coeffs_reg'].float().cuda(non_blocking=True)
+        lo_bdb3D = data_batch['layout_reindexed']['bdb3D'].float().cuda(non_blocking=True)
         cam_K = data_batch['camera']['K'].float().cuda(non_blocking=True)
         cam_R_gt = get_rotation_matrix_gt(opt.bins_tensor, 
                                             pitch_cls, pitch_reg, 
@@ -251,13 +251,21 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
 
         scene_box_list.append(scene_box)
         layout_info_dict_list.append({'est_data': None, 'gt_cam_R': gt_cam_R, 'cam_K': cam_K, 'gt_layout': gt_layout, 'pre_layout': pre_layout, 'pre_cam_R': pre_cam_R, 'image': image})
-        emitter_info_dict_list.append({'cell_info_grid_GT': cell_info_grid_GT, 'cell_info_grid_PRED': cell_info_grid_PRED, \
+        emitter_info_dict = {'cell_info_grid_GT': cell_info_grid_GT, 'cell_info_grid_PRED': cell_info_grid_PRED, \
                                 'emitter_cls_prob_PRED': emitter_cls_result_postprocessed_np, 'emitter_cls_prob_GT': emitter_cls_prob_GT_np, \
-                                'pre_layout': pre_layout, 'pre_cam_R': pre_cam_R})
+                                'pre_layout': pre_layout, 'pre_cam_R': pre_cam_R}
+        if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
+            envmap_lightAccu_mean = pred_dict_em['envmap_lightAccu_mean'][sample_idx].detach().cpu().numpy()
+            # print(envmap_lightAccu_mean.shape) # (6, 3, 8, 8)
+            envmap_lightAccu_mean_vis = np.clip(envmap_lightAccu_mean**(1.0/2.2), 0., 1.)
+
+            emitter_info_dict.update({'envmap_lightAccu_mean_vis_GT': envmap_lightAccu_mean_vis})
+
+        emitter_info_dict_list.append(emitter_info_dict)
 
     output_vis_dict['scene_box_list'] = scene_box_list
     output_vis_dict['layout_info_dict_list'] = layout_info_dict_list
-    output_vis_dict['emitter_info_dict_list'] = layout_info_dict_list
+    output_vis_dict['emitter_info_dict_list'] = emitter_info_dict_list
 
     return output_vis_dict
 

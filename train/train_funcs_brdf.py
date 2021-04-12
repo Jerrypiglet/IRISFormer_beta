@@ -17,19 +17,19 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
 
     if opt.cfg.DATA.load_brdf_gt:
         # Load data from cpu to gpu
-        if 'al' in opt.cfg.MODEL_BRDF.enable_list:
+        if 'al' in opt.cfg.DATA.data_read_list:
             albedo_cpu = data_batch['albedo']
             input_dict['albedoBatch'] = Variable(albedo_cpu ).cuda(non_blocking=True)
 
-        if 'no' in opt.cfg.MODEL_BRDF.enable_list:
+        if 'no' in opt.cfg.DATA.data_read_list:
             normal_cpu = data_batch['normal']
             input_dict['normalBatch'] = Variable(normal_cpu ).cuda(non_blocking=True)
 
-        if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
+        if 'ro' in opt.cfg.DATA.data_read_list:
             rough_cpu = data_batch['rough']
             input_dict['roughBatch'] = Variable(rough_cpu ).cuda(non_blocking=True)
 
-        if 'de' in opt.cfg.MODEL_BRDF.enable_list:
+        if 'de' in opt.cfg.DATA.data_read_list:
             depth_cpu = data_batch['depth']
             input_dict['depthBatch'] = Variable(depth_cpu ).cuda(non_blocking=True)
 

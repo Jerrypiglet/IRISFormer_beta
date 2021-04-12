@@ -5,6 +5,8 @@ Zhengqin Li, Mohammad Shafiei, Ravi Ramamoorthi, Kalyan Sunkavalli, Manmohan Cha
 
 > pip install notebook
 
+Torch: 1.7.1
+
 To resume a task, put FULL original task name in --task_name, and use 'resume' for --resume:
 
 ```

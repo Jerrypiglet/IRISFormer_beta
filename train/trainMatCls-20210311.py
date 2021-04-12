@@ -17,7 +17,8 @@ PACNET_PATH = Path(pwdpath) / 'third-parties' / 'pacnet'
 sys.path.insert(0, str(PACNET_PATH))
 print(sys.path)
 
-from dataset_openroomsV4_total3d_matcls import openrooms, collate_fn_OR
+# from dataset_openroomsV4_total3d_matcls_ import openrooms, collate_fn_OR
+from dataset_openroomsV4_total3d_matcls_detachemitter import openrooms, collate_fn_OR
 from train_funcs_joint_all import get_labels_dict_joint, val_epoch_joint, vis_val_epoch_joint, forward_joint, get_time_meters_joint
 
 from torch.nn.parallel import DistributedDataParallel as DDP

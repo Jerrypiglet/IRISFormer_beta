@@ -296,27 +296,27 @@ class openrooms(data.Dataset):
         if self.opt.cfg.DATA.load_brdf_gt:
             #  or len(self.opt.cfg.DATA.data_read_list) != 0:
             # Get paths for BRDF params
-            if 'al' in self.cfg.MODEL_BRDF.enable_list:
+            if 'al' in self.cfg.DATA.data_read_list:
                 albedo_path = hdr_image_path.replace('im_', 'imbaseColor_').replace('hdr', 'png') 
                 # Read albedo
                 albedo = self.loadImage(albedo_path, isGama = False)
                 albedo = (0.5 * (albedo + 1) ) ** 2.2
                 batch_dict.update({'albedo': torch.from_numpy(albedo)})
 
-            if 'no' in self.cfg.MODEL_BRDF.enable_list:
+            if 'no' in self.cfg.DATA.data_read_list:
                 normal_path = hdr_image_path.replace('im_', 'imnormal_').replace('hdr', 'png').replace('DiffLight', '')
                 # normalize the normal vector so that it will be unit length
                 normal = self.loadImage(normal_path )
                 normal = normal / np.sqrt(np.maximum(np.sum(normal * normal, axis=0), 1e-5) )[np.newaxis, :]
                 batch_dict.update({'normal': torch.from_numpy(normal),})
 
-            if 'ro' in self.cfg.MODEL_BRDF.enable_list:
+            if 'ro' in self.cfg.DATA.data_read_list:
                 rough_path = hdr_image_path.replace('im_', 'imroughness_').replace('hdr', 'png')
                 # Read roughness
                 rough = self.loadImage(rough_path )[0:1, :, :]
                 batch_dict.update({'rough': torch.from_numpy(rough),})
 
-            if 'de' in self.cfg.MODEL_BRDF.enable_list or 'de' in self.cfg.DATA.data_read_list:
+            if 'de' in self.cfg.DATA.data_read_list or 'de' in self.cfg.DATA.data_read_list:
                 depth_path = hdr_image_path.replace('im_', 'imdepth_').replace('hdr', 'dat').replace('DiffLight', '').replace('DiffMat', '')
                 # Read depth
                 depth = self.loadBinary(depth_path)
@@ -428,7 +428,7 @@ class openrooms(data.Dataset):
         # ====== layout, obj, emitters =====
         if self.opt.cfg.DATA.load_layout_emitter_gt:
             scene_total3d_Path = Path(self.cfg.DATASET.layout_emitter_path) / meta_split / scene_name
-            layout_emitter_dict = self.load_layout_emitter_gt(frame_info=(scene_total3d_Path, frame_id))
+            layout_emitter_dict = self.load_layout_emitter_gt_detach_emitter(frame_info=(scene_total3d_Path, frame_id))
             batch_dict.update(layout_emitter_dict)
         
         return batch_dict
@@ -545,7 +545,37 @@ class openrooms(data.Dataset):
             'im_matseg_transformed_trainval': im_matseg_transformed_trainval
         }
 
-    def load_layout_emitter_gt(self, frame_info):
+    def load_layout_emitter_gt_detach_emitter(self, frame_info, if_load_objs=False):
+        '''
+        Required pickles: (/data/ruizhu/OR-V4full-OR45_total3D_train_test_data)
+        - layout_obj_%d.pkl
+            - dict_keys(['transform_R', 'transform_t', 'rgb_img_path', 'envmap_info', 'depth_map', 'boxes', 'camera', 'layout', 'scene_name', 'withinsequence_id', 'meta_split', 'meta_name', 'sub_name', 'scene_pickle_file', 'cam_pickle_file', 'frame_pickle_file', 'reindex_info_dict'])
+        - layout_obj_%d_reindexed.pkl
+            - same as above
+        - layout_obj_%d_emitters.pkl
+            - dict_keys(['sequence_name', 'withinsequence_id', 'boxes'])
+                - boxes:
+                    - dict_keys(['if_valid', 'random_id', 'ori_cls', 'ori_reg', 'bdb3D', 'bdb3D_emitter_part', 'bdb2D_from_3D', 'bdb3D_full', 'bdb2D_full', 'centroid_cls', 'centroid_reg', 'size_cls', 'mask', 'emitter_prop', 'light_world_total3d_centeraxis'])
+        - layout_obj_%d_emitters_assign_info_%dX%d_V3.pkl
+            - dict_keys(['emitter2wall_assign_info_list', 'emitters_obj_list', 'wall_grid_prob', 'cell_prob_mean', 'cell_prob', 'cell_count', 'cell_info_grid'])
+
+        ========> NEW
+        Required pickles: (/data/ruizhu/OR-V4full-detachEmitter-OR45_total3D_train_test_data)
+        - layout_obj_%d.pkl
+            - dict_keys(['transform_R', 'transform_t', 'rgb_img_path', 'envmap_info', 'depth_map', 'boxes', 'camera', 'layout', 'scene_name', 'withinsequence_id', 'meta_split', 'meta_name', 'sub_name', 'scene_pickle_file', 'cam_pickle_file', 'frame_pickle_file', 'reindex_info_dict'])
+        - layout_obj_%d_reindexed.pkl
+            - same as above
+        - layout_obj_%d_emitters.pkl
+            - dict_keys(['sequence_name', 'withinsequence_id', 'boxes'])
+                - boxes:
+                    - dict_keys(['if_valid', 'random_id', 'ori_cls', 'ori_reg', 'bdb3D', 'bdb3D_emitter_part', 'bdb2D_from_3D', 'bdb3D_full', 'bdb2D_full', 'centroid_cls', 'centroid_reg', 'size_cls', 'mask', 'emitter_prop'])
+        - layout_obj_%d_emitters_assign_info_%dX%d_V4_1ambient.pkl
+            - dict_keys(['emitter2wall_assign_info_list', 'emitters_obj_list', 'wall_grid_prob', 'cell_prob_mean', 'cell_prob', 'cell_count', 'cell_info_grid'])
+        ----- [not read] -----
+        - transform_to_total3d_coords_dict_{}.pkl
+            - dict_keys(['transform_R', 'transform_t'])
+
+        '''
         scene_total3d_path, frame_id = frame_info[0], frame_info[1]
         pickle_path = str(scene_total3d_path / ('layout_obj_%d.pkl'%frame_info[1]))
         pickle_path_reindexed = pickle_path.replace('.pkl', '_reindexed.pkl')
@@ -620,15 +650,16 @@ class openrooms(data.Dataset):
         if 'lo' in self.opt.cfg.DATA.data_read_list:
             layout = sequence['layout']
             layout_reindexed = sequence_reindexed['layout']
-            return_dict.update({'layout_emitter_pickle_path': pickle_path, 'camera':camera, 'layout':layout, 'layout_reindexed':layout_reindexed})
+            return_dict.update({'layout_emitter_pickle_path': pickle_path, 'camera':camera, 'layout_':layout, 'layout_reindexed':layout_reindexed}) # 'layout_':layout, should not be used!
 
         # === emitters
         if 'em' in self.opt.cfg.DATA.data_read_list:
             pickle_emitter2wall_assign_info_dict_path = scene_total3d_path / ('layout_obj_%d_emitters_assign_info_%dX%d_V3.pkl'%(frame_id, self.grid_size, self.grid_size))
-        
             with open(pickle_emitter2wall_assign_info_dict_path, 'rb') as f:
                 sequence_emitter2wall_assign_info_dict = pickle.load(f)
             emitter2wall_assign_info_list = sequence_emitter2wall_assign_info_dict['emitter2wall_assign_info_list']
+        
+            
 
             if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'wall_prob':
                 wall_grid_prob = sequence_emitter2wall_assign_info_dict['wall_grid_prob']
@@ -654,6 +685,9 @@ class openrooms(data.Dataset):
                             cell_cls[wall_idx, i, j] = map_obj_type_int[cell_info['obj_type']]
                             cell_light_ratio[wall_idx, i, j] = cell_info['light_ratio']
                             light_dir_offset, normal_outside = cell_info['emitter_info']['light_dir_offset'], cell_info['emitter_info']['normal_outside']
+                            if light_dir_offset.shape != (3,):
+                                print(light_dir_offset.shape)
+                                assert False, str(pickle_emitter2wall_assign_info_dict_path)
                             if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.relative_dir:
                                 # try:
                                 cell_axis_global[wall_idx, i, j] = light_dir_offset
@@ -704,6 +738,169 @@ class openrooms(data.Dataset):
                 return_dict.update({'cell_info_grid': cell_info_grid})
 
         return return_dict
+
+    # def load_layout_emitter_gt(self, frame_info):
+    #     scene_total3d_path, frame_id = frame_info[0], frame_info[1]
+    #     pickle_path = str(scene_total3d_path / ('layout_obj_%d.pkl'%frame_info[1]))
+    #     pickle_path_reindexed = pickle_path.replace('.pkl', '_reindexed.pkl')
+    #     with open(pickle_path, 'rb') as f:
+    #         sequence = pickle.load(f)
+    #     with open(pickle_path_reindexed, 'rb') as f:
+    #         sequence_reindexed = pickle.load(f)
+
+    #     return_dict = {}
+
+    #     camera = sequence['camera']
+
+    #     # ===== load objects
+    #     # boxes = sequence['boxes']
+    #     # n_objects = boxes['bdb2D_pos'].shape[0]
+    #     # boxes_valid_list = list(boxes['if_valid'] if 'if_valid' in boxes else [True]*n_objects)
+    #     # g_feature = [[((loc2[0] + loc2[2]) / 2. - (loc1[0] + loc1[2]) / 2.) / (loc1[2] - loc1[0]),
+    #     #               ((loc2[1] + loc2[3]) / 2. - (loc1[1] + loc1[3]) / 2.) / (loc1[3] - loc1[1]),
+    #     #               math.log((loc2[2] - loc2[0]) / (loc1[2] - loc1[0])),
+    #     #               math.log((loc2[3] - loc2[1]) / (loc1[3] - loc1[1]))] \
+    #     #              for id1, loc1 in enumerate(boxes['bdb2D_pos'])
+    #     #              for id2, loc2 in enumerate(boxes['bdb2D_pos'])]
+
+    #     # locs = [num for loc in g_feature for num in loc]
+
+    #     # pe = torch.zeros(len(locs), d_model)
+    #     # position = torch.from_numpy(np.array(locs)).unsqueeze(1).float()
+    #     # div_term = torch.exp(torch.arange(0, d_model, 2).float() * -(math.log(10000.) / d_model))
+    #     # pe[:, 0::2] = torch.sin(position * div_term)
+    #     # pe[:, 1::2] = torch.cos(position * div_term)
+
+    #     # boxes['g_feature'] = pe.view(n_objects * n_objects, rel_cfg.d_g)
+
+    #     # # encode class
+    #     # cls_codes = torch.zeros([len(boxes['size_cls']), len(self.OR_classes)])
+        
+    #     # # if self.config['data']['dataset_super'] == 'OR': # OR: set cat_id==0 to invalid, (and [optionally] remap not-detect-cats to 0)
+    #     # assert len(boxes['size_cls']) == len(boxes_valid_list)
+    #     # for idx in range(len(boxes['size_cls'])):
+    #     #     if boxes['size_cls'][idx] == 0:
+    #     #         boxes_valid_list[idx] = False # set cat_id==0 to invalid
+    #     #     if boxes['size_cls'][idx] in OR4XCLASSES_not_detect_mapping_ids_dict[self.OR]: # [optionally] remap not-detect-cats to 0
+    #     #         boxes_valid_list[idx] = False
+
+    #     # cls_codes[range(len(boxes['size_cls'])), boxes['size_cls']] = 1
+    #     # boxes['size_cls'] = cls_codes
+
+
+    #     # TODO: If the training error is consistently larger than the test error. We remove the crop and add more intermediate FC layers with no dropout.
+    #     # TODO: Or FC layers with more hidden neurons, which ensures more neurons pass through the dropout layer, or with larger learning rate, longer
+    #     # TODO: decay rate.
+    #     # data_transforms = data_transforms_crop if self.split == 'train' else data_transforms_nocrop
+    #     # data_transforms_nonormalize = data_transforms_crop_nonormalize if self.mode=='train' else data_transforms_nocrop_nonormalize
+
+    #     # patch = []
+    #     # for bdb in boxes['bdb2D_pos']:
+    #     #     img = image.crop((bdb[0], bdb[1], bdb[2], bdb[3]))
+    #     #     # img_nonormalize = data_transforms_nonormalize(img)
+    #     #     img = data_transforms(img)
+    #     #     patch.append(img)
+    #     # boxes['patch'] = torch.stack(patch)
+    #     # image = data_transforms_nocrop(image)
+
+    #     # assert boxes['patch'].shape[0] == len(boxes_valid_list)
+
+    #     # return_dict.update({'image':image, 'image_np': image_np, 
+    #     #     # 'rgb_img': torch.from_numpy(sequence['rgb_img']), 
+    #     #     'rgb_img_path': str(sequence['rgb_img_path']), 'pickle_path': file_path, \
+    #     #     'boxes_batch':boxes, 'camera':camera, 'layout':layout, 'sequence_id': sequence['sequence_id'], 
+    #     #     'boxes_valid_list': boxes_valid_list})
+
+    #     if 'lo' in self.opt.cfg.DATA.data_read_list:
+    #         layout = sequence['layout']
+    #         layout_reindexed = sequence_reindexed['layout']
+    #         return_dict.update({'layout_emitter_pickle_path': pickle_path, 'camera':camera, 'layout_':layout, 'layout_reindexed':layout_reindexed}) # 'layout_':layout, should not be used!
+
+    #     # === emitters
+    #     if 'em' in self.opt.cfg.DATA.data_read_list:
+    #         pickle_emitter2wall_assign_info_dict_path = scene_total3d_path / ('layout_obj_%d_emitters_assign_info_%dX%d_V3.pkl'%(frame_id, self.grid_size, self.grid_size))
+        
+    #         with open(pickle_emitter2wall_assign_info_dict_path, 'rb') as f:
+    #             sequence_emitter2wall_assign_info_dict = pickle.load(f)
+    #         emitter2wall_assign_info_list = sequence_emitter2wall_assign_info_dict['emitter2wall_assign_info_list']
+
+    #         if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'wall_prob':
+    #             wall_grid_prob = sequence_emitter2wall_assign_info_dict['wall_grid_prob']
+    #             return_dict.update({'wall_grid_prob': torch.from_numpy(wall_grid_prob).float()})
+    #         elif self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'cell_prob':
+    #             cell_prob_mean = sequence_emitter2wall_assign_info_dict['cell_prob_mean'] # [6, grid_size, grid_size]
+    #             return_dict.update({'cell_prob_mean': torch.from_numpy(cell_prob_mean).float()})
+    #         elif self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'cell_info':
+    #             cell_info_grid = sequence_emitter2wall_assign_info_dict['cell_info_grid']
+    #             assert len(cell_info_grid) == 6 * self.grid_size**2
+    #             cell_light_ratio = np.zeros((6, self.grid_size, self.grid_size), dtype=np.float32)
+    #             cell_cls = np.zeros((6, self.grid_size, self.grid_size), dtype=np.uint8) # [0: None, 1: window, 2: lamp]
+    #             cell_axis_global = np.zeros((6, self.grid_size, self.grid_size, 3), dtype=np.float32)
+    #             cell_intensity = np.zeros((6, self.grid_size, self.grid_size, 3), dtype=np.float32)
+    #             cell_lamb = np.zeros((6, self.grid_size, self.grid_size), dtype=np.float32)
+    #             for wall_idx in range(6):
+    #                 for i in range(self.grid_size):
+    #                     for j in range(self.grid_size):
+    #                         cell_info = cell_info_grid[wall_idx * (self.grid_size**2) + i * self.grid_size + j]
+    #                         if cell_info['obj_type'] not in ['window', 'obj']:
+    #                             continue
+    #                         map_obj_type_int = {'window': 1, 'obj': 2}
+    #                         cell_cls[wall_idx, i, j] = map_obj_type_int[cell_info['obj_type']]
+    #                         cell_light_ratio[wall_idx, i, j] = cell_info['light_ratio']
+    #                         light_dir_offset, normal_outside = cell_info['emitter_info']['light_dir_offset'], cell_info['emitter_info']['normal_outside']
+    #                         if light_dir_offset.shape != (3,):
+    #                             print(light_dir_offset.shape)
+    #                             assert False, str(pickle_emitter2wall_assign_info_dict_path)
+    #                         if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.relative_dir:
+    #                             # try:
+    #                             cell_axis_global[wall_idx, i, j] = light_dir_offset
+    #                             # except ValueError:
+    #                             #     print('[!!!!!]' + str(hdr_image_path))
+    #                             cell_info['emitter_info']['light_dir'] = light_dir_offset
+    #                         else:
+    #                             cell_info['emitter_info']['light_dir'] = light_dir_offset + normal_outside
+    #                             cell_axis_global[wall_idx, i, j] = light_dir_offset + normal_outside
+    #                         cell_info['emitter_info']['light_dir_abs'] = light_dir_offset + normal_outside
+    #                         cell_intensity[wall_idx, i, j] = np.array([cell_info['emitter_info']['intensity_scale'] * x * 255.for x in cell_info['emitter_info']['intensity_scaled']]) # intensity_scaled: [0., 1.]
+    #                         cell_info['emitter_info']['intensity_scalelog'] = np.log(np.clip(np.linalg.norm(cell_intensity[wall_idx, i, j].flatten()) + 1., 1., np.inf))
+    #                         cell_lamb[wall_idx, i, j] = cell_info['emitter_info']['lamb']
+                            
+    #             # !!!!!! log intensity
+    #             cell_intensity_log = np.log(np.clip(cell_intensity + 1., 1., np.inf))
+    #             # !!!!!! log (lamb + 1.)
+    #             cell_lamb = np.log(cell_lamb+1.)
+
+    #             return_dict.update({'cell_light_ratio': torch.from_numpy(cell_light_ratio).float(), \
+    #                 'cell_cls': torch.from_numpy(cell_cls).long(), \
+    #                 'cell_axis_global': torch.from_numpy(cell_axis_global).float(), \
+    #                 'cell_intensity': torch.from_numpy(cell_intensity_log).float(), \
+    #                 'cell_lamb': torch.from_numpy(cell_lamb).float()})
+    #         else:
+    #             raise ValueError('Invalid: config.emitters.est_type')
+
+    #         emitters_obj_list = []
+
+    #         pickle_emitters_path = str(scene_total3d_path / ('layout_obj_%d_emitters.pkl'%frame_id))
+    #         with open(pickle_emitters_path, 'rb') as f:
+    #             sequence_emitters = pickle.load(f)
+
+    #         # assert sequence_emitters['boxes']['bdb3D'].shape[0] == len(emitter2wall_assign_info_list)
+    #         for x in range(sequence_emitters['boxes']['bdb3D'].shape[0]):
+    #             if_lit_up = sequence_emitters['boxes']['emitter_prop'][x]['if_lit_up']
+    #             if if_lit_up:
+    #                 # assert 'light_world_total3d_centeraxis' in sequence_emitters['boxes'], '[!!!!!]' + str(hdr_image_path)
+    #                 obj_dict_new = {'obj_box_3d': sequence_emitters['boxes']['bdb3D'][x], 'cat_id': sequence_emitters['boxes']['size_cls'][x], \
+    #                                 # 'emitter_dict': sequence_emitters['boxes']['emitter_dict'][x], \
+    #                                 'light_world_total3d_centeraxis': sequence_emitters['boxes']['light_world_total3d_centeraxis'][x], \
+    #                                 'emitter_prop': sequence_emitters['boxes']['emitter_prop'][x], 'bdb3D_emitter_part': sequence_emitters['boxes']['bdb3D_emitter_part'][x], \
+    #                                 'cat_name': self.OR_classes[sequence_emitters['boxes']['size_cls'][x]], 'cat_color': RGB_to_01(self.OR_mapping_catInt_to_RGB[sequence_emitters['boxes']['size_cls'][x]])}
+    #                 emitters_obj_list.append(obj_dict_new)
+
+    #         return_dict.update({'emitter2wall_assign_info_list': emitter2wall_assign_info_list, 'emitters_obj_list': emitters_obj_list, 'gt_layout_RAW': layout_reindexed['bdb3D']})
+    #         if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'cell_info':
+    #             return_dict.update({'cell_info_grid': cell_info_grid})
+
+    #     return return_dict
 
     def get_map_aggre_map(self, objMask):
         cad_map = objMask[:, :, 0]

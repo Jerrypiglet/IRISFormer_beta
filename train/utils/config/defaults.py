@@ -55,8 +55,9 @@ _C.DATASET.png_path_local = '/data/ruizhu/OR-pngs'
 _C.DATASET.png_path_cluster = '/siggraphasia20dataset/pngs'
 
 _C.DATASET.layout_emitter_path = ''
-_C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-OR45_total3D_train_test_data'
-_C.DATASET.layout_emitter_path_cluster = ''
+# _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-OR45_total3D_train_test_data'
+_C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitter-OR45_total3D_train_test_data'
+_C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-OR45_total3D_train_test_data'
 
 _C.DATASET.matpart_path = ''
 _C.DATASET.matpart_path_local = '/data/ruizhu/OR-matpart'
@@ -65,7 +66,8 @@ _C.DATASET.matori_path = ''
 _C.DATASET.matori_path_local = '/newfoundland2/ruizhu/siggraphasia20dataset/BRDFOriginDataset/'
 _C.DATASET.matori_path_cluster = '/siggraphasia20dataset/BRDFOriginDataset/'
 
-_C.DATASET.dataset_list = 'data/openrooms/list_ORfull/list'
+# _C.DATASET.dataset_list = 'data/openrooms/list_OR_V4full/list'
+_C.DATASET.dataset_list = ''
 _C.DATASET.dataset_path_mini = '/data/ruizhu/openrooms_mini'
 _C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini/list'
 
@@ -93,7 +95,7 @@ _C.DATA.load_matcls_gt = False
 _C.MODEL_BRDF = CN()
 _C.MODEL_BRDF.enable = False
 # _C.MODEL_BRDF.enable_list = ['al', 'no', 'de', 'ro', 'li']
-_C.MODEL_BRDF.enable_list = '' # al_no_de_ro
+_C.MODEL_BRDF.enable_list = '' # `al_no_de_ro`
 _C.MODEL_BRDF.enable_list_allowed = ['al', 'no', 'de', 'ro']
 _C.MODEL_BRDF.load_pretrained_pth = False
 _C.MODEL_BRDF.loss_list = ''
@@ -108,6 +110,7 @@ _C.MODEL_BRDF.enable_BRDF_decoders = False
 _C.MODEL_BRDF.enable_semseg_decoder = False
 _C.MODEL_BRDF.semseg_PPM = True
 _C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240/%s0_13.pth'
+_C.MODEL_BRDF.encoder_exclude = '' # e.g. 'x4_x5
 
 # ===== per-pixel lighting
 _C.MODEL_LIGHT = CN()
@@ -139,6 +142,7 @@ _C.MODEL_LAYOUT_EMITTER.data.version = 'V4full'
 _C.MODEL_LAYOUT_EMITTER.emitter = CN()
 _C.MODEL_LAYOUT_EMITTER.emitter.grid_size = 8
 _C.MODEL_LAYOUT_EMITTER.emitter.est_type = 'cell_info'
+_C.MODEL_LAYOUT_EMITTER.emitter.representation_type = '0ambient' # 0ambient, 1ambient, 2ambient
 _C.MODEL_LAYOUT_EMITTER.emitter.relative_dir = True
 _C.MODEL_LAYOUT_EMITTER.emitter.loss_type = 'L2' # [L2, KL]
 _C.MODEL_LAYOUT_EMITTER.emitter.sigmoid = False
@@ -150,8 +154,8 @@ _C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_light_ratio = 100.
 _C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_cls = 10.
 _C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_intensity = 0.2
 _C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_lamb = 0.3
-_C.MODEL_LAYOUT_EMITTER.emitter.lightnet = CN()
-_C.MODEL_LAYOUT_EMITTER.emitter.lightnet.enable = False # enable spatial-encoding network from per-pixel lighting, instead of image encoder-decoder
+_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net = CN() # better model than the vanilla model
+_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable = False # enable spatial-encoding network from per-pixel lighting, instead of image encoder-decoder
 
 _C.MODEL_LAYOUT_EMITTER.layout = CN()
 _C.MODEL_LAYOUT_EMITTER.layout.loss = CN()

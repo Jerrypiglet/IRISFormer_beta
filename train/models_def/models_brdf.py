@@ -136,21 +136,31 @@ class encoder0(nn.Module):
         self.conv4 = nn.Conv2d(in_channels=256, out_channels=256, kernel_size=4, stride=2, bias=True)
         self.gn4 = nn.GroupNorm(num_groups=16, num_channels=256)
 
-        self.pad5 = nn.ZeroPad2d(1)
-        self.conv5 = nn.Conv2d(in_channels=256, out_channels=512, kernel_size=4, stride=2, bias=True)
-        self.gn5 = nn.GroupNorm(num_groups=32, num_channels=512)
+        if 'x5' not in self.opt.cfg.MODEL_BRDF.encoder_exclude:
+            self.pad5 = nn.ZeroPad2d(1)
+            self.conv5 = nn.Conv2d(in_channels=256, out_channels=512, kernel_size=4, stride=2, bias=True)
+            self.gn5 = nn.GroupNorm(num_groups=32, num_channels=512)
 
-        self.pad6 = nn.ZeroPad2d(1)
-        self.conv6 = nn.Conv2d(in_channels=512, out_channels=1024, kernel_size=3, stride=1, bias=True)
-        self.gn6 = nn.GroupNorm(num_groups=64, num_channels=1024)
+        if 'x6' not in self.opt.cfg.MODEL_BRDF.encoder_exclude:
+            self.pad6 = nn.ZeroPad2d(1)
+            self.conv6 = nn.Conv2d(in_channels=512, out_channels=1024, kernel_size=3, stride=1, bias=True)
+            self.gn6 = nn.GroupNorm(num_groups=64, num_channels=1024)
 
     def forward(self, x):
         x1 = F.relu(self.gn1(self.conv1(self.pad1(x))), True)
         x2 = F.relu(self.gn2(self.conv2(self.pad2(x1))), True)
         x3 = F.relu(self.gn3(self.conv3(self.pad3(x2))), True)
         x4 = F.relu(self.gn4(self.conv4(self.pad4(x3))), True)
-        x5 = F.relu(self.gn5(self.conv5(self.pad5(x4))), True)
-        x6 = F.relu(self.gn6(self.conv6(self.pad6(x5))), True)
+        
+        if 'x5' not in self.opt.cfg.MODEL_BRDF.encoder_exclude:
+            x5 = F.relu(self.gn5(self.conv5(self.pad5(x4))), True)
+        else:
+            x5 = x1
+
+        if 'x6' not in self.opt.cfg.MODEL_BRDF.encoder_exclude:
+            x6 = F.relu(self.gn6(self.conv6(self.pad6(x5))), True)
+        else:
+            x6 = x1
 
         # print(x.shape, x1.shape, x2.shape, x3.shape, x4.shape, x5.shape, x6.shape) # [16, 3, 192, 256, ]) [16, 64, 96, 128, ]) [16, 128, 48, 64,) [16, 256, 24, 32,) [16, 256, 12, 16,) [16, 512, 6, 8],  [16, 1024, 6, 8]
         return x1, x2, x3, x4, x5, x6

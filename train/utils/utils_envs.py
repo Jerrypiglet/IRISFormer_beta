@@ -21,9 +21,12 @@ def set_up_envs(opt):
     if opt.data_root is not None:
         opt.cfg.DATASET.dataset_path = opt.data_root
 
+    opt.cfg.DATASET.dataset_list = os.path.join(opt.cfg.PATH.total3D_lists_path, 'list')
     if opt.cfg.DATASET.mini:
         opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_mini
         opt.cfg.DATASET.dataset_list = opt.cfg.DATASET.dataset_list_mini
+    opt.cfg.DATASET.dataset_list = os.path.join(opt.cfg.PATH.root, opt.cfg.DATASET.dataset_list)
+
 
     opt.cfg.MODEL_SEMSEG.semseg_path = opt.cfg.MODEL_SEMSEG.semseg_path_cluster if opt.if_cluster else opt.cfg.MODEL_SEMSEG.semseg_path_local
     opt.cfg.PATH.semseg_colors_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.semseg_colors_path)
@@ -49,27 +52,32 @@ def set_up_envs(opt):
         opt.depth_metrics = ['abs_rel', 'sq_rel', 'rmse', 'rmse_log', 'a1', 'a2', 'a3']
         opt.cfg.MODEL_BRDF.loss_list = opt.cfg.MODEL_BRDF.enable_list
 
+
     # ====== per-pixel lighting =====
     if opt.cfg.MODEL_LIGHT.enable:
         opt.cfg.DATA.load_light_gt = True
         opt.cfg.DATA.load_brdf_gt = True
-        opt.cfg.DATA.data_read_list += ['al_no_de_ro'].split('_')
+        opt.cfg.DATA.data_read_list += 'al_no_de_ro'.split('_')
         if opt.cfg.MODEL_LIGHT.use_GT_brdf:
             opt.cfg.MODEL_BRDF.enable = False
             opt.cfg.MODEL_BRDF.enable_list = ''
         else:
             opt.cfg.MODEL_BRDF.enable = True
-            opt.cfg.MODEL_BRDF.enable_list += 'al_no_de_ro'.split(['_'])
+            opt.cfg.MODEL_BRDF.enable_list += 'al_no_de_ro'.split('_')
+            opt.cfg.MODEL_BRDF.enable_BRDF_decoders = True
         opt.cfg.MODEL_BRDF.loss_list = ''
 
     # ====== layout, emitters =====
     if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
-        if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.lightnet.enable:
-            opt.cfg.DATA.load_light_gt = True
+        if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
             opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = 'em'
+            opt.cfg.DATA.load_light_gt = True
+            opt.cfg.DATA.load_brdf_gt = True
             opt.cfg.DATA.data_read_list.append('de') # used to get 3d points
+            opt.cfg.DATA.data_read_list.append('no')
         else:
             opt.cfg.MODEL_BRDF.enable = True
+            opt.cfg.MODEL_BRDF.encoder_exclude = 'x5_x6'
         opt.cfg.DATA.load_brdf_gt = True
         opt.cfg.DATA.load_layout_emitter_gt = True
         opt.cfg.DATA.data_read_list += ['lo']
@@ -130,6 +138,10 @@ def set_up_envs(opt):
     assert only1true(guidance_options) or nonetrue(guidance_options), 'Only ONE of the guidance methods canbe true at the same time!'
 
     assert opt.cfg.MODEL_MATSEG.albedo_pooling_from in ['gt', 'pred']
+
+    # extra BRDF net params
+    opt.cfg.MODEL_BRDF.encoder_exclude = opt.cfg.MODEL_BRDF.encoder_exclude.split('_')
+
 
     # PAC
     opt.if_vis_debug_pac = False

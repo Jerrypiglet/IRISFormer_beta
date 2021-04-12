@@ -6,10 +6,77 @@ import numpy as np
 
 from models_def.models_light import renderingLayer
 
+class decoder_layout_emitter_lightAccu(nn.Module):
+    def __init__(self, opt=None, grid_size = 8, ):
+        super(decoder_layout_emitter_lightAccu, self).__init__()
+        self.opt = opt
+        self.grid_size = grid_size
 
-class decoder_emitter_lightAccu(nn.Module):
+        self.conv1 = nn.Conv2d(in_channels=3*6, out_channels=128*6, kernel_size=3, stride=1, padding = 1, bias=True, groups=6)
+        self.gn1 = nn.GroupNorm(num_groups=8*6, num_channels=128*6 )
+
+        self.conv2 = nn.Conv2d(in_channels=128*6, out_channels=256*6, kernel_size=5, stride=1, padding = 2, bias=True, groups=6)
+        self.gn2 = nn.GroupNorm(num_groups=16*6, num_channels=256*6 )
+        
+        self.conv3 = nn.Conv2d(in_channels=256*6, out_channels=128*6, kernel_size=3, stride=1, padding = 1, bias=True, groups=6)
+        self.gn3 = nn.GroupNorm(num_groups=8*6, num_channels=128*6 )
+
+
+        self.decoder_heads = torch.nn.ModuleDict({})
+        for head_name, head_channels in [('cell_light_ratio', 1), ('cell_cls', 3), ('cell_axis_global', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
+            self.decoder_heads['decoder_conv2d_1_%s'%head_name] = nn.Conv2d(in_channels=128*6, out_channels=64*6, kernel_size=3, stride=1, padding = 1, bias=True, groups=6)
+            self.decoder_heads['decoder_gn_1_%s'%head_name] = nn.GroupNorm(num_groups=4*6, num_channels=64*6 )
+            self.decoder_heads['decoder_conv2d_2_%s'%head_name] = nn.Conv2d(in_channels=64*6, out_channels=head_channels*6, kernel_size=3, stride=1, padding = 1, bias=True, groups=6)
+            # self.decoder_heads['decoder_gn_%s'%head_name] = nn.GroupNorm(num_groups=8*6, num_channels=head_channels*6 )
+            # self.other_heads['fc_emitter_1_%s'%head_name] = nn.Linear(128, 1024)
+            # self.other_heads['relu_emitter_1_%s'%head_name] = nn.ReLU(inplace=True)
+            # self.other_heads['fc_emitter_2_%s'%head_name] = nn.Linear(1024, 512)
+            # self.other_heads['relu_emitter_2_%s'%head_name] = nn.ReLU(inplace=True)
+            # self.other_heads['fc_emitter_3_%s'%head_name] = nn.Linear(512, (opt.cfg.MODEL_LAYOUT_EMITTER.emitter.grid_size**2)*6 * head_channels)
+
+
+    # def get_6_conv2d(self, layer_name='conv1', in_channels=3, out_channels=256, kernel_size=3, stride=1, padding = 1, bias=True, num_groups=16, num_channels=256 ):
+    #     conv2d_dict = torch.nn.ModuleDict()
+    #     for i in range(6):
+    #         conv = nn.Conv2d(in_channels=in_channels, out_channels=out_channels, kernel_size=kernel_size, stride=stride, padding = padding, bias=bias)
+    #         gn = nn.GroupNorm(num_groups=16, num_channels=)
+    #         conv2d_dict['%s_conv2d_%d'%(layer_name, i)] = conv
+    #         conv2d_dict['%s_GH_%d'%(layer_name, i)] = gn
+
+
+
+    def forward(self, envmap_lightAccu):
+        assert len(envmap_lightAccu.shape)==5 and envmap_lightAccu.shape[1:]==(6, 3, self.grid_size, self.grid_size) # [B, 6, D(3), H(grid_size), W(grid_size)]
+        batch_size = envmap_lightAccu.shape[0]
+        envmap_lightAccu_merged = envmap_lightAccu.reshape(batch_size, -1, self.grid_size, self.grid_size) # [B, 6*D(3), H(grid_size), W(grid_size)]
+        # print(envmap_lightAccu_merged.shape)
+
+        x = envmap_lightAccu_merged
+        # envmap_lightAccu_list = envmap_lightAccu.split([1, 1, 1, 1, 1, 1], dim=2)
+        # print(len(envmap_lightAccu_list), envmap_lightAccu_list[0].shape)
+        x = F.relu(self.gn1(self.conv1(x)), True) # torch.Size([2, 768, 8, 8])
+        x = F.relu(self.gn2(self.conv2(x)), True) # torch.Size([2, 1536, 8, 8])
+        x = F.relu(self.gn3(self.conv3(x)), True) # torch.Size([2, 768, 8, 8])
+
+        return_dict_emitter = {}
+
+        for head_name, head_channels in [('cell_light_ratio', 1), ('cell_cls', 3), ('cell_axis_global', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
+            head_out = self.decoder_heads['decoder_gn_1_%s'%head_name](self.decoder_heads['decoder_conv2d_1_%s'%head_name](x))
+            head_out = self.decoder_heads['decoder_conv2d_2_%s'%head_name](head_out)
+            head_out = head_out.view(batch_size, 6, head_channels, self.grid_size, self.grid_size).permute(0, 1, 3, 4, 2) # [2, 6, head_channels, 8, 8] -> [2, 6, 8, 8, head_channels]
+            # print(head_name, self.decoder_heads['decoder_conv2d_%s'%head_name](x).shape)
+            return_dict_emitter.update({head_name: head_out})
+            # print(head_name, head_out.shape)
+
+        return {'emitter_est_result': return_dict_emitter}
+
+
+
+
+
+class emitter_lightAccu(nn.Module):
     def __init__(self, opt=None, envHeight = 8, envWidth = 16, envRow = 120, envCol = 160, grid_size = 8, params=[]):
-        super(decoder_emitter_lightAccu, self).__init__()
+        super(emitter_lightAccu, self).__init__()
         self.opt = opt
         self.params = params
 
@@ -65,12 +132,13 @@ class decoder_emitter_lightAccu(nn.Module):
 
         verts_center_transformed_LightNet = self.get_grid_centers(layout, cam_R) # [B, 6, 8, 8, 3]
 
-        envmap_sampled = self.accu_light(points, verts_center_transformed_LightNet, camx, camy, normalPred, envmapsPredImage) # [B, 3, #grids, 120, 160]
-        
-        return_dict = {}
+        envmap_lightAccu, points_sampled_mask_expanded = self.accu_light(points, verts_center_transformed_LightNet, camx, camy, normalPred, envmapsPredImage) # [B, 3, #grids, 120, 160]
+        envmap_lightAccu_mean = (envmap_lightAccu.sum(-1).sum(-1) / (points_sampled_mask_expanded.sum(-1).sum(-1)+1e-6)).permute(0, 2, 1) # -> [1, 384, 3]
 
-        # return return_dict
-        return envmap_sampled
+        
+        return_dict = {'envmap_lightAccu': envmap_lightAccu, 'points_sampled_mask_expanded': points_sampled_mask_expanded, 'envmap_lightAccu_mean': envmap_lightAccu_mean}
+
+        return return_dict
 
     def accu_light(self, points, verts_center_transformed_LightNet, camx, camy, normalPred, envmapsPredImage):
         batch_size = verts_center_transformed_LightNet.shape[0]
@@ -126,7 +194,7 @@ class decoder_emitter_lightAccu(nn.Module):
         uv_normalized = torch.cat([uv_normalized, torch.zeros_like(uv_normalized[:, :, :, :, 0:1])], dim=-1) # -> [B*120*160, #grids, 1, 1, 3]
         # essentially sample each 1x8x16 envmap at ngrid points, of B*120*160 envmaps
         # [B*120*160, 3, 1, 8, 16], [B*120*160, #grids, 1, 1, 3] -> [B*120*160, 3, #grids, 1, 1]
-        envmap_ = torch.nn.functional.grid_sample(envmapsPredImage_, uv_normalized, padding_mode='border', align_corners = True) # https://pytorch.org/docs/stable/nn.functional.html#torch.nn.functional.grid_sample
+        envmap_lightAccu_ = torch.nn.functional.grid_sample(envmapsPredImage_, uv_normalized, padding_mode='border', align_corners = True) # https://pytorch.org/docs/stable/nn.functional.html#torch.nn.functional.grid_sample
 
         # # print(envmapsPredImage.shape)
         # # print(envmapsPredImage.view(-1, 8, 16).shape)
@@ -169,19 +237,19 @@ class decoder_emitter_lightAccu(nn.Module):
         # # print(envmapsPredImage_.shape, uv_normalized.shape)
         # # essentially sample each 1x8x16 envmap at ngrid points, of B*120*160 envmaps
         # # [B*120*160, 3, 1, 8, 16], [B*120*160, #grids, 1, 1, 3] -> [B*120*160, 3, #grids, 1, 1]
-        # envmap_ = torch.nn.functional.grid_sample(envmapsPredImage_, uv_normalized, padding_mode='border', align_corners = True) # https://pytorch.org/docs/stable/nn.functional.html#torch.nn.functional.grid_sample
-        envmap_ = envmap_.squeeze(-1).squeeze(-1).view(batch_size, self.envRow, self.envCol, 3, ngrids) # -> [B, 120, 160, 3, #grids]
-        # print(envmap_.shape)
-        envmap_ = envmap_.permute(0, 3, 4, 1, 2) # -> [B, 3, #grids, 120, 160]
+        # envmap_lightAccu_ = torch.nn.functional.grid_sample(envmapsPredImage_, uv_normalized, padding_mode='border', align_corners = True) # https://pytorch.org/docs/stable/nn.functional.html#torch.nn.functional.grid_sample
+        envmap_lightAccu_ = envmap_lightAccu_.squeeze(-1).squeeze(-1).view(batch_size, self.envRow, self.envCol, 3, ngrids) # -> [B, 120, 160, 3, #grids]
+        # print(envmap_lightAccu_.shape)
+        envmap_lightAccu_ = envmap_lightAccu_.permute(0, 3, 4, 1, 2) # -> [B, 3, #grids, 120, 160]
         points_sampled_mask_expanded = points_sampled_mask.float().unsqueeze(1).unsqueeze(1) # [B, 1, 1, 120, 160]
-        envmap_ = envmap_ * points_sampled_mask_expanded
-        envmap_ = envmap_ * 0.1
-        # envmap_vis_ = torch.clip(envmap_**(1.0/2.2), 0., 1.)
-        envmap_vis_ = torch.clip(envmap_ * 0.5, 0., 1.) # [B, 3, #grids, 120, 160]
+        envmap_lightAccu_ = envmap_lightAccu_ * points_sampled_mask_expanded
+        envmap_lightAccu_ = envmap_lightAccu_ * 0.1
+        # envmap_lightAccu_vis_ = torch.clip(envmap_lightAccu_**(1.0/2.2), 0., 1.)
+        # envmap_lightAccu_vis_ = torch.clip(envmap_lightAccu_ * 0.5, 0., 1.) # [B, 3, #grids, 120, 160]
 
-        envmap_vis_mean_ = (envmap_vis_.sum(-1).sum(-1) / points_sampled_mask_expanded.sum(-1).sum(-1)).permute(0, 2, 1) # -> [1, 384, 3]
-        envmap_vis_max_ = envmap_vis_.amax(-1).amax(-1).permute(0, 2, 1) # -> [1, 384, 3]
-        return envmap_, envmap_vis_mean_
+        # envmap_lightAccu_vis_mean_ = (envmap_lightAccu_vis_.sum(-1).sum(-1) / points_sampled_mask_expanded.sum(-1).sum(-1)).permute(0, 2, 1) # -> [1, 384, 3]
+        # envmap_lightAccu_vis_max_ = envmap_lightAccu_vis_.amax(-1).amax(-1).permute(0, 2, 1) # -> [1, 384, 3]
+        return envmap_lightAccu_, points_sampled_mask_expanded
 
     def get_grid_centers(self, layout, cam_R):
         basis_1_list = [(layout[:, origin_v1_v2[1], :] - layout[:, origin_v1_v2[0], :]) / self.grid_size for origin_v1_v2 in self.origin_v1_v2_list]
