@@ -45,6 +45,43 @@ def set_up_envs(opt):
     opt.cfg.MODEL_BRDF.enable_list = [x for x in opt.cfg.MODEL_BRDF.enable_list.split('_') if x != '']
     opt.cfg.MODEL_BRDF.loss_list = [x for x in opt.cfg.MODEL_BRDF.loss_list.split('_') if x != '']
 
+    # ====== layout, emitters =====
+    if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
+        if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
+            opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = 'em'
+
+            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_light:
+                opt.cfg.DATA.load_light_gt = True
+            else: # use LIGHT_Net prediction
+                opt.cfg.MODEL_LIGHT.enable = True
+                opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_brdf = False
+                opt.cfg.MODEL_LIGHT.load_pretrained_MODEL_BRDF = True
+                opt.cfg.MODEL_LIGHT.load_pretrained_MODEL_LIGHT = True
+                if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.freeze_lightnet:
+                    opt.cfg.MODEL_LIGHT.if_freeze = True
+            
+            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_brdf:
+                opt.cfg.DATA.load_brdf_gt = True
+                opt.cfg.DATA.data_read_list.append('de') # used to get 3d points
+                opt.cfg.DATA.data_read_list.append('no')
+            else: # use BRDF_Net prediction
+                opt.cfg.MODEL_BRDF.enable = True
+                opt.cfg.MODEL_BRDF.enable_list += 'no_de'.split('_')
+                if opt.cfg.MODEL_LIGHT.freeze_BRDF_Net:
+                    opt.cfg.MODEL_BRDF.if_freeze = True
+        else:
+            opt.cfg.MODEL_BRDF.enable = True
+            opt.cfg.MODEL_BRDF.encoder_exclude = 'x5_x6'
+        opt.cfg.DATA.load_brdf_gt = True
+        opt.cfg.DATA.load_layout_emitter_gt = True
+        opt.cfg.DATA.data_read_list += ['lo']
+        opt.cfg.DATA.data_read_list += opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.split('_')
+        if opt.cfg.MODEL_LAYOUT_EMITTER.use_depth_as_input:
+            opt.cfg.DATA.data_read_list.append('de')
+        assert opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type in ['cell_prob', 'wall_prob', 'cell_info']
+
+        opt.dataset_config = Dataset_Config('OR', OR=opt.cfg.MODEL_LAYOUT_EMITTER.data.OR, version=opt.cfg.MODEL_LAYOUT_EMITTER.data.version, opt=opt)
+        opt.bins_tensor = to_dict_tensor(opt.dataset_config.bins, if_cuda=True)
 
     # ====== per-pixel lighting =====
     if opt.cfg.MODEL_LIGHT.enable:
@@ -60,27 +97,6 @@ def set_up_envs(opt):
             opt.cfg.MODEL_BRDF.enable_list += 'al_no_de_ro'.split('_')
             opt.cfg.MODEL_BRDF.enable_BRDF_decoders = True
 
-    # ====== layout, emitters =====
-    if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
-        if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
-            opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = 'em'
-            opt.cfg.DATA.load_light_gt = True
-            opt.cfg.DATA.load_brdf_gt = True
-            opt.cfg.DATA.data_read_list.append('de') # used to get 3d points
-            opt.cfg.DATA.data_read_list.append('no')
-        else:
-            opt.cfg.MODEL_BRDF.enable = True
-            opt.cfg.MODEL_BRDF.encoder_exclude = 'x5_x6'
-        opt.cfg.DATA.load_brdf_gt = True
-        opt.cfg.DATA.load_layout_emitter_gt = True
-        opt.cfg.DATA.data_read_list += ['lo']
-        opt.cfg.DATA.data_read_list += opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.split('_')
-        if opt.cfg.MODEL_LAYOUT_EMITTER.use_depth_as_input:
-            opt.cfg.DATA.data_read_list.append('de')
-        assert opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type in ['cell_prob', 'wall_prob', 'cell_info']
-
-        opt.dataset_config = Dataset_Config('OR', OR=opt.cfg.MODEL_LAYOUT_EMITTER.data.OR, version=opt.cfg.MODEL_LAYOUT_EMITTER.data.version, opt=opt)
-        opt.bins_tensor = to_dict_tensor(opt.dataset_config.bins, if_cuda=True)
 
 
     # ====== semseg =====

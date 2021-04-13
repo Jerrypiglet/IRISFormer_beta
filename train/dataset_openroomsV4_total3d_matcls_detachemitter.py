@@ -265,7 +265,7 @@ class openrooms(data.Dataset):
             # Read Image
             im_ori = self.loadHdr(hdr_image_path)
             # Random scale the image
-            im_trainval, scale = self.scaleHdr(im_ori, seg)
+            im_trainval, scale = self.scaleHdr(im_ori, seg, forced_fixed_scale=False) # forced_fixed_scale=False for scale augmentation
             im_trainval_RGB = np.clip(im_trainval**(1.0/2.2), 0., 1.)
 
             # == no random scaling:

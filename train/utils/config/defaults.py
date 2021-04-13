@@ -95,6 +95,7 @@ _C.DATA.load_matcls_gt = False
 # ===== BRDF
 _C.MODEL_BRDF = CN()
 _C.MODEL_BRDF.enable = False
+_C.MODEL_BRDF.if_freeze = False
 # _C.MODEL_BRDF.enable_list = ['al', 'no', 'de', 'ro', 'li']
 _C.MODEL_BRDF.enable_list = '' # `al_no_de_ro`
 _C.MODEL_BRDF.enable_list_allowed = ['al', 'no', 'de', 'ro']
@@ -116,6 +117,7 @@ _C.MODEL_BRDF.encoder_exclude = '' # e.g. 'x4_x5
 # ===== per-pixel lighting
 _C.MODEL_LIGHT = CN()
 _C.MODEL_LIGHT.enable = False
+_C.MODEL_LIGHT.if_freeze = False
 _C.MODEL_LIGHT.envRow = 120
 _C.MODEL_LIGHT.envCol = 160
 _C.MODEL_LIGHT.envHeight = 8
@@ -156,8 +158,13 @@ _C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_light_ratio = 100.
 _C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_cls = 10.
 _C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_intensity = 0.2
 _C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_lamb = 0.3
+
 _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net = CN() # better model than the vanilla model
 _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable = False # enable spatial-encoding network from per-pixel lighting, instead of image encoder-decoder
+_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_light = True # use GT per-pixel lighting instead of predicting using LIGHT_NET
+_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_brdf = True # use GT brdf instead of predicting using BRDF_NET
+_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.freeze_lightnet = True # freeze LIGHT_NET when using predictiion from LIGHT_NET
+_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.freeze_brdfnet = True # freeze LIGHT_NET when using predictiion from LIGHT_NET
 
 _C.MODEL_LAYOUT_EMITTER.layout = CN()
 _C.MODEL_LAYOUT_EMITTER.layout.loss = CN()

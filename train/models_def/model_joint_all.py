@@ -95,6 +95,9 @@ class Model_Joint(nn.Module):
             if self.cfg.MODEL_BRDF.enable_semseg_decoder:
                 self.BRDF_Net.update({'semsegDecoder': self.decoder_to_use(opt, mode=-1, out_channel=self.cfg.MODEL_SEMSEG.semseg_classes, if_PPM=self.cfg.MODEL_BRDF.semseg_PPM)})
 
+            if self.cfg.MODEL_BRDF.if_freeze:
+                self.BRDF_Net.eval()
+
         # self.guide_net = guideNet(opt)
         if self.cfg.MODEL_LIGHT.load_pretrained_MODEL_BRDF:
             self.load_pretrained_MODEL_BRDF(self.cfg.MODEL_BRDF.pretrained_pth_name)
@@ -116,6 +119,10 @@ class Model_Joint(nn.Module):
                 if self.cfg.MODEL_LIGHT.freeze_BRDF_Net:
                     self.turn_off_names(['BRDF_Net'])
                     freeze_bn_in_module(self.BRDF_Net)
+
+                if self.cfg.MODEL_LIGHT.if_freeze:
+                    self.turn_off_names(['LIGHT_Net'])
+                    freeze_bn_in_module(self.LIGHT_Net)
 
             if self.cfg.MODEL_LIGHT.load_pretrained_MODEL_LIGHT:
                 self.load_pretrained_MODEL_LIGHT(self.cfg.MODEL_LIGHT.pretrained_pth_name)
@@ -145,6 +152,8 @@ class Model_Joint(nn.Module):
         return_dict.update(return_dict_matseg)
 
         if self.cfg.MODEL_SEMSEG.enable:
+            if opt.cfg.MODEL_SEMSEG.if_freeze:
+                self.SEMSEG_Net.eval()
             return_dict_semseg = self.forward_semseg(input_dict) # {'prob': prob, 'embedding': embedding, 'feats_mat_seg_dict': feats_mat_seg_dict}
 
             input_dict_guide_semseg = return_dict_semseg['feats_semseg_dict']
@@ -158,6 +167,8 @@ class Model_Joint(nn.Module):
         assert not(self.cfg.MODEL_MATSEG.if_guide and self.cfg.MODEL_SEMSEG.if_guide), 'cannot guide from MATSEG and SEMSEG at the same time!'
 
         if self.cfg.MODEL_BRDF.enable:
+            if self.cfg.MODEL_BRDF.if_freeze:
+                self.BRDF_Net.eval()
             input_dict_extra = {'input_dict_guide': input_dict_guide}
             if (self.cfg.MODEL_MATSEG.if_albedo_pooling and self.cfg.MODEL_MATSEG.albedo_pooling_from == 'pred') \
                 or self.cfg.MODEL_MATSEG.use_pred_as_input \
@@ -170,6 +181,8 @@ class Model_Joint(nn.Module):
         return_dict.update(return_dict_brdf)
 
         if self.cfg.MODEL_LIGHT.enable:
+            if self.cfg.MODEL_LIGHT.if_freeze:
+                self.LIGHT_Net.eval()
             return_dict_light = self.forward_light(input_dict, return_dict_brdf=return_dict_brdf)
         else:
             return_dict_light = {}
@@ -178,7 +191,7 @@ class Model_Joint(nn.Module):
         if self.cfg.MODEL_LAYOUT_EMITTER.enable:
             if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
                 assert self.cfg.MODEL_LAYOUT_EMITTER.enable_list == ['em']
-                return_dict_layout_emitter = self.forward_emitter_lightAccu(input_dict)
+                return_dict_layout_emitter = self.forward_emitter_lightAccu(input_dict, return_dict_brdf=return_dict_brdf, return_dict_light=return_dict_light)
                 return_dict_layout_emitter.update({'layout_est_result': {}})
             else:
                 encoder_outputs = return_dict_brdf['encoder_outputs']
@@ -330,10 +343,19 @@ class Model_Joint(nn.Module):
 
         return return_dict
 
-    def forward_emitter_lightAccu(self, input_dict):
-        normalBatch = input_dict['normalBatch']
-        depthBatch = input_dict['depthBatch'].squeeze(1)
-        envmapsBatch = input_dict['envmapsBatch']
+    def forward_emitter_lightAccu(self, input_dict, return_dict_brdf={}, return_dict_light={}):
+        if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_light:
+            envmapsBatch = input_dict['envmapsBatch']
+        else:
+            envmapsBatch = return_dict_light['envmapsPredImage']
+
+        if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_brdf:
+            normalBatch = input_dict['normalBatch']
+            depthBatch = input_dict['depthBatch'].squeeze(1)
+        else:
+            normalBatch = return_dict_brdf['normalPred']
+            depthBatch = return_dict_brdf['depthPred'].squeeze(1)
+
         cam_K_batch = input_dict['layout_labels']['cam_K']
         cam_R_gt_batch = input_dict['layout_labels']['cam_R_gt']
         layout_gt_batch = input_dict['layout_labels']['lo_bdb3D']
@@ -365,6 +387,9 @@ class Model_Joint(nn.Module):
             depthPred = input_dict['depthBatch']
             normalPred = input_dict['normalBatch']
             roughPred = input_dict['roughBatch']
+
+        if self.cfg.MODEL_LIGHT.freeze_BRDF_Net:
+            assert self.BRDF_Net.training == False
             
         # note: normalization/rescaling also needed for GT BRDFs
         bn, ch, nrow, ncol = albedoPred.size()

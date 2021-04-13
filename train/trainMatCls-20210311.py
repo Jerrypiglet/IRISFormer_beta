@@ -246,7 +246,7 @@ brdf_loader_val_vis, batch_size_val_vis = make_data_loader(
     is_train=False,
     start_iter=0,
     logger=logger,
-    # workers=0,
+    workers=0,
     batch_size_override=opt.batch_size_override_vis, 
     # pin_memory = False, 
     collate_fn=collate_fn_OR, 
@@ -370,7 +370,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
                 loss_keys_print.append('loss_semseg-aux') 
 
         if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
-            if not(opt.cfg.MODEL_LIGHT.enable and opt.cfg.MODEL_LIGHT.freeze_BRDF_Net):
+            if not opt.cfg.MODEL_BRDF.if_freeze:
                 loss_keys_backward.append('loss_brdf-ALL')
             loss_keys_print.append('loss_brdf-ALL')
             if 'al' in opt.cfg.MODEL_BRDF.enable_list and 'al' in opt.cfg.MODEL_BRDF.loss_list:
@@ -383,7 +383,8 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
                 loss_keys_print.append('loss_brdf-depth') 
 
         if opt.cfg.MODEL_LIGHT.enable:
-            loss_keys_backward.append('loss_light-ALL')
+            if not opt.cfg.MODEL_LIGHT.if_freeze:
+                loss_keys_backward.append('loss_light-ALL')
             loss_keys_print.append('loss_light-ALL')
 
         if opt.cfg.MODEL_MATCLS.enable:
