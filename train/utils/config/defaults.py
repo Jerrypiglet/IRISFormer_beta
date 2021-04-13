@@ -57,7 +57,8 @@ _C.DATASET.png_path_cluster = '/siggraphasia20dataset/pngs'
 _C.DATASET.layout_emitter_path = ''
 # _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-OR45_total3D_train_test_data'
 _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitter-OR45_total3D_train_test_data'
-_C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-OR45_total3D_train_test_data'
+# _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-OR45_total3D_train_test_data'
+_C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitter-OR45_total3D_train_test_data'
 
 _C.DATASET.matpart_path = ''
 _C.DATASET.matpart_path_local = '/data/ruizhu/OR-matpart'
@@ -122,8 +123,9 @@ _C.MODEL_LIGHT.envWidth = 16
 _C.MODEL_LIGHT.SGNum = 12
 _C.MODEL_LIGHT.offset = 1. # 'the offset for log error'
 _C.MODEL_LIGHT.use_GT_brdf = False
-_C.MODEL_LIGHT.load_pretrained_BRDF = True
-_C.MODEL_LIGHT.load_pretrained_LIGHT = False
+_C.MODEL_LIGHT.use_GT_light = False
+_C.MODEL_LIGHT.load_pretrained_MODEL_BRDF = False
+_C.MODEL_LIGHT.load_pretrained_MODEL_LIGHT = False
 _C.MODEL_LIGHT.freeze_BRDF_Net = True
 _C.MODEL_LIGHT.pretrained_pth_name = 'check_cascadeLight0_sg12_offset1.0/%s0_9.pth'
 

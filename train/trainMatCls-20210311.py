@@ -3,7 +3,7 @@ import numpy as np
 from torch.autograd import Variable
 import torch.optim as optim
 import argparse
-import random
+# import random
 from tqdm import tqdm
 import time
 import os, sys, inspect
@@ -134,12 +134,11 @@ opt.logger = logger
 set_up_envs(opt)
 opt.cfg.freeze()
 
+if opt.is_master:
+    ic(opt.cfg)
 # <<<<<<<<<<<<< A bunch of modularised set-ups
 
-
-
 from models_def.model_joint_all import Model_Joint as the_model
-
 
 # >>>>>>>>>>>>> MODEL AND OPTIMIZER
 # build model
@@ -149,7 +148,7 @@ if opt.distributed: # https://github.com/dougsouza/pytorch-sync-batchnorm-exampl
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 model.to(opt.device)
 if opt.cfg.MODEL_BRDF.load_pretrained_pth:
-    model.load_pretrained_brdf(opt.cfg.MODEL_BRDF.weights)
+    model.load_pretrained_MODEL_BRDF(opt.cfg.MODEL_BRDF.weights)
 if opt.cfg.MODEL_SEMSEG.enable and opt.cfg.MODEL_SEMSEG.if_freeze:
     # model.turn_off_names(['UNet'])
     model.turn_off_names(['SEMSEG_Net'])
@@ -247,7 +246,7 @@ brdf_loader_val_vis, batch_size_val_vis = make_data_loader(
     is_train=False,
     start_iter=0,
     logger=logger,
-    workers=0,
+    # workers=0,
     batch_size_override=opt.batch_size_override_vis, 
     # pin_memory = False, 
     collate_fn=collate_fn_OR, 
@@ -305,7 +304,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
             val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid}
             if opt.if_vis:
                 with torch.no_grad():
-                    vis_val_epoch_joint(brdf_loader_val_vis, model, bin_mean_shift, val_params, batch_size_val_vis)
+                    vis_val_epoch_joint(brdf_loader_val_vis, model, bin_mean_shift, val_params)
                 synchronize()                
             if opt.if_val:
                 with torch.no_grad():

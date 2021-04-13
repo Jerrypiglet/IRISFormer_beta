@@ -13,28 +13,28 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
     input_dict['im_paths'] = data_batch['image_path']
     # Load the image from cpu to gpu
     im_cpu = (data_batch['im_trainval'].permute(0, 3, 1, 2) )
-    input_dict['imBatch'] = Variable(im_cpu ).cuda(non_blocking=True)
+    input_dict['imBatch'] = im_cpu.cuda(non_blocking=True).contiguous()
 
     if opt.cfg.DATA.load_brdf_gt:
         # Load data from cpu to gpu
         if 'al' in opt.cfg.DATA.data_read_list:
             albedo_cpu = data_batch['albedo']
-            input_dict['albedoBatch'] = Variable(albedo_cpu ).cuda(non_blocking=True)
+            input_dict['albedoBatch'] = albedo_cpu.cuda(non_blocking=True)
 
         if 'no' in opt.cfg.DATA.data_read_list:
             normal_cpu = data_batch['normal']
-            input_dict['normalBatch'] = Variable(normal_cpu ).cuda(non_blocking=True)
+            input_dict['normalBatch'] = normal_cpu.cuda(non_blocking=True)
 
         if 'ro' in opt.cfg.DATA.data_read_list:
             rough_cpu = data_batch['rough']
-            input_dict['roughBatch'] = Variable(rough_cpu ).cuda(non_blocking=True)
+            input_dict['roughBatch'] = rough_cpu.cuda(non_blocking=True)
 
         if 'de' in opt.cfg.DATA.data_read_list:
             depth_cpu = data_batch['depth']
-            input_dict['depthBatch'] = Variable(depth_cpu ).cuda(non_blocking=True)
+            input_dict['depthBatch'] = depth_cpu.cuda(non_blocking=True)
 
         mask_cpu = data_batch['mask'].permute(0, 3, 1, 2) # [b, 3, h, w]
-        input_dict['maskBatch'] = Variable(mask_cpu ).cuda(non_blocking=True)
+        input_dict['maskBatch'] = mask_cpu.cuda(non_blocking=True)
 
 
         segArea_cpu = data_batch['segArea']
@@ -42,7 +42,7 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
         segObj_cpu = data_batch['segObj']
 
         seg_cpu = torch.cat([segArea_cpu, segEnv_cpu, segObj_cpu], dim=1 )
-        segBatch = Variable(seg_cpu ).cuda(non_blocking=True)
+        segBatch = seg_cpu.cuda(non_blocking=True)
 
         input_dict['segBRDFBatch'] = segBatch[:, 2:3, :, :]
         input_dict['segAllBatch'] = segBatch[:, 0:1, :, :]  + segBatch[:, 2:3, :, :]
@@ -52,28 +52,28 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
 
     if opt.cfg.DATA.load_matseg_gt:
         matAggreMap_cpu = data_batch['mat_aggre_map'].permute(0, 3, 1, 2) # [b, 1, h, w]
-        input_dict['matAggreMapBatch'] = Variable(matAggreMap_cpu ).cuda(non_blocking=True)
+        input_dict['matAggreMapBatch'] = matAggreMap_cpu.cuda(non_blocking=True)
 
     preBatchDict = {}
     if opt.cfg.DATA.load_brdf_gt:
         if opt.cascadeLevel > 0:
             albedoPre_cpu = data_batch['albedoPre']
-            albedoPreBatch = Variable(albedoPre_cpu ).cuda(non_blocking=True)
+            albedoPreBatch = albedoPre_cpu.cuda(non_blocking=True)
 
             normalPre_cpu = data_batch['normalPre']
-            normalPreBatch = Variable(normalPre_cpu ).cuda(non_blocking=True)
+            normalPreBatch = normalPre_cpu.cuda(non_blocking=True)
 
             roughPre_cpu = data_batch['roughPre']
-            roughPreBatch = Variable(roughPre_cpu ).cuda(non_blocking=True)
+            roughPreBatch = roughPre_cpu.cuda(non_blocking=True)
 
             depthPre_cpu = data_batch['depthPre']
-            depthPreBatch = Variable(depthPre_cpu ).cuda(non_blocking=True)
+            depthPreBatch = depthPre_cpu.cuda(non_blocking=True)
 
             diffusePre_cpu = data_batch['diffusePre']
-            diffusePreBatch = Variable(diffusePre_cpu ).cuda(non_blocking=True)
+            diffusePreBatch = diffusePre_cpu.cuda(non_blocking=True)
 
             specularPre_cpu = data_batch['specularPre']
-            specularPreBatch = Variable(specularPre_cpu ).cuda(non_blocking=True)
+            specularPreBatch = specularPre_cpu.cuda(non_blocking=True)
 
             if albedoPreBatch.size(2) < opt.imHeight or albedoPreBatch.size(3) < opt.imWidth:
                 albedoPreBatch = F.interpolate(albedoPreBatch, [opt.imHeight, opt.imWidth ], mode='bilinear')

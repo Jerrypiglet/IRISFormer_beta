@@ -1024,7 +1024,9 @@ class openrooms(data.Dataset):
         intensityArr = (hdr * seg).flatten()
         intensityArr.sort()
         if self.split == 'train' and not forced_fixed_scale:
-            scale = (0.95 - 0.1 * np.random.random() )  / np.clip(intensityArr[int(0.95 * self.im_width * self.im_height * 3) ], 0.1, None)
+            # print('randommmm', np.random.random(), random.random())
+            # scale = (0.95 - 0.1 * np.random.random() )  / np.clip(intensityArr[int(0.95 * self.im_width * self.im_height * 3) ], 0.1, None)
+            scale = (0.95 - 0.1 * random.random() )  / np.clip(intensityArr[int(0.95 * self.im_width * self.im_height * 3) ], 0.1, None)
         else:
             scale = (0.95 - 0.05)  / np.clip(intensityArr[int(0.95 * self.im_width * self.im_height * 3) ], 0.1, None)
         hdr = scale * hdr

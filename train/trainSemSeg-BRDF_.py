@@ -140,7 +140,7 @@ if opt.distributed: # https://github.com/dougsouza/pytorch-sync-batchnorm-exampl
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 model.to(opt.device)
 if opt.cfg.MODEL_BRDF.load_pretrained_pth:
-    model.load_pretrained_brdf(opt.cfg.MODEL_BRDF.pretrained_pth_name)
+    model.load_pretrained_MODEL_BRDF(opt.cfg.MODEL_BRDF.pretrained_pth_name)
 if opt.cfg.MODEL_SEMSEG.enable and opt.cfg.MODEL_SEMSEG.if_freeze:
     # model.turn_off_names(['UNet'])
     model.turn_off_names(['SEMSEG_Net'])

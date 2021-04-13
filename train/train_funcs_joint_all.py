@@ -61,13 +61,13 @@ def get_semseg_meters():
 
 def get_brdf_meters(opt):
     brdf_meters = {}
-    if 'no' in opt.cfg.MODEL_BRDF.loss_list:
+    if 'no' in opt.cfg.MODEL_BRDF.enable_list:
         normal_mean_error_meter = AverageMeter('normal_mean_error_meter')
         normal_median_error_meter = AverageMeter('normal_median_error_meter')
         # inv_depth_mean_error_meter = AverageMeter('inv_depth_mean_error_meter')
         # inv_depth_median_error_meter = AverageMeter('inv_depth_median_error_meter')
         brdf_meters.update({'normal_mean_error_meter': normal_mean_error_meter, 'normal_median_error_meter': normal_median_error_meter})
-    if 'de' in opt.cfg.MODEL_BRDF.loss_list:
+    if 'de' in opt.cfg.MODEL_BRDF.enable_list:
         brdf_meters.update(get_depth_meters(opt))
     return brdf_meters
 
@@ -365,6 +365,8 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     matcls_meters['pred_labels_sup_list'].update(output.cpu().flatten())
                     matcls_meters['gt_labels_sup_list'].update(target.cpu().flatten())
 
+            synchronize()
+
     # ======= Metering
         
     if opt.is_master:
@@ -438,7 +440,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         logger.info(red('Evaluation timings: ' + time_meters_to_string(time_meters)))
 
 
-def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batch_size):
+def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
     writer, logger, opt, tid = params_mis['writer'], params_mis['logger'], params_mis['opt'], params_mis['tid']
     logger.info(red('=== [vis_val_epoch_joint] Visualizing for %d batches on rank %d'%(len(brdf_loader_val), opt.rank)))
@@ -483,6 +485,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
     # ===== Gather vis of N batches
     with torch.no_grad():
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
+            batch_size = len(data_batch['image_path'])
             if batch_size*batch_id >= opt.cfg.TEST.vis_max_samples:
                 break
 
@@ -509,7 +512,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
 
             for sample_idx_batch, (im_single, im_path) in enumerate(zip(data_batch['im_SDR_RGB'], data_batch['image_path'])):
                 sample_idx = sample_idx_batch+batch_size*batch_id
-                print('Visualizing %d sample...'%sample_idx, batch_id, sample_idx_batch)
+                print('Visualizing %d image...'%sample_idx, batch_id, sample_idx_batch)
                 if sample_idx >= opt.cfg.TEST.vis_max_samples:
                     break
 
@@ -550,14 +553,18 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
                                     np.save('tmp/demo_%s/affinity_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), affinity[0].detach().cpu().numpy())
                                     np.save('tmp/demo_%s/sample_ij_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), sample_ij)
 
-                # ======= Vis BRDFsemseg / semseg
-                if opt.cfg.DATA.load_semseg_gt:
+            # ======= Vis BRDFsemseg / semseg
+            if opt.cfg.DATA.load_semseg_gt:
+                for sample_idx_batch in range(batch_size):
+                    sample_idx = sample_idx_batch+batch_size*batch_id
                     gray_GT = np.uint8(semseg_label[sample_idx_batch])
                     color_GT = np.array(colorize(gray_GT, colors).convert('RGB'))
                     # print(gray_GT.shape, color_GT.shape) # (241, 321) (241, 321, 3)
                     if opt.is_master:
                         writer.add_image('VAL_semseg_GT/%d'%(sample_idx), color_GT, tid, dataformats='HWC')
-                if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable:
+            if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable:
+                for sample_idx_batch in range(batch_size):
+                    sample_idx = sample_idx_batch+batch_size*batch_id
                     prediction = np.argmax(semseg_pred[sample_idx_batch], 0)
                     gray_pred = np.uint8(prediction)
                     color_pred = np.array(colorize(gray_pred, colors).convert('RGB'))
@@ -574,6 +581,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
                         with open(str(pickle_save_path),"wb") as f:
                             pickle.dump(save_dict, f)
 
+            # ======= Vis layout-emitter
             if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
                 output_vis_dict = vis_layout_emitter(input_dict, output_dict, opt, time_meters)
                 # output_dict['output_layout_emitter_vis_dict'] = output_vis_dict
@@ -645,6 +653,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
                 mat_pred_batch = output_dict['matcls_argmax'].cpu().numpy()
                 mat_sup_pred_batch = output_dict['matcls_sup_argmax'].cpu().numpy()
                 for sample_idx_batch, (mats_pred_vis, mats_gt_vis, mat_mask, mat_label, mat_pred, mat_sup_pred) in enumerate(zip(mats_pred_vis_list, mats_gt_vis_list, input_dict['mat_mask_batch'], mat_label_batch, mat_pred_batch, mat_sup_pred_batch)): # torch.Size([3, 768, 256])
+                    sample_idx = sample_idx_batch+batch_size*batch_id
                     # print(mats_pred_vis.shape) # torch.Size([3, 256, 768])
                     mat_label = mat_label.item()
                     mat_pred = mat_pred.item()
@@ -657,7 +666,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
                         summary_cat = mats_pred_vis.permute(1, 2, 0) # not showing GT if GT label is 0
                     
                     if opt.is_master:
-                        sample_idx = sample_idx_batch+batch_size*batch_id
                         writer.add_image('VAL_matcls_PRED-GT/%d'%(sample_idx), summary_cat, tid, dataformats='HWC')
                         writer.add_image('VAL_matcls_matmask/%d'%(sample_idx), mat_mask.squeeze(), tid, dataformats='HW')
                         im_single = data_batch['im_SDR_RGB'][sample_idx_batch].detach().cpu()
@@ -669,7 +677,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
                             f_matcls_results.write('\n')
                     
 
-            # ======= visualize clusters for mat-seg
+            # ======= Vis clusters for mat-seg
             if opt.cfg.DATA.load_matseg_gt:
                 for sample_idx_batch in range(batch_size):
                     sample_idx = sample_idx_batch+batch_size*batch_id
@@ -686,7 +694,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
             if opt.cfg.MODEL_MATSEG.enable and opt.cfg.MODEL_MATSEG.embed_dims <= 4:
                 b, c, h, w = output_dict['logit'].size()
                 for sample_idx_batch, (logit_single, embedding_single) in enumerate(zip(output_dict['logit'].detach(), output_dict['embedding'].detach())):
-
                     sample_idx = sample_idx_batch+batch_size*batch_id
                     if sample_idx >= opt.cfg.TEST.vis_max_samples:
                         break
@@ -757,7 +764,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
                     logger.info('Vis batch for %.2f seconds.'%(time.time()-ts_start_vis))
 
             
-            # ===== BRDF
+            # ===== Vis BRDF 1/2
             # print(((input_dict['albedoBatch'] ) ** (1.0/2.2) ).data.shape) # [b, 3, h, w]
             if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
                 # if opt.is_master:
@@ -793,6 +800,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
                 renderedImPred = output_dict['renderedImPred'].detach().cpu().numpy()
                 imBatchSmall = output_dict['imBatchSmall'].detach().cpu().numpy()
                 for sample_idx_batch in range(batch_size):
+                    sample_idx = sample_idx_batch+batch_size*batch_id
+                    assert envmapsPredScaledImage.shape[0] == batch_size
                     for I_hdr, name_tag in zip([envmapsPredScaledImage[sample_idx_batch], envmapsBatch[sample_idx_batch]], ['light_Pred', 'light_GT']):
                         H_grid, W_grid, h, w = I_hdr.shape[1:]
                         downsize_ratio = 4
@@ -801,14 +810,16 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
                         xx, yy = np.meshgrid(np.arange(0, H_grid, downsize_ratio), np.arange(0, W_grid, downsize_ratio))
                         I_hdr_downsampled = I_hdr[:, xx.T, yy.T, :, :]
                         I_hdr_downsampled = I_hdr_downsampled.transpose(1, 3, 2, 4, 0).reshape(H_grid*h//downsize_ratio, W_grid*w//downsize_ratio, 3)
-                        cv2.imwrite('{0}/{1}-{2}_{3}.hdr'.format(opt.summary_vis_path_task, tid, sample_idx_batch, name_tag) , I_hdr_downsampled[:, :, [2, 1, 0]])
+                        cv2.imwrite('{0}/{1}-{2}_{3}.hdr'.format(opt.summary_vis_path_task, tid, sample_idx, name_tag) , I_hdr_downsampled[:, :, [2, 1, 0]])
                     for I_png, name_tag in zip([renderedImPred[sample_idx_batch], imBatchSmall[sample_idx_batch]], ['renderedIm_Pred', 'imBatchSmall_GT']):
                         I_png = (I_png.transpose(1, 2, 0) * 255.).astype(np.uint8)
-                        writer.add_image('VAL_light-%s/%d'%(name_tag, sample_idx_batch), I_png, tid, dataformats='HWC')
-                        Image.fromarray(I_png).save('{0}/{1}-{2}_light-{3}.png'.format(opt.summary_vis_path_task, tid, sample_idx_batch, name_tag))
+                        if opt.is_master:
+                            writer.add_image('VAL_light-%s/%d'%(name_tag, sample_idx), I_png, tid, dataformats='HWC')
+                        Image.fromarray(I_png).save('{0}/{1}-{2}_light-{3}.png'.format(opt.summary_vis_path_task, tid, sample_idx, name_tag))
 
     synchronize()
 
+    # ===== Vis BRDF 2/2
     # ===== logging top N to TB
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
         im_paths_list = flatten_list(im_paths_list)
@@ -880,15 +891,16 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis, batc
             # print('++++', rough_gt_batch_vis_sdr_numpy.shape, depth_gt_batch_vis_sdr_numpy.shape, albedo_gt_batch_vis_sdr_numpy.shape, albedo_gt_batch_vis_sdr_numpy.dtype)
             # print(np.amax(albedo_gt_batch_vis_sdr_numpy), np.amin(albedo_gt_batch_vis_sdr_numpy), np.mean(albedo_gt_batch_vis_sdr_numpy))
             if not opt.test_real:
-                for image_idx in range(im_batch_vis_sdr.shape[0]):
+                for sample_idx in range(im_batch_vis_sdr.shape[0]):
                     if 'al' in opt.cfg.MODEL_BRDF.enable_list:
-                        writer.add_image('VAL_brdf-albedo_GT/%d'%image_idx, albedo_gt_batch_vis_sdr_numpy[image_idx], tid, dataformats='HWC')
+                        writer.add_image('VAL_brdf-albedo_GT/%d'%sample_idx, albedo_gt_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                     if 'no' in opt.cfg.MODEL_BRDF.enable_list:
-                        writer.add_image('VAL_brdf-normal_GT/%d'%image_idx, normal_gt_batch_vis_sdr_numpy[image_idx], tid, dataformats='HWC')
+                        writer.add_image('VAL_brdf-normal_GT/%d'%sample_idx, normal_gt_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                     if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
-                        writer.add_image('VAL_brdf-rough_GT/%d'%image_idx, rough_gt_batch_vis_sdr_numpy[image_idx], tid, dataformats='HWC')
+                        writer.add_image('VAL_brdf-rough_GT/%d'%sample_idx, rough_gt_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                     if 'de' in opt.cfg.MODEL_BRDF.enable_list:
-                        writer.add_image('VAL_brdf-depth_GT/%d'%image_idx, vis_disp_colormap(depth_gt_batch_vis_sdr_numpy[image_idx].squeeze()), tid, dataformats='HWC')
+                        writer.add_image('VAL_brdf-depth_GT/%d'%sample_idx, vis_disp_colormap(depth_gt_batch_vis_sdr_numpy[sample_idx].squeeze()), tid, dataformats='HWC')
+
 
             if opt.cascadeLevel > 0:
                 vutils.save_image( ( (diffusePreBatch_vis)**(1.0/2.2) ).data,

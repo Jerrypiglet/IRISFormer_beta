@@ -255,7 +255,7 @@ model.to(opt.device)
 model.print_net()
 if opt.cfg.MODEL_BRDF.load_pretrained_pth:
     # print(opt.cfg.MODEL_BRDF.pre_trained_Zhengqin, '================----')
-    model.load_pretrained_brdf(opt.cfg.MODEL_BRDF.pretrained_pth_name)
+    model.load_pretrained_MODEL_BRDF(opt.cfg.MODEL_BRDF.pretrained_pth_name)
 if opt.cfg.MODEL_SEMSEG.enable and opt.cfg.MODEL_SEMSEG.if_freeze:
     # print(opt.cfg.MODEL_SEMSEG.if_freeze, dtype(opt.cfg.MODEL_SEMSEG.if_freeze), '================')
     model.turn_off_names(['UNet'])

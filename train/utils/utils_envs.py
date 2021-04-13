@@ -45,13 +45,6 @@ def set_up_envs(opt):
     opt.cfg.MODEL_BRDF.enable_list = [x for x in opt.cfg.MODEL_BRDF.enable_list.split('_') if x != '']
     opt.cfg.MODEL_BRDF.loss_list = [x for x in opt.cfg.MODEL_BRDF.loss_list.split('_') if x != '']
 
-    opt.cfg.MODEL_BRDF.enable_BRDF_decoders = len(opt.cfg.MODEL_BRDF.enable_list) > 0
-
-    if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
-        opt.cfg.DATA.load_brdf_gt = True
-        opt.depth_metrics = ['abs_rel', 'sq_rel', 'rmse', 'rmse_log', 'a1', 'a2', 'a3']
-        opt.cfg.MODEL_BRDF.loss_list = opt.cfg.MODEL_BRDF.enable_list
-
 
     # ====== per-pixel lighting =====
     if opt.cfg.MODEL_LIGHT.enable:
@@ -61,11 +54,11 @@ def set_up_envs(opt):
         if opt.cfg.MODEL_LIGHT.use_GT_brdf:
             opt.cfg.MODEL_BRDF.enable = False
             opt.cfg.MODEL_BRDF.enable_list = ''
+            opt.cfg.MODEL_BRDF.loss_list = ''
         else:
             opt.cfg.MODEL_BRDF.enable = True
             opt.cfg.MODEL_BRDF.enable_list += 'al_no_de_ro'.split('_')
             opt.cfg.MODEL_BRDF.enable_BRDF_decoders = True
-        opt.cfg.MODEL_BRDF.loss_list = ''
 
     # ====== layout, emitters =====
     if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
@@ -116,6 +109,16 @@ def set_up_envs(opt):
     # ====== matcls =====
     if opt.cfg.MODEL_MATCLS.enable:
         opt.cfg.DATA.load_matcls_gt = True
+
+    # ====== BRDF, cont. =====
+    opt.cfg.MODEL_BRDF.enable_BRDF_decoders = len(opt.cfg.MODEL_BRDF.enable_list) > 0
+
+    ic(opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders)
+    if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
+        opt.cfg.DATA.load_brdf_gt = True
+        opt.depth_metrics = ['abs_rel', 'sq_rel', 'rmse', 'rmse_log', 'a1', 'a2', 'a3']
+        opt.cfg.MODEL_BRDF.loss_list += opt.cfg.MODEL_BRDF.enable_list
+
 
 
     # ===== check if flags are legal =====

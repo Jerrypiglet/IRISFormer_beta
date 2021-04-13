@@ -19,6 +19,8 @@ import models_def.models_layout_emitter as models_layout_emitter
 import models_def.models_layout_emitter_lightAccu as models_layout_emitter_lightAccu
 import models_def.model_matcls as model_matcls
 
+from icecream import ic
+
 class Model_Joint(nn.Module):
     def __init__(self, opt, logger):
         super(Model_Joint, self).__init__()
@@ -88,13 +90,14 @@ class Model_Joint(nn.Module):
                 if 'ro' in self.cfg.MODEL_BRDF.enable_list:
                     self.BRDF_Net.update({'roughDecoder': self.decoder_to_use(opt, mode=2)})
                 if 'de' in self.cfg.MODEL_BRDF.enable_list:
-                    print('>>>>>>>>')
                     self.BRDF_Net.update({'depthDecoder': self.decoder_to_use(opt, mode=4)})
                     
             if self.cfg.MODEL_BRDF.enable_semseg_decoder:
                 self.BRDF_Net.update({'semsegDecoder': self.decoder_to_use(opt, mode=-1, out_channel=self.cfg.MODEL_SEMSEG.semseg_classes, if_PPM=self.cfg.MODEL_BRDF.semseg_PPM)})
 
         # self.guide_net = guideNet(opt)
+        if self.cfg.MODEL_LIGHT.load_pretrained_MODEL_BRDF:
+            self.load_pretrained_MODEL_BRDF(self.cfg.MODEL_BRDF.pretrained_pth_name)
 
         if self.cfg.MODEL_LIGHT.enable:
             self.LIGHT_Net = nn.ModuleDict({})
@@ -109,14 +112,13 @@ class Model_Joint(nn.Module):
                 envWidth = opt.cfg.MODEL_LIGHT.envWidth, envHeight = opt.cfg.MODEL_LIGHT.envHeight, SGNum = opt.cfg.MODEL_LIGHT.SGNum )
 
             if not self.opt.cfg.MODEL_LIGHT.use_GT_brdf:
-                if self.cfg.MODEL_LIGHT.load_pretrained_BRDF:
-                    self.load_pretrained_brdf(self.cfg.MODEL_BRDF.pretrained_pth_name)
-                if self.cfg.MODEL_LIGHT.load_pretrained_LIGHT:
-                    self.load_pretrained_light(self.cfg.MODEL_LIGHT.pretrained_pth_name)
 
                 if self.cfg.MODEL_LIGHT.freeze_BRDF_Net:
                     self.turn_off_names(['BRDF_Net'])
                     freeze_bn_in_module(self.BRDF_Net)
+
+            if self.cfg.MODEL_LIGHT.load_pretrained_MODEL_LIGHT:
+                self.load_pretrained_MODEL_LIGHT(self.cfg.MODEL_LIGHT.pretrained_pth_name)
 
         if self.cfg.MODEL_LAYOUT_EMITTER.enable:
             if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
@@ -353,17 +355,9 @@ class Model_Joint(nn.Module):
 
     def forward_light(self, input_dict, return_dict_brdf):
         # Normalize Albedo and depth
-        if self.cfg.MODEL_LIGHT.use_GT_brdf:
-            bn, ch, nrow, ncol = return_dict_brdf['albedoPred'].size()
-            albedoPred = return_dict_brdf['albedoPred'].view(bn, -1)
-            albedoPred = albedoPred / torch.clamp(torch.mean(albedoPred, dim=1), min=1e-10).unsqueeze(1) / 3.0
-            albedoPred = albedoPred.view(bn, ch, nrow, ncol)
-
-            bn, ch, nrow, ncol = return_dict_brdf['depthPred'].size()
-            depthPred = return_dict_brdf['depthPred'].view(bn, -1)
-            depthPred = depthPred / torch.clamp(torch.mean(depthPred, dim=1), min=1e-10).unsqueeze(1) / 3.0
-            depthPred = depthPred.view(bn, ch, nrow, ncol)
-
+        if not self.cfg.MODEL_LIGHT.use_GT_brdf:
+            depthPred = return_dict_brdf['depthPred']
+            albedoPred = return_dict_brdf['albedoPred']
             normalPred = return_dict_brdf['normalPred']
             roughPred = return_dict_brdf['roughPred']
         else:
@@ -371,6 +365,17 @@ class Model_Joint(nn.Module):
             depthPred = input_dict['depthBatch']
             normalPred = input_dict['normalBatch']
             roughPred = input_dict['roughBatch']
+            
+        # note: normalization/rescaling also needed for GT BRDFs
+        bn, ch, nrow, ncol = albedoPred.size()
+        albedoPred = albedoPred.view(bn, -1)
+        albedoPred = albedoPred / torch.clamp(torch.mean(albedoPred, dim=1), min=1e-10).unsqueeze(1) / 3.0
+        albedoPred = albedoPred.view(bn, ch, nrow, ncol)
+
+        bn, ch, nrow, ncol = depthPred.size()
+        depthPred = depthPred.view(bn, -1)
+        depthPred = depthPred / torch.clamp(torch.mean(depthPred, dim=1), min=1e-10).unsqueeze(1) / 3.0
+        depthPred = depthPred.view(bn, ch, nrow, ncol)
 
         imBatchLarge = F.interpolate(input_dict['imBatch'], [480, 640], mode='bilinear')
         albedoPredLarge = F.interpolate(albedoPred, [480, 640], mode='bilinear')
@@ -414,9 +419,18 @@ class Model_Joint(nn.Module):
 
         # Compute the rendered error
         pixelNum_render = max( (torch.sum(segBatchSmall ).cpu().data).item(), 1e-5 )
+        
+        if not self.cfg.MODEL_LIGHT.use_GT_brdf:
+            normal_input, rough_input = return_dict_brdf['normalPred'], return_dict_brdf['roughPred']
+        else:
+            normal_input, rough_input = input_dict['normalBatch'], input_dict['roughBatch']
 
-        diffusePred, specularPred = self.non_learnable_layers['renderLayer'].forwardEnv(albedoPred.detach(), return_dict_brdf['normalPred'],
-            return_dict_brdf['roughPred'], envmapsPredImage )
+        if self.cfg.MODEL_LIGHT.use_GT_light:
+            envmapsImage_input = input_dict['envmapsBatch']
+        else:
+            envmapsImage_input = envmapsPredImage
+
+        diffusePred, specularPred = self.non_learnable_layers['renderLayer'].forwardEnv(normalPred=normal_input, envmap=envmapsImage_input, diffusePred=albedoPred.detach(), roughPred=rough_input)
 
         diffusePredScaled, specularPredScaled = models_brdf.LSregressDiffSpec(
             diffusePred.detach(),
@@ -450,7 +464,7 @@ class Model_Joint(nn.Module):
         self.logger.info(magenta('---> ALL %d params; %d trainable'%(len(list(self.named_parameters())), count_grads)))
         return count_grads
 
-    def load_pretrained_brdf(self, pretrained_pth_name='check_cascade0_w320_h240'):
+    def load_pretrained_MODEL_BRDF(self, pretrained_pth_name='check_cascade0_w320_h240'):
         if self.opt.if_cluster:
             pretrained_path = '/viscompfs/users/ruizhu/models_ckpt/' + pretrained_pth_name
         else:
@@ -472,7 +486,7 @@ class Model_Joint(nn.Module):
 
         self.logger.info(magenta('Loaded pretrained BRDF from %s: %s'%(pretrained_pth_name, '+'.join(loaded_strings))))
     
-    def load_pretrained_light(self, pretrained_pth_name='check_cascadeLight0_sg12_offset1.0'):
+    def load_pretrained_MODEL_LIGHT(self, pretrained_pth_name='check_cascadeLight0_sg12_offset1.0'):
         if self.opt.if_cluster:
             pretrained_path = '/viscompfs/users/ruizhu/models_ckpt/' + pretrained_pth_name
         else:

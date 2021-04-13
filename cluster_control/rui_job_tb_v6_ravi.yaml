@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: zz-job-tb
+  name: zz-job-tb2
   # name: z-job-tb-before-cvpr
   # namespace: ucsd-haosulab
   namespace: "#NAMESPACE"
@@ -14,7 +14,7 @@ spec:
       containers:
       - name: gpu-container-rui1
         # image: pytorch/pytorch:1.2-cuda10.0-cudnn7-runtime  # docker image
-        image: localhost:30081/jerrypiglet/deeplearningconda38s3
+        image: jerrypiglet/deeplearningconda38s3
         # image: docker.io/ak3636/deeplearning:latest
         imagePullPolicy: IfNotPresent
         command:

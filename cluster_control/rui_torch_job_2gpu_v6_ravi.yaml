@@ -35,7 +35,7 @@ spec:
         resources:
           requests:
             cpu: "#CPUR" # "20"
-            memory: "#MEMRGi" #"50Gi"
+            memory: "#MEMRGi"  #"50Gi"
             nvidia.com/gpu: '#GPUS'
           limits:
             cpu: "#CPUL" #"30"
