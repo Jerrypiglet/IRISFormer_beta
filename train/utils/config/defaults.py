@@ -101,7 +101,6 @@ _C.MODEL_BRDF.enable_list = '' # `al_no_de_ro`
 _C.MODEL_BRDF.enable_list_allowed = ['al', 'no', 'de', 'ro']
 _C.MODEL_BRDF.load_pretrained_pth = False
 _C.MODEL_BRDF.loss_list = ''
-# _C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240'
 _C.MODEL_BRDF.albedoWeight = 1.5
 _C.MODEL_BRDF.normalWeight = 1.0
 _C.MODEL_BRDF.roughWeight = 0.5
@@ -111,7 +110,8 @@ _C.MODEL_BRDF.enable_BRDF_decoders = False
 # _C.MODEL_BRDF.is_all_light = True
 _C.MODEL_BRDF.enable_semseg_decoder = False
 _C.MODEL_BRDF.semseg_PPM = True
-_C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240/%s0_13.pth'
+# _C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240/%s0_13.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
+_C.MODEL_BRDF.pretrained_pth_name = ''
 _C.MODEL_BRDF.encoder_exclude = '' # e.g. 'x4_x5
 
 # ===== per-pixel lighting
@@ -129,7 +129,8 @@ _C.MODEL_LIGHT.use_GT_light = False
 _C.MODEL_LIGHT.load_pretrained_MODEL_BRDF = False
 _C.MODEL_LIGHT.load_pretrained_MODEL_LIGHT = False
 _C.MODEL_LIGHT.freeze_BRDF_Net = True
-_C.MODEL_LIGHT.pretrained_pth_name = 'check_cascadeLight0_sg12_offset1.0/%s0_9.pth'
+# _C.MODEL_LIGHT.pretrained_pth_name = 'check_cascadeLight0_sg12_offset1.0/%s0_9.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
+_C.MODEL_LIGHT.pretrained_pth_name = ''
 
 # ===== layout, emitter
 _C.MODEL_LAYOUT_EMITTER = CN()

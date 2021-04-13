@@ -67,8 +67,6 @@ def set_up_envs(opt):
             else: # use BRDF_Net prediction
                 opt.cfg.MODEL_BRDF.enable = True
                 opt.cfg.MODEL_BRDF.enable_list += 'no_de'.split('_')
-                if opt.cfg.MODEL_LIGHT.freeze_BRDF_Net:
-                    opt.cfg.MODEL_BRDF.if_freeze = True
         else:
             opt.cfg.MODEL_BRDF.enable = True
             opt.cfg.MODEL_BRDF.encoder_exclude = 'x5_x6'
@@ -96,6 +94,9 @@ def set_up_envs(opt):
             opt.cfg.MODEL_BRDF.enable = True
             opt.cfg.MODEL_BRDF.enable_list += 'al_no_de_ro'.split('_')
             opt.cfg.MODEL_BRDF.enable_BRDF_decoders = True
+            if opt.cfg.MODEL_LIGHT.freeze_BRDF_Net:
+                opt.cfg.MODEL_BRDF.if_freeze = True
+
 
 
 

@@ -152,7 +152,7 @@ class Model_Joint(nn.Module):
         return_dict.update(return_dict_matseg)
 
         if self.cfg.MODEL_SEMSEG.enable:
-            if opt.cfg.MODEL_SEMSEG.if_freeze:
+            if self.cfg.MODEL_SEMSEG.if_freeze:
                 self.SEMSEG_Net.eval()
             return_dict_semseg = self.forward_semseg(input_dict) # {'prob': prob, 'embedding': embedding, 'feats_mat_seg_dict': feats_mat_seg_dict}
 
