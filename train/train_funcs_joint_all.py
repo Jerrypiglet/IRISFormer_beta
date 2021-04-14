@@ -798,6 +798,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 envmapsPredScaledImage = output_dict['envmapsPredScaledImage'].detach().cpu().numpy()
                 envmapsBatch = input_dict['envmapsBatch'].detach().cpu().numpy()
                 renderedImPred = output_dict['renderedImPred'].detach().cpu().numpy()
+                renderedImPred_sdr = output_dict['renderedImPred_sdr'].detach().cpu().numpy()
                 imBatchSmall = output_dict['imBatchSmall'].detach().cpu().numpy()
                 for sample_idx_batch in range(batch_size):
                     sample_idx = sample_idx_batch+batch_size*batch_id
@@ -811,7 +812,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                         I_hdr_downsampled = I_hdr[:, xx.T, yy.T, :, :]
                         I_hdr_downsampled = I_hdr_downsampled.transpose(1, 3, 2, 4, 0).reshape(H_grid*h//downsize_ratio, W_grid*w//downsize_ratio, 3)
                         cv2.imwrite('{0}/{1}-{2}_{3}.hdr'.format(opt.summary_vis_path_task, tid, sample_idx, name_tag) , I_hdr_downsampled[:, :, [2, 1, 0]])
-                    for I_png, name_tag in zip([renderedImPred[sample_idx_batch], imBatchSmall[sample_idx_batch]], ['renderedIm_Pred', 'imBatchSmall_GT']):
+
+                    for I_png, name_tag in zip([renderedImPred[sample_idx_batch], renderedImPred_sdr[sample_idx_batch], imBatchSmall[sample_idx_batch]], ['renderedIm_Pred', 'renderedImPred_sdr', 'imBatchSmall_GT']):
                         I_png = (I_png.transpose(1, 2, 0) * 255.).astype(np.uint8)
                         if opt.is_master:
                             writer.add_image('VAL_light-%s/%d'%(name_tag, sample_idx), I_png, tid, dataformats='HWC')

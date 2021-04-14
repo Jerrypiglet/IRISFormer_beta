@@ -388,7 +388,7 @@ class Model_Joint(nn.Module):
             normalPred = input_dict['normalBatch']
             roughPred = input_dict['roughBatch']
 
-        if self.cfg.MODEL_LIGHT.freeze_BRDF_Net:
+        if self.cfg.MODEL_LIGHT.freeze_BRDF_Net and not self.cfg.MODEL_LIGHT.use_GT_brdf:
             assert self.BRDF_Net.training == False
             
         # note: normalization/rescaling also needed for GT BRDFs
@@ -463,9 +463,11 @@ class Model_Joint(nn.Module):
             imBatchSmall,
             diffusePred, specularPred )
 
-        renderedImPred = torch.clamp(diffusePredScaled + specularPredScaled, 0, 1)
+        renderedImPred_hdr = diffusePredScaled + specularPredScaled
+        renderedImPred = torch.clamp(renderedImPred_hdr, 0, 1)
+        renderedImPred_sdr = torch.clamp(renderedImPred_hdr ** (1.0/2.2), 0, 1)
 
-        return_dict.update({'renderedImPred': renderedImPred, 'pixelNum_render': pixelNum_render}) 
+        return_dict.update({'renderedImPred': renderedImPred, 'renderedImPred_sdr': renderedImPred_sdr, 'pixelNum_render': pixelNum_render}) 
 
         return return_dict
     
