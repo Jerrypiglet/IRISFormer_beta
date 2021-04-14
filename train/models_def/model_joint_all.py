@@ -130,7 +130,10 @@ class Model_Joint(nn.Module):
         if self.cfg.MODEL_LAYOUT_EMITTER.enable:
             if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
                 self.EMITTER_LIGHT_ACCU_NET = models_layout_emitter_lightAccu.emitter_lightAccu(opt)
-                self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu(opt)
+                if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V1':
+                    self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu_(opt)
+                if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V2':
+                    self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu_UNet(opt)
             else:
                 self.LAYOUT_EMITTER_NET = models_layout_emitter.decoder_layout_emitter(opt)
 

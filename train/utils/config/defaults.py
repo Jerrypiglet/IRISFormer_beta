@@ -162,6 +162,7 @@ _C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_lamb = 0.3
 
 _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net = CN() # better model than the vanilla model
 _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable = False # enable spatial-encoding network from per-pixel lighting, instead of image encoder-decoder
+_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version = 'V2'
 _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_light = True # use GT per-pixel lighting instead of predicting using LIGHT_NET
 _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_brdf = True # use GT brdf instead of predicting using BRDF_NET
 _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.freeze_lightnet = True # freeze LIGHT_NET when using predictiion from LIGHT_NET
