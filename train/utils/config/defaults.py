@@ -28,7 +28,11 @@ _C.PATH.root_cluster = '.'
 _C.PATH.semseg_colors_path = 'data/openrooms/openrooms_colors.txt'
 _C.PATH.semseg_names_path = 'data/openrooms/openrooms_names.txt'
 _C.PATH.total3D_colors_path = 'data/openrooms/total3D_colors'
+
 _C.PATH.total3D_lists_path = 'data/openrooms/list_OR_V4full'
+_C.PATH.total3D_lists_path_if_zhengqinCVPR = False
+_C.PATH.total3D_lists_path_zhengqinCVPR = 'data/openrooms/list_OR_V4full_zhengqinCVPR'
+
 _C.PATH.matcls_matIdG1_path = 'data/openrooms/matIdGlobal1.txt'
 _C.PATH.matcls_matIdG2_path = 'data/openrooms/matIdGlobal2.txt'
 _C.PATH.dcn_path = ''
@@ -50,6 +54,9 @@ _C.DATASET.dataset_name = 'openrooms'
 _C.DATASET.dataset_path = ''
 _C.DATASET.dataset_path_local = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms'
 _C.DATASET.dataset_path_cluster = '/siggraphasia20dataset/code/Routine/DatasetCreation/'
+_C.DATASET.dataset_path_test = ''
+_C.DATASET.dataset_path_test_local = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms_test'
+_C.DATASET.dataset_path_test_cluster = '/eccv20dataset/DatasetNew_test'
 _C.DATASET.png_path = ''
 _C.DATASET.png_path_local = '/data/ruizhu/OR-pngs'
 _C.DATASET.png_path_cluster = '/siggraphasia20dataset/pngs'
@@ -110,8 +117,8 @@ _C.MODEL_BRDF.enable_BRDF_decoders = False
 # _C.MODEL_BRDF.is_all_light = True
 _C.MODEL_BRDF.enable_semseg_decoder = False
 _C.MODEL_BRDF.semseg_PPM = True
-# _C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240/%s0_13.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
-_C.MODEL_BRDF.pretrained_pth_name = ''
+_C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240/%s0_13.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
+# _C.MODEL_BRDF.pretrained_pth_name = ''
 _C.MODEL_BRDF.encoder_exclude = '' # e.g. 'x4_x5
 
 # ===== per-pixel lighting
@@ -129,8 +136,8 @@ _C.MODEL_LIGHT.use_GT_light = False
 _C.MODEL_LIGHT.load_pretrained_MODEL_BRDF = False
 _C.MODEL_LIGHT.load_pretrained_MODEL_LIGHT = False
 _C.MODEL_LIGHT.freeze_BRDF_Net = True
-# _C.MODEL_LIGHT.pretrained_pth_name = 'check_cascadeLight0_sg12_offset1.0/%s0_9.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
-_C.MODEL_LIGHT.pretrained_pth_name = ''
+_C.MODEL_LIGHT.pretrained_pth_name = 'check_cascadeLight0_sg12_offset1.0/%s0_9.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
+# _C.MODEL_LIGHT.pretrained_pth_name = ''
 
 # ===== layout, emitter
 _C.MODEL_LAYOUT_EMITTER = CN()

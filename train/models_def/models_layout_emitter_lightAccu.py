@@ -158,35 +158,6 @@ class decoder_layout_emitter_lightAccu_UNet(nn.Module):
 
         return {'emitter_est_result': return_dict_emitter}
 
-    def forward_old(self, envmap_lightAccu):
-        assert len(envmap_lightAccu.shape)==5 and envmap_lightAccu.shape[1:]==(6, 3, self.grid_size, self.grid_size) # [B, 6, D(3), H(grid_size), W(grid_size)]
-        batch_size = envmap_lightAccu.shape[0]
-        envmap_lightAccu_merged = envmap_lightAccu.reshape(batch_size, -1, self.grid_size, self.grid_size) # [B, 6*D(3), H(grid_size), W(grid_size)]
-
-        x = envmap_lightAccu_merged
-        y = self.conv1_UNet(x)
-        print(x.shape, y.shape)
-
-        x = F.relu(self.gn1(self.conv1(x)), True) # torch.Size([2, 768, 8, 8])
-        x = F.relu(self.gn2(self.conv2(x)), True) # torch.Size([2, 1536, 8, 8])
-        x = F.relu(self.gn3(self.conv3(x)), True) # torch.Size([2, 768, 8, 8])
-
-
-        return_dict_emitter = {}
-
-        for head_name, head_channels in [('cell_light_ratio', 1), ('cell_cls', 3), ('cell_axis_global', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
-            head_out = self.decoder_heads['decoder_gn_1_%s'%head_name](self.decoder_heads['decoder_conv2d_1_%s'%head_name](x))
-            head_out = self.decoder_heads['decoder_conv2d_2_%s'%head_name](head_out)
-            head_out = head_out.view(batch_size, 6, head_channels, self.grid_size, self.grid_size).permute(0, 1, 3, 4, 2) # [2, 6, head_channels, 8, 8] -> [2, 6, 8, 8, head_channels]
-            # print(head_name, self.decoder_heads['decoder_conv2d_%s'%head_name](x).shape)
-            return_dict_emitter.update({head_name: head_out})
-            # print(head_name, head_out.shape)
-
-        return {'emitter_est_result': return_dict_emitter}
-
-
-
-
 
 class emitter_lightAccu(nn.Module):
     def __init__(self, opt=None, envHeight = 8, envWidth = 16, envRow = 120, envCol = 160, grid_size = 8, params=[]):
@@ -215,7 +186,7 @@ class emitter_lightAccu(nn.Module):
         self.vv_im, self.uu_im = torch.meshgrid(torch.arange(self.im_height), torch.arange(self.im_width))
         self.uu_im, self.vv_im = self.uu_im.cuda(), self.vv_im.cuda()
 
-        basis_v_indexes = [(3, 2, 0), (7, 6, 4), (4, 5, 0), (6, 2, 5), (7, 6, 3), (7, 3, 4)]
+        basis_v_indexes = [(3, 2, 0), (7, 4, 6), (4, 0, 5), (6, 5, 2), (7, 6, 3), (7, 3, 4)]
         self.origin_v1_v2_list = [basis_v_indexes[wall_idx] for wall_idx in range(6)]
         ii, jj = torch.meshgrid(torch.arange(self.grid_size), torch.arange(self.grid_size))
         self.ii, self.jj = ii.cuda().unsqueeze(0).unsqueeze(0).unsqueeze(-1).float(), jj.cuda().unsqueeze(0).unsqueeze(0).unsqueeze(-1).float() # [B, 1, 8, 8, 1]
@@ -243,14 +214,16 @@ class emitter_lightAccu(nn.Module):
 
         ls_coords, camx, camy, normalPred = self.rL.forwardEnv(normalPred, envmapsPredImage, if_normal_only=True) # torch.Size([B, 128, 3, 120, 160]), [B, 3, 120, 160], [B, 3, 120, 160], [B, 3, 120, 160]
 
-
-        verts_center_transformed_LightNet = self.get_grid_centers(layout, cam_R) # [B, 6, 8, 8, 3]
+        verts_center_transformed_LightNet, verts_transformed_LightNet, \
+            origin_0_array_transformed_LightNet, basis_1_array_transformed_LightNet, basis_2_array_transformed_LightNet, normal_array_transformed_LightNet = self.get_grid_centers(layout, cam_R) # [B, 6, 8, 8, 3]
 
         envmap_lightAccu, points_sampled_mask_expanded = self.accu_light(points, verts_center_transformed_LightNet, camx, camy, normalPred, envmapsPredImage) # [B, 3, #grids, 120, 160]
         envmap_lightAccu_mean = (envmap_lightAccu.sum(-1).sum(-1) / (points_sampled_mask_expanded.sum(-1).sum(-1)+1e-6)).permute(0, 2, 1) # -> [1, 384, 3]
 
         
-        return_dict = {'envmap_lightAccu': envmap_lightAccu, 'points_sampled_mask_expanded': points_sampled_mask_expanded, 'envmap_lightAccu_mean': envmap_lightAccu_mean}
+        return_dict = {'envmap_lightAccu': envmap_lightAccu, 'points_sampled_mask_expanded': points_sampled_mask_expanded, 'envmap_lightAccu_mean': envmap_lightAccu_mean, \
+            'verts_center_transformed_LightNet': verts_center_transformed_LightNet, 'verts_transformed_LightNet': verts_transformed_LightNet, \
+            'origin_0_array_transformed_LightNet': origin_0_array_transformed_LightNet, 'basis_1_array_transformed_LightNet': basis_1_array_transformed_LightNet, 'basis_2_array_transformed_LightNet': basis_2_array_transformed_LightNet, 'normal_array_transformed_LightNet': normal_array_transformed_LightNet}
 
         return return_dict
 
@@ -310,50 +283,7 @@ class emitter_lightAccu(nn.Module):
         # [B*120*160, 3, 1, 8, 16], [B*120*160, #grids, 1, 1, 3] -> [B*120*160, 3, #grids, 1, 1]
         envmap_lightAccu_ = torch.nn.functional.grid_sample(envmapsPredImage_, uv_normalized, padding_mode='border', align_corners = True) # https://pytorch.org/docs/stable/nn.functional.html#torch.nn.functional.grid_sample
 
-        # # print(envmapsPredImage.shape)
-        # # print(envmapsPredImage.view(-1, 8, 16).shape)
-        # # return vec_to_t, camx_, camy_, normalPred_, self.vv_envmap, self.uu_envmap, envmapsPredImage
-        # # A = torch.cat([camx_.unsqueeze(2), camy_.unsqueeze(2), normalPred_.unsqueeze(2)], 2) # [B, 3, 3, 120, 160]
-        # # batch_size = A.shape[0]
-        # # AT = torch.inverse(A.permute(0, 3, 4, 1, 2).view(-1, 3, 3).unsqueeze(1).expand(-1, ngrids, -1, -1, -1, -1)) # [B, 3, 3, 120, 160] -> [B, 120, 160, 3, 3] -> [B, #grids, 120, 160, 3, 3]
-        # # AT = AT.view(-1, 3, 3) # -> [?, 3, 3]
-        # # b = vec_to_t.reshape(-1, 3).unsqueeze(-1) # [B, #grids, 120, 160, 3] -> [?, 3, 1]
-        # A = torch.cat([camx_.permute(0, 2, 3, 1).unsqueeze(-1), camy_.permute(0, 2, 3, 1).unsqueeze(-1), normalPred_.permute(0, 2, 3, 1).unsqueeze(-1)], -1)
-        # eyes = torch.eye(3).float().cuda().reshape((1, 1, 1, 3, 3))
-        # A = A + 1e-6 * eyes
-        # AT = torch.inverse(A).unsqueeze(1) # -> [B, 1, 120, 160, 3, 3]
-        # b = vec_to_t.unsqueeze(-1) # [B, #grids, 120, 160, 3] -> [B, #grids, 120, 160, 3, 1]
-
-        # l_local = torch.matmul(AT, b) # ldirections (one point on the hemisphere; local) [B, #grids, 120, 160, 3, 1]
-        # l_local = l_local / torch.linalg.norm(l_local, dim=-2, keepdim=True) # [B, #grids, 120, 160, 3, 1]
-
-        # # l_local -> pixel coords in envmap
-        # cos_theta = l_local[:, :, :, :, 2, :]
-        # theta_SG = torch.arccos(cos_theta) # [0, pi] # el
-        # cos_phi = l_local[:, :, :, :, 0, :] / torch.sin(theta_SG)
-        # sin_phi = l_local[:, :, :, :, 1, :] / torch.sin(theta_SG)
-        # phi_SG = torch.atan2(sin_phi, cos_phi) # az
-        # # assert phi_SG >= -np.pi and phi_SG <= np.pi
-
-        # az_pix = (phi_SG / np.pi / 2. + 0.5) * self.rL.envWidth - 0.5 # [B, #grids, 120, 160, 1]
-        # el_pix = theta_SG / np.pi * 2. * self.rL.envHeight - 0.5 # [B, #grids, 120, 160, 1]
-        # az_pix = az_pix.permute(0, 2, 3, 1, 4).view(-1, ngrids, 1) # [B, #grids, 120, 160, 1] -> [B, 120, 160, ngrids, 1] -> [B*120*160, ngrids, 1]
-        # el_pix = el_pix.permute(0, 2, 3, 1, 4).view(-1, ngrids, 1) # [B, #grids, 120, 160, 1] -> [B, 120, 160, ngrids, 1] -> [B*120*160, ngrids, 1]
-
-        # # sample envmap
-        # envmapsPredImage_ = envmapsPredImage[:, :, self.vv_envmap, self.uu_envmap, :, :].permute(0, 2, 3, 1, 4, 5) # [B, 3, 120, 160, 8, 16] -> [B, 3, 120, 160, 8, 16] -> [B, 120, 160, 3, 8, 16]
-        # envmapsPredImage_ = envmapsPredImage_.view(-1, 3, 1, self.envHeight, self.envWidth)
-        # h, w = envmapsPredImage_.shape[-2:]
-        # uv_ = torch.cat([az_pix, el_pix], dim=-1) # [B*120*160, #grids, 2]
-        # uv_normalized = uv_ / (torch.tensor([w-1, h-1]).reshape(1, 1, 2).cuda().float()) * 2. - 1. # [B*120*160, #grids, 2]
-        # uv_normalized = uv_normalized.unsqueeze(2).unsqueeze(2)# -> [B*120*160, #grids, 1, 1, 2]
-        # uv_normalized = torch.cat([uv_normalized, torch.zeros_like(uv_normalized[:, :, :, :, 0:1])], dim=-1) # -> [B*120*160, #grids, 1, 1, 3]
-        # # print(envmapsPredImage_.shape, uv_normalized.shape)
-        # # essentially sample each 1x8x16 envmap at ngrid points, of B*120*160 envmaps
-        # # [B*120*160, 3, 1, 8, 16], [B*120*160, #grids, 1, 1, 3] -> [B*120*160, 3, #grids, 1, 1]
-        # envmap_lightAccu_ = torch.nn.functional.grid_sample(envmapsPredImage_, uv_normalized, padding_mode='border', align_corners = True) # https://pytorch.org/docs/stable/nn.functional.html#torch.nn.functional.grid_sample
         envmap_lightAccu_ = envmap_lightAccu_.squeeze(-1).squeeze(-1).view(batch_size, self.envRow, self.envCol, 3, ngrids) # -> [B, 120, 160, 3, #grids]
-        # print(envmap_lightAccu_.shape)
         envmap_lightAccu_ = envmap_lightAccu_.permute(0, 3, 4, 1, 2) # -> [B, 3, #grids, 120, 160]
         points_sampled_mask_expanded = points_sampled_mask.float().unsqueeze(1).unsqueeze(1) # [B, 1, 1, 120, 160]
         envmap_lightAccu_ = envmap_lightAccu_ * points_sampled_mask_expanded
@@ -379,18 +309,28 @@ class emitter_lightAccu(nn.Module):
         x_i1j1 = basis_1_array * (self.ii+1.) + basis_2_array * (self.jj+1.) + origin_0_array
         x_ij1 = basis_1_array * self.ii + basis_2_array * (self.jj+1.)+ origin_0_array
         verts_all = torch.stack([x_ij, x_i1j, x_i1j1, x_ij1], -1) # torch.Size([B, 6, 8, 8, 3, 4])
-        # batch_size = verts_all.shape[0]
-        # verts_flattened = verts_all.reshape(-1, 4, 3).transpose(-1, -2) # [B*6*8*8, 3, 4]
 
-        cam_R_transform, cam_t_transform = cam_R.transpose(1, 2), torch.zeros((1, 1, 1, 1, 3, 1)).cuda().float() # R: cam axes -> transformation matrix
-        # nverts = verts_flattened.shape[0]
-        # cam_R_transform = cam_R_transform.unsqueeze(1).expand(-1, 6*self.grid_size*self.grid_size, -1, -1).view(-1, 3, 3) # [B, 3, 3] -> [B, 1, 3, 3] -> [B, 6*8*8, 3, 3] -> [B*6*8*8, 3, 3]
-        cam_R_transform = cam_R_transform.unsqueeze(1).unsqueeze(1).unsqueeze(1)
-        x1x2_transformed = cam_R_transform @ verts_all + cam_t_transform
+        cam_R_transform, cam_t_transform_unsqueeze = cam_R.transpose(1, 2), torch.zeros((1, 1, 1, 1, 3, 1)).cuda().float() # R: cam axes -> transformation matrix
+        cam_R_transform_unsqueeze = cam_R_transform.unsqueeze(1).unsqueeze(1).unsqueeze(1)
+        x1x2_transformed = cam_R_transform_unsqueeze @ verts_all + cam_t_transform_unsqueeze
         x1x2_transformed = x1x2_transformed.transpose(-1, -2) @ (self.extra_transform_matrix.unsqueeze(1).unsqueeze(1).unsqueeze(1)) # camera projection coords: z forward, x right, y down
         verts_transformed_LightNet = x1x2_transformed @ (self.extra_transform_matrix_LightNet.unsqueeze(1).unsqueeze(1).unsqueeze(1)) # LightNet coords: z backward, x right, y up # [B, 6, 8, 8, 4, 3]
         # print(verts_transformed_LightNet.shape)
 
+        origin_0_array = torch.stack(origin_0_list).permute(1, 0, 2) # [2, 6, 3]
+        basis_1_array = torch.stack(basis_1_list).permute(1, 0, 2) # [2, 6, 3]
+        basis_2_array = torch.stack(basis_2_list).permute(1, 0, 2) # [2, 6, 3]
+        cam_t_transform = torch.zeros(1, 3, 1).cuda().float()
+        origin_0_array = (cam_R_transform @ origin_0_array.transpose(1, 2) + cam_t_transform).transpose(1, 2)
+        origin_0_array_transformed_LightNet = origin_0_array @ self.extra_transform_matrix @ self.extra_transform_matrix_LightNet
+        basis_1_array = (cam_R_transform @ basis_1_array.transpose(1, 2)).transpose(1, 2) #  [2, 6, 3]
+        basis_1_array_transformed_LightNet = basis_1_array @ self.extra_transform_matrix @ self.extra_transform_matrix_LightNet
+        basis_1_array_transformed_LightNet = basis_1_array_transformed_LightNet / torch.linalg.norm(basis_1_array_transformed_LightNet, dim=-1, keepdim=True)
+        basis_2_array = (cam_R_transform @ basis_2_array.transpose(1, 2)).transpose(1, 2)
+        basis_2_array_transformed_LightNet = basis_2_array @ self.extra_transform_matrix @ self.extra_transform_matrix_LightNet
+        basis_2_array_transformed_LightNet = basis_2_array_transformed_LightNet / torch.linalg.norm(basis_2_array_transformed_LightNet, dim=-1, keepdim=True)
+        normal_array_transformed_LightNet = torch.cross(basis_1_array_transformed_LightNet, basis_2_array_transformed_LightNet, dim=-1)
+
         verts_center_transformed_LightNet = torch.mean(verts_transformed_LightNet, 4) # [B, 6, 8, 8, 3]
 
-        return verts_center_transformed_LightNet
+        return verts_center_transformed_LightNet, verts_transformed_LightNet, origin_0_array_transformed_LightNet, basis_1_array_transformed_LightNet, basis_2_array_transformed_LightNet, normal_array_transformed_LightNet

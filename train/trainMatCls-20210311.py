@@ -246,7 +246,7 @@ brdf_loader_val_vis, batch_size_val_vis = make_data_loader(
     is_train=False,
     start_iter=0,
     logger=logger,
-    workers=0,
+    workers=2,
     batch_size_override=opt.batch_size_override_vis, 
     # pin_memory = False, 
     collate_fn=collate_fn_OR, 
@@ -294,12 +294,16 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         break
 
     for i, data_batch in tqdm(enumerate(brdf_loader_train)):
+        print(i)
         if cfg.SOLVER.if_test_dataloader:
             if i % 100 == 0:
                 print(data_batch.keys())
             continue
         reset_tictoc = False
         # Evaluation for an epoch```
+
+        synchronize()
+        
         if opt.eval_every_iter != -1 and (tid - tid_start) % opt.eval_every_iter == 0:
             val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid}
             if opt.if_vis:

@@ -351,6 +351,14 @@ class Model_Joint(nn.Module):
             envmapsBatch = input_dict['envmapsBatch']
         else:
             envmapsBatch = return_dict_light['envmapsPredImage']
+            envmapsBatch = return_dict_light['envmapsPredScaledImage']
+
+        a = input_dict['envmapsBatch']
+        b = return_dict_light['envmapsPredImage']
+        c = return_dict_light['envmapsPredScaledImage']
+        print(a.shape, torch.max(a), torch.min(a), torch.mean(a))
+        print(b.shape, torch.max(b), torch.min(b), torch.mean(b))
+        print(c.shape, torch.max(c), torch.min(c), torch.mean(c))
 
         if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_brdf:
             normalBatch = input_dict['normalBatch']
