@@ -258,7 +258,7 @@ class openrooms(data.Dataset):
             im_SDR_RGB = im_RGB_uint8.astype(np.float32) / 255.
             im_trainval = im_SDR_RGB
 
-            batch_dict = {'image_path': str(png_image_path)}
+            batch_dict = {'image_path': str(png_image_path), 'image_index': index}
 
         else:
 
@@ -273,7 +273,7 @@ class openrooms(data.Dataset):
             im_SDR_RGB = np.clip(im_SDR_fixedscale**(1.0/2.2), 0., 1.)
             im_RGB_uint8 = (255. * im_SDR_RGB).transpose(1, 2, 0).astype(np.uint8)
             image_transformed_fixed = self.transforms_fixed(im_RGB_uint8)
-            batch_dict = {'image_path': str(hdr_image_path)}
+            batch_dict = {'image_path': str(hdr_image_path), 'image_index': index}
 
             im_trainval = np.transpose(im_trainval, (1, 2, 0))
             im_SDR_RGB = np.transpose(im_SDR_RGB, (1, 2, 0))
@@ -590,6 +590,8 @@ class openrooms(data.Dataset):
 
         camera = sequence['camera']
 
+        if_print = pickle_path == '/data/ruizhu/OR-V4full-detachEmitter-OR45_total3D_train_test_data/main_xml1/scene0552_00/layout_obj_1.pkl'
+
         # ===== load objects
         # boxes = sequence['boxes']
         # n_objects = boxes['bdb2D_pos'].shape[0]
@@ -700,6 +702,8 @@ class openrooms(data.Dataset):
                             cell_random_id = cell_info['emitter_info']['random_id']
                             emitter_prop_total3d = emitters_prop_dict_representation_dict[cell_random_id]['emitter_prop_total3d']
 
+                            if if_print:
+                                print(cell_random_id, cell_info['obj_type'], pickle_emitter2wall_assign_info_dict_path)
                             if cell_info['obj_type'] == 'window':
                                 # light_center_world_total3d = emitters_prop_dict_representation_dict[cell_random_id]['emitter_prop_total3d']['light_center_world_total3d']
                                 light_axis_world_total3d = emitter_prop_total3d['light_axis_world_total3d'].reshape(3,)
@@ -1145,7 +1149,7 @@ def collate_fn_OR(batch):
                     list_of_tensor = [recursive_convert_to_torch(elem[key][subkey]) for elem in batch]
                     tensor_batch = torch.cat(list_of_tensor)
                 collated_batch[key][subkey] = tensor_batch
-        elif key in ['boxes_valid_list', 'emitter2wall_assign_info_list', 'emitters_obj_list', 'gt_layout_RAW', 'cell_info_grid']:
+        elif key in ['boxes_valid_list', 'emitter2wall_assign_info_list', 'emitters_obj_list', 'gt_layout_RAW', 'cell_info_grid', 'image_index']:
             collated_batch[key] = [elem[key] for elem in batch]
         else:
             try:

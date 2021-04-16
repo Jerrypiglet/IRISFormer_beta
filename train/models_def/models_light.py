@@ -271,15 +271,13 @@ class renderingLayer():
         # ls (local coords), l (cam coords)
         # \sum [1, 128, 1, 1, 1] * [1, 1, 3, 120, 160] -> [1, 128, 3, 120, 160]
         # single vec: \sum [1, 1, 1, 1, 1] * [1, 1, 3, 1, 1] -> [1, 1, 3, 1, 1]
+        
+        # print(ldirections[:, :, 0:1, :, :].shape, camx.unsqueeze(1).shape) # torch.Size([1, 128, 1, 1, 1]) torch.Size([2, 1, 3, 120, 160])
         l = ldirections[:, :, 0:1, :, :] * camx.unsqueeze(1) \
                 + ldirections[:, :, 1:2, :, :] * camy.unsqueeze(1) \
-                + ldirections[:, :, 2:3, :, :] * normalPred.unsqueeze(1)
+                + ldirections[:, :, 2:3, :, :] * normalPred.unsqueeze(1)    
         # print(l.shape) # torch.Size([1, 128, 3, 120, 160])
         # print(ldirections[:, 20, :, :, :].flatten())
-        # l_ = ldirections[:, 20:21, 0:1, :, :] * camx.unsqueeze(1)[:, :, :, 100:101, 150:151] \
-        # + ldirections[:, 20:21, 1:2, :, :] * camy.unsqueeze(1)[:, :, :, 100:101, 150:151] \
-        # + ldirections[:, 20:21, 2:3, :, :] * normalPred.unsqueeze(1)[:, :, :, 100:101, 150:151]
-        # print(l_)
 
         if if_normal_only:
             return l, camx, camy, normalPred

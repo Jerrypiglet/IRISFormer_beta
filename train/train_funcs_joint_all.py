@@ -442,7 +442,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
 def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
-    writer, logger, opt, tid = params_mis['writer'], params_mis['logger'], params_mis['opt'], params_mis['tid']
+    writer, logger, opt, tid, batch_size = params_mis['writer'], params_mis['logger'], params_mis['opt'], params_mis['tid'], params_mis['batch_size_val_vis']
     logger.info(red('=== [vis_val_epoch_joint] Visualizing for %d batches on rank %d'%(len(brdf_loader_val), opt.rank)))
 
     model.eval()
@@ -485,7 +485,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     # ===== Gather vis of N batches
     with torch.no_grad():
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
-            batch_size = len(data_batch['image_path'])
+            # ic(batch_id)
+            # for i, x in enumerate(data_batch['image_path']):
+            #     ic(i, x)
             if batch_size*batch_id >= opt.cfg.TEST.vis_max_samples:
                 break
 
@@ -529,6 +531,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                         print('Saved to' + 'tmp/demo_%s/im_trainval_RGB_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx))
 
                     writer.add_text('VAL_image_name/%d'%(sample_idx), im_path, tid)
+                    assert sample_idx == data_batch['image_index'][sample_idx_batch]
+                    # ic(sample_idx, data_batch['image_index'][sample_idx_batch], batch_id, batch_size, im_path)
                     # print(sample_idx, im_path)
 
                 if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool or opt.cfg.MODEL_MATSEG.if_albedo_safenet) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
