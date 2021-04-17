@@ -17,6 +17,7 @@ import models_def.models_brdf_safenet as models_brdf_safenet
 import models_def.models_light as models_light 
 import models_def.models_layout_emitter as models_layout_emitter
 import models_def.models_layout_emitter_lightAccu as models_layout_emitter_lightAccu
+import models_def.models_layout_emitter_lightAccuScatter as models_layout_emitter_lightAccuScatter
 import models_def.model_matcls as model_matcls
 
 from icecream import ic
@@ -132,8 +133,10 @@ class Model_Joint(nn.Module):
                 self.EMITTER_LIGHT_ACCU_NET = models_layout_emitter_lightAccu.emitter_lightAccu(opt)
                 if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V1':
                     self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu_(opt)
-                if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V2':
-                    self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu_UNet(opt)
+                elif self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V2':
+                    self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu_UNet_V2(opt)
+                elif self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V3':
+                    self.EMITTER_NET = models_layout_emitter_lightAccuScatter.decoder_layout_emitter_lightAccuScatter_UNet_V3(opt)
             else:
                 self.LAYOUT_EMITTER_NET = models_layout_emitter.decoder_layout_emitter(opt)
 
@@ -376,6 +379,7 @@ class Model_Joint(nn.Module):
 
         return_dict = self.EMITTER_LIGHT_ACCU_NET(input_dict)
         envmap_lightAccu_mean = return_dict['envmap_lightAccu_mean'].view(-1, 6, 8, 8, 3).permute(0, 1, 4, 2, 3)
+        
         
         return_dict_layout_emitter = self.EMITTER_NET(envmap_lightAccu_mean)
 

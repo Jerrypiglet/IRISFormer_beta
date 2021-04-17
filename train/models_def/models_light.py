@@ -232,8 +232,8 @@ class renderingLayer():
         self.up = torch.Tensor([0,1,0] )
 
         # azimuth & elevation angles -> dir vector for each pixel
-        Az = ( (np.arange(envWidth) + 0.5) / envWidth - 0.5 )* 2 * np.pi
-        El = ( (np.arange(envHeight) + 0.5) / envHeight) * np.pi / 2.0
+        Az = ( (np.arange(envWidth) + 0.5) / envWidth - 0.5 )* 2 * np.pi # [-0.46875, -0.40625, -0.34375, -0.28125, -0.21875, -0.15625,-0.09375, -0.03125,  0.03125,  0.09375,  0.15625,  0.21875, 0.28125,  0.34375,  0.40625,  0.46875]
+        El = ( (np.arange(envHeight) + 0.5) / envHeight) * np.pi / 2.0 # [0.0625 0.1875 0.3125 0.4375 0.5625 0.6875 0.8125 0.9375]
         Az, El = np.meshgrid(Az, El)
         Az = Az.reshape(-1, 1)
         El = El.reshape(-1, 1)

@@ -584,7 +584,6 @@ class Box(Scene3D):
                                     light_dir_abs = light_dir_offset + normal_outside
                                 cell_center = extra_info['cell_center'].flatten()
                                 if 'intensity_scalelog' in extra_info['emitter_info']:
-                                    # print('111    11')
                                     intensity_scalelog = extra_info['emitter_info']['intensity_scalelog'] / 3. + 0.5 # add 0.5 for vis (otherwise could be too short)
                                 else:
                                     # print('2')
