@@ -159,6 +159,7 @@ _C.MODEL_LAYOUT_EMITTER.emitter.est_type = 'cell_info'
 _C.MODEL_LAYOUT_EMITTER.emitter.representation_type = '0ambient' # 0ambient, 1ambient, 2ambient
 _C.MODEL_LAYOUT_EMITTER.emitter.relative_dir = True
 _C.MODEL_LAYOUT_EMITTER.emitter.loss_type = 'L2' # [L2, KL]
+_C.MODEL_LAYOUT_EMITTER.emitter.scale_invariant_loss_for_cell_axis = True
 _C.MODEL_LAYOUT_EMITTER.emitter.sigmoid = False
 _C.MODEL_LAYOUT_EMITTER.emitter.softmax = False
 _C.MODEL_LAYOUT_EMITTER.emitter.cls_agnostric = False

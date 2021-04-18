@@ -377,8 +377,9 @@ def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters):
                 # print(emitter_fc_output.shape, emitter_property_gt.shape, window_mask.shape) # torch.Size([2, 6, 64, 3]) torch.Size([2, 6, 64, 3], torch.Size([2, 6, 64])
                 # # print(torch.norm(emitter_fc_output, dim=-1)[window_mask==1.].flatten())
                 # # print(torch.norm(emitter_property_gt, dim=-1)[window_mask==1.].flatten())
-                emitter_fc_output_norm = torch.linalg.norm(emitter_fc_output, dim=-1, keepdim=True).detach()
-                emitter_fc_output_scaled = emitter_fc_output / (emitter_fc_output_norm+1e-6)
+                if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.scale_invariant_loss_for_cell_axis:
+                    emitter_fc_output_norm = torch.linalg.norm(emitter_fc_output, dim=-1, keepdim=True).detach()
+                    emitter_fc_output_scaled = emitter_fc_output / (emitter_fc_output_norm+1e-6)
                 # emitter_fc_output, emitter_property_gt
 
                 # window_mask_expand = window_mask.unsqueeze(-1)
