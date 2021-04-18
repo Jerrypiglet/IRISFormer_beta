@@ -806,7 +806,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 imBatchSmall = output_dict['imBatchSmall'].detach().cpu().numpy()
                 for sample_idx_batch in range(batch_size):
                     sample_idx = sample_idx_batch+batch_size*batch_id
-                    assert envmapsPredScaledImage.shape[0] == batch_size
+                    # assert envmapsPredScaledImage.shape[0] == batch_size
                     for I_hdr, name_tag in zip([envmapsPredScaledImage[sample_idx_batch], envmapsBatch[sample_idx_batch]], ['light_Pred', 'light_GT']):
                         H_grid, W_grid, h, w = I_hdr.shape[1:]
                         downsize_ratio = 4
