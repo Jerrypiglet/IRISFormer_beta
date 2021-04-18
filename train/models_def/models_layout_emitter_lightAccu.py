@@ -25,7 +25,7 @@ class decoder_layout_emitter_lightAccu_(nn.Module):
 
 
         self.decoder_heads = torch.nn.ModuleDict({})
-        for head_name, head_channels in [('cell_light_ratio', 1), ('cell_cls', 3), ('cell_axis_global', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
+        for head_name, head_channels in [('cell_light_ratio', 1), ('cell_cls', 3), ('cell_axis', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
             self.decoder_heads['decoder_conv2d_1_%s'%head_name] = nn.Conv2d(in_channels=128*6, out_channels=64*6, kernel_size=3, stride=1, padding = 1, bias=True, groups=6)
             self.decoder_heads['decoder_gn_1_%s'%head_name] = nn.GroupNorm(num_groups=4*6, num_channels=64*6 )
             self.decoder_heads['decoder_conv2d_2_%s'%head_name] = nn.Conv2d(in_channels=64*6, out_channels=head_channels*6, kernel_size=3, stride=1, padding = 1, bias=True, groups=6)
@@ -62,7 +62,7 @@ class decoder_layout_emitter_lightAccu_(nn.Module):
 
         return_dict_emitter = {}
 
-        for head_name, head_channels in [('cell_light_ratio', 1), ('cell_cls', 3), ('cell_axis_global', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
+        for head_name, head_channels in [('cell_light_ratio', 1), ('cell_cls', 3), ('cell_axis', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
             head_out = self.decoder_heads['decoder_gn_1_%s'%head_name](self.decoder_heads['decoder_conv2d_1_%s'%head_name](x))
             head_out = self.decoder_heads['decoder_conv2d_2_%s'%head_name](head_out)
             head_out = head_out.view(batch_size, 6, head_channels, self.grid_size, self.grid_size).permute(0, 1, 3, 4, 2) # [2, 6, head_channels, 8, 8] -> [2, 6, 8, 8, head_channels]
@@ -95,7 +95,7 @@ class decoder_layout_emitter_lightAccu_UNet_V2(nn.Module):
 
         # UNet arch - decoders
         self.decoder_heads = torch.nn.ModuleDict({})
-        for head_name, head_channels in [('cell_light_ratio', 1), ('cell_cls', 3), ('cell_axis_global', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
+        for head_name, head_channels in [('cell_light_ratio', 1), ('cell_cls', 3), ('cell_axis', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
             self.get_decoder(head_name, head_channels)
 
     def get_decoder(self, head_name, head_channels):
@@ -134,7 +134,7 @@ class decoder_layout_emitter_lightAccu_UNet_V2(nn.Module):
         # print(x4_2.shape)
 
         # decoder
-        for head_name, head_channels in [('cell_light_ratio', 1), ('cell_cls', 3), ('cell_axis_global', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
+        for head_name, head_channels in [('cell_light_ratio', 1), ('cell_cls', 3), ('cell_axis', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
             dconv1, dgn1 = self.decoder_heads['dconv1_%s_UNet'%head_name], self.decoder_heads['dgn1_%s_UNet'%head_name]
             dconv2, dgn2 = self.decoder_heads['dconv2_%s_UNet'%head_name], self.decoder_heads['dgn2_%s_UNet'%head_name]
             dconv3, dgn3 = self.decoder_heads['dconv3_%s_UNet'%head_name], self.decoder_heads['dgn3_%s_UNet'%head_name]
@@ -218,16 +218,18 @@ class emitter_lightAccu(nn.Module):
         ls_coords, camx, camy, normalPred = self.rL.forwardEnv(normalPred, envmapsPredImage, if_normal_only=True) # torch.Size([B, 128, 3, 120, 160]), [B, 3, 120, 160], [B, 3, 120, 160], [B, 3, 120, 160]
 
         verts_center_transformed_LightNet, verts_transformed_LightNet, \
-            origin_0_array_transformed_LightNet, basis_1_array_transformed_LightNet, basis_2_array_transformed_LightNet, normal_array_transformed_LightNet = self.get_grid_centers(layout, cam_R) # [B, 6, 8, 8, 3]
+            origin_0_array_transformed_LightNet, basis_1_array_transformed_LightNet, basis_2_array_transformed_LightNet, normal_array_transformed_LightNet, \
+                Total3D_to_LightNet_transform_params = self.get_grid_centers(layout, cam_R) # [B, 6, 8, 8, 3]
 
         envmap_lightAccu, points_sampled_mask_expanded, points_sampled_mask, vec_to_t = self.accu_light(points, verts_center_transformed_LightNet, camx, camy, normalPred, envmapsPredImage) # [B, 3, #grids, 120, 160]
+
         envmap_lightAccu_mean = (envmap_lightAccu.sum(-1).sum(-1) / (points_sampled_mask_expanded.sum(-1).sum(-1)+1e-6)).permute(0, 2, 1) # -> [1, 384, 3]
 
         
         return_dict = {'envmap_lightAccu': envmap_lightAccu, 'points_sampled_mask_expanded': points_sampled_mask_expanded, 'points_sampled_mask': points_sampled_mask, 'envmap_lightAccu_mean': envmap_lightAccu_mean, \
             'verts_center_transformed_LightNet': verts_center_transformed_LightNet, 'verts_transformed_LightNet': verts_transformed_LightNet, \
             'origin_0_array_transformed_LightNet': origin_0_array_transformed_LightNet, 'basis_1_array_transformed_LightNet': basis_1_array_transformed_LightNet, 'basis_2_array_transformed_LightNet': basis_2_array_transformed_LightNet, 'normal_array_transformed_LightNet': normal_array_transformed_LightNet, \
-            'vec_to_t': vec_to_t}
+            'vec_to_t': vec_to_t, 'Total3D_to_LightNet_transform_params': Total3D_to_LightNet_transform_params}
 
         return return_dict
 
@@ -306,9 +308,8 @@ class emitter_lightAccu(nn.Module):
         emitter_outdirs = -vec_to_t # [2, 384, 120, 160, 3]
         emitter_local_xyz_trans = torch.stack([basis_1_array, basis_2_array, normal_array], -1).transpose(-1, -2) # [2, 6, 3, 3]
         emitter_local_xyz_trans = emitter_local_xyz_trans.repeat(1, self.grid_size*self.grid_size, 1, 1) # [2, 386, 3, 3]
-        # print(emitter_local_xyz_trans.shape)
         emitter_local_xyz_trans = emitter_local_xyz_trans.unsqueeze(2).unsqueeze(2) # [2, 386, 1, 1, 3, 3]
-        # print(emitter_local_xyz_trans.shape)
+
         emitter_outdirs_emitter_local = (emitter_local_xyz_trans @ emitter_outdirs.unsqueeze(-1)).squeeze(-1) # [2, 384, 120, 160, 3]
 
 
@@ -322,10 +323,13 @@ class emitter_lightAccu(nn.Module):
 
         az_pix = (phi_SG / np.pi / 2. + 0.5) * self.scatterWidth - 0.5 # [2, 384, 120, 160] # ideally np.arange(envWidth)
         valid_mask_az = torch.logical_not(torch.isnan(az_pix))
-        valid_mask = torch.logical_and(torch.logical_and(az_pix>-0.5, az_pix<(self.scatterWidth-1.+0.5)), valid_mask_az) # [2, 384, 120, 160]
+        valid_mask_az = torch.logical_and(torch.logical_and(az_pix>-0.5, az_pix<(self.scatterWidth-1.+0.5)), valid_mask_az) # [2, 384, 120, 160]
+        
         el_pix = theta_SG / np.pi * 2. * self.scatterHeight - 0.5 # [2, 384, 120, 160] # ideally np.arange(envHeight)
         valid_mask_el = torch.logical_not(torch.isnan(el_pix))
-        valid_mask = torch.logical_and(torch.logical_and(el_pix>-0.5, el_pix<(self.scatterHeight-1.+0.5)), valid_mask_el).squeeze(-1) # [2, 384, 120, 160]
+        valid_mask_el = torch.logical_and(torch.logical_and(el_pix>-0.5, el_pix<(self.scatterHeight-1.+0.5)), valid_mask_el).squeeze(-1) # [2, 384, 120, 160]
+        
+        valid_mask = torch.logical_and(valid_mask_el, valid_mask_az)
         valid_mask = torch.logical_and(points_sampled_mask.unsqueeze(1).expand_as(valid_mask), valid_mask)
         
         # ----> experimental to reduce memory: only 12 points are valid
@@ -339,33 +343,55 @@ class emitter_lightAccu(nn.Module):
 
         B, ngrids = envmap_lightAccu.shape[0], envmap_lightAccu.shape[2]
         scattered_light = torch.zeros(B, ngrids, self.scatterHeight, self.scatterWidth, 3).cuda()
+        # scattered_light.requires_grad = True
         valid_uu = torch.round(az_pix).long()[valid_mask]
         valid_vv = torch.round(el_pix).long()[valid_mask]
 
         # valid_points_num = valid_vv.shape[0]
         # ic(az_pix.shape, valid_uu.shape, envmap_lightAccu.permute(0, 2, 3, 4, 1)[valid_mask].shape, valid_points_num) # torch.Size([2, 384, 120, 160]) torch.Size([2852266]) torch.Size([2852266, 3])
 
-        B_meshgrid = torch.arange(0, B).view(B, 1, 1, 1).repeat(1, ngrids, self.envRow, self.envCol)
-        ngrids_meshgrid = torch.arange(0, ngrids).view(1, ngrids, 1, 1).repeat(B, 1, self.envRow, self.envCol)
+        B_meshgrid = torch.arange(0, B).view(B, 1, 1, 1).repeat(1, ngrids, self.envRow, self.envCol).cuda()
+        ngrids_meshgrid = torch.arange(0, ngrids).view(1, ngrids, 1, 1).repeat(B, 1, self.envRow, self.envCol).cuda()
         valid_B = B_meshgrid[valid_mask]
         valid_ngrids = ngrids_meshgrid[valid_mask]
-        # ic(valid_B.shape, valid_B)
 
-        # ic(scattered_light[valid_B, valid_ngrids, valid_vv, valid_uu].shape) # should be of the same size as envmap_lightAccu.permute(0, 2, 3, 4, 1)[valid_mask]
+        # print(emitter_local_xyz_trans.shape, emitter_local_xyz_trans[0][0][0][0][0][0])
+        # print(valid_B.requires_grad, valid_ngrids.requires_grad, valid_vv.requires_grad, valid_uu.requires_grad, valid_mask.requires_grad, )
+        # print(scattered_light.requires_grad, envmap_lightAccu.requires_grad)
+        # ic(torch.max(valid_vv), torch.min(valid_vv), torch.max(valid_uu), torch.min(valid_uu))
+        # a = scattered_light[valid_B, valid_ngrids, valid_vv, valid_uu]
+        # print(emitter_local_xyz_trans.shape, emitter_local_xyz_trans[0][0][0][0][0][0])
+        # b = envmap_lightAccu.permute(0, 2, 3, 4, 1)[valid_mask]
+        # print(emitter_local_xyz_trans.shape, emitter_local_xyz_trans[0][0][0][0][0][0])
+
         scattered_light[valid_B, valid_ngrids, valid_vv, valid_uu] = envmap_lightAccu.permute(0, 2, 3, 4, 1)[valid_mask] # in case of a clash: ![later comer will override former comers](https://i.imgur.com/KSU9rm8.png) https://gist.github.com/Jerrypiglet/0c3c0dce28843e215e39eca3c3496c65
-        # ic(scattered_light.shape)
+
+        # print(emitter_local_xyz_trans.shape, emitter_local_xyz_trans[0][0][0][0][0][0])
+
         return scattered_light, emitter_local_xyz_trans
 
-    def emitter_outdirs_meshgrid(self, emitter_local_xyz_trans):
+    def get_emitter_outdirs_meshgrid(self, emitter_local_xyz_trans):
         '''
         return global directions of the scattered panorama (hemisphere pixels) at the emitters; should look like ![](https://i.imgur.com/sO8m431.jpg)
         '''
         emitter_outdirs_meshgrid_emitter_local = self.rL.ls.reshape(self.scatterHeight, self.scatterWidth, 3).unsqueeze(-1).unsqueeze(0).unsqueeze(0)
-        emitter_outdirs_meshgrid = torch.inverse(emitter_local_xyz_trans) @ emitter_outdirs_meshgrid_emitter_local
+
+        # emitter_local_xyz_trans: torch.Size([2, 384, 1, 1, 3, 3])
+        # print(emitter_local_xyz_trans[0, 0, 0, 0, :, :])
+        # print(emitter_local_xyz_trans @ torch.transpose(emitter_local_xyz_trans, -1, -2))
+        # eyes = torch.eye(3).float().cuda().reshape(1, 1, 1, 1, 3, 3)
+        # emitter_outdirs_meshgrid = torch.inverse(emitter_local_xyz_trans + 1e-6*eyes) @ emitter_outdirs_meshgrid_emitter_local
+        # print(emitter_local_xyz_trans.shape, emitter_outdirs_meshgrid_emitter_local.shape, emitter_local_xyz_trans.dtype, emitter_outdirs_meshgrid_emitter_local.dtype, )
+        # a = emitter_local_xyz_trans
+        # b = emitter_local_xyz_trans.transpose(-1, -2)
+        # print(a)
+        # print(b)
+        emitter_outdirs_meshgrid = (emitter_local_xyz_trans.transpose(-1, -2)) @ emitter_outdirs_meshgrid_emitter_local # emitter_local_xyz_trans is orthogonal; inv == transpose
         emitter_outdirs_meshgrid = emitter_outdirs_meshgrid.squeeze(-1) # [2, 384, 8, 16, 3]
         return emitter_outdirs_meshgrid
 
     def get_grid_centers(self, layout, cam_R):
+        # layout in Total3D coords; cam_R is camera axes in Total3D coords
         basis_1_list = [(layout[:, origin_v1_v2[1], :] - layout[:, origin_v1_v2[0], :]) / self.grid_size for origin_v1_v2 in self.origin_v1_v2_list]
         basis_2_list = [(layout[:, origin_v1_v2[2], :] - layout[:, origin_v1_v2[0], :]) / self.grid_size for origin_v1_v2 in self.origin_v1_v2_list]
         origin_0_list = [layout[:, origin_v1_v2[0], :] for origin_v1_v2 in self.origin_v1_v2_list]
@@ -403,4 +429,6 @@ class emitter_lightAccu(nn.Module):
 
         verts_center_transformed_LightNet = torch.mean(verts_transformed_LightNet, 4) # [B, 6, 8, 8, 3]
 
-        return verts_center_transformed_LightNet, verts_transformed_LightNet, origin_0_array_transformed_LightNet, basis_1_array_transformed_LightNet, basis_2_array_transformed_LightNet, normal_array_transformed_LightNet
+        transform_params = {'cam_R_transform_matrix_pre': cam_R_transform, 'post_transform_matrix': self.extra_transform_matrix @ self.extra_transform_matrix_LightNet}
+
+        return verts_center_transformed_LightNet, verts_transformed_LightNet, origin_0_array_transformed_LightNet, basis_1_array_transformed_LightNet, basis_2_array_transformed_LightNet, normal_array_transformed_LightNet, transform_params

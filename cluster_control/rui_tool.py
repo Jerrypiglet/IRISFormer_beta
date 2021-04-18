@@ -51,7 +51,7 @@ def parse_args():
     create_parser.add_argument('-f', '--file', type=str, help='Path to template file')
     create_parser.add_argument('-s', '--string', type=str, help='Input command')
     create_parser.add_argument('-d', '--deploy', action='store_true', help='deploy the code')
-    create_parser.add_argument('--resume', type=str, help='resume_from: e.g. 20201129-232627', default='none')
+    create_parser.add_argument('--resume', type=str, help='resume_from: e.g. 20201129-232627', default='NoCkpt')
     create_parser.add_argument('--deploy_src', type=str, help='deploy to target path', default='~/Documents/Projects/semanticInverse/train/')
     create_parser.add_argument('--deploy_s3', type=str, help='deploy s3 container', default='s3mm1:train')
     create_parser.add_argument('--deploy_tar', type=str, help='deploy to target path', default='/viscompfs/users/ruizhu/train')
@@ -174,7 +174,7 @@ def deploy_to_s3(args):
     print('>>>>>>>>>>>> deployed with: %s'%deploy_command)
 
 def create(args):
-    if args.resume != 'none':
+    if args.resume != 'NoCkpt':
         datetime_str = args.resume
         tmp_yaml_filaname = 'tasks/%s/tmp_%s.yaml'%(datetime_str, datetime_str)
         print('============ Resuming from YAML file: %s'%tmp_yaml_filaname)
@@ -226,7 +226,7 @@ def create(args):
     
     create_job_from_yaml(tmp_yaml_filaname)
 
-    if args.resume == 'none':
+    if args.resume == 'NoCkpt':
         task_dir = './tasks/%s'%datetime_str
         os.mkdir(task_dir)
         os.system('cp %s %s/'%(tmp_yaml_filaname, task_dir))
@@ -240,7 +240,7 @@ def create(args):
 
     pod_name = get_pods(yaml_content['metadata']['name'])
     
-    if pod_name and args.resume == 'none':
+    if pod_name and args.resume == 'NoCkpt':
         with open("all_commands.txt", "a+") as f:
             f.write("%s-%s\n" % (pod_name, datetime_str))
             f.write("%s\n" % command_str)

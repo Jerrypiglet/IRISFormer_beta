@@ -716,10 +716,16 @@ class openrooms(data.Dataset):
                                 if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.relative_dir:
                                     cell_axis_global[wall_idx, i, j] = light_dir_offset
                                     cell_info['emitter_info']['light_dir'] = light_dir_offset
+                                    # print(light_dir_offset.shape, normal_outside.shape) # both are (3,)
+                                    # print(np.linalg.norm(light_dir_offset), np.linalg.norm(normal_outside), np.linalg.norm(light_axis_world_total3d)) # normal_outside and light_axis_world_total3d are normalzed! light_dir_offset is not!
                                 else:
                                     cell_info['emitter_info']['light_dir'] = light_dir_offset + normal_outside
                                     cell_axis_global[wall_idx, i, j] = light_dir_offset + normal_outside
                                 cell_info['emitter_info']['light_dir_abs'] = light_dir_offset + normal_outside
+
+                                cell_info['emitter_info']['light_dir'] = cell_info['emitter_info']['light_dir'] / (1e-6+np.linalg.norm(cell_info['emitter_info']['light_dir']))
+                                cell_info['emitter_info']['light_dir_abs'] = cell_info['emitter_info']['light_dir_abs'] / (1e-6+np.linalg.norm(cell_info['emitter_info']['light_dir_abs']))
+                                cell_axis_global[wall_idx, i, j] = cell_axis_global[wall_idx, i, j] / (1e-6+np.linalg.norm(cell_axis_global[wall_idx, i, j]))
                             else:
                                 cell_info['emitter_info']['light_dir'] = np.zeros((3,))
                                 cell_info['emitter_info']['light_dir_abs'] = np.zeros((3,))

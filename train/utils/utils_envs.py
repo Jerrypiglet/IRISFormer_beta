@@ -13,6 +13,8 @@ from icecream import ic
 
 def set_up_envs(opt):
     opt.cfg.PATH.root = opt.cfg.PATH.root_cluster if opt.if_cluster else opt.cfg.PATH.root_local
+    if opt.if_cluster:
+        opt.cfg.TRAINING.MAX_CKPT_KEEP = -1
     opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_cluster if opt.if_cluster else opt.cfg.DATASET.dataset_path_local
     opt.cfg.DATASET.layout_emitter_path = opt.cfg.DATASET.layout_emitter_path_cluster if opt.if_cluster else opt.cfg.DATASET.layout_emitter_path_local
     opt.cfg.DATASET.png_path = opt.cfg.DATASET.png_path_cluster if opt.if_cluster else opt.cfg.DATASET.png_path_local
@@ -84,6 +86,9 @@ def set_up_envs(opt):
         opt.dataset_config = Dataset_Config('OR', OR=opt.cfg.MODEL_LAYOUT_EMITTER.data.OR, version=opt.cfg.MODEL_LAYOUT_EMITTER.data.version, opt=opt)
         opt.bins_tensor = to_dict_tensor(opt.dataset_config.bins, if_cuda=True)
 
+        if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable and opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V3':
+            opt.cfg.MODEL_LAYOUT_EMITTER.emitter.relative_dir = True
+
     # ====== per-pixel lighting =====
     if opt.cfg.MODEL_LIGHT.enable:
         opt.cfg.DATA.load_light_gt = True
@@ -99,9 +104,6 @@ def set_up_envs(opt):
             opt.cfg.MODEL_BRDF.enable_BRDF_decoders = True
             if opt.cfg.MODEL_LIGHT.freeze_BRDF_Net:
                 opt.cfg.MODEL_BRDF.if_freeze = True
-
-
-
 
     # ====== semseg =====
     if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable or opt.cfg.MODEL_SEMSEG.use_as_input or opt.cfg.MODEL_MATSEG.use_semseg_as_input:
@@ -371,6 +373,7 @@ def set_up_checkpointing(opt, model, optimizer, scheduler, logger):
         # if 'train_POD_matseg_DDP' in opt.resume:
         #     replace_kws = ['hourglass_model.seq_L2.1', 'hourglass_model.seq_L2.3', 'hourglass_model.disp_res_pred_layer_L2']
         #     replace_with_kws = ['hourglass_model.seq.1', 'hourglass_model.seq.3', 'hourglass_model.disp_res_pred_layer']
+        ic(opt.resume)
         checkpoint_restored, _, _ = checkpointer.load(task_name=opt.resume, replace_kws=replace_kws, replace_with_kws=replace_with_kws)
         if 'iteration' in checkpoint_restored:
             tid_start = checkpoint_restored['iteration']

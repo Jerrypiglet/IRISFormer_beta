@@ -131,6 +131,7 @@ class Model_Joint(nn.Module):
         if self.cfg.MODEL_LAYOUT_EMITTER.enable:
             if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
                 self.EMITTER_LIGHT_ACCU_NET = models_layout_emitter_lightAccu.emitter_lightAccu(opt)
+                
                 if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V1':
                     self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu_(opt)
                 elif self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V2':
@@ -377,15 +378,42 @@ class Model_Joint(nn.Module):
 
         input_dict = {'normalPred_lightAccu':normalBatch, 'depthPred_lightAccu': depthBatch, 'envmapsPredImage_lightAccu': envmapsBatch, 'cam_K': cam_K_batch, 'cam_R': cam_R_gt_batch, 'layout': layout_gt_batch}
 
-        return_dict = self.EMITTER_LIGHT_ACCU_NET(input_dict)
-        envmap_lightAccu_mean = return_dict['envmap_lightAccu_mean'].view(-1, 6, 8, 8, 3).permute(0, 1, 4, 2, 3)
-        
-        
-        return_dict_layout_emitter = self.EMITTER_NET(envmap_lightAccu_mean)
+        return_dict_lightAccu = self.EMITTER_LIGHT_ACCU_NET(input_dict)
+        envmap_lightAccu_mean = return_dict_lightAccu['envmap_lightAccu_mean'].view(-1, 6, 8, 8, 3).permute(0, 1, 4, 2, 3)
+
+        if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version in ['V1', 'V2']:
+            return_dict_layout_emitter = self.EMITTER_NET(envmap_lightAccu_mean)
+        else:
+            # scatter lights to each emitter
+            scattered_light, emitter_local_xyz_trans = self.EMITTER_LIGHT_ACCU_NET.scatter_light_to_hemisphere(return_dict_lightAccu['envmap_lightAccu'], return_dict_lightAccu['points_sampled_mask'], return_dict_lightAccu['vec_to_t'], \
+                return_dict_lightAccu['basis_1_array_transformed_LightNet'], return_dict_lightAccu['basis_2_array_transformed_LightNet'], return_dict_lightAccu['normal_array_transformed_LightNet'])
+            
+            # get the dir meshgrid (wrt normal outside) for all cells
+            emitter_outdirs_meshgrid_global_transformed_LightNet = self.EMITTER_LIGHT_ACCU_NET.get_emitter_outdirs_meshgrid(emitter_local_xyz_trans)
+            grid_size = self.EMITTER_LIGHT_ACCU_NET.grid_size
+            normal_outside_transformed_LightNet = - return_dict_lightAccu['normal_array_transformed_LightNet'].unsqueeze(2).unsqueeze(2).repeat(1, grid_size**2, 1, 1, 1) # normal inside --negative--> normal outside
+            emitter_outdirs_meshgrid_wrt_normal_outside_transformed_LightNet = emitter_outdirs_meshgrid_global_transformed_LightNet - normal_outside_transformed_LightNet
+            # [!!!] emitter_outdirs_meshgrid_global_transformed_LightNet and normal_outside_transformed_LightNet are NORMALIZED!
+            # print(torch.linalg.norm(emitter_outdirs_meshgrid_global_transformed_LightNet, dim=-1).flatten(), torch.linalg.norm(normal_outside_transformed_LightNet, dim=-1).flatten())
+            emitter_outdirs_meshgrid_wrt_normal_outside_transformed_LightNet_norm = torch.linalg.norm(emitter_outdirs_meshgrid_wrt_normal_outside_transformed_LightNet, dim=-1, keepdim=True).detach()
+            emitter_outdirs_meshgrid_wrt_normal_outside_transformed_LightNet = emitter_outdirs_meshgrid_wrt_normal_outside_transformed_LightNet / (1e-6+emitter_outdirs_meshgrid_wrt_normal_outside_transformed_LightNet_norm)
+
+            # get params to transform cell_axis from LightNet coords -> Total3D coords
+            Total3D_to_LightNet_transform_params = return_dict_lightAccu['Total3D_to_LightNet_transform_params']
+            cam_R_transform_matrix_pre, post_transform_matrix = Total3D_to_LightNet_transform_params['cam_R_transform_matrix_pre'], Total3D_to_LightNet_transform_params['post_transform_matrix']
+            # inv_post_transform_matrix_expand = torch.inverse(post_transform_matrix.unsqueeze(1).unsqueeze(1).unsqueeze(1))
+            inv_post_transform_matrix_expand = post_transform_matrix.unsqueeze(1).unsqueeze(1).unsqueeze(1).transpose(-1, -2)
+            inv_inv_cam_R_transform_matrix_pre_expand = cam_R_transform_matrix_pre.unsqueeze(1).unsqueeze(1).unsqueeze(1)
+            transform_params_LightNet2Total3D = {'inv_post_transform_matrix_expand': inv_post_transform_matrix_expand, 'inv_inv_cam_R_transform_matrix_pre_expand': inv_inv_cam_R_transform_matrix_pre_expand}
+
+            # run the emitter net!
+            return_dict_layout_emitter = self.EMITTER_NET(scattered_light, emitter_outdirs_meshgrid_wrt_normal_outside_transformed_LightNet, transform_params_LightNet2Total3D=transform_params_LightNet2Total3D)
+
+            return_dict_layout_emitter['emitter_est_result'].update({'envmap_lightAccu': return_dict_lightAccu['envmap_lightAccu'], 'scattered_light': scattered_light, \
+                'emitter_outdirs_meshgrid_global_transformed_LightNet': emitter_outdirs_meshgrid_global_transformed_LightNet})
 
         return_dict_layout_emitter['emitter_est_result'].update({'envmap_lightAccu_mean': envmap_lightAccu_mean})
 
-        # print(return_dict_layout_emitter.keys())
 
         return return_dict_layout_emitter
 

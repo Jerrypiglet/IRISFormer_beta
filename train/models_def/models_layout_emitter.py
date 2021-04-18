@@ -71,7 +71,7 @@ class decoder_layout_emitter(nn.Module):
             # fc for other emitter properties: cell_type, axis, intensity, lamb
             if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'cell_info':
                 self.other_heads = torch.nn.ModuleDict({})
-                for head_name, head_channels in [('cell_cls', 3), ('cell_axis_global', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
+                for head_name, head_channels in [('cell_cls', 3), ('cell_axis', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
                     self.other_heads['fc_emitter_1_%s'%head_name] = nn.Linear(backbone_out_dim, 1024)
                     self.other_heads['relu_emitter_1_%s'%head_name] = nn.ReLU(inplace=True)
                     self.other_heads['fc_emitter_2_%s'%head_name] = nn.Linear(1024, 512)
@@ -109,7 +109,7 @@ class decoder_layout_emitter(nn.Module):
             return_dict_emitter = {'cell_light_ratio': cell_light_ratio}
 
             if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'cell_info':
-                for head_name, head_channels in [('cell_cls', 3), ('cell_axis_global', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
+                for head_name, head_channels in [('cell_cls', 3), ('cell_axis', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
                     fc_out = self.other_heads['fc_emitter_1_%s'%head_name](x)
                     fc_out = self.other_heads['relu_emitter_1_%s'%head_name](fc_out)
                     fc_out = self.other_heads['fc_emitter_2_%s'%head_name](fc_out)

@@ -232,7 +232,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         loss_keys += [
             'loss_emitter-light_ratio', 
             'loss_emitter-cell_cls', 
-            'loss_emitter-cell_axis_global', 
+            'loss_emitter-cell_axis', 
             'loss_emitter-cell_intensity', 
             'loss_emitter-cell_lamb', 
             'loss_emitter-ALL', 

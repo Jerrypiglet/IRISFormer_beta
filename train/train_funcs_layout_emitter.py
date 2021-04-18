@@ -11,6 +11,8 @@ from utils.utils_total3D.utils_OR_cam import get_rotation_matrix_gt, get_rotatio
 from utils.utils_total3D.utils_OR_layout import get_layout_bdb_sunrgbd, reindex_layout
 from utils.utils_total3D.utils_OR_visualize import Box
 
+from models_def.models_brdf import LSregress
+
 cls_criterion = nn.CrossEntropyLoss(reduction='mean')
 reg_criterion = nn.SmoothL1Loss(reduction='mean')
 mse_criterion = nn.MSELoss(reduction='mean')
@@ -138,7 +140,7 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
         
         if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'cell_info':
             cell_cls = torch.argmax(pred_dict_em['cell_cls'].view((batch_size, 6, grid_size, grid_size, 3)), -1).detach().cpu().numpy()
-            cell_axis_global = pred_dict_em['cell_axis_global'].view((batch_size, 6, grid_size, grid_size, 3)).detach().cpu().numpy()
+            cell_axis = pred_dict_em['cell_axis'].view((batch_size, 6, grid_size, grid_size, 3)).detach().cpu().numpy()
             cell_intensity = pred_dict_em['cell_intensity'].view((batch_size, 6, grid_size, grid_size, 3)).detach().cpu().numpy()
             cell_lamb = pred_dict_em['cell_lamb'].view((batch_size, 6, grid_size, grid_size)).detach().cpu().numpy()
 
@@ -206,9 +208,11 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
                                     continue
                             cell_info = {'obj_type': map_obj_type_int[cell_cls[sample_idx][wall_idx][i][j]], 'emitter_info': {}, 'wallidx_i_j': (wall_idx, i, j)}
                             if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.relative_dir:
-                                cell_info['emitter_info']['light_dir_abs'] = cell_axis_global[sample_idx][wall_idx][i][j].flatten() + normal_outside
+                                cell_info['emitter_info']['light_dir_abs'] = cell_axis[sample_idx][wall_idx][i][j].flatten() + normal_outside
                             else:
-                                cell_info['emitter_info']['light_dir_abs'] = cell_axis_global[sample_idx][wall_idx][i][j].flatten()
+                                cell_info['emitter_info']['light_dir_abs'] = cell_axis[sample_idx][wall_idx][i][j].flatten()
+
+                            cell_info['emitter_info']['light_dir_abs'] = cell_info['emitter_info']['light_dir_abs'] / (np.linalg.norm(cell_info['emitter_info']['light_dir_abs'])+1e-6)
                             
                             intensity_log = cell_intensity[sample_idx][wall_idx][i][j].flatten()
                             assert intensity_log.shape == (3,)
@@ -351,28 +355,48 @@ def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters):
         valid_mask = (labels_dict['emitter_labels']['cell_cls'] != 0).float().view((B, 6, -1))
         window_mask = (labels_dict['emitter_labels']['cell_cls'] == 1).float().view((B, 6, -1))
 
-        for head_name, head_channels in [('cell_cls', 3), ('cell_axis_global', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
+        for head_name, head_channels in [('cell_cls', 3), ('cell_axis', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
             emitter_fc_output = output_dict['emitter_est_result'][head_name] # torch.Size([9, 102])
+            head_name_to_label_name_dict = {'cell_cls': 'cell_cls', 'cell_axis': 'cell_axis_global', 'cell_intensity': 'cell_intensity', 'cell_lamb': 'cell_lamb'}
+            label_name = head_name_to_label_name_dict[head_name]
             if head_name == 'cell_cls':
                 emitter_fc_output = emitter_fc_output.view((B, 6, -1, 3)).permute(0, 3, 1, 2)
-                emitter_light_ratio_gt = labels_dict['emitter_labels'][head_name].view((B, 6, -1))
-            elif head_name in ['cell_axis_global', 'cell_intensity']:
+                emitter_property_gt = labels_dict['emitter_labels'][label_name].view((B, 6, -1))
+            elif head_name in ['cell_axis', 'cell_intensity']:
                 emitter_fc_output = emitter_fc_output.view((B, 6, -1, 3))
-                emitter_light_ratio_gt = labels_dict['emitter_labels'][head_name].view((B, 6, -1, 3))
+                emitter_property_gt = labels_dict['emitter_labels'][label_name].view((B, 6, -1, 3))
             elif head_name in ['cell_lamb']:
                 emitter_fc_output = emitter_fc_output.view((B, 6, -1))
-                emitter_light_ratio_gt = labels_dict['emitter_labels'][head_name].view((B, 6, -1))
+                emitter_property_gt = labels_dict['emitter_labels'][label_name].view((B, 6, -1))
 
 
             if head_name == 'cell_cls':
-                loss = cls_criterion_mean(emitter_fc_output, emitter_light_ratio_gt)
+                loss = cls_criterion_mean(emitter_fc_output, emitter_property_gt)
                 loss = loss * opt.cfg.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_cls
+            elif head_name == 'cell_axis':
+                # print(emitter_fc_output.shape, emitter_property_gt.shape, window_mask.shape) # torch.Size([2, 6, 64, 3]) torch.Size([2, 6, 64, 3], torch.Size([2, 6, 64])
+                # # print(torch.norm(emitter_fc_output, dim=-1)[window_mask==1.].flatten())
+                # # print(torch.norm(emitter_property_gt, dim=-1)[window_mask==1.].flatten())
+                emitter_fc_output_norm = torch.linalg.norm(emitter_fc_output, dim=-1, keepdim=True).detach()
+                emitter_fc_output_scaled = emitter_fc_output / (emitter_fc_output_norm+1e-6)
+                # emitter_fc_output, emitter_property_gt
+
+                # window_mask_expand = window_mask.unsqueeze(-1)
+                # emitter_property_gt = window_mask_expand * emitter_property_gt
+                # emitter_fc_output_scaled = LSregress(emitter_fc_output * window_mask_expand.expand_as(emitter_fc_output ),
+                #         emitter_property_gt * window_mask_expand.expand_as(emitter_property_gt), emitter_fc_output )
+                # assert emitter_fc_output_scaled.shape == emitter_fc_output.shape
+
+                # print(torch.norm(emitter_fc_output, dim=-1)[window_mask==1.])
+                # print(torch.norm(emitter_fc_output_scaled, dim=-1)[window_mask==1.])
+                # print(torch.norm(emitter_property_gt, dim=-1)[window_mask==1.])
+
+                loss = emitter_cls_criterion_L2_none(emitter_fc_output_scaled, emitter_property_gt)
+                loss = torch.sum(loss * window_mask.unsqueeze(-1)) / (torch.sum(window_mask.unsqueeze(-1)) * 3. + 1e-5) # only care the axis of windows; lamps are modeled as omnidirectional
+                loss = loss * opt.cfg.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_axis_global
             else:
-                loss = emitter_cls_criterion_L2_none(emitter_fc_output, emitter_light_ratio_gt)
-                if head_name == 'cell_axis_global':
-                    loss = torch.sum(loss * window_mask.unsqueeze(-1)) / (torch.sum(window_mask.unsqueeze(-1)) * 3. + 1e-5) # only care the axis of windows; lamps are modeled as omnidirectional
-                    loss = loss * opt.cfg.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_axis_global
-                elif head_name == 'cell_intensity':
+                loss = emitter_cls_criterion_L2_none(emitter_fc_output, emitter_property_gt)
+                if head_name == 'cell_intensity':
                     loss = torch.sum(loss * valid_mask.unsqueeze(-1)) / (torch.sum(valid_mask.unsqueeze(-1)) * 3. + 1e-5)
                     loss = loss * opt.cfg.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_intensity
                 elif head_name == 'cell_lamb': # lamps have no lambda
@@ -381,6 +405,7 @@ def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters):
 
 
             emitter_losses_dict.update({'loss_emitter-'+head_name: loss})
+            print(head_name, loss)
             emitter_results_dict.update({head_name+'_result_from_loss': emitter_fc_output})
 
     loss_dict.update(emitter_losses_dict)
