@@ -93,7 +93,9 @@ def get_labels_dict_layout_emitter(data_batch, opt):
             cell_light_ratio = data_batch['cell_light_ratio'].cuda(non_blocking=True)
             emitter_labels['cell_light_ratio'] = cell_light_ratio
             emitter_labels['cell_cls'] = data_batch['cell_cls'].cuda(non_blocking=True)
-            emitter_labels['cell_axis_global'] = data_batch['cell_axis_global'].cuda(non_blocking=True)
+            emitter_labels['cell_axis_abs'] = data_batch['cell_axis_abs'].cuda(non_blocking=True)
+            emitter_labels['cell_axis_relative'] = data_batch['cell_axis_relative'].cuda(non_blocking=True)
+            emitter_labels['cell_normal_outside'] = data_batch['cell_normal_outside'].cuda(non_blocking=True)
             emitter_labels['cell_intensity'] = data_batch['cell_intensity'].cuda(non_blocking=True)
             emitter_labels['cell_lamb'] = data_batch['cell_lamb'].cuda(non_blocking=True)
         else:
@@ -192,14 +194,13 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
                             cell_info = cell_info_grid_GT_includeempty[wall_idx * grid_size**2 + i * grid_size + j]
                             if cell_info['obj_type'] is not None:
                                 cell_info['wallidx_i_j'] = (wall_idx, i, j)
-                                # cell_info['emitter_info']['light_dir'] = normal_outside * 5.
                                 cell_info_grid_GT.append(cell_info)
 
                 map_obj_type_int = {1: 'window', 2: 'obj', 0: 'null'}
                 cell_info_grid_PRED = []
                 for wall_idx in range(6):
                     basis_index = face_v_idxes[wall_idx]
-                    normal_outside = - np.cross(gt_layout_RAW[basis_index[1]] - gt_layout_RAW[basis_index[0]], gt_layout_RAW[basis_index[2]] - gt_layout_RAW[basis_index[0]]).flatten()
+                    normal_outside = - np.cross(gt_layout_RAW[basis_index[1]] - gt_layout_RAW[basis_index[0]], gt_layout_RAW[basis_index[2]] - gt_layout_RAW[basis_index[0]]).flatten() # [TODO] change to use EST layout when joint training!!!
                     normal_outside = normal_outside / np.linalg.norm(normal_outside)
                     for i in range(grid_size):
                         for j in range(grid_size):
@@ -222,7 +223,6 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
                             intensity_scaled = [np.clip(x/255., 0., 1.) for x in intensity_scaled] # max: 1.
                             intensity_scalelog = np.log(np.clip(np.linalg.norm(intensity.flatten()) + 1., 1., np.inf))
                             cell_info['emitter_info']['intensity_scalelog'] = intensity_scalelog
-                            # cell_info['emitter_info']['intensity_scale'] = intensity_scale
                             cell_info['emitter_info']['intensity_scaled'] = intensity_scaled
                             cell_info['emitter_info']['intensity'] = intensity  
                             cell_info['emitter_info']['lamb'] = cell_lamb[sample_idx][wall_idx][i][j].item()
@@ -357,7 +357,7 @@ def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters):
 
         for head_name, head_channels in [('cell_cls', 3), ('cell_axis', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
             emitter_fc_output = output_dict['emitter_est_result'][head_name] # torch.Size([9, 102])
-            head_name_to_label_name_dict = {'cell_cls': 'cell_cls', 'cell_axis': 'cell_axis_global', 'cell_intensity': 'cell_intensity', 'cell_lamb': 'cell_lamb'}
+            head_name_to_label_name_dict = {'cell_cls': 'cell_cls', 'cell_axis': 'cell_axis_abs', 'cell_intensity': 'cell_intensity', 'cell_lamb': 'cell_lamb'}
             label_name = head_name_to_label_name_dict[head_name]
             if head_name == 'cell_cls':
                 emitter_fc_output = emitter_fc_output.view((B, 6, -1, 3)).permute(0, 3, 1, 2)
@@ -377,9 +377,6 @@ def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters):
                 # print(emitter_fc_output.shape, emitter_property_gt.shape, window_mask.shape) # torch.Size([2, 6, 64, 3]) torch.Size([2, 6, 64, 3], torch.Size([2, 6, 64])
                 # # print(torch.norm(emitter_fc_output, dim=-1)[window_mask==1.].flatten())
                 # # print(torch.norm(emitter_property_gt, dim=-1)[window_mask==1.].flatten())
-                if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.scale_invariant_loss_for_cell_axis:
-                    emitter_fc_output_norm = torch.linalg.norm(emitter_fc_output, dim=-1, keepdim=True).detach()
-                    emitter_fc_output_scaled = emitter_fc_output / (emitter_fc_output_norm+1e-6)
                 # emitter_fc_output, emitter_property_gt
 
                 # window_mask_expand = window_mask.unsqueeze(-1)
@@ -392,7 +389,23 @@ def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters):
                 # print(torch.norm(emitter_fc_output_scaled, dim=-1)[window_mask==1.])
                 # print(torch.norm(emitter_property_gt, dim=-1)[window_mask==1.])
 
-                loss = emitter_cls_criterion_L2_none(emitter_fc_output_scaled, emitter_property_gt)
+                if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.relative_dir:
+                    cell_normal_outside = labels_dict['emitter_labels']['cell_normal_outside'].view(B, 6, -1, 3)
+                    # print(cell_normal_outside.shape, emitter_fc_output.shape, emitter_property_gt.shape)
+                    emitter_cell_axis_abs_est = emitter_fc_output + cell_normal_outside
+                else:
+                    # abs_dir label was not normalized
+                    emitter_cell_axis_abs_est = emitter_fc_output
+                    if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.scale_invariant_loss_for_cell_axis:
+                        emitter_property_gt_norm = torch.linalg.norm(emitter_property_gt, dim=-1, keepdim=True)
+                        emitter_property_gt = emitter_property_gt / (emitter_property_gt_norm+1e-6)
+
+                if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.scale_invariant_loss_for_cell_axis:
+                    # emitter_fc_output_norm = torch.linalg.norm(emitter_cell_axis_abs_est, dim=-1, keepdim=True).detach()
+                    emitter_fc_output_norm = torch.linalg.norm(emitter_cell_axis_abs_est, dim=-1, keepdim=True)
+                    emitter_cell_axis_abs_est = emitter_cell_axis_abs_est / (emitter_fc_output_norm+1e-6)
+
+                loss = emitter_cls_criterion_L2_none(emitter_cell_axis_abs_est, emitter_property_gt)
                 loss = torch.sum(loss * window_mask.unsqueeze(-1)) / (torch.sum(window_mask.unsqueeze(-1)) * 3. + 1e-5) # only care the axis of windows; lamps are modeled as omnidirectional
                 loss = loss * opt.cfg.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_axis_global
             else:

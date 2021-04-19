@@ -681,9 +681,13 @@ class openrooms(data.Dataset):
                 assert len(cell_info_grid) == 6 * self.grid_size**2
                 cell_light_ratio = np.zeros((6, self.grid_size, self.grid_size), dtype=np.float32)
                 cell_cls = np.zeros((6, self.grid_size, self.grid_size), dtype=np.uint8) # [0: None, 1: window, 2: lamp]
-                cell_axis_global = np.zeros((6, self.grid_size, self.grid_size, 3), dtype=np.float32)
                 cell_intensity = np.zeros((6, self.grid_size, self.grid_size, 3), dtype=np.float32)
                 cell_lamb = np.zeros((6, self.grid_size, self.grid_size), dtype=np.float32)
+
+                cell_axis_abs = np.zeros((6, self.grid_size, self.grid_size, 3), dtype=np.float32)
+                cell_axis_relative = np.zeros((6, self.grid_size, self.grid_size, 3), dtype=np.float32)
+                cell_normal_outside = np.zeros((6, self.grid_size, self.grid_size, 3), dtype=np.float32)
+
                 if emitter_representation_type in ['1ambient']:
                     cell_ambient = np.zeros((6, self.grid_size, self.grid_size, 3), dtype=np.float32)
                 if emitter_representation_type in ['2ambient']:
@@ -710,24 +714,24 @@ class openrooms(data.Dataset):
                                 # light_center_world_total3d = emitters_prop_dict_representation_dict[cell_random_id]['emitter_prop_total3d']['light_center_world_total3d']
                                 light_axis_world_total3d = emitter_prop_total3d['light_axis_world_total3d'].reshape(3,)
                                 normal_outside = cell_info['emitter_info']['normal_outside']
-                                light_dir_offset = light_axis_world_total3d - normal_outside
+                                light_dir_offset = light_axis_world_total3d - normal_outside # [!!!] normal_outside, light_axis_world_total3d are already normalized
 
                                 if light_dir_offset.shape != (3,):
                                     print(light_dir_offset.shape)
                                     assert False, str(pickle_emitter2wall_assign_info_dict_path)
                                 if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.relative_dir:
-                                    cell_axis_global[wall_idx, i, j] = light_dir_offset
                                     cell_info['emitter_info']['light_dir'] = light_dir_offset
-                                    # print(light_dir_offset.shape, normal_outside.shape) # both are (3,)
-                                    # print(np.linalg.norm(light_dir_offset), np.linalg.norm(normal_outside), np.linalg.norm(light_axis_world_total3d)) # normal_outside and light_axis_world_total3d are normalzed! light_dir_offset is not!
                                 else:
-                                    cell_info['emitter_info']['light_dir'] = light_dir_offset + normal_outside
-                                    cell_axis_global[wall_idx, i, j] = light_dir_offset + normal_outside
-                                cell_info['emitter_info']['light_dir_abs'] = light_dir_offset + normal_outside
+                                    cell_info['emitter_info']['light_dir'] = light_axis_world_total3d
+                                cell_info['emitter_info']['light_dir_abs'] = light_axis_world_total3d
 
-                                cell_info['emitter_info']['light_dir'] = cell_info['emitter_info']['light_dir'] / (1e-6+np.linalg.norm(cell_info['emitter_info']['light_dir']))
-                                cell_info['emitter_info']['light_dir_abs'] = cell_info['emitter_info']['light_dir_abs'] / (1e-6+np.linalg.norm(cell_info['emitter_info']['light_dir_abs']))
-                                cell_axis_global[wall_idx, i, j] = cell_axis_global[wall_idx, i, j] / (1e-6+np.linalg.norm(cell_axis_global[wall_idx, i, j]))
+                                cell_axis_relative[wall_idx, i, j] = light_dir_offset
+                                cell_axis_abs[wall_idx, i, j] = light_axis_world_total3d
+                                cell_normal_outside[wall_idx, i, j] = normal_outside
+
+                                # cell_info['emitter_info']['light_dir'] = cell_info['emitter_info']['light_dir'] / (1e-6+np.linalg.norm(cell_info['emitter_info']['light_dir']))
+                                # cell_info['emitter_info']['light_dir_abs'] = cell_info['emitter_info']['light_dir_abs'] / (1e-6+np.linalg.norm(cell_info['emitter_info']['light_dir_abs']))
+                                # cell_axis_global[wall_idx, i, j] = cell_axis_global[wall_idx, i, j] / (1e-6+np.linalg.norm(cell_axis_global[wall_idx, i, j]))
                             else:
                                 cell_info['emitter_info']['light_dir'] = np.zeros((3,))
                                 cell_info['emitter_info']['light_dir_abs'] = np.zeros((3,))
@@ -755,11 +759,17 @@ class openrooms(data.Dataset):
                 # !!!!!! log (lamb + 1.)
                 cell_lamb = np.log(cell_lamb+1.)
 
-                return_dict.update({'cell_light_ratio': torch.from_numpy(cell_light_ratio).float(), \
-                    'cell_cls': torch.from_numpy(cell_cls).long(), \
-                    'cell_axis_global': torch.from_numpy(cell_axis_global).float(), \
-                    'cell_intensity': torch.from_numpy(cell_intensity_log).float(), \
-                    'cell_lamb': torch.from_numpy(cell_lamb).float()})
+                return_dict.update(
+                    {
+                        'cell_light_ratio': torch.from_numpy(cell_light_ratio).float(), \
+                        'cell_cls': torch.from_numpy(cell_cls).long(), \
+                        'cell_intensity': torch.from_numpy(cell_intensity_log).float(), \
+                        'cell_lamb': torch.from_numpy(cell_lamb).float(),  \
+                        'cell_axis_abs': torch.from_numpy(cell_axis_abs).float(), \
+                        'cell_axis_relative': torch.from_numpy(cell_axis_relative).float(), \
+                        'cell_normal_outside': torch.from_numpy(cell_normal_outside).float()
+                        }
+                    )
                 if emitter_representation_type in ['1ambient']:
                     return_dict.update({'cell_ambient': torch.from_numpy(cell_ambient).float()})
                 if emitter_representation_type in ['2ambient']:
