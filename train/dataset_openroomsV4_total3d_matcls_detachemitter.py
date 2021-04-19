@@ -245,7 +245,7 @@ class openrooms(data.Dataset):
             mask = self.loadBinary(mask_path, channels = 3, dtype=np.int32, if_resize=True).squeeze() # [h, w, 3]
 
         scale = 1.
-        
+
         if self.opt.cfg.DATA.if_load_png_not_hdr:
             meta_split, scene_name, frame_id = self.meta_split_scene_name_frame_id_list[index]
             png_image_path = Path(self.opt.cfg.DATASET.png_path) / meta_split / scene_name / ('im_%d.png'%frame_id)
@@ -291,7 +291,7 @@ class openrooms(data.Dataset):
         # print('------', image_transformed_fixed.shape, im_trainval.shape, im_trainval_RGB.shape, im_SDR_RGB.shape, im_RGB_uint8.shape, )
         # png: ------ torch.Size([3, 240, 320]) (240, 320, 3) torch.Size([3, 240, 320]) (240, 320, 3) (240, 320, 3)
         # hdr: ------ torch.Size([3, 240, 320]) (3, 240, 320) (3, 240, 320) (3, 240, 320) (240, 320, 3)
-        batch_dict.update({'image_transformed_fixed': image_transformed_fixed, 'im_trainval': torch.from_numpy(im_trainval), 'im_trainval_RGB': im_trainval_RGB, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
+        batch_dict.update({'hdr_scale': scale, 'image_transformed_fixed': image_transformed_fixed, 'im_trainval': torch.from_numpy(im_trainval), 'im_trainval_RGB': im_trainval_RGB, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
 
         # ====== BRDF =====
         # image_path = batch_dict['image_path']

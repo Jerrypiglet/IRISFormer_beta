@@ -261,7 +261,7 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
         if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
             envmap_lightAccu_mean = pred_dict_em['envmap_lightAccu_mean'][sample_idx].detach().cpu().numpy()
             # print(envmap_lightAccu_mean.shape) # (6, 3, 8, 8)
-            envmap_lightAccu_mean_vis = np.clip(envmap_lightAccu_mean**(1.0/2.2), 0., 1.)
+            envmap_lightAccu_mean_vis = envmap_lightAccu_mean**(1.0/2.2)
 
             emitter_info_dict.update({'envmap_lightAccu_mean_vis_GT': envmap_lightAccu_mean_vis})
 
