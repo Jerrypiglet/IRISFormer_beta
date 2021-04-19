@@ -559,7 +559,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
             # ======= Vis BRDFsemseg / semseg
             if opt.cfg.DATA.load_semseg_gt:
-                for sample_idx_batch in range(batch_size):
+                for sample_idx_batch in range(semseg_label.shape[0]):
                     sample_idx = sample_idx_batch+batch_size*batch_id
                     gray_GT = np.uint8(semseg_label[sample_idx_batch])
                     color_GT = np.array(colorize(gray_GT, colors).convert('RGB'))
@@ -567,7 +567,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     if opt.is_master:
                         writer.add_image('VAL_semseg_GT/%d'%(sample_idx), color_GT, tid, dataformats='HWC')
             if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable:
-                for sample_idx_batch in range(batch_size):
+                for sample_idx_batch in range(semseg_pred.shape[0]):
                     sample_idx = sample_idx_batch+batch_size*batch_id
                     prediction = np.argmax(semseg_pred[sample_idx_batch], 0)
                     gray_pred = np.uint8(prediction)
@@ -683,7 +683,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
             # ======= Vis clusters for mat-seg
             if opt.cfg.DATA.load_matseg_gt:
-                for sample_idx_batch in range(batch_size):
+                for sample_idx_batch in range(input_dict['mat_aggre_map_cpu'].shape[0]):
                     sample_idx = sample_idx_batch+batch_size*batch_id
                     if sample_idx >= opt.cfg.TEST.vis_max_samples:
                         break
@@ -804,7 +804,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 renderedImPred = output_dict['renderedImPred'].detach().cpu().numpy()
                 renderedImPred_sdr = output_dict['renderedImPred_sdr'].detach().cpu().numpy()
                 imBatchSmall = output_dict['imBatchSmall'].detach().cpu().numpy()
-                for sample_idx_batch in range(batch_size):
+                for sample_idx_batch in range(envmapsPredScaledImage.shape[0]):
                     sample_idx = sample_idx_batch+batch_size*batch_id
                     # assert envmapsPredScaledImage.shape[0] == batch_size
                     for I_hdr, name_tag in zip([envmapsPredScaledImage[sample_idx_batch], envmapsBatch[sample_idx_batch]], ['light_Pred', 'light_GT']):

@@ -244,6 +244,8 @@ class openrooms(data.Dataset):
             # mask_path = semantics_path.replace('im_', 'immatPart_').replace('hdr', 'dat')
             mask = self.loadBinary(mask_path, channels = 3, dtype=np.int32, if_resize=True).squeeze() # [h, w, 3]
 
+        scale = 1.
+        
         if self.opt.cfg.DATA.if_load_png_not_hdr:
             meta_split, scene_name, frame_id = self.meta_split_scene_name_frame_id_list[index]
             png_image_path = Path(self.opt.cfg.DATASET.png_path) / meta_split / scene_name / ('im_%d.png'%frame_id)

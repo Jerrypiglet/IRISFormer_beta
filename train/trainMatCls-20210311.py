@@ -70,8 +70,8 @@ parser.add_argument('--ifMatMapInput', action='store_true', help='using mask as 
 parser.add_argument('--ifDataloaderOnly', action='store_true', help='benchmark dataloading overhead')
 parser.add_argument('--if_cluster', action='store_true', help='if using cluster')
 parser.add_argument('--if_hdr_input_matseg', action='store_true', help='if using hdr images')
-parser.add_argument('--eval_every_iter', type=int, default=2000, help='')
-parser.add_argument('--save_every_iter', type=int, default=2000, help='')
+parser.add_argument('--eval_every_iter', type=int, default=5000, help='')
+parser.add_argument('--save_every_iter', type=int, default=5000, help='')
 parser.add_argument('--debug_every_iter', type=int, default=2000, help='')
 parser.add_argument('--max_iter', type=int, default=-1, help='')
 parser.add_argument('--invalid_index', type=int, default = 0, help='index for invalid aread (e.g. windows, lights)')
@@ -81,6 +81,7 @@ parser.add_argument('--resume', type=str, help='resume training; can be full pat
 parser.add_argument('--reset_latest_ckpt', action='store_true', help='remove latest_checkpoint file')
 parser.add_argument('--reset_scheduler', action='store_true', help='')
 parser.add_argument('--reset_lr', action='store_true', help='')
+parser.add_argument('--reset_tid', action='store_true', help='')
 # debug
 parser.add_argument("--mini_val", type=str2bool, nargs='?', const=True, default=False)
 # to get rid of

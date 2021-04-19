@@ -384,24 +384,25 @@ class Model_Joint(nn.Module):
         if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version in ['V1', 'V2']:
             return_dict_layout_emitter = self.EMITTER_NET(envmap_lightAccu_mean)
         else:
-            # scatter lights to each emitter
-            scattered_light, emitter_local_xyz_trans = self.EMITTER_LIGHT_ACCU_NET.scatter_light_to_hemisphere(return_dict_lightAccu['envmap_lightAccu'], return_dict_lightAccu['points_sampled_mask'], return_dict_lightAccu['vec_to_t'], \
-                return_dict_lightAccu['basis_1_array_transformed_LightNet'], return_dict_lightAccu['basis_2_array_transformed_LightNet'], return_dict_lightAccu['normal_array_transformed_LightNet'])
+            # Scatter lights to each emitter
+            scattered_light, emitter_local_xyz_trans = self.EMITTER_LIGHT_ACCU_NET.scatter_light_to_hemisphere(return_dict_lightAccu)
             
-            # get the dir meshgrid (wrt normal outside) for all cells
+            # Get the dir meshgrid (wrt normal outside) for all cells
             emitter_outdirs_meshgrid_global_transformed_LightNet = self.EMITTER_LIGHT_ACCU_NET.get_emitter_outdirs_meshgrid(emitter_local_xyz_trans)
             grid_size = self.EMITTER_LIGHT_ACCU_NET.grid_size
-            normal_outside_transformed_LightNet = - return_dict_lightAccu['normal_array_transformed_LightNet'].unsqueeze(2).unsqueeze(2).repeat(1, grid_size**2, 1, 1, 1) # normal inside --negative--> normal outside
+            normal_outside_transformed_LightNet = - return_dict_lightAccu['normal_array_transformed_LightNet'].unsqueeze(2).unsqueeze(2).unsqueeze(2) # [2, 6, 1, 1, 1, 3]
+            normal_outside_transformed_LightNet = normal_outside_transformed_LightNet.repeat(1, 1, grid_size**2, 1, 1, 1) # normal inside --negative--> normal outside # [2, ngrids(6*8*8, 1, 1, 3]
+            normal_outside_transformed_LightNet = normal_outside_transformed_LightNet.view(normal_outside_transformed_LightNet.shape[0], 6*grid_size*grid_size, 1, 1, 3) # [2, ngrids, 1, 1, 3]
             emitter_outdirs_meshgrid_wrt_normal_outside_transformed_LightNet = emitter_outdirs_meshgrid_global_transformed_LightNet - normal_outside_transformed_LightNet
             # [!!!] emitter_outdirs_meshgrid_global_transformed_LightNet and normal_outside_transformed_LightNet are NORMALIZED!
             # print(torch.linalg.norm(emitter_outdirs_meshgrid_global_transformed_LightNet, dim=-1).flatten(), torch.linalg.norm(normal_outside_transformed_LightNet, dim=-1).flatten())
             emitter_outdirs_meshgrid_wrt_normal_outside_transformed_LightNet_norm = torch.linalg.norm(emitter_outdirs_meshgrid_wrt_normal_outside_transformed_LightNet, dim=-1, keepdim=True).detach()
             emitter_outdirs_meshgrid_wrt_normal_outside_transformed_LightNet = emitter_outdirs_meshgrid_wrt_normal_outside_transformed_LightNet / (1e-6+emitter_outdirs_meshgrid_wrt_normal_outside_transformed_LightNet_norm)
 
-            # get params to transform cell_axis from LightNet coords -> Total3D coords
+            # Get params to transform cell_axis from LightNet coords -> Total3D coords
             Total3D_to_LightNet_transform_params = return_dict_lightAccu['Total3D_to_LightNet_transform_params']
             cam_R_transform_matrix_pre, post_transform_matrix = Total3D_to_LightNet_transform_params['cam_R_transform_matrix_pre'], Total3D_to_LightNet_transform_params['post_transform_matrix']
-            # inv_post_transform_matrix_expand = torch.inverse(post_transform_matrix.unsqueeze(1).unsqueeze(1).unsqueeze(1))
+            # i7nv_post_transform_matrix_expand = torch.inverse(post_transform_matrix.unsqueeze(1).unsqueeze(1).unsqueeze(1))
             inv_post_transform_matrix_expand = post_transform_matrix.unsqueeze(1).unsqueeze(1).unsqueeze(1).transpose(-1, -2)
             inv_inv_cam_R_transform_matrix_pre_expand = cam_R_transform_matrix_pre.unsqueeze(1).unsqueeze(1).unsqueeze(1)
             transform_params_LightNet2Total3D = {'inv_post_transform_matrix_expand': inv_post_transform_matrix_expand, 'inv_inv_cam_R_transform_matrix_pre_expand': inv_inv_cam_R_transform_matrix_pre_expand}

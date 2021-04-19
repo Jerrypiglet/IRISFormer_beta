@@ -375,9 +375,9 @@ def set_up_checkpointing(opt, model, optimizer, scheduler, logger):
         #     replace_with_kws = ['hourglass_model.seq.1', 'hourglass_model.seq.3', 'hourglass_model.disp_res_pred_layer']
         ic(opt.resume)
         checkpoint_restored, _, _ = checkpointer.load(task_name=opt.resume, replace_kws=replace_kws, replace_with_kws=replace_with_kws)
-        if 'iteration' in checkpoint_restored:
+        if 'iteration' in checkpoint_restored and not opt.reset_tid:
             tid_start = checkpoint_restored['iteration']
-        if 'epoch' in checkpoint_restored:
+        if 'epoch' in checkpoint_restored and not opt.reset_tid:
             epoch_start = checkpoint_restored['epoch']
         print(checkpoint_restored.keys())
         logger.info(colored('Restoring from epoch %d - iter %d'%(epoch_start, tid_start), 'white', 'on_blue'))

@@ -301,17 +301,22 @@ class emitter_lightAccu(nn.Module):
         # envmap_lightAccu_vis_max_ = envmap_lightAccu_vis_.amax(-1).amax(-1).permute(0, 2, 1) # -> [1, 384, 3]
         return envmap_lightAccu_, points_sampled_mask_expanded, points_sampled_mask, vec_to_t
 
-    def scatter_light_to_hemisphere(self, envmap_lightAccu, points_sampled_mask, vec_to_t, basis_1_array, basis_2_array, normal_array):
+    def scatter_light_to_hemisphere(self, input_dict):
+        envmap_lightAccu, points_sampled_mask, vec_to_t, basis_1_array, basis_2_array, normal_inside_array = \
+            input_dict['envmap_lightAccu'], input_dict['points_sampled_mask'], input_dict['vec_to_t'], \
+                input_dict['basis_1_array_transformed_LightNet'], input_dict['basis_2_array_transformed_LightNet'], input_dict['normal_array_transformed_LightNet']
         # all global coord in _transformed_LightNet
-        # print(envmap_lightAccu.shape, points_sampled_mask_expanded.shape, vec_to_t.shape, basis_1_array.shape, basis_2_array.shape, normal_array.shape)
+        # print(envmap_lightAccu.shape, points_sampled_mask_expanded.shape, vec_to_t.shape, basis_1_array.shape, basis_2_array.shape, normal_inside_array.shape)
         # torch.Size([2, 3, 384, 120, 160]) torch.Size([2, 1, 1, 120, 160]) torch.Size([2, 384, 120, 160, 3]) torch.Size([2, 6, 3]) torch.Size([2, 6, 3]) torch.Size([2, 6, 3])
         emitter_outdirs = -vec_to_t # [2, 384, 120, 160, 3]
-        emitter_local_xyz_trans = torch.stack([basis_1_array, basis_2_array, normal_array], -1).transpose(-1, -2) # [2, 6, 3, 3]
-        emitter_local_xyz_trans = emitter_local_xyz_trans.repeat(1, self.grid_size*self.grid_size, 1, 1) # [2, 386, 3, 3]
-        emitter_local_xyz_trans = emitter_local_xyz_trans.unsqueeze(2).unsqueeze(2) # [2, 386, 1, 1, 3, 3]
 
-        emitter_outdirs_emitter_local = (emitter_local_xyz_trans @ emitter_outdirs.unsqueeze(-1)).squeeze(-1) # [2, 384, 120, 160, 3]
+        # Get emitter local coords -> LightNet global coords
+        emitter_global2localLightNet_trans_matrix = torch.cat([basis_1_array.unsqueeze(-1), basis_2_array.unsqueeze(-1), normal_inside_array.unsqueeze(-1)], -1).transpose(-1, -2) # [2, 6, 3, 3]
+        emitter_global2localLightNet_trans_matrix = emitter_global2localLightNet_trans_matrix.unsqueeze(2).repeat(1, 1, self.grid_size*self.grid_size, 1, 1) # [2, 6, 8*8, 3, 3]
+        emitter_global2localLightNet_trans_matrix = emitter_global2localLightNet_trans_matrix.view(emitter_global2localLightNet_trans_matrix.shape[0], 6*self.grid_size*self.grid_size, 3, 3) # [2, 386, 3, 3]
+        emitter_global2localLightNet_trans_matrix = emitter_global2localLightNet_trans_matrix.unsqueeze(2).unsqueeze(2) # [2, 386, 1, 1, 3, 3]
 
+        emitter_outdirs_emitter_local = (emitter_global2localLightNet_trans_matrix @ emitter_outdirs.unsqueeze(-1)).squeeze(-1) # [2, 384, 120, 160, 3]
 
         # l_local -> pixel coords in envmap
         cos_theta = emitter_outdirs_emitter_local[:, :, :, :, 2]
@@ -355,38 +360,27 @@ class emitter_lightAccu(nn.Module):
         valid_B = B_meshgrid[valid_mask]
         valid_ngrids = ngrids_meshgrid[valid_mask]
 
-        # print(emitter_local_xyz_trans.shape, emitter_local_xyz_trans[0][0][0][0][0][0])
-        # print(valid_B.requires_grad, valid_ngrids.requires_grad, valid_vv.requires_grad, valid_uu.requires_grad, valid_mask.requires_grad, )
-        # print(scattered_light.requires_grad, envmap_lightAccu.requires_grad)
-        # ic(torch.max(valid_vv), torch.min(valid_vv), torch.max(valid_uu), torch.min(valid_uu))
-        # a = scattered_light[valid_B, valid_ngrids, valid_vv, valid_uu]
-        # print(emitter_local_xyz_trans.shape, emitter_local_xyz_trans[0][0][0][0][0][0])
-        # b = envmap_lightAccu.permute(0, 2, 3, 4, 1)[valid_mask]
-        # print(emitter_local_xyz_trans.shape, emitter_local_xyz_trans[0][0][0][0][0][0])
-
         scattered_light[valid_B, valid_ngrids, valid_vv, valid_uu] = envmap_lightAccu.permute(0, 2, 3, 4, 1)[valid_mask] # in case of a clash: ![later comer will override former comers](https://i.imgur.com/KSU9rm8.png) https://gist.github.com/Jerrypiglet/0c3c0dce28843e215e39eca3c3496c65
 
-        # print(emitter_local_xyz_trans.shape, emitter_local_xyz_trans[0][0][0][0][0][0])
+        return scattered_light, emitter_global2localLightNet_trans_matrix
 
-        return scattered_light, emitter_local_xyz_trans
-
-    def get_emitter_outdirs_meshgrid(self, emitter_local_xyz_trans):
+    def get_emitter_outdirs_meshgrid(self, emitter_global2localLightNet_trans_matrix):
         '''
         return global directions of the scattered panorama (hemisphere pixels) at the emitters; should look like ![](https://i.imgur.com/sO8m431.jpg)
         '''
         emitter_outdirs_meshgrid_emitter_local = self.rL.ls.reshape(self.scatterHeight, self.scatterWidth, 3).unsqueeze(-1).unsqueeze(0).unsqueeze(0)
 
-        # emitter_local_xyz_trans: torch.Size([2, 384, 1, 1, 3, 3])
-        # print(emitter_local_xyz_trans[0, 0, 0, 0, :, :])
-        # print(emitter_local_xyz_trans @ torch.transpose(emitter_local_xyz_trans, -1, -2))
+        # emitter_global2localLightNet_trans_matrix: torch.Size([2, 384, 1, 1, 3, 3])
+        # print(emitter_global2localLightNet_trans_matrix[0, 0, 0, 0, :, :])
+        # print(emitter_global2localLightNet_trans_matrix @ torch.transpose(emitter_global2localLightNet_trans_matrix, -1, -2))
         # eyes = torch.eye(3).float().cuda().reshape(1, 1, 1, 1, 3, 3)
-        # emitter_outdirs_meshgrid = torch.inverse(emitter_local_xyz_trans + 1e-6*eyes) @ emitter_outdirs_meshgrid_emitter_local
-        # print(emitter_local_xyz_trans.shape, emitter_outdirs_meshgrid_emitter_local.shape, emitter_local_xyz_trans.dtype, emitter_outdirs_meshgrid_emitter_local.dtype, )
-        # a = emitter_local_xyz_trans
-        # b = emitter_local_xyz_trans.transpose(-1, -2)
+        # emitter_outdirs_meshgrid = torch.inverse(emitter_global2localLightNet_trans_matrix + 1e-6*eyes) @ emitter_outdirs_meshgrid_emitter_local
+        # print(emitter_global2localLightNet_trans_matrix.shape, emitter_outdirs_meshgrid_emitter_local.shape, emitter_global2localLightNet_trans_matrix.dtype, emitter_outdirs_meshgrid_emitter_local.dtype, )
+        # a = emitter_global2localLightNet_trans_matrix
+        # b = emitter_global2localLightNet_trans_matrix.transpose(-1, -2)
         # print(a)
         # print(b)
-        emitter_outdirs_meshgrid = (emitter_local_xyz_trans.transpose(-1, -2)) @ emitter_outdirs_meshgrid_emitter_local # emitter_local_xyz_trans is orthogonal; inv == transpose
+        emitter_outdirs_meshgrid = emitter_global2localLightNet_trans_matrix.transpose(-1, -2) @ emitter_outdirs_meshgrid_emitter_local # emitter_global2localLightNet_trans_matrix is orthogonal; inv == transpose
         emitter_outdirs_meshgrid = emitter_outdirs_meshgrid.squeeze(-1) # [2, 384, 8, 16, 3]
         return emitter_outdirs_meshgrid
 

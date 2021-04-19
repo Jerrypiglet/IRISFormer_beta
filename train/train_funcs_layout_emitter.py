@@ -406,7 +406,6 @@ def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters):
 
 
             emitter_losses_dict.update({'loss_emitter-'+head_name: loss})
-            print(head_name, loss)
             emitter_results_dict.update({head_name+'_result_from_loss': emitter_fc_output})
 
     loss_dict.update(emitter_losses_dict)
