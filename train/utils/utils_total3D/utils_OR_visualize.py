@@ -600,7 +600,7 @@ class Box(Scene3D):
                                 else:
                                     ax_3d_PRED.add_artist(a)
 
-
+    
 
         for ax_3d in [ax_3d_GT, ax_3d_PRED]:
             if ax_3d is not None:
