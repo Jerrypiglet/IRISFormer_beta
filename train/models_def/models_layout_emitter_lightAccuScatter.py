@@ -34,9 +34,10 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
             self.envmap_encoder_heads[head_name] = self.get_envmap_encoder(head_name, out_channels=self.envmapFeatsChannels)
 
         # envmap - decoder (for cell_axis): feats -> weight
-        self.envmap_decoder_heads = torch.nn.ModuleDict({})
-        for head_name, head_channels in [('cell_axis', 3)]:
-            self.envmap_decoder_heads[head_name] = self.get_envmap_decoder(head_name, in_channels=self.envmapFeatsChannels, out_channels=1)
+        if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis:
+            self.envmap_decoder_heads = torch.nn.ModuleDict({})
+            for head_name, head_channels in [('cell_axis', 3)]:
+                self.envmap_decoder_heads[head_name] = self.get_envmap_decoder(head_name, in_channels=self.envmapFeatsChannels, out_channels=1)
 
         # UNet arch - encoders
         self.emitter_encoder_heads = torch.nn.ModuleDict({})
@@ -45,8 +46,12 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
 
         # UNet arch - decoders
         self.emitter_decoder_heads = torch.nn.ModuleDict({})
-        # for head_name, head_channels in [('cell_light_ratio', 1), ('cell_cls', 3), ('cell_axis', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
-        for head_name, head_channels in [('cell_light_ratio', 1), ('cell_cls', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
+
+        self.UNet_decoder_heads_channels = [('cell_light_ratio', 1), ('cell_cls', 3), ('cell_intensity', 3), ('cell_lamb', 1)]
+        if not self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis:
+            self.UNet_decoder_heads_channels.append(('cell_axis', 3))
+
+        for head_name, head_channels in self.UNet_decoder_heads_channels:
             self.get_emitter_decoder(head_name, head_channels, in_channels=256)
         
 
@@ -153,43 +158,44 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
         return_dict_emitter = {'emitter_envmap_feats': emitter_envmap_feats, 'emitter_est_result':{}}
 
         # ======== get cell_axis results by weighted avg ========
-        head_name = 'cell_axis'
-        envmap_decoder_heads = self.envmap_decoder_heads[head_name]
-        dconv1, dgn1 = envmap_decoder_heads['dconv1_%s_UNet'%head_name], envmap_decoder_heads['dgn1_%s_UNet'%head_name]
-        dconv2, dgn2 = envmap_decoder_heads['dconv2_%s_UNet'%head_name], envmap_decoder_heads['dgn2_%s_UNet'%head_name]
-        dconv3, dgn3 = envmap_decoder_heads['dconv3_%s_UNet'%head_name], envmap_decoder_heads['dgn3_%s_UNet'%head_name]
-        dconv4, dgn4 = envmap_decoder_heads['dconv4_%s_UNet'%head_name], envmap_decoder_heads['dgn4_%s_UNet'%head_name]
-        dconv5 = envmap_decoder_heads['dconv5_%s_UNet'%head_name]
+        if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis:
+            head_name = 'cell_axis'
+            envmap_decoder_heads = self.envmap_decoder_heads[head_name]
+            dconv1, dgn1 = envmap_decoder_heads['dconv1_%s_UNet'%head_name], envmap_decoder_heads['dgn1_%s_UNet'%head_name]
+            dconv2, dgn2 = envmap_decoder_heads['dconv2_%s_UNet'%head_name], envmap_decoder_heads['dgn2_%s_UNet'%head_name]
+            dconv3, dgn3 = envmap_decoder_heads['dconv3_%s_UNet'%head_name], envmap_decoder_heads['dgn3_%s_UNet'%head_name]
+            dconv4, dgn4 = envmap_decoder_heads['dconv4_%s_UNet'%head_name], envmap_decoder_heads['dgn4_%s_UNet'%head_name]
+            dconv5 = envmap_decoder_heads['dconv5_%s_UNet'%head_name]
 
-        x1_8, x2_4, x3_4, x4_2 = [emitter_envmap_feats['%s-%s'%(head_name, layer_name)] for layer_name in ['x1_8', 'x2_4', 'x3_4', 'x4_2']]
+            x1_8, x2_4, x3_4, x4_2 = [emitter_envmap_feats['%s-%s'%(head_name, layer_name)] for layer_name in ['x1_8', 'x2_4', 'x3_4', 'x4_2']]
 
-        dx1_2 = F.relu(dgn1(dconv1(x4_2)), True)
-        dx2_4_in = F.interpolate(dx1_2, scale_factor=2, mode='bilinear')
-        dx2_4_in = torch.cat([dx2_4_in, x3_4], dim = 1)
-        dx2_4 = F.relu(dgn2(dconv2(dx2_4_in)), True)
+            dx1_2 = F.relu(dgn1(dconv1(x4_2)), True)
+            dx2_4_in = F.interpolate(dx1_2, scale_factor=2, mode='bilinear')
+            dx2_4_in = torch.cat([dx2_4_in, x3_4], dim = 1)
+            dx2_4 = F.relu(dgn2(dconv2(dx2_4_in)), True)
 
-        dx3_4 = F.relu(dgn3(dconv3(dx2_4)), True)
-        dx4_8_in = F.interpolate(dx3_4, scale_factor=2, mode='bilinear')
-        dx4_8_in = torch.cat([dx4_8_in, x1_8], dim = 1)
-        dx4_8 = F.relu(dgn4(dconv4(dx4_8_in)), True)
+            dx3_4 = F.relu(dgn3(dconv3(dx2_4)), True)
+            dx4_8_in = F.interpolate(dx3_4, scale_factor=2, mode='bilinear')
+            dx4_8_in = torch.cat([dx4_8_in, x1_8], dim = 1)
+            dx4_8 = F.relu(dgn4(dconv4(dx4_8_in)), True)
 
-        dx5_8 = dconv5(dx4_8) # [768, 1, 8, 16]
+            dx5_8 = dconv5(dx4_8) # [768, 1, 8, 16]
 
-        dx5_8_reshaped = dx5_8.view(batch_size, self.ngrids, 1, self.scatterHeight, self.scatterWidth) # [B, ngrids, 1, 8, 16]
-        dx5_8_reshaped = dx5_8_reshaped.squeeze(2).view(batch_size, self.ngrids, -1) # [B, ngrids, 8*16]
-        cell_axis_weights = torch.softmax(dx5_8_reshaped, -1).view(batch_size, self.ngrids, self.scatterHeight, self.scatterWidth, 1) # [B, ngrids, 8, 16, 1]
-        assert len(emitter_outdirs_meshgrid_Total3D_outside.shape) == 5 and emitter_outdirs_meshgrid_Total3D_outside.shape == (batch_size, self.ngrids, self.scatterHeight, self.scatterWidth, 3)
-        cell_axis_weighted = cell_axis_weights * emitter_outdirs_meshgrid_Total3D_outside # [B, ngrids, 8, 16, 3]
-        cell_axis_weighted = torch.sum(torch.sum(cell_axis_weighted, 2), 2) # [B, ngrids, 3]
-        cell_axis_out = cell_axis_weighted.view(batch_size, 6, self.grid_size, self.grid_size, 3) # in LightNet coords!!!!! Need to transform back to Total3D coords!!!
+            dx5_8_reshaped = dx5_8.view(batch_size, self.ngrids, 1, self.scatterHeight, self.scatterWidth) # [B, ngrids, 1, 8, 16]
+            dx5_8_reshaped = dx5_8_reshaped.squeeze(2).view(batch_size, self.ngrids, -1) # [B, ngrids, 8*16]
+            cell_axis_weights = torch.softmax(dx5_8_reshaped, -1).view(batch_size, self.ngrids, self.scatterHeight, self.scatterWidth, 1) # [B, ngrids, 8, 16, 1]
+            assert len(emitter_outdirs_meshgrid_Total3D_outside.shape) == 5 and emitter_outdirs_meshgrid_Total3D_outside.shape == (batch_size, self.ngrids, self.scatterHeight, self.scatterWidth, 3)
+            cell_axis_weighted = cell_axis_weights * emitter_outdirs_meshgrid_Total3D_outside # [B, ngrids, 8, 16, 3]
+            cell_axis_weighted = torch.sum(torch.sum(cell_axis_weighted, 2), 2) # [B, ngrids, 3]
+            cell_axis_out = cell_axis_weighted.view(batch_size, 6, self.grid_size, self.grid_size, 3) # in LightNet coords!!!!! Need to transform back to Total3D coords!!!
 
-        # cell_axis_LightNet = cell_axis_out.unsqueeze(-2) @ transform_params_LightNet2Total3D['inv_post_transform_matrix_expand'] @ transform_params_LightNet2Total3D['inv_inv_cam_R_transform_matrix_pre_expand']
-        # cell_axis_LightNet = cell_axis_LightNet.squeeze(-2)
+            # cell_axis_LightNet = cell_axis_out.unsqueeze(-2) @ transform_params_LightNet2Total3D['inv_post_transform_matrix_expand'] @ transform_params_LightNet2Total3D['inv_inv_cam_R_transform_matrix_pre_expand']
+            # cell_axis_LightNet = cell_axis_LightNet.squeeze(-2)
 
-        return_dict_emitter['emitter_est_result'].update({'cell_axis': cell_axis_out})
+            return_dict_emitter['emitter_est_result'].update({'cell_axis': cell_axis_out})
 
         # ======== get emitter est from U-Net for each estimated except `cell_axis` ========
-        for head_name, head_channels in [('cell_light_ratio', 1), ('cell_cls', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
+        for head_name, head_channels in self.UNet_decoder_heads_channels:
             
             x = emitter_envmap_feats[head_name] # [B, ngrids, 128*2*4]
             x = x.permute(0, 2, 1) # [B, 128*2*4, ngrids]

@@ -177,6 +177,7 @@ _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_light = True # use GT per-
 _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_brdf = True # use GT brdf instead of predicting using BRDF_NET
 _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.freeze_lightnet = True # freeze LIGHT_NET when using predictiion from LIGHT_NET
 _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.freeze_brdfnet = True # freeze LIGHT_NET when using predictiion from LIGHT_NET
+_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis = True
 
 _C.MODEL_LAYOUT_EMITTER.layout = CN()
 _C.MODEL_LAYOUT_EMITTER.layout.loss = CN()
