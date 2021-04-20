@@ -116,7 +116,7 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
         # same (8x8)
         self.emitter_decoder_heads['dconv5_%s_UNet'%head_name] = nn.Conv2d(in_channels=64*6, out_channels=head_channels*6, kernel_size=3, stride=1, padding = 1, bias=True, groups=6)
 
-    def forward(self, scattered_light, emitter_outdirs_meshgrid, transform_params_LightNet2Total3D):
+    def forward(self, scattered_light, emitter_outdirs_meshgrid_Total3D_outside):
         '''
         scattered_light: [B, ngrids, 8, 16, 3]
         '''
@@ -178,13 +178,13 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
         dx5_8_reshaped = dx5_8.view(batch_size, self.ngrids, 1, self.scatterHeight, self.scatterWidth) # [B, ngrids, 1, 8, 16]
         dx5_8_reshaped = dx5_8_reshaped.squeeze(2).view(batch_size, self.ngrids, -1) # [B, ngrids, 8*16]
         cell_axis_weights = torch.softmax(dx5_8_reshaped, -1).view(batch_size, self.ngrids, self.scatterHeight, self.scatterWidth, 1) # [B, ngrids, 8, 16, 1]
-        assert len(emitter_outdirs_meshgrid.shape) == 5 and emitter_outdirs_meshgrid.shape == (batch_size, self.ngrids, self.scatterHeight, self.scatterWidth, 3)
-        cell_axis_weighted = cell_axis_weights * emitter_outdirs_meshgrid # [B, ngrids, 8, 16, 3]
+        assert len(emitter_outdirs_meshgrid_Total3D_outside.shape) == 5 and emitter_outdirs_meshgrid_Total3D_outside.shape == (batch_size, self.ngrids, self.scatterHeight, self.scatterWidth, 3)
+        cell_axis_weighted = cell_axis_weights * emitter_outdirs_meshgrid_Total3D_outside # [B, ngrids, 8, 16, 3]
         cell_axis_weighted = torch.sum(torch.sum(cell_axis_weighted, 2), 2) # [B, ngrids, 3]
         cell_axis_out = cell_axis_weighted.view(batch_size, 6, self.grid_size, self.grid_size, 3) # in LightNet coords!!!!! Need to transform back to Total3D coords!!!
 
-        cell_axis_LightNet = cell_axis_out.unsqueeze(-2) @ transform_params_LightNet2Total3D['inv_post_transform_matrix_expand'] @ transform_params_LightNet2Total3D['inv_inv_cam_R_transform_matrix_pre_expand']
-        cell_axis_LightNet = cell_axis_LightNet.squeeze(-2)
+        # cell_axis_LightNet = cell_axis_out.unsqueeze(-2) @ transform_params_LightNet2Total3D['inv_post_transform_matrix_expand'] @ transform_params_LightNet2Total3D['inv_inv_cam_R_transform_matrix_pre_expand']
+        # cell_axis_LightNet = cell_axis_LightNet.squeeze(-2)
 
         return_dict_emitter['emitter_est_result'].update({'cell_axis': cell_axis_out})
 

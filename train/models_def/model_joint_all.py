@@ -387,31 +387,46 @@ class Model_Joint(nn.Module):
             # Scatter lights to each emitter
             scattered_light, emitter_local_xyz_trans = self.EMITTER_LIGHT_ACCU_NET.scatter_light_to_hemisphere(return_dict_lightAccu)
             
-            # Get the dir meshgrid (wrt normal outside) for all cells
-            emitter_outdirs_meshgrid_global_transformed_LightNet = self.EMITTER_LIGHT_ACCU_NET.get_emitter_outdirs_meshgrid(emitter_local_xyz_trans)
-            grid_size = self.EMITTER_LIGHT_ACCU_NET.grid_size
-            normal_outside_transformed_LightNet = - return_dict_lightAccu['normal_array_transformed_LightNet'].unsqueeze(2).unsqueeze(2).unsqueeze(2) # [2, 6, 1, 1, 1, 3]
-            normal_outside_transformed_LightNet = normal_outside_transformed_LightNet.repeat(1, 1, grid_size**2, 1, 1, 1) # normal inside --negative--> normal outside # [2, ngrids(6*8*8, 1, 1, 3]
-            normal_outside_transformed_LightNet = normal_outside_transformed_LightNet.view(normal_outside_transformed_LightNet.shape[0], 6*grid_size*grid_size, 1, 1, 3) # [2, ngrids, 1, 1, 3]
-            emitter_outdirs_meshgrid_wrt_normal_outside_transformed_LightNet = emitter_outdirs_meshgrid_global_transformed_LightNet - normal_outside_transformed_LightNet
-            # [!!!] emitter_outdirs_meshgrid_global_transformed_LightNet and normal_outside_transformed_LightNet are NORMALIZED!
-            # print(torch.linalg.norm(emitter_outdirs_meshgrid_global_transformed_LightNet, dim=-1).flatten(), torch.linalg.norm(normal_outside_transformed_LightNet, dim=-1).flatten())
-            emitter_outdirs_meshgrid_wrt_normal_outside_transformed_LightNet_norm = torch.linalg.norm(emitter_outdirs_meshgrid_wrt_normal_outside_transformed_LightNet, dim=-1, keepdim=True).detach()
-            emitter_outdirs_meshgrid_wrt_normal_outside_transformed_LightNet = emitter_outdirs_meshgrid_wrt_normal_outside_transformed_LightNet / (1e-6+emitter_outdirs_meshgrid_wrt_normal_outside_transformed_LightNet_norm)
-
-            # Get params to transform cell_axis from LightNet coords -> Total3D coords
+            # ---- Get params to transform cell_axis from LightNet coords -> Total3D coords
             Total3D_to_LightNet_transform_params = return_dict_lightAccu['Total3D_to_LightNet_transform_params']
             cam_R_transform_matrix_pre, post_transform_matrix = Total3D_to_LightNet_transform_params['cam_R_transform_matrix_pre'], Total3D_to_LightNet_transform_params['post_transform_matrix']
-            # i7nv_post_transform_matrix_expand = torch.inverse(post_transform_matrix.unsqueeze(1).unsqueeze(1).unsqueeze(1))
             inv_post_transform_matrix_expand = post_transform_matrix.unsqueeze(1).unsqueeze(1).unsqueeze(1).transpose(-1, -2)
             inv_inv_cam_R_transform_matrix_pre_expand = cam_R_transform_matrix_pre.unsqueeze(1).unsqueeze(1).unsqueeze(1)
             transform_params_LightNet2Total3D = {'inv_post_transform_matrix_expand': inv_post_transform_matrix_expand, 'inv_inv_cam_R_transform_matrix_pre_expand': inv_inv_cam_R_transform_matrix_pre_expand}
 
-            # run the emitter net!
-            return_dict_layout_emitter = self.EMITTER_NET(scattered_light, emitter_outdirs_meshgrid_wrt_normal_outside_transformed_LightNet, transform_params_LightNet2Total3D=transform_params_LightNet2Total3D)
+            T_LightNet2Total3D_rightmult = transform_params_LightNet2Total3D['inv_post_transform_matrix_expand'] @ transform_params_LightNet2Total3D['inv_inv_cam_R_transform_matrix_pre_expand']
+
+            # ---- Get the dir meshgrid outside (abs/relative) for all cells
+            emitter_outdirs_meshgrid_global_lightNet = self.EMITTER_LIGHT_ACCU_NET.get_emitter_outdirs_meshgrid(emitter_local_xyz_trans)
+            grid_size = self.EMITTER_LIGHT_ACCU_NET.grid_size
+            # normal_outside_lightNet = - return_dict_lightAccu['normal_array_lightNet'].unsqueeze(2).unsqueeze(2).unsqueeze(2) # [B, 6, 1, 1, 1, 3]
+            # emitter_outdirs_meshgrid_wrt_normal_outside_lightNet = emitter_outdirs_meshgrid_global_lightNet - normal_outside_lightNet
+            # # [!!!] emitter_outdirs_meshgrid_global_lightNet and normal_outside_lightNet are NORMALIZED!
+            # # print(torch.linalg.norm(emitter_outdirs_meshgrid_global_lightNet, dim=-1).flatten(), torch.linalg.norm(normal_outside_lightNet, dim=-1).flatten())
+            # emitter_outdirs_meshgrid_wrt_normal_outside_lightNet_norm = torch.linalg.norm(emitter_outdirs_meshgrid_wrt_normal_outside_lightNet, dim=-1, keepdim=True).detach()
+            # emitter_outdirs_meshgrid_wrt_normal_outside_lightNet = emitter_outdirs_meshgrid_wrt_normal_outside_lightNet / (1e-6+emitter_outdirs_meshgrid_wrt_normal_outside_lightNet_norm)
+            normal_outside_lightNet = - return_dict_lightAccu['normal_array_lightNet'].unsqueeze(2).unsqueeze(2).unsqueeze(2) # [B, 6, 1, 1, 1, 3]
+            normal_outside_lightNet = normal_outside_lightNet.repeat(1, 1, grid_size**2, 1, 1, 1) # normal inside --negative--> normal outside # [B, ngrids(6*8*8, 1, 1, 3]
+            normal_outside_lightNet = normal_outside_lightNet.view(normal_outside_lightNet.shape[0], 6*grid_size*grid_size, 1, 1, 3) # [B, ngrids, 1, 1, 3]
+
+            emitter_outdirs_meshgrid_global_lightNet_outside = - emitter_outdirs_meshgrid_global_lightNet # flip the hemisphere dirs so that they point to the outside of the wall
+            
+            # ---- LightNet -> Total3D (dirs & normal outside)
+            emitter_outdirs_meshgrid_Total3D_outside = (emitter_outdirs_meshgrid_global_lightNet_outside.unsqueeze(-2) @ T_LightNet2Total3D_rightmult).squeeze(-2) # [B, 384, 8, 16, 3]
+            # print(emitter_outdirs_meshgrid_Total3D_outside.shape, normal_outside_lightNet.shape) # torch.Size([4, 384, 8, 16, 3]) torch.Size([4, 6, 1, 1, 1, 3])
+            # print(torch.linalg.norm(emitter_outdirs_meshgrid_Total3D_outside, dim=-1), torch.linalg.norm(normal_outside_lightNet, dim=-1)) # both are unit norm
+            normal_outside_Total3D = (normal_outside_lightNet.unsqueeze(-2) @ T_LightNet2Total3D_rightmult).squeeze(-2) # [B, 384, 8, 16, 3]            
+            # print(emitter_outdirs_meshgrid_Total3D_outside.shape, normal_outside_Total3D.shape) # torch.Size([4, 384, 8, 16, 3]) torch.Size([4, 384, 1, 1, 3])
+            # print(torch.linalg.norm(normal_outside_Total3D, dim=-1)) # both unit norm
+            
+            if self.cfg.MODEL_LAYOUT_EMITTER.emitter.relative_dir:
+                emitter_outdirs_meshgrid_Total3D_outside = emitter_outdirs_meshgrid_Total3D_outside - normal_outside_Total3D
+
+            # ---- run the emitter net!
+            return_dict_layout_emitter = self.EMITTER_NET(scattered_light, emitter_outdirs_meshgrid_Total3D_outside)
 
             return_dict_layout_emitter['emitter_est_result'].update({'envmap_lightAccu': return_dict_lightAccu['envmap_lightAccu'], 'scattered_light': scattered_light, \
-                'emitter_outdirs_meshgrid_global_transformed_LightNet': emitter_outdirs_meshgrid_global_transformed_LightNet})
+                'emitter_outdirs_meshgrid_global_lightNet': emitter_outdirs_meshgrid_global_lightNet})
 
         return_dict_layout_emitter['emitter_est_result'].update({'envmap_lightAccu_mean': envmap_lightAccu_mean})
 

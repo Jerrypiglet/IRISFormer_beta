@@ -217,25 +217,25 @@ class emitter_lightAccu(nn.Module):
 
         ls_coords, camx, camy, normalPred = self.rL.forwardEnv(normalPred, envmapsPredImage, if_normal_only=True) # torch.Size([B, 128, 3, 120, 160]), [B, 3, 120, 160], [B, 3, 120, 160], [B, 3, 120, 160]
 
-        verts_center_transformed_LightNet, verts_transformed_LightNet, \
-            origin_0_array_transformed_LightNet, basis_1_array_transformed_LightNet, basis_2_array_transformed_LightNet, normal_array_transformed_LightNet, \
+        verts_center_lightNet, verts_lightNet, \
+            origin_0_array_lightNet, basis_1_array_lightNet, basis_2_array_lightNet, normal_array_lightNet, \
                 Total3D_to_LightNet_transform_params = self.get_grid_centers(layout, cam_R) # [B, 6, 8, 8, 3]
 
-        envmap_lightAccu, points_sampled_mask_expanded, points_sampled_mask, vec_to_t = self.accu_light(points, verts_center_transformed_LightNet, camx, camy, normalPred, envmapsPredImage) # [B, 3, #grids, 120, 160]
+        envmap_lightAccu, points_sampled_mask_expanded, points_sampled_mask, vec_to_t = self.accu_light(points, verts_center_lightNet, camx, camy, normalPred, envmapsPredImage) # [B, 3, #grids, 120, 160]
 
         envmap_lightAccu_mean = (envmap_lightAccu.sum(-1).sum(-1) / (points_sampled_mask_expanded.sum(-1).sum(-1)+1e-6)).permute(0, 2, 1) # -> [1, 384, 3]
 
         
         return_dict = {'envmap_lightAccu': envmap_lightAccu, 'points_sampled_mask_expanded': points_sampled_mask_expanded, 'points_sampled_mask': points_sampled_mask, 'envmap_lightAccu_mean': envmap_lightAccu_mean, \
-            'verts_center_transformed_LightNet': verts_center_transformed_LightNet, 'verts_transformed_LightNet': verts_transformed_LightNet, \
-            'origin_0_array_transformed_LightNet': origin_0_array_transformed_LightNet, 'basis_1_array_transformed_LightNet': basis_1_array_transformed_LightNet, 'basis_2_array_transformed_LightNet': basis_2_array_transformed_LightNet, 'normal_array_transformed_LightNet': normal_array_transformed_LightNet, \
+            'verts_center_lightNet': verts_center_lightNet, 'verts_lightNet': verts_lightNet, \
+            'origin_0_array_lightNet': origin_0_array_lightNet, 'basis_1_array_lightNet': basis_1_array_lightNet, 'basis_2_array_lightNet': basis_2_array_lightNet, 'normal_array_lightNet': normal_array_lightNet, \
             'vec_to_t': vec_to_t, 'Total3D_to_LightNet_transform_params': Total3D_to_LightNet_transform_params}
 
         return return_dict
 
-    def accu_light(self, points, verts_center_transformed_LightNet, camx, camy, normalPred, envmapsPredImage):
-        batch_size = verts_center_transformed_LightNet.shape[0]
-        p_t_all_grids = verts_center_transformed_LightNet.view(batch_size, -1, 3)
+    def accu_light(self, points, verts_center_lightNet, camx, camy, normalPred, envmapsPredImage):
+        batch_size = verts_center_lightNet.shape[0]
+        p_t_all_grids = verts_center_lightNet.view(batch_size, -1, 3)
         ngrids = p_t_all_grids.shape[1]
         p_t_all_grids = p_t_all_grids.unsqueeze(2).unsqueeze(3) # torch.Size([B, #grids, 1, 1, 3])
 
@@ -304,8 +304,8 @@ class emitter_lightAccu(nn.Module):
     def scatter_light_to_hemisphere(self, input_dict):
         envmap_lightAccu, points_sampled_mask, vec_to_t, basis_1_array, basis_2_array, normal_inside_array = \
             input_dict['envmap_lightAccu'], input_dict['points_sampled_mask'], input_dict['vec_to_t'], \
-                input_dict['basis_1_array_transformed_LightNet'], input_dict['basis_2_array_transformed_LightNet'], input_dict['normal_array_transformed_LightNet']
-        # all global coord in _transformed_LightNet
+                input_dict['basis_1_array_lightNet'], input_dict['basis_2_array_lightNet'], input_dict['normal_array_lightNet']
+        # all global coord in _lightNet
         # print(envmap_lightAccu.shape, points_sampled_mask_expanded.shape, vec_to_t.shape, basis_1_array.shape, basis_2_array.shape, normal_inside_array.shape)
         # torch.Size([2, 3, 384, 120, 160]) torch.Size([2, 1, 1, 120, 160]) torch.Size([2, 384, 120, 160, 3]) torch.Size([2, 6, 3]) torch.Size([2, 6, 3]) torch.Size([2, 6, 3])
         emitter_outdirs = -vec_to_t # [2, 384, 120, 160, 3]
@@ -404,25 +404,25 @@ class emitter_lightAccu(nn.Module):
         cam_R_transform_unsqueeze = cam_R_transform.unsqueeze(1).unsqueeze(1).unsqueeze(1)
         x1x2_transformed = cam_R_transform_unsqueeze @ verts_all + cam_t_transform_unsqueeze
         x1x2_transformed = x1x2_transformed.transpose(-1, -2) @ (self.extra_transform_matrix.unsqueeze(1).unsqueeze(1).unsqueeze(1)) # camera projection coords: z forward, x right, y down
-        verts_transformed_LightNet = x1x2_transformed @ (self.extra_transform_matrix_LightNet.unsqueeze(1).unsqueeze(1).unsqueeze(1)) # LightNet coords: z backward, x right, y up # [B, 6, 8, 8, 4, 3]
-        # print(verts_transformed_LightNet.shape)
+        verts_lightNet = x1x2_transformed @ (self.extra_transform_matrix_LightNet.unsqueeze(1).unsqueeze(1).unsqueeze(1)) # LightNet coords: z backward, x right, y up # [B, 6, 8, 8, 4, 3]
+        # print(verts_lightNet.shape)
 
         origin_0_array = torch.stack(origin_0_list).permute(1, 0, 2) # [2, 6, 3]
         basis_1_array = torch.stack(basis_1_list).permute(1, 0, 2) # [2, 6, 3]
         basis_2_array = torch.stack(basis_2_list).permute(1, 0, 2) # [2, 6, 3]
         cam_t_transform = torch.zeros(1, 3, 1).cuda().float()
         origin_0_array = (cam_R_transform @ origin_0_array.transpose(1, 2) + cam_t_transform).transpose(1, 2)
-        origin_0_array_transformed_LightNet = origin_0_array @ self.extra_transform_matrix @ self.extra_transform_matrix_LightNet
+        origin_0_array_lightNet = origin_0_array @ self.extra_transform_matrix @ self.extra_transform_matrix_LightNet
         basis_1_array = (cam_R_transform @ basis_1_array.transpose(1, 2)).transpose(1, 2) #  [2, 6, 3]
-        basis_1_array_transformed_LightNet = basis_1_array @ self.extra_transform_matrix @ self.extra_transform_matrix_LightNet
-        basis_1_array_transformed_LightNet = basis_1_array_transformed_LightNet / torch.linalg.norm(basis_1_array_transformed_LightNet, dim=-1, keepdim=True)
+        basis_1_array_lightNet = basis_1_array @ self.extra_transform_matrix @ self.extra_transform_matrix_LightNet
+        basis_1_array_lightNet = basis_1_array_lightNet / torch.linalg.norm(basis_1_array_lightNet, dim=-1, keepdim=True)
         basis_2_array = (cam_R_transform @ basis_2_array.transpose(1, 2)).transpose(1, 2)
-        basis_2_array_transformed_LightNet = basis_2_array @ self.extra_transform_matrix @ self.extra_transform_matrix_LightNet
-        basis_2_array_transformed_LightNet = basis_2_array_transformed_LightNet / torch.linalg.norm(basis_2_array_transformed_LightNet, dim=-1, keepdim=True)
-        normal_array_transformed_LightNet = torch.cross(basis_1_array_transformed_LightNet, basis_2_array_transformed_LightNet, dim=-1)
+        basis_2_array_lightNet = basis_2_array @ self.extra_transform_matrix @ self.extra_transform_matrix_LightNet
+        basis_2_array_lightNet = basis_2_array_lightNet / torch.linalg.norm(basis_2_array_lightNet, dim=-1, keepdim=True)
+        normal_array_lightNet = torch.cross(basis_1_array_lightNet, basis_2_array_lightNet, dim=-1)
 
-        verts_center_transformed_LightNet = torch.mean(verts_transformed_LightNet, 4) # [B, 6, 8, 8, 3]
+        verts_center_lightNet = torch.mean(verts_lightNet, 4) # [B, 6, 8, 8, 3]
 
         transform_params = {'cam_R_transform_matrix_pre': cam_R_transform, 'post_transform_matrix': self.extra_transform_matrix @ self.extra_transform_matrix_LightNet}
 
-        return verts_center_transformed_LightNet, verts_transformed_LightNet, origin_0_array_transformed_LightNet, basis_1_array_transformed_LightNet, basis_2_array_transformed_LightNet, normal_array_transformed_LightNet, transform_params
+        return verts_center_lightNet, verts_lightNet, origin_0_array_lightNet, basis_1_array_lightNet, basis_2_array_lightNet, normal_array_lightNet, transform_params
