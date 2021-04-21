@@ -96,7 +96,7 @@ def get_labels_dict_layout_emitter(data_batch, opt):
             emitter_labels['cell_axis_abs'] = data_batch['cell_axis_abs'].cuda(non_blocking=True)
             emitter_labels['cell_axis_relative'] = data_batch['cell_axis_relative'].cuda(non_blocking=True)
             emitter_labels['cell_normal_outside'] = data_batch['cell_normal_outside'].cuda(non_blocking=True)
-            emitter_labels['cell_intensity'] = data_batch['cell_intensity'].cuda(non_blocking=True)
+            emitter_labels['cell_intensity'] = data_batch['cell_intensity'].cuda(non_blocking=True) # actually LOG!!!
             emitter_labels['cell_lamb'] = data_batch['cell_lamb'].cuda(non_blocking=True)
         else:
             raise ValueError('Invalid: config.emitters.est_type')
@@ -215,15 +215,15 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
 
                             cell_info['emitter_info']['light_dir_abs'] = cell_info['emitter_info']['light_dir_abs'] / (np.linalg.norm(cell_info['emitter_info']['light_dir_abs'])+1e-6)
                             
-                            intensity_log = cell_intensity[sample_idx][wall_idx][i][j].flatten()
+                            intensity_log = cell_intensity[sample_idx][wall_idx][i][j].flatten() # actually predicts LOG intensity!
                             assert intensity_log.shape == (3,)
                             intensity = np.exp(intensity_log) - 1.
-                            intensity_scale = np.amax(intensity) / 255.
-                            intensity_scaled = intensity / (intensity_scale + 1e-5)
-                            intensity_scaled = [np.clip(x/255., 0., 1.) for x in intensity_scaled] # max: 1.
+                            intensity_scale255 = np.amax(intensity) / 255.
+                            intensity_scaled255 = intensity / (intensity_scale255 + 1e-5)
+                            intensity_scaled01 = [np.clip(x/255., 0., 1.) for x in intensity_scaled255] # max: 1.
                             intensity_scalelog = np.log(np.clip(np.linalg.norm(intensity.flatten()) + 1., 1., np.inf))
-                            cell_info['emitter_info']['intensity_scalelog'] = intensity_scalelog
-                            cell_info['emitter_info']['intensity_scaled'] = intensity_scaled
+                            cell_info['emitter_info']['intensity_scalelog'] = intensity_scalelog # log of norm of intensity
+                            cell_info['emitter_info']['intensity_scaled'] = intensity_scaled01
                             cell_info['emitter_info']['intensity'] = intensity  
                             cell_info['emitter_info']['lamb'] = cell_lamb[sample_idx][wall_idx][i][j].item()
                             cell_info['light_ratio'] = emitter_cls_result_postprocessed_np[wall_idx][i * grid_size + j]

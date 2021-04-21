@@ -24,7 +24,7 @@ from utils.utils_total3D.utils_OR_cam import project_3d_line
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-
+from icecream import ic
 
 import matplotlib.patches as patches
 from utils.utils_total3D.utils_OR_geo import bb_intersection_over_union
@@ -303,7 +303,8 @@ class Box(Scene3D):
 
         return depth_combined, mask_conflict
 
-    def draw_3D_scene_plt(self, type = 'prediction', if_save = True, save_path='', fig_or_ax=[None, None],  which_to_vis='cell_info', if_show_emitter=True, if_show_objs=True, if_return_cells_vis_info=False, hide_cells=False):
+    def draw_3D_scene_plt(self, type = 'prediction', if_save = True, save_path='', fig_or_ax=[None, None],  which_to_vis='cell_info', if_show_emitter=True, if_show_objs=True, if_return_cells_vis_info=False, hide_cells=False, hide_random_id=True, scale_emitter_length=1.):
+        ic(hide_cells)
         assert type in ['prediction', 'GT', 'both']
         figs_to_draw = {'prediction': ['prediction'], 'GT': ['GT'],'both': ['prediction', 'GT']}
         figs_to_draw = figs_to_draw[type]
@@ -385,7 +386,9 @@ class Box(Scene3D):
                     if cat_id == 0:
                         continue
 
-                    vis_cube_plt(emitter_dict['obj_box_3d'], ax_3d, cat_color, linestyle, cat_name)
+                    # print('---', emitter_dict['random_id'])
+                    obj_label_show = cat_name if hide_random_id else cat_name+'-'+ emitter_dict['random_id']
+                    vis_cube_plt(emitter_dict['obj_box_3d'], ax_3d, cat_color, linestyle, obj_label_show)
 
                     vis_emitter_part = True
                     if emitter_dict['emitter_prop']['if_lit_up'] and emitter_dict['emitter_prop']['obj_type'] == 'window':
@@ -407,7 +410,7 @@ class Box(Scene3D):
                                 light_center = np.mean(emitter_dict['bdb3D_emitter_part'], 0).flatten()
                             light_axis = emitter_dict['emitter_prop']['light_axis_world'].flatten()
                         # intensity_scalelog = 5. 
-                        light_axis_end = light_axis / np.linalg.norm(light_axis) * intensity_scalelog + light_center
+                        light_axis_end = light_axis / np.linalg.norm(light_axis) * intensity_scalelog * scale_emitter_length + light_center
                         a_light = Arrow3D([light_center[0], light_axis_end[0]], [light_center[1], light_axis_end[1]], [light_center[2], light_axis_end[2]], mutation_scale=20,
                             lw=2, arrowstyle="-|>", facecolor=intensity_scaled, edgecolor='k')
                         ax_3d.add_artist(a_light)
@@ -587,14 +590,14 @@ class Box(Scene3D):
                                     intensity_scalelog = extra_info['emitter_info']['intensity_scalelog'] / 3. + 0.5 # add 0.5 for vis (otherwise could be too short)
                                 else:
                                     # print('2')
-                                    intensity = extra_info['emitter_info']['intensity_scale'] * np.array(extra_info['emitter_info']['intensity_scaled']) * 255.
+                                    intensity = extra_info['emitter_info']['intensity_scale255'] * np.array(extra_info['emitter_info']['intensity_scaled01']) * 255.
                                     intensity_scalelog = np.log(np.clip(np.linalg.norm(intensity.flatten()) + 1., 1., np.inf)) / 3. + 0.5 # add 0.5 for vis (otherwise could be too short)
 
                                 light_end = cell_center + light_dir_abs / np.linalg.norm(light_dir_abs) * intensity_scalelog
                                 # light_end = cell_center + normal_outside
                                 # print(cell_center, light_dir)
                                 a = Arrow3D([cell_center[0], light_end[0]], [cell_center[1], light_end[1]], [cell_center[2], light_end[2]], mutation_scale=20,
-                                    lw=1, arrowstyle="-|>", facecolor=extra_info['emitter_info']['intensity_scaled'], edgecolor='grey')
+                                    lw=1, arrowstyle="-|>", facecolor=extra_info['emitter_info']['intensity_scaled01'], edgecolor='grey')
                                 if type0 == 'GT':
                                     ax_3d_GT.add_artist(a)
                                 else:

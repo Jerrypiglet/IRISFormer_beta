@@ -10,7 +10,7 @@ from utils.utils_misc import *
 
 # V3 LightAccuNetScatter (not taking mean of accumulated light; scatter over a hemisphere centered at the emitter instead)
 class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
-    def __init__(self, opt=None, grid_size = 8, scatterHeight = 8, scatterWidth = 16, envmapFeatsChannels=128):
+    def __init__(self, opt=None, grid_size = 8, scatterHeight = 8, scatterWidth = 16, envmapFeatsChannels=128, other_flags=[]):
         super(decoder_layout_emitter_lightAccuScatter_UNet_V3, self).__init__()
         self.opt = opt
         self.grid_size = grid_size
@@ -18,6 +18,8 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
 
         if self.opt is not None:
             assert self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.relative_dir == True
+
+        self.use_weighted_axis = 'use_weighted_axis' in other_flags or self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis 
 
         self.scatterHeight = scatterHeight
         self.scatterWidth = scatterWidth
@@ -34,7 +36,7 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
             self.envmap_encoder_heads[head_name] = self.get_envmap_encoder(head_name, out_channels=self.envmapFeatsChannels)
 
         # envmap - decoder (for cell_axis): feats -> weight
-        if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis:
+        if self.use_weighted_axis:
             self.envmap_decoder_heads = torch.nn.ModuleDict({})
             for head_name, head_channels in [('cell_axis', 3)]:
                 self.envmap_decoder_heads[head_name] = self.get_envmap_decoder(head_name, in_channels=self.envmapFeatsChannels, out_channels=1)
@@ -48,7 +50,7 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
         self.emitter_decoder_heads = torch.nn.ModuleDict({})
 
         self.UNet_decoder_heads_channels = [('cell_light_ratio', 1), ('cell_cls', 3), ('cell_intensity', 3), ('cell_lamb', 1)]
-        if not self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis:
+        if not self.use_weighted_axis:
             self.UNet_decoder_heads_channels.append(('cell_axis', 3))
 
         for head_name, head_channels in self.UNet_decoder_heads_channels:
@@ -158,7 +160,7 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
         return_dict_emitter = {'emitter_envmap_feats': emitter_envmap_feats, 'emitter_est_result':{}}
 
         # ======== get cell_axis results by weighted avg ========
-        if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis:
+        if self.use_weighted_axis:
             head_name = 'cell_axis'
             envmap_decoder_heads = self.envmap_decoder_heads[head_name]
             dconv1, dgn1 = envmap_decoder_heads['dconv1_%s_UNet'%head_name], envmap_decoder_heads['dgn1_%s_UNet'%head_name]

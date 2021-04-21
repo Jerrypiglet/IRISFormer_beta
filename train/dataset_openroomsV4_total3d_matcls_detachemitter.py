@@ -244,7 +244,7 @@ class openrooms(data.Dataset):
             # mask_path = semantics_path.replace('im_', 'immatPart_').replace('hdr', 'dat')
             mask = self.loadBinary(mask_path, channels = 3, dtype=np.int32, if_resize=True).squeeze() # [h, w, 3]
 
-        scale = 1.
+        hdr_scale = 1.
 
         if self.opt.cfg.DATA.if_load_png_not_hdr:
             meta_split, scene_name, frame_id = self.meta_split_scene_name_frame_id_list[index]
@@ -267,7 +267,7 @@ class openrooms(data.Dataset):
             # Read Image
             im_ori = self.loadHdr(hdr_image_path)
             # Random scale the image
-            im_trainval, scale = self.scaleHdr(im_ori, seg, forced_fixed_scale=False) # forced_fixed_scale=False for scale augmentation
+            im_trainval, hdr_scale = self.scaleHdr(im_ori, seg, forced_fixed_scale=False) # forced_fixed_scale=False for scale augmentation
             im_trainval_RGB = np.clip(im_trainval**(1.0/2.2), 0., 1.)
 
             # == no random scaling:
@@ -291,7 +291,7 @@ class openrooms(data.Dataset):
         # print('------', image_transformed_fixed.shape, im_trainval.shape, im_trainval_RGB.shape, im_SDR_RGB.shape, im_RGB_uint8.shape, )
         # png: ------ torch.Size([3, 240, 320]) (240, 320, 3) torch.Size([3, 240, 320]) (240, 320, 3) (240, 320, 3)
         # hdr: ------ torch.Size([3, 240, 320]) (3, 240, 320) (3, 240, 320) (3, 240, 320) (240, 320, 3)
-        batch_dict.update({'hdr_scale': scale, 'image_transformed_fixed': image_transformed_fixed, 'im_trainval': torch.from_numpy(im_trainval), 'im_trainval_RGB': im_trainval_RGB, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
+        batch_dict.update({'hdr_scale': hdr_scale, 'image_transformed_fixed': image_transformed_fixed, 'im_trainval': torch.from_numpy(im_trainval), 'im_trainval_RGB': im_trainval_RGB, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
 
         # ====== BRDF =====
         # image_path = batch_dict['image_path']
@@ -352,7 +352,7 @@ class openrooms(data.Dataset):
 
             if self.opt.cfg.DATA.load_light_gt:
                 envmaps, envmapsInd = self.loadEnvmap(env_path )
-                envmaps = envmaps * scale 
+                envmaps = envmaps * hdr_scale 
                 if self.cascadeLevel > 0: 
                     envmapsPre = self.loadH5(envPre_path ) 
                     if envmapsPre is None:
@@ -430,7 +430,7 @@ class openrooms(data.Dataset):
         # ====== layout, obj, emitters =====
         if self.opt.cfg.DATA.load_layout_emitter_gt:
             scene_total3d_Path = Path(self.cfg.DATASET.layout_emitter_path) / meta_split / scene_name
-            layout_emitter_dict = self.load_layout_emitter_gt_detach_emitter(frame_info=(scene_total3d_Path, frame_id))
+            layout_emitter_dict = self.load_layout_emitter_gt_detach_emitter(frame_info=(scene_total3d_Path, frame_id), hdr_scale=hdr_scale)
             batch_dict.update(layout_emitter_dict)
         
         return batch_dict
@@ -547,7 +547,7 @@ class openrooms(data.Dataset):
             'im_matseg_transformed_trainval': im_matseg_transformed_trainval
         }
 
-    def load_layout_emitter_gt_detach_emitter(self, frame_info, if_load_objs=False):
+    def load_layout_emitter_gt_detach_emitter(self, frame_info, hdr_scale, if_load_objs=False):
         '''
         Required pickles: (/data/ruizhu/OR-V4full-OR45_total3D_train_test_data)
         - layout_obj_%d.pkl
@@ -736,12 +736,18 @@ class openrooms(data.Dataset):
                                 cell_info['emitter_info']['light_dir'] = np.zeros((3,))
                                 cell_info['emitter_info']['light_dir_abs'] = np.zeros((3,))
 
-                            cell_intensity[wall_idx, i, j] = np.array([emitter_prop_total3d['intensity_scale'] * x * 255.for x in emitter_prop_total3d['intensity_scaled']]) # intensity_scaled: [0., 1.]
-                            cell_info['emitter_info']['intensity_scalelog'] = np.log(np.clip(np.linalg.norm(cell_intensity[wall_idx, i, j].flatten()) + 1., 1., np.inf))
-                            cell_info['emitter_info']['intensity'] = emitter_prop_total3d['intensity']
-                            # print(cell_intensity[wall_idx, i, j], cell_info['emitter_info']['intensity'])
-                            cell_info['emitter_info']['intensity_scale'] = emitter_prop_total3d['intensity_scale']
-                            cell_info['emitter_info']['intensity_scaled'] = emitter_prop_total3d['intensity_scaled']
+                            cell_info['emitter_info']['intensity_noEnvScale'] = emitter_prop_total3d['intensity']
+                            # envScale = emitter_prop_total3d['envScale'] if cell_info['obj_type'] == 'window' else 1.
+                            envScale = 1.
+                            cell_info['emitter_info']['intensity'] = [x * envScale for x in emitter_prop_total3d['intensity']]
+
+                            cell_intensity[wall_idx, i, j] = np.array(cell_info['emitter_info']['intensity']).flatten()
+                            cell_info['emitter_info']['intensity_scalelog'] = np.log(np.clip(np.linalg.norm(cell_intensity[wall_idx, i, j]) + 1., 1., np.inf)) # log of norm of intensity
+
+                            intensity_scale255 = max(cell_info['emitter_info']['intensity']) / 255.
+                            intensity_scaled01 = [np.clip(x / (intensity_scale255+1e-5) / 255., 0., 1.) for x in cell_info['emitter_info']['intensity']]
+                            cell_info['emitter_info']['intensity_scale255'] = intensity_scale255
+                            cell_info['emitter_info']['intensity_scaled01'] = intensity_scaled01
 
                             # other representation-specific params
                             if cell_info['obj_type'] == 'window':

@@ -582,7 +582,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
                         pickle_save_path = Path(opt.summary_vis_path_task) / ('results_semseg_tid%d-%d.pickle'%(tid, sample_idx))
                         save_dict = {'semseg_pred': semseg_pred[sample_idx_batch], }
-                        if not opt.if_not_save_pickles:
+                        if opt.if_save_pickles:
                             with open(str(pickle_save_path),"wb") as f:
                                 pickle.dump(save_dict, f)
 
@@ -608,7 +608,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                             pickle_save_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'layout_info') + '.pickle')
                             save_dict = {'rgb_img_path': data_batch['image_path'][sample_idx_batch],  'bins_tensor': opt.bins_tensor}
                             save_dict.update(layout_info_dict)
-                            if not opt.if_not_save_pickles:
+                            if opt.if_save_pickles:
                                 with open(str(pickle_save_path),"wb") as f:
                                     pickle.dump(save_dict, f)
 
@@ -618,42 +618,59 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                         #     fig_2d.savefig(str(output_path))
                         #     plt.close(fig_2d)
 
-                        if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-                            output_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'emitter') + '.png')
-                            fig_3d, ax_3ds = scene_box.draw_3D_scene_plt(draw_mode, if_return_cells_vis_info=True, if_show_emitter=not(if_real_image))
-                            fig_3d.savefig(str(output_path))
-                            plt.close(fig_3d)
-                            cells_vis_info_list = ax_3ds[-1]
-                            save_dict = {'cells_vis_info_list': cells_vis_info_list}
-                            save_dict.update(emitter_info_dict)
-                            pickle_save_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'cells_vis_info_list') + '.pickle')
-                            if not opt.if_not_save_pickles:
+                        if opt.if_save_pickles:
+                            pickle_save_path = Path(opt.summary_vis_path_task) / ('results_emitter_%d.pickle'%sample_idx)
+                            save_dict = {'scattered_light': output_dict['emitter_est_result']['scattered_light'].detach().cpu().squeeze().numpy()[sample_idx_batch]}
+                            if opt.if_save_pickles:
                                 with open(str(pickle_save_path),"wb") as f:
                                     pickle.dump(save_dict, f)
 
-                            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
-                                fig_3d, ax_3d = scene_box.draw_3D_scene_plt('GT', )
-                                ax_3d[1] = fig_3d.add_subplot(122, projection='3d')
-                                scene_box.draw_3D_scene_plt('GT', fig_or_ax=[ax_3d[1], ax_3d[0]], hide_cells=True)
+
+                        
+                        # if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+                        #     output_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'emitter') + '.png')
+                        #     fig_3d, ax_3ds = scene_box.draw_3D_scene_plt(draw_mode, if_return_cells_vis_info=True, if_show_emitter=not(if_real_image))
+                        #     fig_3d.savefig(str(output_path))
+                        #     plt.close(fig_3d)
+                        #     cells_vis_info_list = ax_3ds[-1]
+                        #     save_dict = {'cells_vis_info_list': cells_vis_info_list}
+                        #     save_dict.update(emitter_info_dict)
+                        #     pickle_save_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'cells_vis_info_list') + '.pickle')
+                        #     if opt.if_save_pickles:
+                        #         with open(str(pickle_save_path),"wb") as f:
+                        #             pickle.dump(save_dict, f)
+
+                        #     if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
+                        #         fig_3d, ax_3d = scene_box.draw_3D_scene_plt('GT', )
+                        #         ax_3d[1] = fig_3d.add_subplot(122, projection='3d')
+                        #         scene_box.draw_3D_scene_plt('GT', fig_or_ax=[ax_3d[1], ax_3d[0]], hide_cells=True)
                                 
-                                lightAccu_color_array_GT = emitter_info_dict['envmap_lightAccu_mean_vis_GT'].transpose(0, 2, 3, 1) # -> [6, 8, 8, 3]
-                                hdr_scale = data_batch['hdr_scale'][sample_idx_batch].item()
-                                # ic(sample_idx, hdr_scale)
-                                # lightAccu_color_array_GT = np.clip(lightAccu_color_array_GT * hdr_scale, 0., 1.)
-                                lightAccu_color_array_GT = np.clip(lightAccu_color_array_GT, 0., 1.)
-                                scene_box.draw_all_cells(ax_3d[1], scene_box.gt_layout, lightnet_array_GT=lightAccu_color_array_GT, alpha=1.)
+                        #         lightAccu_color_array_GT = emitter_info_dict['envmap_lightAccu_mean_vis_GT'].transpose(0, 2, 3, 1) # -> [6, 8, 8, 3]
+                        #         hdr_scale = data_batch['hdr_scale'][sample_idx_batch].item()
+                        #         # ic(sample_idx, hdr_scale)
+                        #         # lightAccu_color_array_GT = np.clip(lightAccu_color_array_GT * hdr_scale, 0., 1.)
+                        #         lightAccu_color_array_GT = np.clip(lightAccu_color_array_GT, 0., 1.)
+                        #         scene_box.draw_all_cells(ax_3d[1], scene_box.gt_layout, lightnet_array_GT=lightAccu_color_array_GT, alpha=1.)
 
-                                output_path = Path(opt.summary_vis_path_task) / (('results_LABEL-%d'%(sample_idx)).replace('LABEL', 'lightAccu_view1') + '.png')
-                                fig_3d.savefig(str(output_path))
+                        #         output_path = Path(opt.summary_vis_path_task) / (('results_LABEL-%d'%(sample_idx)).replace('LABEL', 'lightAccu_view1') + '.png')
+                        #         fig_3d.savefig(str(output_path))
 
-                                az = 92
-                                elev = 113
-                                ax_3d[1].view_init(elev=elev, azim=az)
-                                ax_3d[0].view_init(elev=elev, azim=az)
-                                output_path = str(output_path).replace('lightAccu_view1', 'lightAccu_view2')
-                                fig_3d.savefig(str(output_path))
+                        #         az = 92
+                        #         elev = 113
+                        #         ax_3d[1].view_init(elev=elev, azim=az)
+                        #         ax_3d[0].view_init(elev=elev, azim=az)
+                        #         output_path = str(output_path).replace('lightAccu_view1', 'lightAccu_view2')
+                        #         fig_3d.savefig(str(output_path))
 
-                                plt.close(fig_3d)
+                        #         plt.close(fig_3d)
+        
+                        #         if opt.if_save_pickles:
+                        #             pickle_save_path = Path(opt.summary_vis_path_task) / ('results_emitter_%d.pickle'%sample_idx)
+                        #             save_dict = {'scattered_light': output_dict['emitter_est_result']['scattered_light'].detach().cpu().squeeze().numpy()[sample_idx_batch]}
+                        #             if opt.if_save_pickles:
+                        #                 with open(str(pickle_save_path),"wb") as f:
+                        #                     pickle.dump(save_dict, f)
+
 
 
             # ======= Vis matcls
@@ -985,7 +1002,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     writer.add_image('VAL_brdf-depth_PRED/%d'%sample_idx, vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze()), tid, dataformats='HWC')
                     pickle_save_path = Path(opt.summary_vis_path_task) / ('results_depth_%d.pickle'%sample_idx)
                     save_dict = {'depthPreds_vis': depthPreds_vis[sample_idx].detach().cpu().squeeze().numpy()}
-                    if not opt.if_not_save_pickles:
+                    if opt.if_save_pickles:
                         with open(str(pickle_save_path),"wb") as f:
                             pickle.dump(save_dict, f)
 
