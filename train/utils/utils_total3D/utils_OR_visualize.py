@@ -590,6 +590,7 @@ class Box(Scene3D):
                                     intensity_scalelog = extra_info['emitter_info']['intensity_scalelog'] / 3. + 0.5 # add 0.5 for vis (otherwise could be too short)
                                 else:
                                     # print('2')
+                                    print(extra_info['emitter_info'].keys())
                                     intensity = extra_info['emitter_info']['intensity_scale255'] * np.array(extra_info['emitter_info']['intensity_scaled01']) * 255.
                                     intensity_scalelog = np.log(np.clip(np.linalg.norm(intensity.flatten()) + 1., 1., np.inf)) / 3. + 0.5 # add 0.5 for vis (otherwise could be too short)
 

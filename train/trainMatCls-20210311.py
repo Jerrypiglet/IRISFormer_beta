@@ -1,4 +1,5 @@
 import torch
+
 import numpy as np
 from torch.autograd import Variable
 import torch.optim as optim
@@ -47,6 +48,7 @@ parser.add_argument('--task_split', type=str, default='train', help='train, val,
 parser.add_argument('--isFineTune', action='store_true', help='fine-tune the model')
 parser.add_argument("--if_val", type=str2bool, nargs='?', const=True, default=True)
 parser.add_argument("--if_vis", type=str2bool, nargs='?', const=True, default=True)
+parser.add_argument("--if_overfit_val", type=str2bool, nargs='?', const=True, default=False)
 parser.add_argument('--epochIdFineTune', type=int, default = 0, help='the training of epoch of the loaded model')
 # The training weight
 parser.add_argument('--albedoWeight', type=float, default=1.5, help='the weight for the diffuse component')
@@ -243,6 +245,19 @@ brdf_loader_val, _ = make_data_loader(
     # collate_fn=my_collate_seq_dataset if opt.if_padding else my_collate_seq_dataset_noPadding,
     if_distributed_override=opt.cfg.DATASET.if_val_dist and opt.distributed
 )
+
+if opt.if_overfit_val:
+    brdf_loader_train, _ = make_data_loader(
+        opt,
+        brdf_dataset_val,
+        is_train=True,
+        start_iter=0,
+        logger=logger,
+        collate_fn=collate_fn_OR, 
+        # collate_fn=my_collate_seq_dataset if opt.if_padding else my_collate_seq_dataset_noPadding,
+    )
+
+
 brdf_loader_val_vis, batch_size_val_vis = make_data_loader(
     opt,
     brdf_dataset_val_vis,

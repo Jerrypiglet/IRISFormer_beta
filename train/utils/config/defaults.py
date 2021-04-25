@@ -64,10 +64,14 @@ _C.DATASET.png_path_cluster = '/siggraphasia20dataset/pngs'
 _C.DATASET.layout_emitter_path = ''
 # _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitter-OR45_total3D_train_test_data'
-_C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitterRERE-OR45_total3D_train_test_data'
+# _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitterRERE-OR45_total3D_train_test_data'
+_C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitterRERERE20210420-OR45_total3D_train_test_data'
+
 # _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitter-OR45_total3D_train_test_data'
-_C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitterRERE-OR45_total3D_train_test_data'
+# _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitterRERE-OR45_total3D_train_test_data'
+_C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitterRERERE20210420-OR45_total3D_train_test_data'
+
 
 _C.DATASET.matpart_path = ''
 _C.DATASET.matpart_path_local = '/data/ruizhu/OR-matpart'
@@ -78,8 +82,10 @@ _C.DATASET.matori_path_cluster = '/siggraphasia20dataset/BRDFOriginDataset/'
 
 # _C.DATASET.dataset_list = 'data/openrooms/list_OR_V4full/list'
 _C.DATASET.dataset_list = ''
-_C.DATASET.dataset_path_mini = '/data/ruizhu/openrooms_mini'
-_C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini/list'
+# _C.DATASET.dataset_path_mini = '/data/ruizhu/openrooms_mini'
+# _C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini/list'
+_C.DATASET.dataset_path_mini = '/data/ruizhu/openrooms_mini-val'
+_C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini-val/list'
 
 _C.DATASET.num_workers = 8
 _C.DATASET.if_val_dist = True

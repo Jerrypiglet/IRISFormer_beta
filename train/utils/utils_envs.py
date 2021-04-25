@@ -1,3 +1,4 @@
+from torch.utils.tensorboard import SummaryWriter
 import torch
 import torch.nn as nn
 import numpy as np
@@ -217,7 +218,6 @@ def check_if_in_list(list_to_check, list_allowed, module_name='Unknown Module'):
 def set_up_logger(opt):
     from utils.logger import setup_logger, Logger, printer
     import sys
-    from torch.utils.tensorboard import SummaryWriter
 
     # === LOGGING
     sys.stdout = Logger(Path(opt.summary_path_task) / 'log.txt')

@@ -239,7 +239,7 @@ class openrooms(data.Dataset):
             seg_path = hdr_image_path.replace('im_', 'immask_').replace('hdr', 'png').replace('DiffMat', '')
             # Read segmentation
             seg = 0.5 * (self.loadImage(seg_path ) + 1)[0:1, :, :]
-            semantics_path = hdr_image_path.replace('DiffMat', '').replace('DiffMat', '').replace('DiffLight', '')
+            semantics_path = hdr_image_path.replace('DiffMat', '').replace('DiffLight', '')
             mask_path = semantics_path.replace('im_', 'imcadmatobj_').replace('hdr', 'dat')
             # mask_path = semantics_path.replace('im_', 'immatPart_').replace('hdr', 'dat')
             mask = self.loadBinary(mask_path, channels = 3, dtype=np.int32, if_resize=True).squeeze() # [h, w, 3]
@@ -737,8 +737,8 @@ class openrooms(data.Dataset):
                                 cell_info['emitter_info']['light_dir_abs'] = np.zeros((3,))
 
                             cell_info['emitter_info']['intensity_noEnvScale'] = emitter_prop_total3d['intensity']
-                            # envScale = emitter_prop_total3d['envScale'] if cell_info['obj_type'] == 'window' else 1.
-                            envScale = 1.
+                            envScale = emitter_prop_total3d['envScale'] if cell_info['obj_type'] == 'window' else 1.
+                            # envScale = 1.
                             cell_info['emitter_info']['intensity'] = [x * envScale for x in emitter_prop_total3d['intensity']]
 
                             cell_intensity[wall_idx, i, j] = np.array(cell_info['emitter_info']['intensity']).flatten()
