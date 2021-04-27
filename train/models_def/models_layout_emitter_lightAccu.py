@@ -222,6 +222,9 @@ class emitter_lightAccu(nn.Module):
                 Total3D_to_LightNet_transform_params = self.get_grid_centers(layout, cam_R) # [B, 6, 8, 8, 3]
 
         envmap_lightAccu, points_sampled_mask_expanded, points_sampled_mask, vec_to_t = self.accu_light(points, verts_center_lightNet, camx, camy, normalPred, envmapsPredImage) # [B, 3, #grids, 120, 160]
+        # ic(envmap_lightAccu.shape, points_sampled_mask_expanded.shape)
+        # ic(points_sampled_mask_expanded[0].detach().cpu().numpy())
+
 
         envmap_lightAccu_mean = (envmap_lightAccu.sum(-1).sum(-1) / (points_sampled_mask_expanded.sum(-1).sum(-1)+1e-6)).permute(0, 2, 1) # -> [1, 384, 3]
 

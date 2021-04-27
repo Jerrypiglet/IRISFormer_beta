@@ -79,6 +79,8 @@ parser.add_argument('--resume', type=str, help='resume training; can be full pat
 parser.add_argument('--reset_latest_ckpt', action='store_true', help='remove latest_checkpoint file')
 parser.add_argument('--reset_scheduler', action='store_true', help='')
 parser.add_argument('--reset_lr', action='store_true', help='')
+parser.add_argument('--reset_tid', action='store_true', help='')
+
 # debug
 parser.add_argument("--mini_val", type=str2bool, nargs='?', const=True, default=False)
 # to get rid of
@@ -197,7 +199,7 @@ brdf_dataset_val_vis = openrooms(opt,
     transforms_resize = transforms_val_resize, 
     cascadeLevel = opt.cascadeLevel, split = 'val', load_first = opt.cfg.TEST.vis_max_samples, logger=logger)
 
-brdf_loader_val_vis, _ = make_data_loader(
+brdf_loader_val_vis, batch_size_val_vis = make_data_loader(
     opt,
     brdf_dataset_val_vis,
     is_train=False,
@@ -230,6 +232,6 @@ num_mat_masks_MAX = 0
 model.train(not opt.cfg.MODEL_SEMSEG.fix_bn)
 synchronize()
 
-val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid}
+val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'batch_size_val_vis': batch_size_val_vis}
 with torch.no_grad():
-    vis_val_epoch_joint(brdf_loader_val_vis, model, bin_mean_shift, val_params, batch_size=opt.cfg.TEST.ims_per_batch)
+    vis_val_epoch_joint(brdf_loader_val_vis, model, bin_mean_shift, val_params)

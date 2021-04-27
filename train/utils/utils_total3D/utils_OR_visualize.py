@@ -304,7 +304,6 @@ class Box(Scene3D):
         return depth_combined, mask_conflict
 
     def draw_3D_scene_plt(self, type = 'prediction', if_save = True, save_path='', fig_or_ax=[None, None],  which_to_vis='cell_info', if_show_emitter=True, if_show_objs=True, if_return_cells_vis_info=False, hide_cells=False, hide_random_id=True, scale_emitter_length=1.):
-        ic(hide_cells)
         assert type in ['prediction', 'GT', 'both']
         figs_to_draw = {'prediction': ['prediction'], 'GT': ['GT'],'both': ['prediction', 'GT']}
         figs_to_draw = figs_to_draw[type]
@@ -590,13 +589,14 @@ class Box(Scene3D):
                                     intensity_scalelog = extra_info['emitter_info']['intensity_scalelog'] / 3. + 0.5 # add 0.5 for vis (otherwise could be too short)
                                 else:
                                     # print('2')
-                                    print(extra_info['emitter_info'].keys())
+                                    # print(extra_info['emitter_info'].keys())
                                     intensity = extra_info['emitter_info']['intensity_scale255'] * np.array(extra_info['emitter_info']['intensity_scaled01']) * 255.
                                     intensity_scalelog = np.log(np.clip(np.linalg.norm(intensity.flatten()) + 1., 1., np.inf)) / 3. + 0.5 # add 0.5 for vis (otherwise could be too short)
 
                                 light_end = cell_center + light_dir_abs / np.linalg.norm(light_dir_abs) * intensity_scalelog
                                 # light_end = cell_center + normal_outside
                                 # print(cell_center, light_dir)
+                                # print(extra_info['emitter_info'])
                                 a = Arrow3D([cell_center[0], light_end[0]], [cell_center[1], light_end[1]], [cell_center[2], light_end[2]], mutation_scale=20,
                                     lw=1, arrowstyle="-|>", facecolor=extra_info['emitter_info']['intensity_scaled01'], edgecolor='grey')
                                 if type0 == 'GT':

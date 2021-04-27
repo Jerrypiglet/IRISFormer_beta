@@ -176,6 +176,8 @@ def forward_joint(labels_dict, model, opt, time_meters, if_vis=False):
         time_meters['loss_matcls'].update(time.time() - time_meters['ts'])
         time_meters['ts'] = time.time()
 
+    # ic(output_dict.keys(), output_dict['results_emitter'].keys())
+
     return output_dict, loss_dict
 
 def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
@@ -544,7 +546,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                         if not opt.if_cluster:
                             if 'kernel_list' in output_dict and not output_dict['kernel_list'] is None:
                                 kernel_list = output_dict['kernel_list']
-                                print(len(kernel_list), kernel_list[0].shape)
+                                # print(len(kernel_list), kernel_list[0].shape)
                                 np.save('tmp/demo_%s/kernel_list_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), kernel_list[0].detach().cpu().numpy())
                             if output_dict['im_trainval_RGB_mask_pooled_mean'] is not None:
                                 np.save('tmp/demo_%s/im_trainval_RGB_mask_pooled_mean_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), im_trainval_RGB_mask_pooled_mean)
@@ -618,58 +620,65 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                         #     fig_2d.savefig(str(output_path))
                         #     plt.close(fig_2d)
 
-                        if opt.if_save_pickles:
-                            pickle_save_path = Path(opt.summary_vis_path_task) / ('results_emitter_%d.pickle'%sample_idx)
-                            save_dict = {'scattered_light': output_dict['emitter_est_result']['scattered_light'].detach().cpu().squeeze().numpy()[sample_idx_batch]}
+                        if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+                            output_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'emitter') + '.png')
+                            fig_3d, ax_3ds = scene_box.draw_3D_scene_plt(draw_mode, if_return_cells_vis_info=True, if_show_emitter=not(if_real_image))
+                            fig_3d.savefig(str(output_path))
+                            plt.close(fig_3d)
+                            cells_vis_info_list = ax_3ds[-1]
+                            save_dict = {'cells_vis_info_list': cells_vis_info_list}
+                            save_dict.update(emitter_info_dict)
+                            pickle_save_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'cells_vis_info_list') + '.pickle')
                             if opt.if_save_pickles:
                                 with open(str(pickle_save_path),"wb") as f:
                                     pickle.dump(save_dict, f)
 
-
-                        
-                        # if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-                        #     output_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'emitter') + '.png')
-                        #     fig_3d, ax_3ds = scene_box.draw_3D_scene_plt(draw_mode, if_return_cells_vis_info=True, if_show_emitter=not(if_real_image))
-                        #     fig_3d.savefig(str(output_path))
-                        #     plt.close(fig_3d)
-                        #     cells_vis_info_list = ax_3ds[-1]
-                        #     save_dict = {'cells_vis_info_list': cells_vis_info_list}
-                        #     save_dict.update(emitter_info_dict)
-                        #     pickle_save_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'cells_vis_info_list') + '.pickle')
-                        #     if opt.if_save_pickles:
-                        #         with open(str(pickle_save_path),"wb") as f:
-                        #             pickle.dump(save_dict, f)
-
-                        #     if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
-                        #         fig_3d, ax_3d = scene_box.draw_3D_scene_plt('GT', )
-                        #         ax_3d[1] = fig_3d.add_subplot(122, projection='3d')
-                        #         scene_box.draw_3D_scene_plt('GT', fig_or_ax=[ax_3d[1], ax_3d[0]], hide_cells=True)
+                            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
+                                fig_3d, ax_3d = scene_box.draw_3D_scene_plt('GT', )
+                                ax_3d[1] = fig_3d.add_subplot(122, projection='3d')
+                                scene_box.draw_3D_scene_plt('GT', fig_or_ax=[ax_3d[1], ax_3d[0]], hide_cells=True)
                                 
-                        #         lightAccu_color_array_GT = emitter_info_dict['envmap_lightAccu_mean_vis_GT'].transpose(0, 2, 3, 1) # -> [6, 8, 8, 3]
-                        #         hdr_scale = data_batch['hdr_scale'][sample_idx_batch].item()
-                        #         # ic(sample_idx, hdr_scale)
-                        #         # lightAccu_color_array_GT = np.clip(lightAccu_color_array_GT * hdr_scale, 0., 1.)
-                        #         lightAccu_color_array_GT = np.clip(lightAccu_color_array_GT, 0., 1.)
-                        #         scene_box.draw_all_cells(ax_3d[1], scene_box.gt_layout, lightnet_array_GT=lightAccu_color_array_GT, alpha=1.)
+                                lightAccu_color_array_GT = emitter_info_dict['envmap_lightAccu_mean_vis_GT'].transpose(0, 2, 3, 1) # -> [6, 8, 8, 3]
+                                hdr_scale = data_batch['hdr_scale'][sample_idx_batch].item()
+                                # ic(sample_idx, hdr_scale)
+                                # lightAccu_color_array_GT = np.clip(lightAccu_color_array_GT * hdr_scale, 0., 1.)
+                                lightAccu_color_array_GT = np.clip(lightAccu_color_array_GT, 0., 1.)
+                                scene_box.draw_all_cells(ax_3d[1], scene_box.gt_layout, lightnet_array_GT=lightAccu_color_array_GT, alpha=1.)
 
-                        #         output_path = Path(opt.summary_vis_path_task) / (('results_LABEL-%d'%(sample_idx)).replace('LABEL', 'lightAccu_view1') + '.png')
-                        #         fig_3d.savefig(str(output_path))
+                                output_path = Path(opt.summary_vis_path_task) / (('results_LABEL-%d'%(sample_idx)).replace('LABEL', 'lightAccu_view1') + '.png')
+                                fig_3d.savefig(str(output_path))
 
-                        #         az = 92
-                        #         elev = 113
-                        #         ax_3d[1].view_init(elev=elev, azim=az)
-                        #         ax_3d[0].view_init(elev=elev, azim=az)
-                        #         output_path = str(output_path).replace('lightAccu_view1', 'lightAccu_view2')
-                        #         fig_3d.savefig(str(output_path))
+                                az = 92
+                                elev = 113
+                                ax_3d[1].view_init(elev=elev, azim=az)
+                                ax_3d[0].view_init(elev=elev, azim=az)
+                                output_path = str(output_path).replace('lightAccu_view1', 'lightAccu_view2')
+                                fig_3d.savefig(str(output_path))
 
-                        #         plt.close(fig_3d)
+                                plt.close(fig_3d)
         
-                        #         if opt.if_save_pickles:
-                        #             pickle_save_path = Path(opt.summary_vis_path_task) / ('results_emitter_%d.pickle'%sample_idx)
-                        #             save_dict = {'scattered_light': output_dict['emitter_est_result']['scattered_light'].detach().cpu().squeeze().numpy()[sample_idx_batch]}
-                        #             if opt.if_save_pickles:
-                        #                 with open(str(pickle_save_path),"wb") as f:
-                        #                     pickle.dump(save_dict, f)
+                                if opt.if_save_pickles:
+                                    pickle_save_path = Path(opt.summary_vis_path_task) / ('results_emitter_%d.pickle'%sample_idx)
+                                    save_dict = {'envmap_lightAccu': output_dict['emitter_est_result']['envmap_lightAccu'].detach().cpu().numpy()[sample_idx_batch], \
+                                        'envmap_lightAccu_mean': output_dict['emitter_est_result']['envmap_lightAccu_mean'].detach().cpu().numpy()[sample_idx_batch], \
+                                        'points_sampled_mask_expanded': output_dict['emitter_est_result']['points_sampled_mask_expanded'].detach().cpu().numpy()[sample_idx_batch], \
+                                        'scattered_light': output_dict['emitter_est_result']['scattered_light'].detach().cpu().numpy()[sample_idx_batch], \
+                                        'cell_normal_outside_label': input_dict['emitter_labels']['cell_normal_outside'].detach().cpu().numpy()[sample_idx_batch], 
+                                        'emitter_outdirs_meshgrid_Total3D_outside': output_dict['emitter_est_result']['emitter_outdirs_meshgrid_Total3D_outside'].detach().cpu().numpy()[sample_idx_batch], \
+                                        'normal_outside_Total3D': output_dict['emitter_est_result']['normal_outside_Total3D'].detach().cpu().numpy()[sample_idx_batch], \
+                                        'cell_axis_weights': output_dict['emitter_est_result']['cell_axis_weights'].detach().cpu().numpy()[sample_idx_batch], \
+                                        'emitter_cell_axis_abs_est': output_dict['results_emitter']['emitter_cell_axis_abs_est'].detach().cpu().numpy()[sample_idx_batch], \
+                                        'emitter_cell_axis_abs_gt': output_dict['results_emitter']['emitter_cell_axis_abs_gt'].detach().cpu().numpy()[sample_idx_batch], \
+                                        'window_mask': output_dict['results_emitter']['window_mask'].detach().cpu().numpy()[sample_idx_batch], 
+                                    }
+                                    # print(output_dict['emitter_est_result']['envmap_lightAccu'].shape) # [2, 3, 384, 120, 160]
+                                    # print(output_dict['emitter_est_result']['scattered_light'].shape) # [2, 384, 8, 16, 3]
+                                    # print(input_dict['emitter_labels']['cell_normal_outside'].shape) # [2, 6, 8, 8, 3]
+                                    # print(output_dict['emitter_est_result']['emitter_outdirs_meshgrid_Total3D_outside'].shape)# [2, 384, 8, 16, 3]
+                                    # print(output_dict['emitter_est_result']['normal_outside_Total3D'].shape) # [2, 384, 1, 1, 3]
+                                    if opt.if_save_pickles:
+                                        with open(str(pickle_save_path),"wb") as f:
+                                            pickle.dump(save_dict, f)
 
 
 

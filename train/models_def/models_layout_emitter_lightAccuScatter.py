@@ -194,7 +194,7 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
             # cell_axis_LightNet = cell_axis_out.unsqueeze(-2) @ transform_params_LightNet2Total3D['inv_post_transform_matrix_expand'] @ transform_params_LightNet2Total3D['inv_inv_cam_R_transform_matrix_pre_expand']
             # cell_axis_LightNet = cell_axis_LightNet.squeeze(-2)
 
-            return_dict_emitter['emitter_est_result'].update({'cell_axis': cell_axis_out})
+            return_dict_emitter['emitter_est_result'].update({'cell_axis': cell_axis_out, 'cell_axis_weights': cell_axis_weights})
 
         # ======== get emitter est from U-Net for each estimated except `cell_axis` ========
         for head_name, head_channels in self.UNet_decoder_heads_channels:

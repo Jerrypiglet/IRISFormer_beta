@@ -223,7 +223,7 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
                             intensity_scaled01 = [np.clip(x/255., 0., 1.) for x in intensity_scaled255] # max: 1.
                             intensity_scalelog = np.log(np.clip(np.linalg.norm(intensity.flatten()) + 1., 1., np.inf))
                             cell_info['emitter_info']['intensity_scalelog'] = intensity_scalelog # log of norm of intensity
-                            cell_info['emitter_info']['intensity_scaled'] = intensity_scaled01
+                            cell_info['emitter_info']['intensity_scaled01'] = intensity_scaled01
                             cell_info['emitter_info']['intensity'] = intensity  
                             cell_info['emitter_info']['lamb'] = cell_lamb[sample_idx][wall_idx][i][j].item()
                             cell_info['light_ratio'] = emitter_cls_result_postprocessed_np[wall_idx][i * grid_size + j]
@@ -405,9 +405,12 @@ def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters):
                     emitter_fc_output_norm = torch.linalg.norm(emitter_cell_axis_abs_est, dim=-1, keepdim=True)
                     emitter_cell_axis_abs_est = emitter_cell_axis_abs_est / (emitter_fc_output_norm+1e-6)
 
+
+
                 loss = emitter_cls_criterion_L2_none(emitter_cell_axis_abs_est, emitter_property_gt)
                 loss = torch.sum(loss * window_mask.unsqueeze(-1)) / (torch.sum(window_mask.unsqueeze(-1)) * 3. + 1e-5) # only care the axis of windows; lamps are modeled as omnidirectional
                 loss = loss * opt.cfg.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_axis_global
+                emitter_results_dict.update({'emitter_cell_axis_abs_est': emitter_cell_axis_abs_est, 'emitter_cell_axis_abs_gt': emitter_property_gt, 'window_mask': window_mask})
             else:
                 loss = emitter_cls_criterion_L2_none(emitter_fc_output, emitter_property_gt)
                 if head_name == 'cell_intensity':

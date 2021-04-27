@@ -354,8 +354,8 @@ class Model_Joint(nn.Module):
         if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_light:
             envmapsBatch = input_dict['envmapsBatch']
         else:
-            envmapsBatch = return_dict_light['envmapsPredImage']
-            envmapsBatch = return_dict_light['envmapsPredScaledImage']
+            # envmapsBatch = return_dict_light['envmapsPredImage']
+            envmapsBatch = return_dict_light['envmapsPredScaledImage'] # should not assume we have this because this aligns with GT for scale
 
         # a = input_dict['envmapsBatch']
         # b = return_dict_light['envmapsPredImage']
@@ -426,9 +426,9 @@ class Model_Joint(nn.Module):
             return_dict_layout_emitter = self.EMITTER_NET(scattered_light, emitter_outdirs_meshgrid_Total3D_outside)
 
             return_dict_layout_emitter['emitter_est_result'].update({'envmap_lightAccu': return_dict_lightAccu['envmap_lightAccu'], 'scattered_light': scattered_light, \
-                'emitter_outdirs_meshgrid_global_lightNet': emitter_outdirs_meshgrid_global_lightNet})
+                'emitter_outdirs_meshgrid_Total3D_outside': emitter_outdirs_meshgrid_Total3D_outside, 'normal_outside_Total3D': normal_outside_Total3D})
 
-        return_dict_layout_emitter['emitter_est_result'].update({'envmap_lightAccu_mean': envmap_lightAccu_mean})
+        return_dict_layout_emitter['emitter_est_result'].update({'envmap_lightAccu_mean': envmap_lightAccu_mean, 'points_sampled_mask_expanded': return_dict_lightAccu['points_sampled_mask_expanded']})
 
 
         return return_dict_layout_emitter
@@ -497,6 +497,9 @@ class Model_Joint(nn.Module):
         pixelNum_recon = max( (torch.sum(segEnvBatch ).cpu().data).item(), 1e-5)
         envmapsPredScaledImage = models_brdf.LSregress(envmapsPredImage.detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
             input_dict['envmapsBatch'] * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage )
+        # ic(torch.max(input_dict['envmapsBatch']), torch.min(input_dict['envmapsBatch']),torch.median(input_dict['envmapsBatch']))
+        # ic(torch.max(envmapsPredImage), torch.min(envmapsPredImage),torch.median(envmapsPredImage))
+        # ic(torch.max(envmapsPredScaledImage), torch.min(envmapsPredScaledImage),torch.median(envmapsPredScaledImage))
 
         return_dict.update({'envmapsPredImage': envmapsPredImage, 'envmapsPredScaledImage': envmapsPredScaledImage, 'segEnvBatch': segEnvBatch, \
             'imBatchSmall': imBatchSmall, 'segBatchSmall': segBatchSmall, 'pixelNum_recon': pixelNum_recon}) 

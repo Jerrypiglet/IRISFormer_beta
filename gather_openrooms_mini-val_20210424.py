@@ -29,7 +29,7 @@ subset_to_prefix = {'im_RGB': 'im_', 'label_semseg': 'imsemLabel_'}
 list_read = open(original_list_path).readlines()
 list_read = [x.strip() for x in list_read]
 
-list_read = list_read[:200]
+list_read = list_read[:500]
 
 # for split in ['train', 'val']:
 frame_paths_all_dict = {'im_RGB': [], 'label_semseg': []}

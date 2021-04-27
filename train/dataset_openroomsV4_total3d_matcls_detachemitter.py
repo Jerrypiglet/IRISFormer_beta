@@ -247,6 +247,7 @@ class openrooms(data.Dataset):
         hdr_scale = 1.
 
         if self.opt.cfg.DATA.if_load_png_not_hdr:
+            # Read PNG image
             meta_split, scene_name, frame_id = self.meta_split_scene_name_frame_id_list[index]
             png_image_path = Path(self.opt.cfg.DATASET.png_path) / meta_split / scene_name / ('im_%d.png'%frame_id)
             image = Image.open(str(png_image_path))
@@ -263,11 +264,10 @@ class openrooms(data.Dataset):
             batch_dict = {'image_path': str(png_image_path), 'image_index': index}
 
         else:
-
-            # Read Image
+            # Read HDR image
             im_ori = self.loadHdr(hdr_image_path)
             # Random scale the image
-            im_trainval, hdr_scale = self.scaleHdr(im_ori, seg, forced_fixed_scale=False) # forced_fixed_scale=False for scale augmentation
+            im_trainval, hdr_scale = self.scaleHdr(im_ori, seg, forced_fixed_scale=False, if_print=True) # forced_fixed_scale=False for scale augmentation
             im_trainval_RGB = np.clip(im_trainval**(1.0/2.2), 0., 1.)
 
             # == no random scaling:
@@ -353,6 +353,7 @@ class openrooms(data.Dataset):
             if self.opt.cfg.DATA.load_light_gt:
                 envmaps, envmapsInd = self.loadEnvmap(env_path )
                 envmaps = envmaps * hdr_scale 
+                # print(self.split, hdr_scale, np.amax(envmaps),np.amin(envmaps), np.median(envmaps))
                 if self.cascadeLevel > 0: 
                     envmapsPre = self.loadH5(envPre_path ) 
                     if envmapsPre is None:
@@ -1048,7 +1049,7 @@ class openrooms(data.Dataset):
         im = im[::-1, :, :]
         return im
 
-    def scaleHdr(self, hdr, seg, forced_fixed_scale=False):
+    def scaleHdr(self, hdr, seg, forced_fixed_scale=False, if_print=False):
         intensityArr = (hdr * seg).flatten()
         intensityArr.sort()
         if self.split == 'train' and not forced_fixed_scale:
@@ -1057,6 +1058,9 @@ class openrooms(data.Dataset):
             scale = (0.95 - 0.1 * random.random() )  / np.clip(intensityArr[int(0.95 * self.im_width * self.im_height * 3) ], 0.1, None)
         else:
             scale = (0.95 - 0.05)  / np.clip(intensityArr[int(0.95 * self.im_width * self.im_height * 3) ], 0.1, None)
+            # if if_print:
+            #     print(self.split, not forced_fixed_scale, scale)
+
         hdr = scale * hdr
         return np.clip(hdr, 0, 1), scale 
 

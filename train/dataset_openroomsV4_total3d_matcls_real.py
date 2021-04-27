@@ -156,7 +156,7 @@ class openrooms(data.Dataset):
         im_SDR_RGB = im_RGB_uint8.astype(np.float32) / 255.
         im_trainval = im_SDR_RGB
 
-        batch_dict = {'image_path': str(png_image_path)}
+        batch_dict = {'image_path': str(png_image_path), 'image_index': index}
         batch_dict.update({'image_transformed_fixed': image_transformed_fixed, 'im_trainval': torch.from_numpy(im_trainval), 'im_trainval_RGB': im_trainval_RGB, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
 
         # ====== matcls =====
