@@ -607,12 +607,13 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                             fig_2d, _ = scene_box.draw_projected_layout(draw_mode, return_plt=True, if_use_plt=True) # with plt plotting
                             fig_2d.savefig(str(output_path))
                             plt.close(fig_2d)
-                            pickle_save_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'layout_info') + '.pickle')
-                            save_dict = {'rgb_img_path': data_batch['image_path'][sample_idx_batch],  'bins_tensor': opt.bins_tensor}
-                            save_dict.update(layout_info_dict)
-                            if opt.if_save_pickles:
-                                with open(str(pickle_save_path),"wb") as f:
-                                    pickle.dump(save_dict, f)
+                            
+                        pickle_save_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'layout_info') + '.pickle')
+                        save_dict = {'rgb_img_path': data_batch['image_path'][sample_idx_batch],  'bins_tensor': opt.bins_tensor}
+                        save_dict.update(layout_info_dict)
+                        if opt.if_save_pickles:
+                            with open(str(pickle_save_path),"wb") as f:
+                                pickle.dump(save_dict, f)
 
                         # if if_vis_obj:
                         #     output_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'obj') + '.png')

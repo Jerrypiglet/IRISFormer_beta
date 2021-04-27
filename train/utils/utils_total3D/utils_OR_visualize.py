@@ -303,7 +303,9 @@ class Box(Scene3D):
 
         return depth_combined, mask_conflict
 
-    def draw_3D_scene_plt(self, type = 'prediction', if_save = True, save_path='', fig_or_ax=[None, None],  which_to_vis='cell_info', if_show_emitter=True, if_show_objs=True, if_return_cells_vis_info=False, hide_cells=False, hide_random_id=True, scale_emitter_length=1.):
+    def draw_3D_scene_plt(self, type = 'prediction', if_save = True, save_path='', fig_or_ax=[None, None],  which_to_vis='cell_info', \
+            if_show_emitter=True, if_show_objs=True, if_return_cells_vis_info=False, hide_cells=False, hide_random_id=True, scale_emitter_length=1., \
+            if_print_log=False):
         assert type in ['prediction', 'GT', 'both']
         figs_to_draw = {'prediction': ['prediction'], 'GT': ['GT'],'both': ['prediction', 'GT']}
         figs_to_draw = figs_to_draw[type]
@@ -512,6 +514,7 @@ class Box(Scene3D):
 
                 for cell_info in cell_info_grid:
                     wall_idx, i, j = cell_info['wallidx_i_j']
+
                     origin_v1_v2 = basis_v_indexes[wall_idx]
                     basis_1 = (layout[origin_v1_v2[1]] - layout[origin_v1_v2[0]]) / self.grid_size
                     basis_2 = (layout[origin_v1_v2[2]] - layout[origin_v1_v2[0]]) / self.grid_size
@@ -550,6 +553,12 @@ class Box(Scene3D):
                             verts = (np.array(verts).squeeze().T - cell_vis['extra_info']['cell_center']) * (cell_vis['alpha']/2.+0.5) + cell_vis['extra_info']['cell_center']
                             verts = [(verts.T).tolist()]
                             poly = Poly3DCollection(verts, facecolor=intensity_color, edgecolor=color)
+
+                            if if_print_log:
+                                if type0 == 'GT' and cell_info['obj_type'] == 'window':
+                                    # ic('------')
+                                    print(wall_idx, i, j)
+
                         else:
                             poly = Poly3DCollection(verts, facecolor=color)
 
@@ -616,7 +625,7 @@ class Box(Scene3D):
         else:
             return ax_3d, [ax_3d_GT, ax_3d_PRED, [cells_vis_info_list_pred, cells_vis_info_list_GT]]
 
-    def draw_all_cells(self, ax_3d, layout, lightnet_array_GT, alpha=0.5):
+    def draw_all_cells(self, ax_3d, layout, lightnet_array_GT, alpha=0.5, if_print_log=False, highlight_cells=[]):
         assert lightnet_array_GT.shape == (6, self.grid_size, self.grid_size, 3)
         basis_v_indexes = [(3, 2, 0), (7, 6, 4), (4, 5, 0), (6, 2, 5), (7, 6, 3), (7, 3, 4)]
 
@@ -636,7 +645,8 @@ class Box(Scene3D):
 
                     verts = np.array(verts).squeeze()
                     verts = [verts.tolist()]
-                    poly = Poly3DCollection(verts, facecolor=lightnet_array_GT[wall_idx, i, j, :].flatten().tolist(), edgecolor='k')
+                    if_highlight = (wall_idx, i, j) in highlight_cells
+                    poly = Poly3DCollection(verts, facecolor=lightnet_array_GT[wall_idx, i, j, :].flatten().tolist(), edgecolor='r' if if_highlight else 'k', linewidths=3 if if_highlight else 1)
 
                     cell_vis = {}
                     cell_vis.update({'poly': poly})

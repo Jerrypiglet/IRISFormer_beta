@@ -271,6 +271,14 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
     output_vis_dict['layout_info_dict_list'] = layout_info_dict_list
     output_vis_dict['emitter_info_dict_list'] = emitter_info_dict_list
 
+    # output_vis_dict.update({
+    #     'cell_info_grid_GT': cell_info_grid_GT, \
+    #     'cell_info_grid_PRED': cell_info_grid_PRED, \
+    #     'emitter_cls_prob_PRED': emitter_cls_result_postprocessed_np, 'emitter_cls_prob_GT': emitter_cls_prob_GT_np, \
+    #     'pre_layout': pre_layout, 'pre_cam_R': pre_cam_R
+    # })
+
+
     return output_vis_dict
 
 

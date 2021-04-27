@@ -178,6 +178,7 @@ class emitter_lightAccu(nn.Module):
         self.vv_envmap, self.uu_envmap = torch.meshgrid(torch.arange(self.envRow), torch.arange(self.envCol))
         self.vv_envmap, self.uu_envmap = self.vv_envmap.cuda(), self.uu_envmap.cuda()
         self.rL = renderingLayer(imWidth = envCol, imHeight = envRow)
+        self.rL_dest = renderingLayer(imWidth = envCol, imHeight = envRow, envWidth = scatterWidth, envHeight = scatterHeight)
 
         if self.opt is not None:
             self.im_width, self.im_height = self.opt.cfg.DATA.im_width, self.opt.cfg.DATA.im_height
@@ -320,6 +321,7 @@ class emitter_lightAccu(nn.Module):
         emitter_global2localLightNet_trans_matrix = emitter_global2localLightNet_trans_matrix.unsqueeze(2).unsqueeze(2) # [2, 386, 1, 1, 3, 3]
 
         emitter_outdirs_emitter_local = (emitter_global2localLightNet_trans_matrix @ emitter_outdirs.unsqueeze(-1)).squeeze(-1) # [2, 384, 120, 160, 3]
+        emitter_outdirs_emitter_local = emitter_outdirs_emitter_local / (torch.linalg.norm(emitter_outdirs_emitter_local, axis=-1, keepdim=True)+1e-6)
 
         # l_local -> pixel coords in envmap
         cos_theta = emitter_outdirs_emitter_local[:, :, :, :, 2]
@@ -371,18 +373,8 @@ class emitter_lightAccu(nn.Module):
         '''
         return global directions of the scattered panorama (hemisphere pixels) at the emitters; should look like ![](https://i.imgur.com/sO8m431.jpg)
         '''
-        emitter_outdirs_meshgrid_emitter_local = self.rL.ls.reshape(self.scatterHeight, self.scatterWidth, 3).unsqueeze(-1).unsqueeze(0).unsqueeze(0)
+        emitter_outdirs_meshgrid_emitter_local = self.rL_dest.ls.reshape(self.scatterHeight, self.scatterWidth, 3).unsqueeze(-1).unsqueeze(0).unsqueeze(0)
 
-        # emitter_global2localLightNet_trans_matrix: torch.Size([2, 384, 1, 1, 3, 3])
-        # print(emitter_global2localLightNet_trans_matrix[0, 0, 0, 0, :, :])
-        # print(emitter_global2localLightNet_trans_matrix @ torch.transpose(emitter_global2localLightNet_trans_matrix, -1, -2))
-        # eyes = torch.eye(3).float().cuda().reshape(1, 1, 1, 1, 3, 3)
-        # emitter_outdirs_meshgrid = torch.inverse(emitter_global2localLightNet_trans_matrix + 1e-6*eyes) @ emitter_outdirs_meshgrid_emitter_local
-        # print(emitter_global2localLightNet_trans_matrix.shape, emitter_outdirs_meshgrid_emitter_local.shape, emitter_global2localLightNet_trans_matrix.dtype, emitter_outdirs_meshgrid_emitter_local.dtype, )
-        # a = emitter_global2localLightNet_trans_matrix
-        # b = emitter_global2localLightNet_trans_matrix.transpose(-1, -2)
-        # print(a)
-        # print(b)
         emitter_outdirs_meshgrid = emitter_global2localLightNet_trans_matrix.transpose(-1, -2) @ emitter_outdirs_meshgrid_emitter_local # emitter_global2localLightNet_trans_matrix is orthogonal; inv == transpose
         emitter_outdirs_meshgrid = emitter_outdirs_meshgrid.squeeze(-1) # [2, 384, 8, 16, 3]
         return emitter_outdirs_meshgrid

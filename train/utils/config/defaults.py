@@ -287,7 +287,7 @@ _C.TRAINING.MAX_CKPT_KEEP = 5
 
 _C.TEST = CN()
 _C.TEST.ims_per_batch = 16
-_C.TEST.vis_max_samples = 28
+_C.TEST.vis_max_samples = 50
 
 _C.seed = 123
 # _C.num_gpus = 1
