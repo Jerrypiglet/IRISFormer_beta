@@ -162,7 +162,7 @@ class decoder_layout_emitter_lightAccu_UNet_V2(nn.Module):
 
 class emitter_lightAccu(nn.Module):
     def __init__(self, opt=None, envHeight = 8, envWidth = 16, envRow = 120, envCol = 160, grid_size = 8, scatterHeight = 8, scatterWidth = 16, params=[]):
-        super(emitter_lightAccu, self).__init__()
+        super().__init__()
         self.opt = opt
         self.params = params
 
@@ -173,7 +173,11 @@ class emitter_lightAccu(nn.Module):
         self.scatterHeight = scatterHeight
         self.scatterWidth = scatterWidth
 
+        self.envmapHeight = self.opt.cfg.MODEL_LIGHT.envmapHeight if opt is not None else params['envmapHeight'] # 512
+        self.envmapWidth = self.opt.cfg.MODEL_LIGHT.envmapWidth if opt is not None else params['envmapWidth'] # 1024
+
         self.grid_size = grid_size
+        self.ngrids = 6 * self.grid_size**2
 
         self.vv_envmap, self.uu_envmap = torch.meshgrid(torch.arange(self.envRow), torch.arange(self.envCol))
         self.vv_envmap, self.uu_envmap = self.vv_envmap.cuda(), self.uu_envmap.cuda()
@@ -216,6 +220,7 @@ class emitter_lightAccu(nn.Module):
         y = (self.vv_im - self.v0_im) / f_pix * z
         points = torch.cat([x.unsqueeze(1), y.unsqueeze(1), z.unsqueeze(1)], dim=1) # (B, 3, 240, 320)
 
+        # normal is normalized here:
         ls_coords, camx, camy, normalPred = self.rL.forwardEnv(normalPred, envmapsPredImage, if_normal_only=True) # torch.Size([B, 128, 3, 120, 160]), [B, 3, 120, 160], [B, 3, 120, 160], [B, 3, 120, 160]
 
         verts_center_lightNet, verts_lightNet, \
@@ -272,11 +277,22 @@ class emitter_lightAccu(nn.Module):
         phi_SG = torch.atan2(sin_phi, cos_phi) # az
         # assert phi_SG >= -np.pi and phi_SG <= np.pi
 
-        az_pix = (phi_SG / np.pi / 2. + 0.5) * self.envWidth - 0.5 # [#grids, B, 120, 160, 1]
-        el_pix = theta_SG / np.pi * 2. * self.envHeight - 0.5 # [#grids, B, 120, 160, 1]
+        # az_pix = (phi_SG / np.pi / 2. + 0.5) * self.envWidth - 0.5 # [#grids, B, 120, 160, 1]
+        # el_pix = theta_SG / np.pi * 2. * self.envHeight - 0.5 # [#grids, B, 120, 160, 1]
+        # ngrids = el_pix.shape[0]
+        # az_pix = az_pix.view(ngrids, -1, 1).transpose(0, 1) # [ngrids, B*120*160, 1] -> [B*120*160, ngrids, 1]
+        # el_pix = el_pix.view(ngrids, -1, 1).transpose(0, 1) # [ngrids, B*120*160, 1] -> [B*120*160, ngrids, 1]
+        # uv_ = torch.cat([az_pix, el_pix], dim=-1) # [B*120*160, #grids, 2]
+        # uv_normalized = uv_ / (torch.tensor([w-1, h-1]).reshape(1, 1, 2).cuda().float()) * 2. - 1. # [B*120*160, #grids, 2]
+        # uv_normalized = uv_normalized.unsqueeze(2).unsqueeze(2)# -> [B*120*160, #grids, 1, 1, 2]
+        # uv_normalized = torch.cat([uv_normalized, torch.zeros_like(uv_normalized[:, :, :, :, 0:1])], dim=-1) # -> [B*120*160, #grids, 1, 1, 3]
+
+        az_pix = (phi_SG / np.pi / 2. + 0.5) * self.envWidth # [#grids, B, 120, 160, 1]
+        el_pix = theta_SG / np.pi * 2. * self.envHeight # [#grids, B, 120, 160, 1]
         ngrids = el_pix.shape[0]
         az_pix = az_pix.view(ngrids, -1, 1).transpose(0, 1) # [ngrids, B*120*160, 1] -> [B*120*160, ngrids, 1]
         el_pix = el_pix.view(ngrids, -1, 1).transpose(0, 1) # [ngrids, B*120*160, 1] -> [B*120*160, ngrids, 1]
+        uv_ = torch.cat([az_pix, el_pix], dim=-1) # [B*120*160, #grids, 2]
 
         # # sample envmap
         # envmapsPredImage_ = envmapsPredImage[:, :, vv_envmap, uu_envmap, :, :] # [B, 3, 120, 160, 8, 16] -> [B, 3, 120, 160, 8, 16]
@@ -285,13 +301,14 @@ class emitter_lightAccu(nn.Module):
         batch_size = envmapsPredImage_.shape[0]
         envmapsPredImage_ = envmapsPredImage_.view(-1, 3, 8, 16).unsqueeze(2)
         h, w = envmapsPredImage_.shape[-2:]
-        uv_ = torch.cat([az_pix, el_pix], dim=-1) # [B*120*160, #grids, 2]
-        uv_normalized = uv_ / (torch.tensor([w-1, h-1]).reshape(1, 1, 2).cuda().float()) * 2. - 1. # [B*120*160, #grids, 2]
+        # uv_normalized = uv_ / (torch.tensor([w-1, h-1]).reshape(1, 1, 2).cuda().float()) * 2. - 1. # [B*120*160, #grids, 2]
+        uv_normalized = uv_ / (torch.tensor([w, h]).reshape(1, 1, 2).cuda().float()) * 2. - 1. # [B*120*160, #grids, 2]
         uv_normalized = uv_normalized.unsqueeze(2).unsqueeze(2)# -> [B*120*160, #grids, 1, 1, 2]
         uv_normalized = torch.cat([uv_normalized, torch.zeros_like(uv_normalized[:, :, :, :, 0:1])], dim=-1) # -> [B*120*160, #grids, 1, 1, 3]
+
         # essentially sample each 1x8x16 envmap at ngrid points, of B*120*160 envmaps
         # [B*120*160, 3, 1, 8, 16], [B*120*160, #grids, 1, 1, 3] -> [B*120*160, 3, #grids, 1, 1]
-        envmap_lightAccu_ = torch.nn.functional.grid_sample(envmapsPredImage_, uv_normalized, padding_mode='border', align_corners = True) # https://pytorch.org/docs/stable/nn.functional.html#torch.nn.functional.grid_sample
+        envmap_lightAccu_ = torch.nn.functional.grid_sample(envmapsPredImage_, uv_normalized, padding_mode='border', align_corners=False) # https://pytorch.org/docs/stable/nn.functional.html#torch.nn.functional.grid_sample
 
         envmap_lightAccu_ = envmap_lightAccu_.squeeze(-1).squeeze(-1).view(batch_size, self.envRow, self.envCol, 3, ngrids) # -> [B, 120, 160, 3, #grids]
         envmap_lightAccu_ = envmap_lightAccu_.permute(0, 3, 4, 1, 2) # -> [B, 3, #grids, 120, 160]
@@ -305,7 +322,56 @@ class emitter_lightAccu(nn.Module):
         # envmap_lightAccu_vis_max_ = envmap_lightAccu_vis_.amax(-1).amax(-1).permute(0, 2, 1) # -> [1, 384, 3]
         return envmap_lightAccu_, points_sampled_mask_expanded, points_sampled_mask, vec_to_t
 
-    def scatter_light_to_hemisphere(self, input_dict):
+    def sample_envmap(self, input_dict):
+        emitter_outdirs_meshgrid_Total3D_outside = input_dict['emitter_outdirs_meshgrid_Total3D_outside'] # [B, 384, 8, 16, 3]
+        transform_R_RAW2Total3D = input_dict['transform_R_RAW2Total3D'] # [B, 3, 3]
+        im_envmap_ori = input_dict['im_envmap_ori'] # [B, 512, 1024, 3]
+        # print(emitter_outdirs_meshgrid_Total3D_outside.shape, transform_R_RAW2Total3D.shape, im_envmap_ori.shape)
+        assert emitter_outdirs_meshgrid_Total3D_outside.shape[1:] == (self.ngrids, self.scatterHeight, self.scatterWidth, 3)
+        assert transform_R_RAW2Total3D.shape[1:] == (3, 3)
+        assert im_envmap_ori.shape[1:] == (self.envmapHeight, self.envmapWidth, 3)
+        im_envmap_ori = im_envmap_ori.permute(0, 3, 1, 2) # [B, 3, 512, 1024]
+
+        emitter_outdirs_meshgrid_Total3D_outside = emitter_outdirs_meshgrid_Total3D_outside.unsqueeze(-1) # [B, 384, 8, 16, 3, 1]
+
+        transform_R_Total3D2RAW = transform_R_RAW2Total3D.transpose(1, 2).unsqueeze(1).unsqueeze(1).unsqueeze(1) # [B, 1, 1, 1, 3, 3]
+
+        emitter_outdirs_meshgrid_RAW_outside = (transform_R_Total3D2RAW @ emitter_outdirs_meshgrid_Total3D_outside).squeeze(-1) # [B, 384, 8, 16, 3]
+        # print(emitter_outdirs_meshgrid_RAW_outside.shape)
+
+        light_axis_world_SG = torch.stack([emitter_outdirs_meshgrid_RAW_outside[:, :, :, :, 2], -emitter_outdirs_meshgrid_RAW_outside[:, :, :, :, 0], emitter_outdirs_meshgrid_RAW_outside[:, :, :, :, 1]], -1) # already normalized
+        # print(light_axis_world_SG.shape)
+        # print(torch.linalg.norm(light_axis_world_SG, dim=-1))
+        cos_theta = light_axis_world_SG[:, :, :, :, 2]
+        theta_SG = torch.arccos(cos_theta) # [0, pi]
+        cos_phi = light_axis_world_SG[:, :, :, :, 0] / torch.sin(theta_SG)
+        sin_phi = light_axis_world_SG[:, :, :, :, 1] / torch.sin(theta_SG)
+        phi_SG = torch.atan2(sin_phi, cos_phi)
+        # assert np.all(phi_SG >= -np.pi)
+        # assert np.all(phi_SG <= np.pi)
+
+        # az = phi_SG
+        # az_pix = (phi_SG / np.pi / 2. + 0.5) * envmap_W - 0.5 # [2, 384, 120, 160] # ideally np.arange(envWidth)
+        # el_pix = theta_SG / np.pi * 2. * envmap_H - 0.5 # [2, 384, 120, 160] # ideally np.arange(envHeight)
+        # uu_pix = (phi_SG + np.pi) / (2 * np.pi) * self.envmapWidth
+        # vv_pix = theta_SG / np.pi * (self.envmapHeight-1) + 0.5 # pixel center when align_corners = False: [0.5, ..., h-0.5]
+        uu_pix_normalized = phi_SG / np.pi # pixel center when align_corners = False; -pi~pi -> -1~1; [B, 384, 8, 16]
+        vv_pix_normalized = theta_SG * 2. / np.pi -1. # pixel center when align_corners = False; 0~pi -> -1~1; [B, 384, 8, 16]
+        # uv_normalized = torch.cat([torch.zeros_like(uu_pix_normalized).unsqueeze(-1), uu_pix_normalized.unsqueeze(-1), vv_pix_normalized.unsqueeze(-1)], dim=-1) # [B, 384, 8, 16, 3]
+        uv_normalized = torch.cat([uu_pix_normalized.unsqueeze(-1), vv_pix_normalized.unsqueeze(-1), torch.zeros_like(uu_pix_normalized).unsqueeze(-1)], dim=-1) # [B, 384, 8, 16, 3]
+
+        im_envmap_ori = im_envmap_ori.unsqueeze(2)
+
+        # print(im_envmap_ori.shape, uv_normalized.shape)
+         # [B, 3, 1, 512, 1024], [B, 384, 8, 16, 3]-> [B, 3, 384, 8, 16]
+        im_envmap_sampled = torch.nn.functional.grid_sample(im_envmap_ori, uv_normalized, padding_mode='border', align_corners=False) # https://pytorch.org/docs/stable/nn.functional.html#torch.nn.functional.grid_sample
+        # print(im_envmap_sampled.shape)
+
+        return im_envmap_sampled
+
+
+
+    def scatter_light_to_hemisphere(self, input_dict, if_scatter=True):
         envmap_lightAccu, points_sampled_mask, vec_to_t, basis_1_array, basis_2_array, normal_inside_array = \
             input_dict['envmap_lightAccu'], input_dict['points_sampled_mask'], input_dict['vec_to_t'], \
                 input_dict['basis_1_array_lightNet'], input_dict['basis_2_array_lightNet'], input_dict['normal_array_lightNet']
@@ -320,6 +386,9 @@ class emitter_lightAccu(nn.Module):
         emitter_global2localLightNet_trans_matrix = emitter_global2localLightNet_trans_matrix.view(emitter_global2localLightNet_trans_matrix.shape[0], 6*self.grid_size*self.grid_size, 3, 3) # [2, 386, 3, 3]
         emitter_global2localLightNet_trans_matrix = emitter_global2localLightNet_trans_matrix.unsqueeze(2).unsqueeze(2) # [2, 386, 1, 1, 3, 3]
 
+        if not if_scatter:
+            return None, emitter_global2localLightNet_trans_matrix
+
         emitter_outdirs_emitter_local = (emitter_global2localLightNet_trans_matrix @ emitter_outdirs.unsqueeze(-1)).squeeze(-1) # [2, 384, 120, 160, 3]
         emitter_outdirs_emitter_local = emitter_outdirs_emitter_local / (torch.linalg.norm(emitter_outdirs_emitter_local, axis=-1, keepdim=True)+1e-6)
 
@@ -331,13 +400,21 @@ class emitter_lightAccu(nn.Module):
         phi_SG = torch.atan2(sin_phi, cos_phi) # az
         # assert phi_SG >= -np.pi and phi_SG <= np.pi
 
-        az_pix = (phi_SG / np.pi / 2. + 0.5) * self.scatterWidth - 0.5 # [2, 384, 120, 160] # ideally np.arange(envWidth)
-        valid_mask_az = torch.logical_not(torch.isnan(az_pix))
-        valid_mask_az = torch.logical_and(torch.logical_and(az_pix>-0.5, az_pix<(self.scatterWidth-1.+0.5)), valid_mask_az) # [2, 384, 120, 160]
+        # az_pix = (phi_SG / np.pi / 2. + 0.5) * self.scatterWidth - 0.5 # [2, 384, 120, 160] # ideally np.arange(envWidth)
+        # valid_mask_az = torch.logical_not(torch.isnan(az_pix))
+        # valid_mask_az = torch.logical_and(torch.logical_and(az_pix>-0.5, az_pix<(self.scatterWidth-1.+0.5)), valid_mask_az) # [2, 384, 120, 160]
         
-        el_pix = theta_SG / np.pi * 2. * self.scatterHeight - 0.5 # [2, 384, 120, 160] # ideally np.arange(envHeight)
+        # el_pix = theta_SG / np.pi * 2. * self.scatterHeight - 0.5 # [2, 384, 120, 160] # ideally np.arange(envHeight)
+        # valid_mask_el = torch.logical_not(torch.isnan(el_pix))
+        # valid_mask_el = torch.logical_and(torch.logical_and(el_pix>-0.5, el_pix<(self.scatterHeight-1.+0.5)), valid_mask_el).squeeze(-1) # [2, 384, 120, 160]
+
+        az_pix = (phi_SG / np.pi / 2. + 0.5) * self.scatterWidth # [2, 384, 120, 160] # ideally np.arange(envWidth)
+        valid_mask_az = torch.logical_not(torch.isnan(az_pix))
+        valid_mask_az = torch.logical_and(torch.logical_and(az_pix>0., az_pix<self.scatterWidth), valid_mask_az) # [2, 384, 120, 160]
+        
+        el_pix = theta_SG / np.pi * 2. * self.scatterHeight # [2, 384, 120, 160] # ideally np.arange(envHeight)
         valid_mask_el = torch.logical_not(torch.isnan(el_pix))
-        valid_mask_el = torch.logical_and(torch.logical_and(el_pix>-0.5, el_pix<(self.scatterHeight-1.+0.5)), valid_mask_el).squeeze(-1) # [2, 384, 120, 160]
+        valid_mask_el = torch.logical_and(torch.logical_and(el_pix>0., el_pix<self.scatterHeight), valid_mask_el).squeeze(-1) # [2, 384, 120, 160]
         
         valid_mask = torch.logical_and(valid_mask_el, valid_mask_az)
         valid_mask = torch.logical_and(points_sampled_mask.unsqueeze(1).expand_as(valid_mask), valid_mask)
@@ -354,8 +431,8 @@ class emitter_lightAccu(nn.Module):
         B, ngrids = envmap_lightAccu.shape[0], envmap_lightAccu.shape[2]
         scattered_light = torch.zeros(B, ngrids, self.scatterHeight, self.scatterWidth, 3).cuda()
         # scattered_light.requires_grad = True
-        valid_uu = torch.round(az_pix).long()[valid_mask]
-        valid_vv = torch.round(el_pix).long()[valid_mask]
+        valid_uu = torch.round(az_pix-0.5).long()[valid_mask]
+        valid_vv = torch.round(el_pix-0.5).long()[valid_mask]
 
         # valid_points_num = valid_vv.shape[0]
         # ic(az_pix.shape, valid_uu.shape, envmap_lightAccu.permute(0, 2, 3, 4, 1)[valid_mask].shape, valid_points_num) # torch.Size([2, 384, 120, 160]) torch.Size([2852266]) torch.Size([2852266, 3])

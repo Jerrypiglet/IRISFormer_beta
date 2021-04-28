@@ -315,8 +315,9 @@ class Model_Joint(nn.Module):
                 albedo_output = self.BRDF_Net['albedoDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)
                 albedoPred = 0.5 * (albedo_output['x_out'] + 1)
                 input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
-                albedoPred = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
-                        input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
+                if not self.cfg.MODEL_BRDF.use_scale_aware_loss:
+                    albedoPred = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
+                            input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
                 albedoPred = torch.clamp(albedoPred, 0, 1)
                 return_dict.update({'albedoPred': albedoPred})
             if 'no' in self.cfg.MODEL_BRDF.enable_list:
@@ -327,8 +328,9 @@ class Model_Joint(nn.Module):
                 return_dict.update({'roughPred': roughPred})
             if 'de' in self.cfg.MODEL_BRDF.enable_list:
                 depthPred = 0.5 * (self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)['x_out'] + 1)
-                depthPred = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
-                        input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
+                if not self.cfg.MODEL_BRDF.use_scale_aware_loss:
+                    depthPred = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
+                            input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
                 return_dict.update({'depthPred': depthPred})
 
             # print(x1.shape, x2.shape, x3.shape, x4.shape, x5.shape, x6.shape)
@@ -376,16 +378,18 @@ class Model_Joint(nn.Module):
         layout_gt_batch = input_dict['layout_labels']['lo_bdb3D']
         # print(depthBatch.shape, normalBatch.shape, envmapsBatch.shape, cam_K_batch.shape, cam_R_gt_batch.shape, layout_gt_batch.shape)
 
-        input_dict = {'normalPred_lightAccu':normalBatch, 'depthPred_lightAccu': depthBatch, 'envmapsPredImage_lightAccu': envmapsBatch, 'cam_K': cam_K_batch, 'cam_R': cam_R_gt_batch, 'layout': layout_gt_batch}
+        input_dict_light_accu = {'normalPred_lightAccu':normalBatch, 'depthPred_lightAccu': depthBatch, 'envmapsPredImage_lightAccu': envmapsBatch, 'cam_K': cam_K_batch, 'cam_R': cam_R_gt_batch, 'layout': layout_gt_batch}
 
-        return_dict_lightAccu = self.EMITTER_LIGHT_ACCU_NET(input_dict)
+        return_dict_lightAccu = self.EMITTER_LIGHT_ACCU_NET(input_dict_light_accu)
         envmap_lightAccu_mean = return_dict_lightAccu['envmap_lightAccu_mean'].view(-1, 6, 8, 8, 3).permute(0, 1, 4, 2, 3)
 
         if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version in ['V1', 'V2']:
             return_dict_layout_emitter = self.EMITTER_NET(envmap_lightAccu_mean)
         else:
+
             # Scatter lights to each emitter
-            scattered_light, emitter_local_xyz_trans = self.EMITTER_LIGHT_ACCU_NET.scatter_light_to_hemisphere(return_dict_lightAccu)
+            scattered_light, emitter_global2localLightNet_trans_matrix = self.EMITTER_LIGHT_ACCU_NET.scatter_light_to_hemisphere(return_dict_lightAccu, if_scatter=True)
+
             
             # ---- Get params to transform cell_axis from LightNet coords -> Total3D coords
             Total3D_to_LightNet_transform_params = return_dict_lightAccu['Total3D_to_LightNet_transform_params']
@@ -397,14 +401,8 @@ class Model_Joint(nn.Module):
             T_LightNet2Total3D_rightmult = transform_params_LightNet2Total3D['inv_post_transform_matrix_expand'] @ transform_params_LightNet2Total3D['inv_inv_cam_R_transform_matrix_pre_expand']
 
             # ---- Get the dir meshgrid outside (abs/relative) for all cells
-            emitter_outdirs_meshgrid_global_lightNet = self.EMITTER_LIGHT_ACCU_NET.get_emitter_outdirs_meshgrid(emitter_local_xyz_trans)
+            emitter_outdirs_meshgrid_global_lightNet = self.EMITTER_LIGHT_ACCU_NET.get_emitter_outdirs_meshgrid(emitter_global2localLightNet_trans_matrix)
             grid_size = self.EMITTER_LIGHT_ACCU_NET.grid_size
-            # normal_outside_lightNet = - return_dict_lightAccu['normal_array_lightNet'].unsqueeze(2).unsqueeze(2).unsqueeze(2) # [B, 6, 1, 1, 1, 3]
-            # emitter_outdirs_meshgrid_wrt_normal_outside_lightNet = emitter_outdirs_meshgrid_global_lightNet - normal_outside_lightNet
-            # # [!!!] emitter_outdirs_meshgrid_global_lightNet and normal_outside_lightNet are NORMALIZED!
-            # # print(torch.linalg.norm(emitter_outdirs_meshgrid_global_lightNet, dim=-1).flatten(), torch.linalg.norm(normal_outside_lightNet, dim=-1).flatten())
-            # emitter_outdirs_meshgrid_wrt_normal_outside_lightNet_norm = torch.linalg.norm(emitter_outdirs_meshgrid_wrt_normal_outside_lightNet, dim=-1, keepdim=True).detach()
-            # emitter_outdirs_meshgrid_wrt_normal_outside_lightNet = emitter_outdirs_meshgrid_wrt_normal_outside_lightNet / (1e-6+emitter_outdirs_meshgrid_wrt_normal_outside_lightNet_norm)
             normal_outside_lightNet = - return_dict_lightAccu['normal_array_lightNet'].unsqueeze(2).unsqueeze(2).unsqueeze(2) # [B, 6, 1, 1, 1, 3]
             normal_outside_lightNet = normal_outside_lightNet.repeat(1, 1, grid_size**2, 1, 1, 1) # normal inside --negative--> normal outside # [B, ngrids(6*8*8, 1, 1, 3]
             normal_outside_lightNet = normal_outside_lightNet.view(normal_outside_lightNet.shape[0], 6*grid_size*grid_size, 1, 1, 3) # [B, ngrids, 1, 1, 3]
@@ -412,23 +410,39 @@ class Model_Joint(nn.Module):
             emitter_outdirs_meshgrid_global_lightNet_outside = - emitter_outdirs_meshgrid_global_lightNet # flip the hemisphere dirs so that they point to the outside of the wall
             
             # ---- LightNet -> Total3D (dirs & normal outside)
-            emitter_outdirs_meshgrid_Total3D_outside = (emitter_outdirs_meshgrid_global_lightNet_outside.unsqueeze(-2) @ T_LightNet2Total3D_rightmult).squeeze(-2) # [B, 384, 8, 16, 3]
-            # print(emitter_outdirs_meshgrid_Total3D_outside.shape, normal_outside_lightNet.shape) # torch.Size([4, 384, 8, 16, 3]) torch.Size([4, 6, 1, 1, 1, 3])
-            # print(torch.linalg.norm(emitter_outdirs_meshgrid_Total3D_outside, dim=-1), torch.linalg.norm(normal_outside_lightNet, dim=-1)) # both are unit norm
+            emitter_outdirs_meshgrid_Total3D_outside_abs = (emitter_outdirs_meshgrid_global_lightNet_outside.unsqueeze(-2) @ T_LightNet2Total3D_rightmult).squeeze(-2) # [B, 384, 8, 16, 3]
             normal_outside_Total3D = (normal_outside_lightNet.unsqueeze(-2) @ T_LightNet2Total3D_rightmult).squeeze(-2) # [B, 384, 8, 16, 3]            
-            # print(emitter_outdirs_meshgrid_Total3D_outside.shape, normal_outside_Total3D.shape) # torch.Size([4, 384, 8, 16, 3]) torch.Size([4, 384, 1, 1, 3])
-            # print(torch.linalg.norm(normal_outside_Total3D, dim=-1)) # both unit norm
             
             if self.cfg.MODEL_LAYOUT_EMITTER.emitter.relative_dir:
-                emitter_outdirs_meshgrid_Total3D_outside = emitter_outdirs_meshgrid_Total3D_outside - normal_outside_Total3D
+                emitter_outdirs_meshgrid_Total3D_outside = emitter_outdirs_meshgrid_Total3D_outside_abs - normal_outside_Total3D
+            else:
+                emitter_outdirs_meshgrid_Total3D_outside = emitter_outdirs_meshgrid_Total3D_outside_abs
 
             # ---- run the emitter net!
-            return_dict_layout_emitter = self.EMITTER_NET(scattered_light, emitter_outdirs_meshgrid_Total3D_outside)
+            if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_envmap_as_input:
+                # -- if not scatter: use_sampled_envmap_as_input
+                input_dict_sampler = {'emitter_outdirs_meshgrid_Total3D_outside': emitter_outdirs_meshgrid_Total3D_outside_abs, \
+                     'transform_R_RAW2Total3D': input_dict['emitter_labels']['transform_R_RAW2Total3D'], \
+                     'im_envmap_ori': input_dict['emitter_labels']['im_envmap_ori']}
 
-            return_dict_layout_emitter['emitter_est_result'].update({'envmap_lightAccu': return_dict_lightAccu['envmap_lightAccu'], 'scattered_light': scattered_light, \
+                im_envmap_sampled = self.EMITTER_LIGHT_ACCU_NET.sample_envmap(input_dict_sampler) # [B, 3, 384, 8, 16]
+                im_envmap_sampled = im_envmap_sampled.permute(0, 2, 3, 4, 1) # [B, 384, 8, 16, 3]
+                window_mask = (input_dict['emitter_labels']['cell_cls'] == 1).float() # [B, 6, 8, 8]
+                window_mask = window_mask.view(window_mask.shape[0], -1) # [B, 384]
+                window_mask = window_mask.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
+                # print(window_mask.shape, im_envmap_sampled.shape, scattered_light.shape)
+                scattered_light = im_envmap_sampled * window_mask + scattered_light * (1-window_mask)
+
+            return_dict_layout_emitter = self.EMITTER_NET(scattered_light, emitter_outdirs_meshgrid_Total3D_outside)
+            return_dict_layout_emitter['emitter_est_result'].update({'scattered_light': scattered_light})
+
+            return_dict_layout_emitter['emitter_est_result'].update({'envmap_lightAccu': return_dict_lightAccu['envmap_lightAccu'], \
                 'emitter_outdirs_meshgrid_Total3D_outside': emitter_outdirs_meshgrid_Total3D_outside, 'normal_outside_Total3D': normal_outside_Total3D})
 
         return_dict_layout_emitter['emitter_est_result'].update({'envmap_lightAccu_mean': envmap_lightAccu_mean, 'points_sampled_mask_expanded': return_dict_lightAccu['points_sampled_mask_expanded']})
+
+        return_dict_layout_emitter['emitter_input'] = {'normalPred_lightAccu':normalBatch, 'depthPred_lightAccu': depthBatch, 'envmapsPredImage_lightAccu': envmapsBatch}
+
 
 
         return return_dict_layout_emitter

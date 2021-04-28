@@ -65,13 +65,16 @@ _C.DATASET.layout_emitter_path = ''
 # _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitter-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitterRERE-OR45_total3D_train_test_data'
-_C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitterRERERE20210420-OR45_total3D_train_test_data'
+_C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitterRERERE20210425-OR45_total3D_train_test_data'
 
 # _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitter-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitterRERE-OR45_total3D_train_test_data'
-_C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitterRERERE20210420-OR45_total3D_train_test_data'
+_C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitterRERERE20210425-OR45_total3D_train_test_data'
 
+_C.DATASET.envmap_path = ''
+_C.DATASET.envmap_path_local = '/home/ruizhu/Documents/data/EnvDataset/'
+_C.DATASET.envmap_path_cluster = '/siggraphasia20dataset/EnvDataset/'
 
 _C.DATASET.matpart_path = ''
 _C.DATASET.matpart_path_local = '/data/ruizhu/OR-matpart'
@@ -128,6 +131,7 @@ _C.MODEL_BRDF.semseg_PPM = True
 _C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240/%s0_13.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
 # _C.MODEL_BRDF.pretrained_pth_name = ''
 _C.MODEL_BRDF.encoder_exclude = '' # e.g. 'x4_x5
+_C.MODEL_BRDF.use_scale_aware_loss = False
 
 # ===== per-pixel lighting
 _C.MODEL_LIGHT = CN()
@@ -138,6 +142,8 @@ _C.MODEL_LIGHT.envCol = 160
 _C.MODEL_LIGHT.envHeight = 8
 _C.MODEL_LIGHT.envWidth = 16
 _C.MODEL_LIGHT.SGNum = 12
+_C.MODEL_LIGHT.envmapWidth = 1024
+_C.MODEL_LIGHT.envmapHeight = 512
 _C.MODEL_LIGHT.offset = 1. # 'the offset for log error'
 _C.MODEL_LIGHT.use_GT_brdf = False
 _C.MODEL_LIGHT.use_GT_light = False
@@ -145,6 +151,8 @@ _C.MODEL_LIGHT.load_pretrained_MODEL_BRDF = False
 _C.MODEL_LIGHT.load_pretrained_MODEL_LIGHT = False
 _C.MODEL_LIGHT.freeze_BRDF_Net = True
 _C.MODEL_LIGHT.pretrained_pth_name = 'check_cascadeLight0_sg12_offset1.0/%s0_9.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
+_C.MODEL_LIGHT.use_scale_aware_loss = False
+
 # _C.MODEL_LIGHT.pretrained_pth_name = ''
 
 # ===== layout, emitter
@@ -184,6 +192,8 @@ _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_brdf = True # use GT brdf 
 _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.freeze_lightnet = True # freeze LIGHT_NET when using predictiion from LIGHT_NET
 _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.freeze_brdfnet = True # freeze LIGHT_NET when using predictiion from LIGHT_NET
 _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis = True
+_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_envmap = False
+_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_envmap_as_input = False
 
 _C.MODEL_LAYOUT_EMITTER.layout = CN()
 _C.MODEL_LAYOUT_EMITTER.layout.loss = CN()

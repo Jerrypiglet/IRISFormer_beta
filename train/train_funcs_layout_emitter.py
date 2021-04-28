@@ -104,6 +104,10 @@ def get_labels_dict_layout_emitter(data_batch, opt):
         emitter_labels.update({'emitter2wall_assign_info_list': data_batch['emitter2wall_assign_info_list'], 'emitters_obj_list': data_batch['emitters_obj_list'], 'gt_layout_RAW': data_batch['gt_layout_RAW'], 'cell_info_grid': data_batch['cell_info_grid']})
         labels_dict['emitter_labels'] = emitter_labels
 
+        if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_envmap:
+            emitter_labels['im_envmap_ori'] = data_batch['im_envmap_ori'].cuda(non_blocking=True)
+            emitter_labels['transform_R_RAW2Total3D'] = data_batch['transform_R_RAW2Total3D'].cuda(non_blocking=True)
+
     return labels_dict
 
 def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
@@ -408,12 +412,15 @@ def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters):
                         emitter_property_gt_norm = torch.linalg.norm(emitter_property_gt, dim=-1, keepdim=True)
                         emitter_property_gt = emitter_property_gt / (emitter_property_gt_norm+1e-6)
 
+                # print(cell_normal_outside.shape, window_mask.shape) # torch.Size([2, 6, 64, 3]) torch.Size([2, 6, 64])
+                # a = cell_normal_outside[window_mask==1.]
+                # a = a.reshape(-1, 3)
+                # print(a.shape, a, '---456---')
+
                 if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.scale_invariant_loss_for_cell_axis:
                     # emitter_fc_output_norm = torch.linalg.norm(emitter_cell_axis_abs_est, dim=-1, keepdim=True).detach()
                     emitter_fc_output_norm = torch.linalg.norm(emitter_cell_axis_abs_est, dim=-1, keepdim=True)
                     emitter_cell_axis_abs_est = emitter_cell_axis_abs_est / (emitter_fc_output_norm+1e-6)
-
-
 
                 loss = emitter_cls_criterion_L2_none(emitter_cell_axis_abs_est, emitter_property_gt)
                 loss = torch.sum(loss * window_mask.unsqueeze(-1)) / (torch.sum(window_mask.unsqueeze(-1)) * 3. + 1e-5) # only care the axis of windows; lamps are modeled as omnidirectional

@@ -5,6 +5,20 @@ import trimesh
 from PIL import Image, ImageDraw, ImageFont
 import os.path as osp
 
+def loadHdr_simple(imName):
+    im_rec = cv2.imread(str(imName), -1 )
+    # print(imName, np.amax(im_rec))
+    im_rec = np.ascontiguousarray(im_rec[:, :, ::-1] )
+    return im_rec
+
+def to_nonhdr(im, scale=None, extra_scale=1.):
+    seg = np.amin(im, 2)[:, :, np.newaxis] > 0.
+    im, scale = scaleHdr(im, seg, scale=scale)
+    im = im * extra_scale
+    im_not_hdr = np.clip((im)**(1.0/2.2), 0., 1.)
+    im_uint8 = (255. * im_not_hdr).astype(np.uint8)
+    return im_uint8, scale
+
 def loadImage(imName, isGama = False):
     imName = str(imName)
     if not(osp.isfile(imName ) ):
@@ -44,11 +58,12 @@ def loadHdr(imName, if_resize=False, imWidth=None, imHeight=None, if_channel_fir
         im = np.transpose(im, [2, 0, 1])
     return im
 
-def scaleHdr(hdr, seg):
-    imHeight, imWidth = hdr.shape[:2]
-    intensityArr = (hdr * seg).flatten()
-    intensityArr.sort()
-    scale = (0.95 - 0.05)  / np.clip(intensityArr[int(0.95 * imWidth * imHeight * 3) ], 0.1, None)
+def scaleHdr(hdr, seg, scale=None):
+    if scale is None:
+        imHeight, imWidth = hdr.shape[:2]
+        intensityArr = (hdr * seg).flatten()
+        intensityArr.sort()
+        scale = (0.95 - 0.05)  / np.clip(intensityArr[int(0.95 * imWidth * imHeight * 3) ], 0.1, None)
     hdr = scale * hdr
     return np.clip(hdr, 0, 1), scale 
 

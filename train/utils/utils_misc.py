@@ -56,7 +56,7 @@ def copy_py_files(root_path, dest_path, exclude_paths=[]):
     origin_path_list = []
     for root, dirs, files in os.walk(root_path):
         for file in files:
-            if file.endswith(".py") or file.endswith(".yaml"):
+            if (file.endswith(".py") or file.endswith(".yaml")) and (not file.endswith(".pyc")):
                 origin_path = os.path.join(root, file)
                 # print(os.path.join(root, file))
                 exclude_flag = False

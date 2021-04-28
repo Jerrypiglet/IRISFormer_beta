@@ -16,11 +16,13 @@ def set_up_envs(opt):
     opt.cfg.PATH.root = opt.cfg.PATH.root_cluster if opt.if_cluster else opt.cfg.PATH.root_local
     if opt.if_cluster:
         opt.cfg.TRAINING.MAX_CKPT_KEEP = -1
+        opt.if_save_pickles = True
     opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_cluster if opt.if_cluster else opt.cfg.DATASET.dataset_path_local
     opt.cfg.DATASET.layout_emitter_path = opt.cfg.DATASET.layout_emitter_path_cluster if opt.if_cluster else opt.cfg.DATASET.layout_emitter_path_local
     opt.cfg.DATASET.png_path = opt.cfg.DATASET.png_path_cluster if opt.if_cluster else opt.cfg.DATASET.png_path_local
     opt.cfg.DATASET.matpart_path = opt.cfg.DATASET.matpart_path_cluster if opt.if_cluster else opt.cfg.DATASET.matpart_path_local
     opt.cfg.DATASET.matori_path = opt.cfg.DATASET.matori_path_cluster if opt.if_cluster else opt.cfg.DATASET.matori_path_local
+    opt.cfg.DATASET.envmap_path = opt.cfg.DATASET.envmap_path_cluster if opt.if_cluster else opt.cfg.DATASET.envmap_path_local
     if opt.data_root is not None:
         opt.cfg.DATASET.dataset_path = opt.data_root
 
@@ -91,6 +93,9 @@ def set_up_envs(opt):
         if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable and opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V3':
             opt.cfg.MODEL_LAYOUT_EMITTER.emitter.relative_dir = True
 
+        if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_envmap_as_input:
+            opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_envmap = True
+
     # ====== per-pixel lighting =====
     if opt.cfg.MODEL_LIGHT.enable:
         opt.cfg.DATA.load_light_gt = True
@@ -142,6 +147,7 @@ def set_up_envs(opt):
         opt.cfg.DATA.load_brdf_gt = True
         opt.depth_metrics = ['abs_rel', 'sq_rel', 'rmse', 'rmse_log', 'a1', 'a2', 'a3']
         opt.cfg.MODEL_BRDF.loss_list += opt.cfg.MODEL_BRDF.enable_list
+        ic(opt.cfg.DATA.load_brdf_gt)
 
 
 

@@ -667,11 +667,13 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                                         'cell_normal_outside_label': input_dict['emitter_labels']['cell_normal_outside'].detach().cpu().numpy()[sample_idx_batch], 
                                         'emitter_outdirs_meshgrid_Total3D_outside': output_dict['emitter_est_result']['emitter_outdirs_meshgrid_Total3D_outside'].detach().cpu().numpy()[sample_idx_batch], \
                                         'normal_outside_Total3D': output_dict['emitter_est_result']['normal_outside_Total3D'].detach().cpu().numpy()[sample_idx_batch], \
-                                        'cell_axis_weights': output_dict['emitter_est_result']['cell_axis_weights'].detach().cpu().numpy()[sample_idx_batch], \
                                         'emitter_cell_axis_abs_est': output_dict['results_emitter']['emitter_cell_axis_abs_est'].detach().cpu().numpy()[sample_idx_batch], \
                                         'emitter_cell_axis_abs_gt': output_dict['results_emitter']['emitter_cell_axis_abs_gt'].detach().cpu().numpy()[sample_idx_batch], \
                                         'window_mask': output_dict['results_emitter']['window_mask'].detach().cpu().numpy()[sample_idx_batch], 
                                     }
+                                    if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis:
+                                        save_dict.update({'cell_axis_weights': output_dict['emitter_est_result']['cell_axis_weights'].detach().cpu().numpy()[sample_idx_batch]})
+
                                     # print(output_dict['emitter_est_result']['envmap_lightAccu'].shape) # [2, 3, 384, 120, 160]
                                     # print(output_dict['emitter_est_result']['scattered_light'].shape) # [2, 384, 8, 16, 3]
                                     # print(input_dict['emitter_labels']['cell_normal_outside'].shape) # [2, 6, 8, 8, 3]
@@ -680,6 +682,13 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                                     if opt.if_save_pickles:
                                         with open(str(pickle_save_path),"wb") as f:
                                             pickle.dump(save_dict, f)
+
+                                    emitter_input_dict = {x: output_dict['emitter_input'][x].detach().cpu().numpy()[sample_idx_batch] for x in output_dict['emitter_input']}
+                                    pickle_save_path = Path(opt.summary_vis_path_task) / ('results_emitter_input_%d.pickle'%sample_idx)
+                                    if opt.if_save_pickles:
+                                        with open(str(pickle_save_path),"wb") as f:
+                                            pickle.dump(emitter_input_dict, f)
+
 
 
 
