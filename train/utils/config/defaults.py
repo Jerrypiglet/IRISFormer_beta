@@ -131,7 +131,8 @@ _C.MODEL_BRDF.semseg_PPM = True
 _C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240/%s0_13.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
 # _C.MODEL_BRDF.pretrained_pth_name = ''
 _C.MODEL_BRDF.encoder_exclude = '' # e.g. 'x4_x5
-_C.MODEL_BRDF.use_scale_aware_loss = False
+_C.MODEL_BRDF.use_scale_aware_depth = False
+_C.MODEL_BRDF.use_scale_aware_albedo = False
 
 # ===== per-pixel lighting
 _C.MODEL_LIGHT = CN()

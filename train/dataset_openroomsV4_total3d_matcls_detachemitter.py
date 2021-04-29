@@ -662,6 +662,7 @@ class openrooms(data.Dataset):
 
         # === emitters
         if 'em' in self.opt.cfg.DATA.data_read_list:
+            envScale_list = []
             pickle_emitter2wall_assign_info_dict_path = scene_total3d_path / ('layout_obj_%d_emitters_assign_info_%dX%d_V4.pkl'%(frame_id, self.grid_size, self.grid_size))
             with open(pickle_emitter2wall_assign_info_dict_path, 'rb') as f:
                 sequence_emitter2wall_assign_info_dict = pickle.load(f)
@@ -740,6 +741,8 @@ class openrooms(data.Dataset):
 
                             cell_info['emitter_info']['intensity_noEnvScale'] = emitter_prop_total3d['intensity']
                             envScale = emitter_prop_total3d['envScale'] if cell_info['obj_type'] == 'window' else 1.
+                            if cell_info['obj_type'] == 'window':
+                                envScale_list.append(envScale)
                             # envScale = 1.
                             cell_info['emitter_info']['intensity'] = [x * envScale * hdr_scale for x in emitter_prop_total3d['intensity']] # [!!! IMPORTANT] scale the intensity with the lighting scale and the hdr scale
 
@@ -793,6 +796,10 @@ class openrooms(data.Dataset):
             with open(pickle_emitters_path, 'rb') as f:
                 sequence_emitters = pickle.load(f)
 
+
+            if len(envScale_list)!=0:
+                assert envScale_list.count(envScale_list[0]) == len(envScale_list)
+
             # assert sequence_emitters['boxes']['bdb3D'].shape[0] == len(emitter2wall_assign_info_list)
             envMapPaths = []
             envScales = []
@@ -838,6 +845,7 @@ class openrooms(data.Dataset):
                 if len(envMapPaths) > 0:
                     assert envScales.count(envScales[0]) == len(envScales)
                     env_scale = envScales[0]
+                    assert env_scale == envScale_list[0]
                     assert envMapPaths.count(envMapPaths[0]) == len(envMapPaths)
                     envmap_path = envMapPaths[0]
                     envmap_path = envmap_path.replace('../../../../../EnvDataset/', self.opt.cfg.DATASET.envmap_path)
@@ -848,8 +856,11 @@ class openrooms(data.Dataset):
                     im_envmap_ori = np.zeros((self.opt.cfg.MODEL_LIGHT.envmapHeight, self.opt.cfg.MODEL_LIGHT.envmapWidth, 3), dtype=np.float32)
                     im_envmap_ori_uint8 = np.zeros((self.opt.cfg.MODEL_LIGHT.envmapHeight, self.opt.cfg.MODEL_LIGHT.envmapWidth, 3), dtype=np.uint8)
                     im_envmap_ori_scale = 0.
+                    env_scale = 0.
+                    envmap_path = ''
 
                 return_dict.update({'im_envmap_ori': im_envmap_ori, 'im_envmap_ori_uint8': im_envmap_ori_uint8, 'im_envmap_ori_scale': im_envmap_ori_scale})
+                return_dict.update({'env_scale': env_scale, 'envmap_path': envmap_path})
 
         return return_dict
 

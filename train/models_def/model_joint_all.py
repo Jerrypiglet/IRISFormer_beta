@@ -315,7 +315,7 @@ class Model_Joint(nn.Module):
                 albedo_output = self.BRDF_Net['albedoDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)
                 albedoPred = 0.5 * (albedo_output['x_out'] + 1)
                 input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
-                if not self.cfg.MODEL_BRDF.use_scale_aware_loss:
+                if not self.cfg.MODEL_BRDF.use_scale_aware_albedo:
                     albedoPred = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
                             input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
                 albedoPred = torch.clamp(albedoPred, 0, 1)
@@ -328,7 +328,7 @@ class Model_Joint(nn.Module):
                 return_dict.update({'roughPred': roughPred})
             if 'de' in self.cfg.MODEL_BRDF.enable_list:
                 depthPred = 0.5 * (self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)['x_out'] + 1)
-                if not self.cfg.MODEL_BRDF.use_scale_aware_loss:
+                if not self.cfg.MODEL_BRDF.use_scale_aware_depth:
                     depthPred = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
                             input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
                 return_dict.update({'depthPred': depthPred})

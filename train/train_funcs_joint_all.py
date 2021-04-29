@@ -674,22 +674,31 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                                     if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis:
                                         save_dict.update({'cell_axis_weights': output_dict['emitter_est_result']['cell_axis_weights'].detach().cpu().numpy()[sample_idx_batch]})
 
-                                    # print(output_dict['emitter_est_result']['envmap_lightAccu'].shape) # [2, 3, 384, 120, 160]
-                                    # print(output_dict['emitter_est_result']['scattered_light'].shape) # [2, 384, 8, 16, 3]
-                                    # print(input_dict['emitter_labels']['cell_normal_outside'].shape) # [2, 6, 8, 8, 3]
-                                    # print(output_dict['emitter_est_result']['emitter_outdirs_meshgrid_Total3D_outside'].shape)# [2, 384, 8, 16, 3]
-                                    # print(output_dict['emitter_est_result']['normal_outside_Total3D'].shape) # [2, 384, 1, 1, 3]
+                                    # envmap_lightAccu (3, 384, 120, 160)
+                                    # envmap_lightAccu_mean (6, 3, 8, 8)
+                                    # points_sampled_mask_expanded (1, 1, 120, 160)
+                                    # scattered_light (384, 8, 16, 3)
+                                    # cell_normal_outside_label (6, 8, 8, 3)
+                                    # emitter_outdirs_meshgrid_Total3D_outside (384, 8, 16, 3)
+                                    # normal_outside_Total3D (384, 1, 1, 3)
+                                    # emitter_cell_axis_abs_est (6, 64, 3)
+                                    # emitter_cell_axis_abs_gt (6, 64, 3)
+                                    # window_mask (6, 64)
+                                    # cell_axis_weights (384, 8, 16, 1)
                                     if opt.if_save_pickles:
                                         with open(str(pickle_save_path),"wb") as f:
                                             pickle.dump(save_dict, f)
 
-                                    emitter_input_dict = {x: output_dict['emitter_input'][x].detach().cpu().numpy()[sample_idx_batch] for x in output_dict['emitter_input']}
-                                    pickle_save_path = Path(opt.summary_vis_path_task) / ('results_emitter_input_%d.pickle'%sample_idx)
-                                    if opt.if_save_pickles:
-                                        with open(str(pickle_save_path),"wb") as f:
-                                            pickle.dump(emitter_input_dict, f)
-
-
+                            emitter_input_dict = {x: output_dict['emitter_input'][x].detach().cpu().numpy()[sample_idx_batch] for x in output_dict['emitter_input']}
+                            emitter_input_dict.update({'hdr_scale': data_batch['hdr_scale'].cpu().numpy()[sample_idx_batch], \
+                                'env_scale': data_batch['env_scale'].cpu().numpy()[sample_idx_batch], 'envmap_path': data_batch['envmap_path'][sample_idx_batch]})
+                            pickle_save_path = Path(opt.summary_vis_path_task) / ('results_emitter_input_%d.pickle'%sample_idx)
+                            # normalPred_lightAccu (3, 240, 320)
+                            # depthPred_lightAccu (240, 320)
+                            # envmapsPredImage_lightAccu (3, 120, 160, 8, 16)
+                            if opt.if_save_pickles:
+                                with open(str(pickle_save_path),"wb") as f:
+                                    pickle.dump(emitter_input_dict, f)
 
 
             # ======= Vis matcls
