@@ -634,6 +634,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                                 with open(str(pickle_save_path),"wb") as f:
                                     pickle.dump(save_dict, f)
 
+                            emitter_input_dict = {'hdr_scale': data_batch['hdr_scale'].cpu().numpy()[sample_idx_batch]}
+
                             if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
                                 fig_3d, ax_3d = scene_box.draw_3D_scene_plt('GT', )
                                 ax_3d[1] = fig_3d.add_subplot(122, projection='3d')
@@ -689,9 +691,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                                         with open(str(pickle_save_path),"wb") as f:
                                             pickle.dump(save_dict, f)
 
-                            emitter_input_dict = {x: output_dict['emitter_input'][x].detach().cpu().numpy()[sample_idx_batch] for x in output_dict['emitter_input']}
-                            emitter_input_dict.update({'hdr_scale': data_batch['hdr_scale'].cpu().numpy()[sample_idx_batch], \
-                                'env_scale': data_batch['env_scale'].cpu().numpy()[sample_idx_batch], 'envmap_path': data_batch['envmap_path'][sample_idx_batch]})
+                                emitter_input_dict.update({x: output_dict['emitter_input'][x].detach().cpu().numpy()[sample_idx_batch] for x in output_dict['emitter_input']})
+                                emitter_input_dict.update({'env_scale': data_batch['env_scale'].cpu().numpy()[sample_idx_batch], 'envmap_path': data_batch['envmap_path'][sample_idx_batch]})
+
                             pickle_save_path = Path(opt.summary_vis_path_task) / ('results_emitter_input_%d.pickle'%sample_idx)
                             # normalPred_lightAccu (3, 240, 320)
                             # depthPred_lightAccu (240, 320)
