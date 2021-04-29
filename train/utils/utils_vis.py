@@ -36,16 +36,22 @@ def reindex_output_map(index_map, invalid_index):
 
     return index_map_reindex
 
-def vis_disp_colormap(disp_array, file=None, normalize=True):
+def vis_disp_colormap(disp_array, file=None, normalize=True, min_scale=None):
     # disp_array = cv2.applyColorMap(disp_array, cv2.COLORMAP_JET)
     # disp_array = cv2.applyColorMap(disp_array, get_mpl_colormap('jet'))
     cm = plt.get_cmap('jet')
     # disp_array = disp_array[:, :, :3]
     if normalize:
-        disp_array -= np.amin(disp_array)
-        disp_array = disp_array/(1e-6+np.amax(disp_array))
-    else:
-        disp_array = np.clip(disp_array, 0., 1.)
+        if min_scale is None:
+            depth_min = np.amin(disp_array)
+            disp_array -= depth_min
+            depth_scale = 1./(1e-6+np.amax(disp_array))
+            disp_array = disp_array * depth_scale
+            min_scale = [depth_min, depth_scale]
+        else:
+            disp_array -= min_scale[0]
+            disp_array = disp_array * min_scale[1]
+    disp_array = np.clip(disp_array, 0., 1.)
     disp_array = (cm(disp_array)[:, :, :3] * 255).astype(np.uint8)
     
     # print('+++++', np.amax(disp_array), np.amin(disp_array))
@@ -54,7 +60,7 @@ def vis_disp_colormap(disp_array, file=None, normalize=True):
         disp_Image = Image.fromarray(disp_array)
         disp_Image.save(file)
     else:
-        return disp_array
+        return disp_array, min_scale
 
 def colorize(gray, palette):
     # gray: numpy array of the label and 1*3N size list palette

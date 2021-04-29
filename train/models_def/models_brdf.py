@@ -364,6 +364,8 @@ class decoder0(nn.Module):
         self.dconv6 = nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3, stride=1, padding = 1, bias=True)
         self.dgn6 = nn.GroupNorm(num_groups=4, num_channels=64 )
 
+        self.relu = nn.ReLU(inplace = True )
+
         fea_dim = 64
         if self.if_PPM:
             bins=(1, 2, 3, 6)
@@ -564,6 +566,11 @@ class decoder0(nn.Module):
         elif self.mode == 4:
             x_orig = torch.mean(x_orig, dim=1).unsqueeze(1)
             x_out = torch.clamp(1.01 * torch.tanh(x_orig ), -1, 1)
+        elif self.mode == 5: # clip to 0., inf
+            x_out = self.relu(torch.mean(x_orig, dim=1).unsqueeze(1))
+        elif self.mode == 6: # sigmoid to 0., 1. -> inverse to 0., inf
+            x_out = torch.sigmoid(torch.mean(x_orig, dim=1).unsqueeze(1))
+            x_out = 1. / (x_out + 1e-6)
         else:
             x_out = x_orig
 

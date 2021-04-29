@@ -91,7 +91,14 @@ class Model_Joint(nn.Module):
                 if 'ro' in self.cfg.MODEL_BRDF.enable_list:
                     self.BRDF_Net.update({'roughDecoder': self.decoder_to_use(opt, mode=2)})
                 if 'de' in self.cfg.MODEL_BRDF.enable_list:
-                    self.BRDF_Net.update({'depthDecoder': self.decoder_to_use(opt, mode=4)})
+                    if self.cfg.MODEL_BRDF.use_scale_aware_depth:
+                        assert self.cfg.MODEL_BRDF.depth_activation in ['relu', 'sigmoid']
+                        if self.cfg.MODEL_BRDF.depth_activation == 'relu':
+                            self.BRDF_Net.update({'depthDecoder': self.decoder_to_use(opt, mode=5)})
+                        elif self.cfg.MODEL_BRDF.depth_activation == 'sigmoid':
+                            self.BRDF_Net.update({'depthDecoder': self.decoder_to_use(opt, mode=6)})
+                    else:
+                        self.BRDF_Net.update({'depthDecoder': self.decoder_to_use(opt, mode=4)})
                     
             if self.cfg.MODEL_BRDF.enable_semseg_decoder:
                 self.BRDF_Net.update({'semsegDecoder': self.decoder_to_use(opt, mode=-1, out_channel=self.cfg.MODEL_SEMSEG.semseg_classes, if_PPM=self.cfg.MODEL_BRDF.semseg_PPM)})
@@ -327,11 +334,15 @@ class Model_Joint(nn.Module):
                 roughPred = self.BRDF_Net['roughDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)['x_out']
                 return_dict.update({'roughPred': roughPred})
             if 'de' in self.cfg.MODEL_BRDF.enable_list:
-                depthPred = 0.5 * (self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)['x_out'] + 1)
                 if not self.cfg.MODEL_BRDF.use_scale_aware_depth:
+                    depthPred = 0.5 * (self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)['x_out'] + 1) # [-1, 1] -> [0, 2] -> [0, 1]
                     depthPred = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
                             input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
+                else:
+                    depthPred = self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)['x_out']
+
                 return_dict.update({'depthPred': depthPred})
+
 
             # print(x1.shape, x2.shape, x3.shape, x4.shape, x5.shape, x6.shape)
             # return_dict.update({'albedoPred': albedosPred, 'normalPred': normalPred, 'roughPred': roughPred, 'depthPred': depthPred})
