@@ -1,7 +1,7 @@
 from pathlib import Path
 from tqdm import tqdm
 from icecream import ic
-
+import shutil
 
 list_path = 'clean_up_tasks.txt'
 
@@ -19,5 +19,6 @@ for folder in folders:
         task_name = log_path.name
         for task_datetime in mylist:
             if task_name.startswith(task_datetime):
-                Path(log_path).unlink()
-                ic('Removed '+str(log_path))
+                # Path(log_path).unlink()
+                shutil.rmtree(log_path)
+                print('Removed '+str(log_path))
