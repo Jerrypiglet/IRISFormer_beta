@@ -119,9 +119,10 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
     batch_size = labels_dict['imBatch'].shape[0]
     grid_size = opt.cfg.MODEL_LAYOUT_EMITTER.emitter.grid_size
 
+    gt_dict_lo = labels_dict['layout_labels']
+    pred_dict_lo = output_dict['layout_est_result']
+    
     if if_est_layout:
-        gt_dict_lo = labels_dict['layout_labels']
-        pred_dict_lo = output_dict['layout_est_result']
         lo_bdb3D_out = get_layout_bdb_sunrgbd(opt.bins_tensor, pred_dict_lo['lo_ori_reg_result'],
                                             torch.argmax(pred_dict_lo['lo_ori_cls_result'], 1),
                                             pred_dict_lo['lo_centroid_result'],
@@ -156,15 +157,14 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
     emitter_info_dict_list = []
     for sample_idx in range(batch_size):
         # print('--- Visualizing sample %d ---'%sample_idx)
-        
         # save_prefix = 'sample%d-LABEL-epoch%d-tid%d-%s'%(sample_idx+batch_size*vis_batch_count, epoch, iter, phase)
+        gt_cam_R = gt_dict_lo['cam_R_gt'][sample_idx].cpu().numpy()
+        cam_K = gt_dict_lo['cam_K'][sample_idx].cpu().numpy()
+        gt_layout = gt_dict_lo['lo_bdb3D'][sample_idx].cpu().numpy()
+        
         if if_est_layout:
-            gt_cam_R = gt_dict_lo['cam_R_gt'][sample_idx].cpu().numpy()
-            cam_K = gt_dict_lo['cam_K'][sample_idx].cpu().numpy()
-            gt_layout = gt_dict_lo['lo_bdb3D'][sample_idx].cpu().numpy()
             layout_dict = {'layout': lo_bdb3D_out[sample_idx, :, :].cpu().detach().numpy()}
             cam_R_dict = {'cam_R': cam_R_out[sample_idx, :, :].cpu().detach().numpy()}
-
 
             pre_layout = layout_dict['layout']                
             pre_cam_R = cam_R_dict['cam_R']
