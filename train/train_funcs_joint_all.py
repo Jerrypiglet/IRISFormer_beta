@@ -662,21 +662,23 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         
                                 if opt.if_save_pickles:
                                     pickle_save_path = Path(opt.summary_vis_path_task) / ('results_emitter_%d.pickle'%sample_idx)
+                                    save_dict = {}
                                     if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version in ['V2', 'V3']:
-                                        save_dict = {
+                                        save_dict.update({
                                             'envmap_lightAccu_mean': output_dict['emitter_est_result']['envmap_lightAccu_mean'].detach().cpu().numpy()[sample_idx_batch], \
                                             'points_sampled_mask_expanded': output_dict['emitter_est_result']['points_sampled_mask_expanded'].detach().cpu().numpy()[sample_idx_batch], \
                                             'cell_normal_outside_label': input_dict['emitter_labels']['cell_normal_outside'].detach().cpu().numpy()[sample_idx_batch], 
                                             'emitter_cell_axis_abs_est': output_dict['results_emitter']['emitter_cell_axis_abs_est'].detach().cpu().numpy()[sample_idx_batch], \
                                             'emitter_cell_axis_abs_gt': output_dict['results_emitter']['emitter_cell_axis_abs_gt'].detach().cpu().numpy()[sample_idx_batch], \
                                             'window_mask': output_dict['results_emitter']['window_mask'].detach().cpu().numpy()[sample_idx_batch], 
-                                        }
+                                        })
                                     if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version in ['V3']:
-                                        save_dict = {'envmap_lightAccu': output_dict['emitter_est_result']['envmap_lightAccu'].detach().cpu().numpy()[sample_idx_batch], \
+                                        save_dict.update({
+                                            'envmap_lightAccu': output_dict['emitter_est_result']['envmap_lightAccu'].detach().cpu().numpy()[sample_idx_batch], \
                                             'scattered_light': output_dict['emitter_est_result']['scattered_light'].detach().cpu().numpy()[sample_idx_batch], \
                                             'emitter_outdirs_meshgrid_Total3D_outside': output_dict['emitter_est_result']['emitter_outdirs_meshgrid_Total3D_outside'].detach().cpu().numpy()[sample_idx_batch], \
                                             'normal_outside_Total3D': output_dict['emitter_est_result']['normal_outside_Total3D'].detach().cpu().numpy()[sample_idx_batch], \
-                                        }
+                                        })
                                         if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis:
                                             save_dict.update({'cell_axis_weights': output_dict['emitter_est_result']['cell_axis_weights'].detach().cpu().numpy()[sample_idx_batch]})
 
@@ -1040,7 +1042,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     writer.add_image('VAL_brdf-rough_PRED/%d'%sample_idx, rough_pred_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                 if 'de' in opt.cfg.MODEL_BRDF.enable_list:
                     depth_normalized, _ = vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True, min_scale=depth_min_scale)
-                    ic('--> EST', np.amax(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze()), np.amin(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze()), np.median(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze()))
+                    # ic('--> EST', np.amax(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze()), np.amin(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze()), np.median(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze()))
                     ic(np.amax(depth_normalized), np.amin(depth_normalized), np.median(depth_normalized))
                     writer.add_image('VAL_brdf-depth_syncScale_PRED/%d'%sample_idx, depth_normalized, tid, dataformats='HWC')
                     writer.add_image('VAL_brdf-depth_PRED/%d'%sample_idx, vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True)[0], tid, dataformats='HWC')
@@ -1049,7 +1051,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     if opt.if_save_pickles:
                         with open(str(pickle_save_path),"wb") as f:
                             pickle.dump(save_dict, f)
-                            ic(str(pickle_save_path))
+                            # ic(str(pickle_save_path))
 
 
     logger.info(red('Evaluation VIS timings: ' + time_meters_to_string(time_meters)))

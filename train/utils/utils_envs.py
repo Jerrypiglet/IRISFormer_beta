@@ -78,7 +78,8 @@ def set_up_envs(opt):
                 opt.cfg.MODEL_BRDF.enable_list += 'no_de'.split('_')
         else:
             opt.cfg.MODEL_BRDF.enable = True
-            opt.cfg.MODEL_BRDF.encoder_exclude = 'x5_x6'
+            if opt.cfg.MODEL_BRDF.enable == False:
+                opt.cfg.MODEL_BRDF.encoder_exclude = 'x5_x6' # if no BRDF decoder, these two layers are not used in layout net
         opt.cfg.DATA.load_brdf_gt = True
         opt.cfg.DATA.load_layout_emitter_gt = True
         opt.cfg.DATA.data_read_list += ['lo']

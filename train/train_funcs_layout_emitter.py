@@ -115,15 +115,13 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
     if_est_emitter = 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
     if_est_layout = 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
 
-    gt_dict_lo = labels_dict['layout_labels']
-    pred_dict_lo = output_dict['layout_est_result']
-    gt_dict_em = labels_dict['emitter_labels']
-    pred_dict_em = output_dict['emitter_est_result']
     
     batch_size = labels_dict['imBatch'].shape[0]
     grid_size = opt.cfg.MODEL_LAYOUT_EMITTER.emitter.grid_size
 
     if if_est_layout:
+        gt_dict_lo = labels_dict['layout_labels']
+        pred_dict_lo = output_dict['layout_est_result']
         lo_bdb3D_out = get_layout_bdb_sunrgbd(opt.bins_tensor, pred_dict_lo['lo_ori_reg_result'],
                                             torch.argmax(pred_dict_lo['lo_ori_cls_result'], 1),
                                             pred_dict_lo['lo_centroid_result'],
@@ -133,6 +131,8 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
                                     torch.argmax(pred_dict_lo['roll_cls_result'], 1), pred_dict_lo['roll_reg_result'])
 
     if if_est_emitter:
+        gt_dict_em = labels_dict['emitter_labels']
+        pred_dict_em = output_dict['emitter_est_result']
         emitter_cls_result = pred_dict_em['cell_light_ratio'].view((batch_size, 6, -1))
         if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.loss_type == 'KL':
             emitter_cls_result_postprocessed = torch.nn.functional.softmax(emitter_cls_result, dim=2)
@@ -158,10 +158,10 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
         # print('--- Visualizing sample %d ---'%sample_idx)
         
         # save_prefix = 'sample%d-LABEL-epoch%d-tid%d-%s'%(sample_idx+batch_size*vis_batch_count, epoch, iter, phase)
-        gt_cam_R = gt_dict_lo['cam_R_gt'][sample_idx].cpu().numpy()
-        cam_K = gt_dict_lo['cam_K'][sample_idx].cpu().numpy()
-        gt_layout = gt_dict_lo['lo_bdb3D'][sample_idx].cpu().numpy()
         if if_est_layout:
+            gt_cam_R = gt_dict_lo['cam_R_gt'][sample_idx].cpu().numpy()
+            cam_K = gt_dict_lo['cam_K'][sample_idx].cpu().numpy()
+            gt_layout = gt_dict_lo['lo_bdb3D'][sample_idx].cpu().numpy()
             layout_dict = {'layout': lo_bdb3D_out[sample_idx, :, :].cpu().detach().numpy()}
             cam_R_dict = {'cam_R': cam_R_out[sample_idx, :, :].cpu().detach().numpy()}
 
