@@ -299,8 +299,9 @@ synchronize()
 # for epoch_0 in list(range(1, 2) ):
 
 if not opt.if_train:
-    val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'batch_size_val_vis': batch_size_val_vis}
+    val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid}
     if opt.if_vis:
+        val_params.update({'batch_size_val_vis': batch_size_val_vis})
         with torch.no_grad():
             vis_val_epoch_joint(brdf_loader_val_vis, model, bin_mean_shift, val_params)
         synchronize()                

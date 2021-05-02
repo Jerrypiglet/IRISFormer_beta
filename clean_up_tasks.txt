@@ -29,3 +29,12 @@ zz-torch-job-gpu20210501-200047-nngkq
 zz-torch-job-gpu20210501-205032-7nlww
 zz-torch-job-gpu20210501-211245-rwhhb
 zz-torch-job-gpu20210501-204351-qsk5b
+20210501-214849
+zz-torch-job-gpu20210501-214138-mjtmq
+zz-torch-job-gpu20210501-215205-nct9d
+zz-torch-job-gpu20210501-215325-7l27k
+zz-torch-job-gpu20210501-221845-7twfh
+zz-torch-job-gpu20210501-221902-b2k6d
+zz-torch-job-gpu20210501-235132-p75r7
+20210501-235744
+20210502-000805

@@ -15,6 +15,8 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
     im_cpu = (data_batch['im_trainval'].permute(0, 3, 1, 2) )
     input_dict['imBatch'] = im_cpu.cuda(non_blocking=True).contiguous()
 
+    if_load_mask = opt.cfg.DATA.load_brdf_gt and not opt.cfg.DATA.if_load_png_not_hdr
+    
     if opt.cfg.DATA.load_brdf_gt:
         # Load data from cpu to gpu
         if 'al' in opt.cfg.DATA.data_read_list:
@@ -33,19 +35,20 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
             depth_cpu = data_batch['depth']
             input_dict['depthBatch'] = depth_cpu.cuda(non_blocking=True)
 
-        mask_cpu = data_batch['mask'].permute(0, 3, 1, 2) # [b, 3, h, w]
-        input_dict['maskBatch'] = mask_cpu.cuda(non_blocking=True)
+        if if_load_mask:
+            mask_cpu = data_batch['mask'].permute(0, 3, 1, 2) # [b, 3, h, w]
+            input_dict['maskBatch'] = mask_cpu.cuda(non_blocking=True)
 
 
-        segArea_cpu = data_batch['segArea']
-        segEnv_cpu = data_batch['segEnv']
-        segObj_cpu = data_batch['segObj']
+            segArea_cpu = data_batch['segArea']
+            segEnv_cpu = data_batch['segEnv']
+            segObj_cpu = data_batch['segObj']
 
-        seg_cpu = torch.cat([segArea_cpu, segEnv_cpu, segObj_cpu], dim=1 )
-        segBatch = seg_cpu.cuda(non_blocking=True)
+            seg_cpu = torch.cat([segArea_cpu, segEnv_cpu, segObj_cpu], dim=1 )
+            segBatch = seg_cpu.cuda(non_blocking=True)
 
-        input_dict['segBRDFBatch'] = segBatch[:, 2:3, :, :]
-        input_dict['segAllBatch'] = segBatch[:, 0:1, :, :]  + segBatch[:, 2:3, :, :]
+            input_dict['segBRDFBatch'] = segBatch[:, 2:3, :, :]
+            input_dict['segAllBatch'] = segBatch[:, 0:1, :, :]  + segBatch[:, 2:3, :, :]
 
     if opt.cfg.DATA.load_semseg_gt:
         input_dict['semseg_label'] = data_batch['semseg_label'].cuda(non_blocking=True)

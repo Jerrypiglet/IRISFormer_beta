@@ -236,7 +236,9 @@ class openrooms(data.Dataset):
         hdr_image_path, semseg_label_path = self.data_list[index]
         meta_split, scene_name, frame_id = self.meta_split_scene_name_frame_id_list[index]
 
-        if self.opt.cfg.DATA.load_brdf_gt:
+        if_load_mask = self.opt.cfg.DATA.load_brdf_gt and not self.opt.cfg.DATA.if_load_png_not_hdr
+        
+        if if_load_mask:
             seg_path = hdr_image_path.replace('im_', 'immask_').replace('hdr', 'png').replace('DiffMat', '')
             # Read segmentation
             seg = 0.5 * (self.loadImage(seg_path ) + 1)[0:1, :, :]
@@ -339,17 +341,18 @@ class openrooms(data.Dataset):
                 diffusePre_path = hdr_image_path.replace('im_', 'imdiffuse_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
                 specularPre_path = hdr_image_path.replace('im_', 'imspecular_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
 
-            segArea = np.logical_and(seg > 0.49, seg < 0.51 ).astype(np.float32 )
-            segEnv = (seg < 0.1).astype(np.float32 )
-            segObj = (seg > 0.9) 
+            if if_load_mask:
+                segArea = np.logical_and(seg > 0.49, seg < 0.51 ).astype(np.float32 )
+                segEnv = (seg < 0.1).astype(np.float32 )
+                segObj = (seg > 0.9) 
 
-            if self.opt.cfg.MODEL_LIGHT.enable:
-                segObj = segObj.squeeze()
-                segObj = ndimage.binary_erosion(segObj, structure=np.ones((7, 7) ),
-                        border_value=1)
-                segObj = segObj[np.newaxis, :, :]
+                if self.opt.cfg.MODEL_LIGHT.enable:
+                    segObj = segObj.squeeze()
+                    segObj = ndimage.binary_erosion(segObj, structure=np.ones((7, 7) ),
+                            border_value=1)
+                    segObj = segObj[np.newaxis, :, :]
 
-            segObj = segObj.astype(np.float32 )
+                segObj = segObj.astype(np.float32 )
 
             if self.opt.cfg.DATA.load_light_gt:
                 envmaps, envmapsInd = self.loadEnvmap(env_path )
@@ -386,14 +389,15 @@ class openrooms(data.Dataset):
                 specularPre = self.loadH5(specularPre_path )
                 specularPre = specularPre / max(specularPre.max(), 1e-10)
 
-            batch_dict.update({
-                    'mask': torch.from_numpy(mask), 
-                    'maskPath': mask_path, 
-                    'segArea': torch.from_numpy(segArea),
-                    'segEnv': torch.from_numpy(segEnv),
-                    'segObj': torch.from_numpy(segObj),
-                    'object_type_seg': torch.from_numpy(seg), 
-                    })
+            if if_load_mask:
+                batch_dict.update({
+                        'mask': torch.from_numpy(mask), 
+                        'maskPath': mask_path, 
+                        'segArea': torch.from_numpy(segArea),
+                        'segEnv': torch.from_numpy(segEnv),
+                        'segObj': torch.from_numpy(segObj),
+                        'object_type_seg': torch.from_numpy(seg), 
+                        })
             # if self.transform is not None and not self.opt.if_hdr:
 
             if self.opt.cfg.DATA.load_light_gt:
