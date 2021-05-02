@@ -431,7 +431,7 @@ class decoder0(nn.Module):
                 dconv_final_in_channels = 64 * (1 + len(self.acco_pool_mean_list)) if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_pool_keep_input else 64 * len(self.acco_pool_mean_list)
         assert not(self.if_albedo_pooling and self.if_albedo_asso_pool_conv), 'self.if_albedo_pooling and self.if_albedo_asso_pool_conv cannot be True at the same time!'
 
-        self.dconvFinal = nn.Conv2d(in_channels=dconv_final_in_channels, out_channels=3, kernel_size = 3, stride=1, bias=True)
+        self.dconvFinal = nn.Conv2d(in_channels=dconv_final_in_channels, out_channels=out_channel, kernel_size = 3, stride=1, bias=True)
 
         self.flag = True
 

@@ -78,7 +78,7 @@ def set_up_envs(opt):
                 opt.cfg.MODEL_BRDF.enable_list += 'no_de'.split('_')
         else:
             opt.cfg.MODEL_BRDF.enable = True
-            if opt.cfg.MODEL_BRDF.enable == False:
+            if opt.cfg.MODEL_BRDF.enable_BRDF_decoders == False and not opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
                 opt.cfg.MODEL_BRDF.encoder_exclude = 'x5_x6' # if no BRDF decoder, these two layers are not used in layout net
         opt.cfg.DATA.load_brdf_gt = True
         opt.cfg.DATA.load_layout_emitter_gt = True
@@ -96,6 +96,9 @@ def set_up_envs(opt):
 
         if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_envmap_as_input:
             opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_envmap = True
+
+        if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
+            opt.cfg.MODEL_BRDF.enable = True # enable image encoder
 
     # ====== per-pixel lighting =====
     if opt.cfg.MODEL_LIGHT.enable:

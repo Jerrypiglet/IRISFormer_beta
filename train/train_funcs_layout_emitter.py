@@ -70,13 +70,15 @@ def get_labels_dict_layout_emitter(data_batch, opt):
         lo_coeffs = data_batch['layout_reindexed']['coeffs_reg'].float().cuda(non_blocking=True)
         lo_bdb3D = data_batch['layout_reindexed']['bdb3D'].float().cuda(non_blocking=True)
         cam_K = data_batch['camera']['K'].float().cuda(non_blocking=True)
+        cam_K_scaled = data_batch['camera']['K_scaled'].float().cuda(non_blocking=True)
+
         cam_R_gt = get_rotation_matrix_gt(opt.bins_tensor, 
                                             pitch_cls, pitch_reg, 
                                             roll_cls, roll_reg)
 
         layout_labels = {'pitch_reg': pitch_reg, 'pitch_cls': pitch_cls, 'roll_reg': roll_reg,
                         'roll_cls': roll_cls, 'lo_ori_reg': lo_ori_reg, 'lo_ori_cls': lo_ori_cls, 'lo_centroid': lo_centroid,
-                        'lo_coeffs': lo_coeffs, 'lo_bdb3D': lo_bdb3D, 'cam_K': cam_K, 'cam_R_gt':cam_R_gt}
+                        'lo_coeffs': lo_coeffs, 'lo_bdb3D': lo_bdb3D, 'cam_K': cam_K, 'cam_K_scaled': cam_K_scaled, 'cam_R_gt':cam_R_gt}
         labels_dict['layout_labels'] = layout_labels
 
     if if_emitter:
@@ -161,7 +163,7 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
         gt_cam_R = gt_dict_lo['cam_R_gt'][sample_idx].cpu().numpy()
         cam_K = gt_dict_lo['cam_K'][sample_idx].cpu().numpy()
         gt_layout = gt_dict_lo['lo_bdb3D'][sample_idx].cpu().numpy()
-        
+
         if if_est_layout:
             layout_dict = {'layout': lo_bdb3D_out[sample_idx, :, :].cpu().detach().numpy()}
             cam_R_dict = {'cam_R': cam_R_out[sample_idx, :, :].cpu().detach().numpy()}

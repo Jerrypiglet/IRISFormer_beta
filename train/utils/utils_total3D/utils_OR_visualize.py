@@ -494,7 +494,9 @@ class Box(Scene3D):
         if self.emitter2wall_assign_info_list is not None and not hide_cells:
             # basis_indexes = [(1, 0, 2, 3), (4, 5, 7, 6), (0, 1, 4, 5), (1, 5, 2, 6), (3, 2, 7, 6), (4, 0, 7, 3)]
             # constant_axes = [1, 1, 2, 0, 2, 0]
-            basis_v_indexes = [(3, 2, 0), (7, 6, 4), (4, 5, 0), (6, 2, 5), (7, 6, 3), (7, 3, 4)]
+            # basis_v_indexes = [(3, 2, 0), (7, 6, 4), (4, 5, 0), (6, 2, 5), (7, 6, 3), (7, 3, 4)]
+            basis_v_indexes = [(3, 2, 0), (7, 4, 6), (4, 0, 5), (6, 5, 2), (7, 6, 3), (7, 3, 4)]
+
 
             # face_belong_idx_list = [x['face_belong_idx'] for x in self.emitter2wall_assign_info_list]
 
@@ -627,7 +629,9 @@ class Box(Scene3D):
 
     def draw_all_cells(self, ax_3d, layout, lightnet_array_GT, alpha=0.5, if_print_log=False, highlight_cells=[]):
         assert lightnet_array_GT.shape == (6, self.grid_size, self.grid_size, 3)
-        basis_v_indexes = [(3, 2, 0), (7, 6, 4), (4, 5, 0), (6, 2, 5), (7, 6, 3), (7, 3, 4)]
+        # basis_v_indexes = [(3, 2, 0), (7, 6, 4), (4, 5, 0), (6, 2, 5), (7, 6, 3), (7, 3, 4)]
+        basis_v_indexes = [(3, 2, 0), (7, 4, 6), (4, 0, 5), (6, 5, 2), (7, 6, 3), (7, 3, 4)]
+
 
         for wall_idx in range(6):
             for i in range(self.grid_size):                    

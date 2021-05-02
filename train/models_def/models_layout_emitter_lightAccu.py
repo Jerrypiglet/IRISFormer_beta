@@ -75,14 +75,15 @@ class decoder_layout_emitter_lightAccu_(nn.Module):
 # V2 LightAccuNet
 class decoder_layout_emitter_lightAccu_UNet_V2(nn.Module):
     # a more sophisticated model based on BRDF_Net style (UNet)
-    def __init__(self, opt=None, grid_size = 8, ):
+    def __init__(self, opt=None, grid_size = 8, input_channels=3):
         super(decoder_layout_emitter_lightAccu_UNet_V2, self).__init__()
         self.opt = opt
         self.grid_size = grid_size
+        self.input_channels = input_channels
 
         # UNet arch - encoder
         # same + downsize (4x4)
-        self.conv1_UNet = nn.Conv2d(in_channels=3*6, out_channels=64*6, kernel_size=3, stride=1, padding = 1, bias=True, groups=6)
+        self.conv1_UNet = nn.Conv2d(in_channels=input_channels*6, out_channels=64*6, kernel_size=3, stride=1, padding = 1, bias=True, groups=6)
         self.gn1_UNet = nn.GroupNorm(num_groups=4*6, num_channels=64*6 )
         self.conv2_UNet = nn.Conv2d(in_channels=64*6, out_channels=128*6, kernel_size=3, stride=2, padding = 1, bias=True, groups=6)
         self.gn2_UNet = nn.GroupNorm(num_groups=8*6, num_channels=128*6 )
@@ -116,7 +117,7 @@ class decoder_layout_emitter_lightAccu_UNet_V2(nn.Module):
 
 
     def forward(self, envmap_lightAccu):
-        assert len(envmap_lightAccu.shape)==5 and envmap_lightAccu.shape[1:]==(6, 3, self.grid_size, self.grid_size) # [B, 6, D(3), H(grid_size), W(grid_size)]
+        assert len(envmap_lightAccu.shape)==5 and envmap_lightAccu.shape[1:]==(6, self.input_channels, self.grid_size, self.grid_size) # [B, 6, D(3), H(grid_size), W(grid_size)]
         batch_size = envmap_lightAccu.shape[0]
         envmap_lightAccu_merged = envmap_lightAccu.reshape(batch_size, -1, self.grid_size, self.grid_size) # [B, 6*D(3), H(grid_size), W(grid_size)]
 
@@ -223,7 +224,7 @@ class emitter_lightAccu(nn.Module):
         # normal is normalized here:
         ls_coords, camx, camy, normalPred = self.rL.forwardEnv(normalPred, envmapsPredImage, if_normal_only=True) # torch.Size([B, 128, 3, 120, 160]), [B, 3, 120, 160], [B, 3, 120, 160], [B, 3, 120, 160]
 
-        verts_center_lightNet, verts_lightNet, \
+        verts_all_Total3D, verts_center_lightNet, verts_lightNet, \
             origin_0_array_lightNet, basis_1_array_lightNet, basis_2_array_lightNet, normal_array_lightNet, \
                 Total3D_to_LightNet_transform_params = self.get_grid_centers(layout, cam_R) # [B, 6, 8, 8, 3]
 
@@ -236,7 +237,7 @@ class emitter_lightAccu(nn.Module):
 
         
         return_dict = {'envmap_lightAccu': envmap_lightAccu, 'points_sampled_mask_expanded': points_sampled_mask_expanded, 'points_sampled_mask': points_sampled_mask, 'envmap_lightAccu_mean': envmap_lightAccu_mean, \
-            'verts_center_lightNet': verts_center_lightNet, 'verts_lightNet': verts_lightNet, \
+            'verts_all_Total3D': verts_all_Total3D, 'verts_center_lightNet': verts_center_lightNet, 'verts_lightNet': verts_lightNet, \
             'origin_0_array_lightNet': origin_0_array_lightNet, 'basis_1_array_lightNet': basis_1_array_lightNet, 'basis_2_array_lightNet': basis_2_array_lightNet, 'normal_array_lightNet': normal_array_lightNet, \
             'vec_to_t': vec_to_t, 'Total3D_to_LightNet_transform_params': Total3D_to_LightNet_transform_params}
 
@@ -456,7 +457,7 @@ class emitter_lightAccu(nn.Module):
         emitter_outdirs_meshgrid = emitter_outdirs_meshgrid.squeeze(-1) # [2, 384, 8, 16, 3]
         return emitter_outdirs_meshgrid
 
-    def get_grid_centers(self, layout, cam_R):
+    def get_grid_centers(self, layout, cam_R, if_return_in_Total3D_coords=False):
         # layout in Total3D coords; cam_R is camera axes in Total3D coords
         basis_1_list = [(layout[:, origin_v1_v2[1], :] - layout[:, origin_v1_v2[0], :]) / self.grid_size for origin_v1_v2 in self.origin_v1_v2_list]
         basis_2_list = [(layout[:, origin_v1_v2[2], :] - layout[:, origin_v1_v2[0], :]) / self.grid_size for origin_v1_v2 in self.origin_v1_v2_list]
@@ -471,6 +472,9 @@ class emitter_lightAccu(nn.Module):
         x_i1j1 = basis_1_array * (self.ii+1.) + basis_2_array * (self.jj+1.) + origin_0_array
         x_ij1 = basis_1_array * self.ii + basis_2_array * (self.jj+1.)+ origin_0_array
         verts_all = torch.stack([x_ij, x_i1j, x_i1j1, x_ij1], -1) # torch.Size([B, 6, 8, 8, 3, 4])
+
+        if if_return_in_Total3D_coords:
+            return verts_all
 
         cam_R_transform, cam_t_transform_unsqueeze = cam_R.transpose(1, 2), torch.zeros((1, 1, 1, 1, 3, 1)).cuda().float() # R: cam axes -> transformation matrix
         cam_R_transform_unsqueeze = cam_R_transform.unsqueeze(1).unsqueeze(1).unsqueeze(1)
@@ -497,4 +501,4 @@ class emitter_lightAccu(nn.Module):
 
         transform_params = {'cam_R_transform_matrix_pre': cam_R_transform, 'post_transform_matrix': self.extra_transform_matrix @ self.extra_transform_matrix_LightNet}
 
-        return verts_center_lightNet, verts_lightNet, origin_0_array_lightNet, basis_1_array_lightNet, basis_2_array_lightNet, normal_array_lightNet, transform_params
+        return verts_all, verts_center_lightNet, verts_lightNet, origin_0_array_lightNet, basis_1_array_lightNet, basis_2_array_lightNet, normal_array_lightNet, transform_params

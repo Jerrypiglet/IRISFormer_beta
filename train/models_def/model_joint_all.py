@@ -19,6 +19,7 @@ import models_def.models_layout_emitter as models_layout_emitter
 import models_def.models_layout_emitter_lightAccu as models_layout_emitter_lightAccu
 import models_def.models_layout_emitter_lightAccuScatter as models_layout_emitter_lightAccuScatter
 import models_def.model_matcls as model_matcls
+from SimpleLayout.SimpleSceneTorchBatch import SimpleSceneTorchBatch
 
 from icecream import ic
 
@@ -142,10 +143,16 @@ class Model_Joint(nn.Module):
                 if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V1':
                     self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu_(opt)
                 elif self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V2':
-                    self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu_UNet_V2(opt)
+                    input_channels = 3
+                    if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
+                        input_channels += self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels + 3 # +3 for img input
+                    self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu_UNet_V2(opt, input_channels=input_channels)
                 elif self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V3':
                     self.EMITTER_NET = models_layout_emitter_lightAccuScatter.decoder_layout_emitter_lightAccuScatter_UNet_V3(opt)
+                if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
+                    self.EMITTER_NET_IMG_FEAT_DECODER = self.decoder_to_use(opt, mode=-1, out_channel=self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels) # same as BRDF decoder; mode==-1 means no activation or postprocessing in the end
             else:
+                # the vanilla model
                 self.LAYOUT_EMITTER_NET = models_layout_emitter.decoder_layout_emitter(opt)
 
         if self.cfg.MODEL_MATCLS.enable:
@@ -370,13 +377,6 @@ class Model_Joint(nn.Module):
             # envmapsBatch = return_dict_light['envmapsPredImage']
             envmapsBatch = return_dict_light['envmapsPredScaledImage'] # should not assume we have this because this aligns with GT for scale
 
-        # a = input_dict['envmapsBatch']
-        # b = return_dict_light['envmapsPredImage']
-        # c = return_dict_light['envmapsPredScaledImage']
-        # print(a.shape, torch.max(a), torch.min(a), torch.mean(a))
-        # print(b.shape, torch.max(b), torch.min(b), torch.mean(b))
-        # print(c.shape, torch.max(c), torch.min(c), torch.mean(c))
-
         if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_brdf:
             normalBatch = input_dict['normalBatch']
             depthBatch = input_dict['depthBatch'].squeeze(1)
@@ -390,17 +390,71 @@ class Model_Joint(nn.Module):
         # print(depthBatch.shape, normalBatch.shape, envmapsBatch.shape, cam_K_batch.shape, cam_R_gt_batch.shape, layout_gt_batch.shape)
 
         input_dict_light_accu = {'normalPred_lightAccu':normalBatch, 'depthPred_lightAccu': depthBatch, 'envmapsPredImage_lightAccu': envmapsBatch, 'cam_K': cam_K_batch, 'cam_R': cam_R_gt_batch, 'layout': layout_gt_batch}
+        return_dict_layout_emitter = {'emitter_input': {}}
 
+        # ---- accu lights
         return_dict_lightAccu = self.EMITTER_LIGHT_ACCU_NET(input_dict_light_accu)
         envmap_lightAccu_mean = return_dict_lightAccu['envmap_lightAccu_mean'].view(-1, 6, 8, 8, 3).permute(0, 1, 4, 2, 3)
 
-        if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version in ['V1', 'V2']:
-            return_dict_layout_emitter = self.EMITTER_NET(envmap_lightAccu_mean)
-        else:
+        grid_size = self.EMITTER_LIGHT_ACCU_NET.grid_size
+        im_height, im_width = self.opt.cfg.DATA.im_height, self.opt.cfg.DATA.im_width
 
+        V2_input_list = [envmap_lightAccu_mean]
+
+        # ---- sample image features using reproj cell centers
+        if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
+            # ---- get img feats
+            # x1 torch.Size([2, 64, 120, 160])
+            # x2 torch.Size([2, 128, 60, 80])
+            # x3 torch.Size([2, 256, 30, 40])
+            # x4 torch.Size([2, 256, 15, 20])
+            # x5 torch.Size([2, 512, 7, 10])
+            # x6 torch.Size([2, 1024, 7, 10])
+            x1, x2, x3, x4, x5, x6 = return_dict_brdf['encoder_outputs']['x1'], return_dict_brdf['encoder_outputs']['x2'], return_dict_brdf['encoder_outputs']['x3'], \
+                return_dict_brdf['encoder_outputs']['x4'], return_dict_brdf['encoder_outputs']['x5'], return_dict_brdf['encoder_outputs']['x6']
+            img_feat_output = self.EMITTER_NET_IMG_FEAT_DECODER(input_dict['imBatch'], x1, x2, x3, x4, x5, x6)['x_out'] # [B, 8, 240, 320]
+            assert img_feat_output.shape[2:]==(im_height, im_width)
+
+
+            # ---- get reprojected cell centers
+            verts_all_Total3D = return_dict_lightAccu['verts_all_Total3D'] # [B, 6, 8, 8, 3, 4]
+            verts_center_all_Total3D = verts_all_Total3D.mean(-1) # [B, 6, 8, 8, 3]
+
+            cam_K_scaled_batch = input_dict['layout_labels']['cam_K_scaled']
+            cam_dict = {'origin': torch.tensor([0., 0., 0.]).cuda(), 'cam_K': cam_K_scaled_batch}
+            cam_axes_batch = cam_R_gt_batch # TODO: change to est layout
+
+            simpleSceneTorch = SimpleSceneTorchBatch(cam_dict, im_height=im_height, im_width=im_width)
+            simpleSceneTorch.form_camera(cam_axes_batch)
+            
+            batch_size = verts_center_all_Total3D.shape[0]
+            # -> [B, 384, 2] torch.float32, [B, 384] torch.bool
+            verts_proj, front_flags = simpleSceneTorch.transform_and_proj(verts_center_all_Total3D.reshape(batch_size, -1, 3)) # assuming align_corners=False, meaning the upper-left corner is 0 and lower corner is (W, H)
+            verts_proj[torch.logical_not(front_flags.unsqueeze(-1).repeat(1, 1, 2))] = -100
+
+            feat_map = torch.cat([img_feat_output, input_dict['imBatch']], dim=1).unsqueeze(2) # [B, D+3, 1, H, W]
+            feat_height, feat_width = feat_map.shape[-2:]
+            verts_proj_reshape = verts_proj.view(batch_size, 6, grid_size, grid_size, 2) # [B, 6, 8, 8, 2]
+            wh_tensor = torch.tensor([feat_width, feat_height]).reshape(1, 1, 1, 1, 2).cuda().float()
+            verts_proj_reshape_normalized = verts_proj_reshape/wh_tensor * 2. - 1.
+            verts_proj_reshape_normalized_concat = torch.cat([verts_proj_reshape_normalized, torch.zeros(batch_size, 6, grid_size, grid_size, 1).cuda()], -1) # [B, 6, 8, 8, 3]
+
+            # [B, D, 1, H, W], [B, 6, 8, 8, 3] -> [B, D, 6, 8, 8]
+            img_feat_map_sampled = torch.nn.functional.grid_sample(feat_map, verts_proj_reshape_normalized_concat, padding_mode="zeros", align_corners=False)
+            return_dict_layout_emitter['emitter_input']['img_feat_map_sampled'] = img_feat_map_sampled
+
+            V2_input_list.append(img_feat_map_sampled.transpose(1, 2)) # [B, D, 6, 8, 8] -> [B, 6, D, 8, 8]
+
+
+        if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version in ['V1', 'V2']:
+            V2_input_tensor = torch.cat(V2_input_list, 2) #  # [B, 6, D(3), H(grid_size), W(grid_size)]
+            # ic([a.shape for a in V2_input_list])
+            emitter_net_outputs = self.EMITTER_NET(V2_input_tensor)
+            return_dict_layout_emitter.update(emitter_net_outputs)
+
+        elif self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version in ['V3']:
             # Scatter lights to each emitter
             scattered_light, emitter_global2localLightNet_trans_matrix = self.EMITTER_LIGHT_ACCU_NET.scatter_light_to_hemisphere(return_dict_lightAccu, if_scatter=True)
-
             
             # ---- Get params to transform cell_axis from LightNet coords -> Total3D coords
             Total3D_to_LightNet_transform_params = return_dict_lightAccu['Total3D_to_LightNet_transform_params']
@@ -413,7 +467,6 @@ class Model_Joint(nn.Module):
 
             # ---- Get the dir meshgrid outside (abs/relative) for all cells
             emitter_outdirs_meshgrid_global_lightNet = self.EMITTER_LIGHT_ACCU_NET.get_emitter_outdirs_meshgrid(emitter_global2localLightNet_trans_matrix)
-            grid_size = self.EMITTER_LIGHT_ACCU_NET.grid_size
             normal_outside_lightNet = - return_dict_lightAccu['normal_array_lightNet'].unsqueeze(2).unsqueeze(2).unsqueeze(2) # [B, 6, 1, 1, 1, 3]
             normal_outside_lightNet = normal_outside_lightNet.repeat(1, 1, grid_size**2, 1, 1, 1) # normal inside --negative--> normal outside # [B, ngrids(6*8*8, 1, 1, 3]
             normal_outside_lightNet = normal_outside_lightNet.view(normal_outside_lightNet.shape[0], 6*grid_size*grid_size, 1, 1, 3) # [B, ngrids, 1, 1, 3]
@@ -429,7 +482,7 @@ class Model_Joint(nn.Module):
             else:
                 emitter_outdirs_meshgrid_Total3D_outside = emitter_outdirs_meshgrid_Total3D_outside_abs
 
-            # ---- run the emitter net!
+            # ---- sample env map!
             if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_envmap_as_input:
                 # -- if not scatter: use_sampled_envmap_as_input
                 input_dict_sampler = {'emitter_outdirs_meshgrid_Total3D_outside': emitter_outdirs_meshgrid_Total3D_outside_abs, \
@@ -444,17 +497,26 @@ class Model_Joint(nn.Module):
                 # print(window_mask.shape, im_envmap_sampled.shape, scattered_light.shape)
                 scattered_light = im_envmap_sampled * window_mask + scattered_light * (1-window_mask)
 
-            return_dict_layout_emitter = self.EMITTER_NET(scattered_light, emitter_outdirs_meshgrid_Total3D_outside)
+            # ---- run the emitter net!
+            input_dict_lightAccuScatter_UNet_V3 = {'scattered_light': scattered_light, 'emitter_outdirs_meshgrid_Total3D_outside': emitter_outdirs_meshgrid_Total3D_outside}
+            if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
+                input_dict_lightAccuScatter_UNet_V3.update({'img_feat_map_sampled': img_feat_map_sampled})
+
+            emitter_net_outputs = self.EMITTER_NET(input_dict_lightAccuScatter_UNet_V3)
+
+            # ---- gather outputs
+            return_dict_layout_emitter.update(emitter_net_outputs)
             return_dict_layout_emitter['emitter_est_result'].update({'scattered_light': scattered_light})
 
             return_dict_layout_emitter['emitter_est_result'].update({'envmap_lightAccu': return_dict_lightAccu['envmap_lightAccu'], \
                 'emitter_outdirs_meshgrid_Total3D_outside': emitter_outdirs_meshgrid_Total3D_outside, 'normal_outside_Total3D': normal_outside_Total3D})
+        else:
+            raise ValueError('Invalid self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version')
+
 
         return_dict_layout_emitter['emitter_est_result'].update({'envmap_lightAccu_mean': envmap_lightAccu_mean, 'points_sampled_mask_expanded': return_dict_lightAccu['points_sampled_mask_expanded']})
 
-        return_dict_layout_emitter['emitter_input'] = {'normalPred_lightAccu':normalBatch, 'depthPred_lightAccu': depthBatch, 'envmapsPredImage_lightAccu': envmapsBatch}
-
-
+        return_dict_layout_emitter['emitter_input'].update({'normalPred_lightAccu':normalBatch, 'depthPred_lightAccu': depthBatch, 'envmapsPredImage_lightAccu': envmapsBatch})
 
         return return_dict_layout_emitter
 

@@ -10,16 +10,17 @@ from utils.utils_misc import *
 
 # V3 LightAccuNetScatter (not taking mean of accumulated light; scatter over a hemisphere centered at the emitter instead)
 class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
-    def __init__(self, opt=None, grid_size = 8, scatterHeight = 8, scatterWidth = 16, envmapFeatsChannels=128, other_flags=[]):
+    def __init__(self, opt=None, grid_size = 8, scatterHeight = 8, scatterWidth = 16, envmapFeatsChannels=64, other_flags=[]):
         super(decoder_layout_emitter_lightAccuScatter_UNet_V3, self).__init__()
         self.opt = opt
+        self.cfg = self.opt.cfg
         self.grid_size = grid_size
         self.ngrids = 6 * self.grid_size * self.grid_size
 
         if self.opt is not None:
-            assert self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.relative_dir == True
+            assert self.cfg.MODEL_LAYOUT_EMITTER.emitter.relative_dir == True
 
-        self.use_weighted_axis = 'use_weighted_axis' in other_flags or self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis 
+        self.use_weighted_axis = 'use_weighted_axis' in other_flags or self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis 
 
         self.scatterHeight = scatterHeight
         self.scatterWidth = scatterWidth
@@ -27,7 +28,8 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
         self.envmapFeatsHeight = self.scatterHeight // 4
         self.envmapFeatsWidth = self.scatterWidth // 4
         self.envmapFeatsChannels = envmapFeatsChannels
-        self.flattened_envmap_feats_channels = self.envmapFeatsChannels * self.envmapFeatsHeight * self.envmapFeatsWidth
+        # self.flattened_envmap_feats_channels = self.envmapFeatsChannels * self.envmapFeatsHeight * self.envmapFeatsWidth
+        self.flattened_envmap_feats_channels = self.envmapFeatsChannels # if use avg pooling after envmap encoder
 
 
         # envmap - encoders: envmap -> feats
@@ -35,16 +37,23 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
         for head_name, head_channels in [('cell_light_ratio', 1), ('cell_cls', 3), ('cell_axis', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
             self.envmap_encoder_heads[head_name] = self.get_envmap_encoder(head_name, out_channels=self.envmapFeatsChannels)
 
+        self.envmap_feat_avgpool = nn.AdaptiveAvgPool2d((1, 1))
+
         # envmap - decoder (for cell_axis): feats -> weight
         if self.use_weighted_axis:
             self.envmap_decoder_heads = torch.nn.ModuleDict({})
             for head_name, head_channels in [('cell_axis', 3)]:
                 self.envmap_decoder_heads[head_name] = self.get_envmap_decoder(head_name, in_channels=self.envmapFeatsChannels, out_channels=1)
 
+        
         # UNet arch - encoders
         self.emitter_encoder_heads = torch.nn.ModuleDict({})
+        self.emitter_encoder_decoder_in_channels=self.flattened_envmap_feats_channels
+        if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
+            self.emitter_encoder_decoder_in_channels = self.emitter_encoder_decoder_in_channels + self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels + 3 # +3 for img input
+
         for head_name, head_channels in [('cell_light_ratio', 1), ('cell_cls', 3), ('cell_axis', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
-            self.get_emitter_encoder(head_name, in_channels=self.flattened_envmap_feats_channels)
+            self.get_emitter_encoder(head_name, in_channels=self.emitter_encoder_decoder_in_channels)
 
         # UNet arch - decoders
         self.emitter_decoder_heads = torch.nn.ModuleDict({})
@@ -60,35 +69,34 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
     def get_envmap_encoder(self, head_name, out_channels):
         # same + downsize (4x8)
         envmap_encoder_heads = torch.nn.ModuleDict({})
-        envmap_encoder_heads['conv1_%s_UNet'%head_name] = nn.Conv2d(in_channels=3, out_channels=64, kernel_size=3, stride=1, padding = 1, bias=True)
-        envmap_encoder_heads['gn1_%s_UNet'%head_name] = nn.GroupNorm(num_groups=4, num_channels=64 )
-        envmap_encoder_heads['conv2_%s_UNet'%head_name] = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=2, padding = 1, bias=True)
-        envmap_encoder_heads['gn2_%s_UNet'%head_name] = nn.GroupNorm(num_groups=8, num_channels=128 )
+        envmap_encoder_heads['conv1_%s_UNet'%head_name] = nn.Conv2d(in_channels=3, out_channels=16, kernel_size=3, stride=1, padding = 1, bias=True)
+        envmap_encoder_heads['gn1_%s_UNet'%head_name] = nn.GroupNorm(num_groups=1, num_channels=16 )
+        envmap_encoder_heads['conv2_%s_UNet'%head_name] = nn.Conv2d(in_channels=16, out_channels=32, kernel_size=3, stride=2, padding = 1, bias=True)
+        envmap_encoder_heads['gn2_%s_UNet'%head_name] = nn.GroupNorm(num_groups=2, num_channels=32 )
 
         # same + downsize (2x4)
-        envmap_encoder_heads['conv3_%s_UNet'%head_name] = nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=1, padding = 1, bias=True)
-        envmap_encoder_heads['gn3_%s_UNet'%head_name] = nn.GroupNorm(num_groups=8, num_channels=128 )
-        envmap_encoder_heads['conv4_%s_UNet'%head_name] = nn.Conv2d(in_channels=128, out_channels=128, kernel_size=3, stride=2, padding = 1, bias=True)
-        envmap_encoder_heads['gn4_%s_UNet'%head_name] = nn.GroupNorm(num_groups=8, num_channels=out_channels )
+        envmap_encoder_heads['conv3_%s_UNet'%head_name] = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding = 1, bias=True)
+        envmap_encoder_heads['gn3_%s_UNet'%head_name] = nn.GroupNorm(num_groups=4, num_channels=64 )
+        envmap_encoder_heads['conv4_%s_UNet'%head_name] = nn.Conv2d(in_channels=64, out_channels=out_channels, kernel_size=3, stride=2, padding = 1, bias=True)
+        assert out_channels%16==0
+        envmap_encoder_heads['gn4_%s_UNet'%head_name] = nn.GroupNorm(num_groups=out_channels//16, num_channels=out_channels )
 
         return envmap_encoder_heads
 
     def get_envmap_decoder(self, head_name, in_channels, out_channels):
-        # same + upsize (4x8)
+        # same
         envmap_decoder_heads = torch.nn.ModuleDict({})
-        envmap_decoder_heads['dconv1_%s_UNet'%head_name] = nn.Conv2d(in_channels=in_channels, out_channels=128, kernel_size=3, stride=1, padding = 1, bias=True)
-        envmap_decoder_heads['dgn1_%s_UNet'%head_name] = nn.GroupNorm(num_groups=8, num_channels=128 )
-        envmap_decoder_heads['dconv2_%s_UNet'%head_name] = nn.Conv2d(in_channels=256, out_channels=64, kernel_size=3, stride=1, padding = 1, bias=True)
-        envmap_decoder_heads['dgn2_%s_UNet'%head_name] = nn.GroupNorm(num_groups=4, num_channels=64 )
-
-        # same + upsize (8x16)
-        envmap_decoder_heads['dconv3_%s_UNet'%head_name] = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding = 1, bias=True)
-        envmap_decoder_heads['dgn3_%s_UNet'%head_name] = nn.GroupNorm(num_groups=8, num_channels=64 )
-        envmap_decoder_heads['dconv4_%s_UNet'%head_name] = nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3, stride=1, padding = 1, bias=True)
-        envmap_decoder_heads['dgn4_%s_UNet'%head_name] = nn.GroupNorm(num_groups=4, num_channels=64 )
+        envmap_decoder_heads['dconv1_%s_UNet'%head_name] = nn.Conv2d(in_channels=in_channels, out_channels=64, kernel_size=3, stride=1, padding = 1, bias=True)
+        envmap_decoder_heads['dgn1_%s_UNet'%head_name] = nn.GroupNorm(num_groups=4, num_channels=64 )
+        envmap_decoder_heads['dconv2_%s_UNet'%head_name] = nn.Conv2d(in_channels=128, out_channels=32, kernel_size=3, stride=1, padding = 1, bias=True)
+        envmap_decoder_heads['dgn2_%s_UNet'%head_name] = nn.GroupNorm(num_groups=2, num_channels=32 )
+        envmap_decoder_heads['dconv3_%s_UNet'%head_name] = nn.Conv2d(in_channels=64, out_channels=16, kernel_size=3, stride=1, padding = 1, bias=True)
+        envmap_decoder_heads['dgn3_%s_UNet'%head_name] = nn.GroupNorm(num_groups=1, num_channels=16 )
+        envmap_decoder_heads['dconv4_%s_UNet'%head_name] = nn.Conv2d(in_channels=32, out_channels=16, kernel_size=3, stride=1, padding = 1, bias=True)
+        envmap_decoder_heads['dgn4_%s_UNet'%head_name] = nn.GroupNorm(num_groups=1, num_channels=16 )
 
         # same (8x16)
-        envmap_decoder_heads['dconv5_%s_UNet'%head_name] = nn.Conv2d(in_channels=64, out_channels=out_channels, kernel_size=3, stride=1, padding = 1, bias=True)
+        envmap_decoder_heads['dconv5_%s_UNet'%head_name] = nn.Conv2d(in_channels=16, out_channels=out_channels, kernel_size=3, stride=1, padding = 1, bias=True)
 
 
         return envmap_decoder_heads
@@ -123,10 +131,11 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
         # same (8x8)
         self.emitter_decoder_heads['dconv5_%s_UNet'%head_name] = nn.Conv2d(in_channels=64*6, out_channels=head_channels*6, kernel_size=3, stride=1, padding = 1, bias=True, groups=6)
 
-    def forward(self, scattered_light, emitter_outdirs_meshgrid_Total3D_outside):
+    def forward(self, input_dict):
         '''
         scattered_light: [B, ngrids, 8, 16, 3]
         '''
+        scattered_light, emitter_outdirs_meshgrid_Total3D_outside = input_dict['scattered_light'], input_dict['emitter_outdirs_meshgrid_Total3D_outside']
         assert len(scattered_light.shape)==5 and scattered_light.shape[1:]==(self.ngrids, self.scatterHeight, self.scatterWidth, 3)
         batch_size = scattered_light.shape[0]
         scattered_light_merged = scattered_light.reshape(-1, self.scatterHeight, self.scatterWidth, 3).permute(0, 3, 1, 2) # [B*ngrids, 3, 8, 16]
@@ -134,8 +143,6 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
         # ======== get envmap features from scattered_light ========
         emitter_envmap_feats = {}
         for head_name, head_channels in [('cell_light_ratio', 1), ('cell_cls', 3), ('cell_axis', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
-        # for head_name, head_channels in [('cell_light_ratio', 1)]:
-            # xx = self.envmap_encoder_heads[head_name](scattered_light_merged)
             x = scattered_light_merged
             envmap_encoder_heads = self.envmap_encoder_heads[head_name]
             conv1, gn1 = envmap_encoder_heads['conv1_%s_UNet'%head_name], envmap_encoder_heads['gn1_%s_UNet'%head_name]
@@ -146,11 +153,14 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
             x1_8 = F.relu(gn1(conv1(x)), True) # [B*ngrids, 3, 8, 16]
             x2_4 = F.relu(gn2(conv2(x1_8)), True) # [B*ngrids, ?, 4, 8]
             x3_4 = F.relu(gn3(conv3(x2_4)), True) # [B*ngrids, ?, 4, 8]
-            x4_2 = F.relu(gn4(conv4(x3_4)), True) # [B*ngrids, 128, 2, 4]
+            x4_2 = F.relu(gn4(conv4(x3_4)), True) # [B*ngrids, envmapFeatsChannels, 2, 4]
+            
+            x4_2_pooled = self.envmap_feat_avgpool(x4_2)
 
-            x4_2_reshaped = x4_2.view(batch_size, self.ngrids, self.envmapFeatsChannels, self.envmapFeatsHeight, self.envmapFeatsWidth) # [B, ngrids, 128, 2, 4]
-
-            emitter_envmap_feats[head_name] = x4_2_reshaped.view(batch_size, self.ngrids, self.flattened_envmap_feats_channels) # [B, ngrids, 128*2*4]
+            # x4_2_reshaped = x4_2.view(batch_size, self.ngrids, self.envmapFeatsChannels, self.envmapFeatsHeight, self.envmapFeatsWidth) # [B, ngrids, envmapFeatsChannels, 2, 4]
+            x4_2_reshaped = x4_2_pooled.view(batch_size, self.ngrids, self.envmapFeatsChannels, 1, 1) # [B, ngrids, envmapFeatsChannels, 1, 1]
+    
+            emitter_envmap_feats[head_name] = x4_2_reshaped.view(batch_size, self.ngrids, self.flattened_envmap_feats_channels) # [B, ngrids, envmapFeatsChannels]
 
             if head_name == 'cell_axis':
                 for layer_name, layer_feat in zip(['x1_8', 'x2_4', 'x3_4', 'x4_2'], [x1_8, x2_4, x3_4, x4_2]):
@@ -172,11 +182,14 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
             x1_8, x2_4, x3_4, x4_2 = [emitter_envmap_feats['%s-%s'%(head_name, layer_name)] for layer_name in ['x1_8', 'x2_4', 'x3_4', 'x4_2']]
 
             dx1_2 = F.relu(dgn1(dconv1(x4_2)), True)
+
             dx2_4_in = F.interpolate(dx1_2, scale_factor=2, mode='bilinear')
             dx2_4_in = torch.cat([dx2_4_in, x3_4], dim = 1)
             dx2_4 = F.relu(dgn2(dconv2(dx2_4_in)), True)
-
-            dx3_4 = F.relu(dgn3(dconv3(dx2_4)), True)
+            
+            dx3_4_in = torch.cat([dx2_4, x2_4], dim = 1)
+            dx3_4 = F.relu(dgn3(dconv3(dx3_4_in)), True)
+            
             dx4_8_in = F.interpolate(dx3_4, scale_factor=2, mode='bilinear')
             dx4_8_in = torch.cat([dx4_8_in, x1_8], dim = 1)
             dx4_8 = F.relu(dgn4(dconv4(dx4_8_in)), True)
@@ -196,14 +209,19 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
 
             return_dict_emitter['emitter_est_result'].update({'cell_axis': cell_axis_out, 'cell_axis_weights': cell_axis_weights})
 
-        # ======== get emitter est from U-Net for each estimated except `cell_axis` ========
+        # ======== get emitter est from U-Net for each estimated EXCEPT `cell_axis` ========
         for head_name, head_channels in self.UNet_decoder_heads_channels:
             
-            x = emitter_envmap_feats[head_name] # [B, ngrids, 128*2*4]
-            x = x.permute(0, 2, 1) # [B, 128*2*4, ngrids]
+            x = emitter_envmap_feats[head_name] # [B, ngrids, envmapFeatsChannels*2*4] or [B, ngrids, envmapFeatsChannels]
+            x = x.permute(0, 2, 1) # [B, envmapFeatsChannels*2*4, ngrids] or [B, envmapFeatsChannels, ngrids]
             batch_size = x.shape[0]
             x = x.view(batch_size, self.flattened_envmap_feats_channels, 6, self.grid_size, self.grid_size)
-            x = x.reshape(batch_size, self.flattened_envmap_feats_channels*6, self.grid_size, self.grid_size)
+
+            if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
+                img_feat_map_sampled = input_dict['img_feat_map_sampled'] # [B, D, 6, 8, 8]
+                x = torch.cat([x, img_feat_map_sampled], 1)
+
+            x = x.reshape(batch_size, self.emitter_encoder_decoder_in_channels*6, self.grid_size, self.grid_size) # [B, envmapFeatsChannels*6, 8, 8]
 
             # ---- emitter encoder
             conv1, gn1 = self.emitter_encoder_heads['conv1_%s_UNet'%head_name], self.emitter_encoder_heads['gn1_%s_UNet'%head_name]

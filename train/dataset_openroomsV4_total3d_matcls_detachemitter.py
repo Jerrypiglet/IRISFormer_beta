@@ -658,6 +658,12 @@ class openrooms(data.Dataset):
         if 'lo' in self.opt.cfg.DATA.data_read_list:
             layout = sequence['layout']
             layout_reindexed = sequence_reindexed['layout']
+            
+            cam_K_ratio_W = camera['K'][0][2] / (self.im_width/2.)
+            cam_K_ratio_H = camera['K'][1][2] / (self.im_height/2.)
+            assert cam_K_ratio_W == cam_K_ratio_H
+            camera['K_scaled'] = np.vstack([camera['K'][:2, :] / cam_K_ratio_W, camera['K'][2:3, :]])
+
             return_dict.update({'layout_emitter_pickle_path': pickle_path, 'camera':camera, 'layout_':layout, 'layout_reindexed':layout_reindexed}) # 'layout_':layout, should not be used!
 
         # === emitters
