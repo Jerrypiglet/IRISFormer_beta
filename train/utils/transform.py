@@ -78,12 +78,14 @@ class Normalize(object):
 
 
 class Resize(object):
-    # Resize the input to the given size, 'size' is a 2-element tuple or list in the order of (h, w).
+    # Resize the input to the given size, 'size' is a 2-element tuple or list in the order of (w, h).
     def __init__(self, size):
         assert (isinstance(size, collections.Iterable) and len(size) == 2) and isinstance(size, tuple)
         self.size = size
 
     def __call__(self, image, label=None):
+        # if min(image.shape)==0:
+        #     print(image.shape, self.size)
         image = cv2.resize(image, self.size, interpolation=cv2.INTER_LINEAR)
         if label is not None:
             label = cv2.resize(label, self.size, interpolation=cv2.INTER_NEAREST)
@@ -188,6 +190,31 @@ class Crop(object):
         image = image[h_off:h_off+self.crop_h, w_off:w_off+self.crop_w]
         if label is not None:
             label = label[h_off:h_off+self.crop_h, w_off:w_off+self.crop_w]
+            return image, label
+        else:
+            return image
+
+
+
+class CropBdb(object):
+    """Crops the given ndarray image (H*W*C or H*W) from a bounding box bdb: [x1, x2, y1, y2].
+    Args:
+        size (sequence or int): Desired output size of the crop. If size is an
+        int instead of sequence like (h, w), a square crop (size, size) is made.
+    """
+    def __init__(self, bdb):
+        self.bdb = bdb
+
+    def __call__(self, image, label=None):
+        h, w, _ = image.shape
+        x1, y1, x2, y2 = int(np.round(self.bdb[0])), int(np.round(self.bdb[1])), int(np.round(self.bdb[2])), int(np.round(self.bdb[3]))
+        x1 = np.clip(x1, 0, w-1)
+        x2 = np.clip(x2, 0, w-1)
+        y1 = np.clip(y1, 0, h-1)
+        y2 = np.clip(y2, 0, h-1)
+        image = image[y1:y2, x1:x2]
+        if label is not None:
+            label = label[y1:y2, x1:x2]
             return image, label
         else:
             return image

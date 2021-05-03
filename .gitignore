@@ -4,6 +4,7 @@ models_ckpt
 dataset/
 results/
 logs/
+logs
 logs_cluster/
 notebooks/.ipynb_checkpoints/
 cluster_control/tasks/

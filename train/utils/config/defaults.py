@@ -52,7 +52,7 @@ _C.DATASET = CN()
 _C.DATASET.mini = False # load mini OR from SSD to enable faster dataloading for debugging purposes etc.
 _C.DATASET.dataset_name = 'openrooms'
 _C.DATASET.dataset_path = ''
-_C.DATASET.dataset_path_local = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms_'
+_C.DATASET.dataset_path_local = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms'
 _C.DATASET.dataset_path_cluster = '/siggraphasia20dataset/code/Routine/DatasetCreation/'
 _C.DATASET.dataset_path_test = ''
 _C.DATASET.dataset_path_test_local = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms_test'
@@ -100,6 +100,8 @@ _C.DATA.if_load_png_not_hdr = False # load png as input image instead of hdr ima
 _C.DATA.if_augment_train = False
 _C.DATA.im_height = 240
 _C.DATA.im_width = 320
+_C.DATA.im_height_ori = 480
+_C.DATA.im_width_ori = 640
 _C.DATA.load_semseg_gt = False
 _C.DATA.load_matseg_gt = False
 _C.DATA.load_brdf_gt = False
@@ -107,7 +109,7 @@ _C.DATA.load_light_gt = False
 _C.DATA.load_layout_emitter_gt = False
 _C.DATA.data_read_list = ''
 _C.DATA.data_read_list_allowed = ['al', 'no', 'de', 'ro', \
-    'lo', 'em']
+    'lo', 'em', 'ob']
 _C.DATA.load_matcls_gt = False
 
 # ===== BRDF
@@ -160,8 +162,8 @@ _C.MODEL_LIGHT.use_scale_aware_loss = False
 # ===== layout, emitter
 _C.MODEL_LAYOUT_EMITTER = CN()
 _C.MODEL_LAYOUT_EMITTER.enable = False # enable model / modules
-_C.MODEL_LAYOUT_EMITTER.enable_list = 'lo_em' # enable model / modules
-_C.MODEL_LAYOUT_EMITTER.enable_list_allowed = ['lo', 'em']
+_C.MODEL_LAYOUT_EMITTER.enable_list = 'lo_ob_em' # enable model / modules
+_C.MODEL_LAYOUT_EMITTER.enable_list_allowed = ['lo', 'ob', 'em']
 _C.MODEL_LAYOUT_EMITTER.loss_list = ''
 _C.MODEL_LAYOUT_EMITTER.use_depth_as_input = False
 

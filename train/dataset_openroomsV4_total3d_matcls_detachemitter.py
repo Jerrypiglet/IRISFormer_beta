@@ -20,11 +20,10 @@ from pathlib import Path
 import pickle5 as pickle
 from icecream import ic
 from utils.utils_total3D.utils_OR_imageops import loadHdr_simple, to_nonhdr
+import math
 
 # import math
 
-# HEIGHT_PATCH = 256
-# WIDTH_PATCH = 256
 from utils.utils_total3D.utils_OR_vis_labels import RGB_to_01
 from utils.utils_total3D.utils_others import Relation_Config, OR4XCLASSES_dict, OR4XCLASSES_not_detect_mapping_ids_dict, OR4X_mapping_catInt_to_RGB
 # OR = 'OR45'
@@ -51,17 +50,40 @@ d_model = int(rel_cfg.d_g/4)
 #     T.ToTensor(),
 # ])
 
+HEIGHT_PATCH = 256
+WIDTH_PATCH = 256
+
 # data_transforms_crop_nonormalize = T.Compose([
 #     T.Resize((280, 280)),
 #     T.RandomCrop((HEIGHT_PATCH, WIDTH_PATCH)),
-#     T.ToTensor(),
+#     # T.ToTensor(),
 # ])
 
 # data_transforms_nocrop_nonormalize = T.Compose([
 #     T.Resize((HEIGHT_PATCH, WIDTH_PATCH)),
-#     T.ToTensor(),
+#     # T.ToTensor(),
 # ])
 
+from utils import transform
+def get_bdb2d_transform(split, crop_bdb): # crop_bdb: [x1, x2, y1, y2] in float
+    assert split in ['train', 'val']
+    if split == 'train':
+        data_transforms_crop_nonormalize = [
+            transform.CropBdb(crop_bdb), 
+            transform.Resize((280, 280)),
+            transform.Crop((HEIGHT_PATCH, WIDTH_PATCH), crop_type='rand'),
+            transform.ToTensor()
+        ]
+        data_transforms_crop_nonormalize = transform.Compose(data_transforms_crop_nonormalize)
+        return data_transforms_crop_nonormalize
+    else:
+        data_transforms_nocrop_nonormalize = T.Compose([
+            transform.CropBdb(crop_bdb), 
+            transform.Resize((HEIGHT_PATCH, WIDTH_PATCH)),
+            transform.ToTensor()
+        ])
+        data_transforms_nocrop_nonormalize = transform.Compose(data_transforms_nocrop_nonormalize)
+        return data_transforms_nocrop_nonormalize
 
 def make_dataset(split='train', data_root=None, data_list=None, logger=None):
     assert split in ['train', 'val', 'test']
@@ -237,7 +259,7 @@ class openrooms(data.Dataset):
         meta_split, scene_name, frame_id = self.meta_split_scene_name_frame_id_list[index]
 
         if_load_mask = self.opt.cfg.DATA.load_brdf_gt and not self.opt.cfg.DATA.if_load_png_not_hdr
-        
+
         if if_load_mask:
             seg_path = hdr_image_path.replace('im_', 'immask_').replace('hdr', 'png').replace('DiffMat', '')
             # Read segmentation
@@ -262,7 +284,7 @@ class openrooms(data.Dataset):
             im_trainval_RGB = self.transforms_resize(im_RGB_uint8) # not necessarily \in [0., 1.] [!!!!]
             # print(type(im_trainval_RGB), torch.max(im_trainval_RGB), torch.min(im_trainval_RGB), torch.mean(im_trainval_RGB))
             im_SDR_RGB = im_RGB_uint8.astype(np.float32) / 255.
-            im_trainval = im_SDR_RGB
+            im_trainval = im_SDR_RGB # [240, 320, 3], np.ndarray
 
             batch_dict = {'image_path': str(png_image_path), 'image_index': index}
 
@@ -280,7 +302,7 @@ class openrooms(data.Dataset):
             image_transformed_fixed = self.transforms_fixed(im_RGB_uint8)
             batch_dict = {'image_path': str(hdr_image_path), 'image_index': index}
 
-            im_trainval = np.transpose(im_trainval, (1, 2, 0))
+            im_trainval = np.transpose(im_trainval, (1, 2, 0)) # [240, 320, 3], np.ndarray
             im_SDR_RGB = np.transpose(im_SDR_RGB, (1, 2, 0))
         
         # image_transformed_fixed: normalized, not augmented [only needed in semseg]
@@ -436,7 +458,7 @@ class openrooms(data.Dataset):
         # ====== layout, obj, emitters =====
         if self.opt.cfg.DATA.load_layout_emitter_gt:
             scene_total3d_Path = Path(self.cfg.DATASET.layout_emitter_path) / meta_split / scene_name
-            layout_emitter_dict = self.load_layout_emitter_gt_detach_emitter(frame_info=(scene_total3d_Path, frame_id), hdr_scale=hdr_scale)
+            layout_emitter_dict = self.load_layout_emitter_gt_detach_emitter(im_trainval, frame_info=(scene_total3d_Path, frame_id), hdr_scale=hdr_scale)
             batch_dict.update(layout_emitter_dict)
         
         return batch_dict
@@ -553,7 +575,7 @@ class openrooms(data.Dataset):
             'im_matseg_transformed_trainval': im_matseg_transformed_trainval
         }
 
-    def load_layout_emitter_gt_detach_emitter(self, frame_info, hdr_scale, if_load_objs=False):
+    def load_layout_emitter_gt_detach_emitter(self, im_trainval, frame_info, hdr_scale, if_load_objs=False):
         '''
         Required pickles: (/data/ruizhu/OR-V4full-OR45_total3D_train_test_data)
         - layout_obj_%d.pkl
@@ -600,65 +622,89 @@ class openrooms(data.Dataset):
 
         if_print = pickle_path == '/data/ruizhu/OR-V4full-detachEmitter-OR45_total3D_train_test_data/main_xml1/scene0552_00/layout_obj_1.pkl'
 
-        # ===== load objects
-        # boxes = sequence['boxes']
-        # n_objects = boxes['bdb2D_pos'].shape[0]
-        # boxes_valid_list = list(boxes['if_valid'] if 'if_valid' in boxes else [True]*n_objects)
-        # g_feature = [[((loc2[0] + loc2[2]) / 2. - (loc1[0] + loc1[2]) / 2.) / (loc1[2] - loc1[0]),
-        #               ((loc2[1] + loc2[3]) / 2. - (loc1[1] + loc1[3]) / 2.) / (loc1[3] - loc1[1]),
-        #               math.log((loc2[2] - loc2[0]) / (loc1[2] - loc1[0])),
-        #               math.log((loc2[3] - loc2[1]) / (loc1[3] - loc1[1]))] \
-        #              for id1, loc1 in enumerate(boxes['bdb2D_pos'])
-        #              for id2, loc2 in enumerate(boxes['bdb2D_pos'])]
+        # ===== objects
+        if 'ob' in self.opt.cfg.DATA.data_read_list:
+            boxes = sequence['boxes']
+            n_objects = boxes['bdb2D_pos'].shape[0]
+            boxes_valid_list = list(boxes['if_valid'] if 'if_valid' in boxes else [True]*n_objects)
+            g_feature = [[((loc2[0] + loc2[2]) / 2. - (loc1[0] + loc1[2]) / 2.) / (loc1[2] - loc1[0]),
+                        ((loc2[1] + loc2[3]) / 2. - (loc1[1] + loc1[3]) / 2.) / (loc1[3] - loc1[1]),
+                        math.log((loc2[2] - loc2[0]) / (loc1[2] - loc1[0])),
+                        math.log((loc2[3] - loc2[1]) / (loc1[3] - loc1[1]))] \
+                        for id1, loc1 in enumerate(boxes['bdb2D_pos'])
+                        for id2, loc2 in enumerate(boxes['bdb2D_pos'])]
 
-        # locs = [num for loc in g_feature for num in loc]
+            locs = [num for loc in g_feature for num in loc]
 
-        # pe = torch.zeros(len(locs), d_model)
-        # position = torch.from_numpy(np.array(locs)).unsqueeze(1).float()
-        # div_term = torch.exp(torch.arange(0, d_model, 2).float() * -(math.log(10000.) / d_model))
-        # pe[:, 0::2] = torch.sin(position * div_term)
-        # pe[:, 1::2] = torch.cos(position * div_term)
+            pe = torch.zeros(len(locs), d_model)
+            position = torch.from_numpy(np.array(locs)).unsqueeze(1).float()
+            div_term = torch.exp(torch.arange(0, d_model, 2).float() * -(math.log(10000.) / d_model))
+            pe[:, 0::2] = torch.sin(position * div_term)
+            pe[:, 1::2] = torch.cos(position * div_term)
 
-        # boxes['g_feature'] = pe.view(n_objects * n_objects, rel_cfg.d_g)
+            boxes['g_feature'] = pe.view(n_objects * n_objects, rel_cfg.d_g)
 
-        # # encode class
-        # cls_codes = torch.zeros([len(boxes['size_cls']), len(self.OR_classes)])
-        
-        # # if self.config['data']['dataset_super'] == 'OR': # OR: set cat_id==0 to invalid, (and [optionally] remap not-detect-cats to 0)
-        # assert len(boxes['size_cls']) == len(boxes_valid_list)
-        # for idx in range(len(boxes['size_cls'])):
-        #     if boxes['size_cls'][idx] == 0:
-        #         boxes_valid_list[idx] = False # set cat_id==0 to invalid
-        #     if boxes['size_cls'][idx] in OR4XCLASSES_not_detect_mapping_ids_dict[self.OR]: # [optionally] remap not-detect-cats to 0
-        #         boxes_valid_list[idx] = False
+            # encode class
+            cls_codes = torch.zeros([len(boxes['size_cls']), len(self.OR_classes)])
+            
+            # if self.config['data']['dataset_super'] == 'OR': # OR: set cat_id==0 to invalid, (and [optionally] remap not-detect-cats to 0)
+            assert len(boxes['size_cls']) == len(boxes_valid_list)
+            for idx in range(len(boxes['size_cls'])):
+                if boxes['size_cls'][idx] == 0:
+                    boxes_valid_list[idx] = False # set cat_id==0 to invalid
+                if boxes['size_cls'][idx] in OR4XCLASSES_not_detect_mapping_ids_dict[self.OR]: # [optionally] remap not-detect-cats to 0
+                    boxes_valid_list[idx] = False
 
-        # cls_codes[range(len(boxes['size_cls'])), boxes['size_cls']] = 1
-        # boxes['size_cls'] = cls_codes
+            cls_codes[range(len(boxes['size_cls'])), boxes['size_cls']] = 1
+            boxes['size_cls'] = cls_codes
 
 
-        # TODO: If the training error is consistently larger than the test error. We remove the crop and add more intermediate FC layers with no dropout.
-        # TODO: Or FC layers with more hidden neurons, which ensures more neurons pass through the dropout layer, or with larger learning rate, longer
-        # TODO: decay rate.
-        # data_transforms = data_transforms_crop if self.split == 'train' else data_transforms_nocrop
-        # data_transforms_nonormalize = data_transforms_crop_nonormalize if self.mode=='train' else data_transforms_nocrop_nonormalize
+            # TODO: If the training error is consistently larger than the test error. We remove the crop and add more intermediate FC layers with no dropout.
+            # TODO: Or FC layers with more hidden neurons, which ensures more neurons pass through the dropout layer, or with larger learning rate, longer
+            # TODO: decay rate.
+            # data_transforms = data_transforms_crop if self.split == 'train' else data_transforms_nocrop
+            # data_transforms_nonormalize = data_transforms_crop_nonormalize if self.split=='train' else data_transforms_nocrop_nonormalize
 
-        # patch = []
-        # for bdb in boxes['bdb2D_pos']:
-        #     img = image.crop((bdb[0], bdb[1], bdb[2], bdb[3]))
-        #     # img_nonormalize = data_transforms_nonormalize(img)
-        #     img = data_transforms(img)
-        #     patch.append(img)
-        # boxes['patch'] = torch.stack(patch)
-        # image = data_transforms_nocrop(image)
+            patch = []
+            for box_idx, bdb in enumerate(boxes['bdb2D_pos']): # [x1, y1, x2, y2] in [640, 480]
+                # print(im_trainval.shape, bdb)
+                scale_height = self.opt.cfg.DATA.im_height / self.opt.cfg.DATA.im_height_ori
+                scale_width = self.opt.cfg.DATA.im_width / self.opt.cfg.DATA.im_width_ori
 
-        # assert boxes['patch'].shape[0] == len(boxes_valid_list)
+                # x1, y1, x2, y2 = int(np.round(bdb[0]*scale_width)), int(np.round(bdb[1]*scale_height)), int(np.round(bdb[2]*scale_width)), int(np.round(bdb[3]*scale_height))
+                # img = im_trainval[y1:y2, x1:x2, :]
 
-        # return_dict.update({'image':image, 'image_np': image_np, 
-        #     # 'rgb_img': torch.from_numpy(sequence['rgb_img']), 
-        #     'rgb_img_path': str(sequence['rgb_img_path']), 'pickle_path': file_path, \
-        #     'boxes_batch':boxes, 'camera':camera, 'layout':layout, 'sequence_id': sequence['sequence_id'], 
-        #     'boxes_valid_list': boxes_valid_list})
+                # img = im_trainval.crop((bdb[0], bdb[1], bdb[2], bdb[3]))
+                # img = data_transforms_nonormalize(img)
+                # img = data_transforms(img)
+                bdb_crop = [bdb[0]*scale_width, bdb[1]*scale_height, bdb[2]*scale_width, bdb[3]*scale_height]
+                
+                width_thres = 3
+                height_thres = 3
+                if bdb_crop[2]-bdb_crop[0] < width_thres or bdb_crop[3]-bdb_crop[1] < height_thres:
+                    # deal with very small objects
+                    img = torch.zeros((3, HEIGHT_PATCH, WIDTH_PATCH), dtype=torch.float32)
+                    boxes_valid_list[box_idx] = False
+                else:
+                    bdb2d_transform = get_bdb2d_transform(self.split, bdb_crop)
+                    img = bdb2d_transform(im_trainval)
+                    # if min(img.shape)==0:
+                    #     print(img.shape, bdb_crop, bdb)
 
+                patch.append(img)
+            boxes['patch'] = torch.stack(patch)
+            # image = data_transforms_nocrop(image)
+
+            assert boxes['patch'].shape[0] == len(boxes_valid_list)
+
+            # return_dict.update({'image':image, 'image_np': image_np, 
+            #     # 'rgb_img': torch.from_numpy(sequence['rgb_img']), 
+            #     'rgb_img_path': str(sequence['rgb_img_path']), 'pickle_path': file_path, \
+            #     'boxes_batch':boxes, 'camera':camera, 'layout':layout, 'sequence_id': sequence['sequence_id'], 
+            #     'boxes_valid_list': boxes_valid_list})
+            return_dict.update({'boxes_batch':boxes, 'boxes_valid_list': boxes_valid_list})
+
+        # === layout
         if 'lo' in self.opt.cfg.DATA.data_read_list:
             layout = sequence['layout']
             layout_reindexed = sequence_reindexed['layout']
@@ -883,168 +929,6 @@ class openrooms(data.Dataset):
 
         return return_dict
 
-    # def load_layout_emitter_gt(self, frame_info):
-    #     scene_total3d_path, frame_id = frame_info[0], frame_info[1]
-    #     pickle_path = str(scene_total3d_path / ('layout_obj_%d.pkl'%frame_info[1]))
-    #     pickle_path_reindexed = pickle_path.replace('.pkl', '_reindexed.pkl')
-    #     with open(pickle_path, 'rb') as f:
-    #         sequence = pickle.load(f)
-    #     with open(pickle_path_reindexed, 'rb') as f:
-    #         sequence_reindexed = pickle.load(f)
-
-    #     return_dict = {}
-
-    #     camera = sequence['camera']
-
-    #     # ===== load objects
-    #     # boxes = sequence['boxes']
-    #     # n_objects = boxes['bdb2D_pos'].shape[0]
-    #     # boxes_valid_list = list(boxes['if_valid'] if 'if_valid' in boxes else [True]*n_objects)
-    #     # g_feature = [[((loc2[0] + loc2[2]) / 2. - (loc1[0] + loc1[2]) / 2.) / (loc1[2] - loc1[0]),
-    #     #               ((loc2[1] + loc2[3]) / 2. - (loc1[1] + loc1[3]) / 2.) / (loc1[3] - loc1[1]),
-    #     #               math.log((loc2[2] - loc2[0]) / (loc1[2] - loc1[0])),
-    #     #               math.log((loc2[3] - loc2[1]) / (loc1[3] - loc1[1]))] \
-    #     #              for id1, loc1 in enumerate(boxes['bdb2D_pos'])
-    #     #              for id2, loc2 in enumerate(boxes['bdb2D_pos'])]
-
-    #     # locs = [num for loc in g_feature for num in loc]
-
-    #     # pe = torch.zeros(len(locs), d_model)
-    #     # position = torch.from_numpy(np.array(locs)).unsqueeze(1).float()
-    #     # div_term = torch.exp(torch.arange(0, d_model, 2).float() * -(math.log(10000.) / d_model))
-    #     # pe[:, 0::2] = torch.sin(position * div_term)
-    #     # pe[:, 1::2] = torch.cos(position * div_term)
-
-    #     # boxes['g_feature'] = pe.view(n_objects * n_objects, rel_cfg.d_g)
-
-    #     # # encode class
-    #     # cls_codes = torch.zeros([len(boxes['size_cls']), len(self.OR_classes)])
-        
-    #     # # if self.config['data']['dataset_super'] == 'OR': # OR: set cat_id==0 to invalid, (and [optionally] remap not-detect-cats to 0)
-    #     # assert len(boxes['size_cls']) == len(boxes_valid_list)
-    #     # for idx in range(len(boxes['size_cls'])):
-    #     #     if boxes['size_cls'][idx] == 0:
-    #     #         boxes_valid_list[idx] = False # set cat_id==0 to invalid
-    #     #     if boxes['size_cls'][idx] in OR4XCLASSES_not_detect_mapping_ids_dict[self.OR]: # [optionally] remap not-detect-cats to 0
-    #     #         boxes_valid_list[idx] = False
-
-    #     # cls_codes[range(len(boxes['size_cls'])), boxes['size_cls']] = 1
-    #     # boxes['size_cls'] = cls_codes
-
-
-    #     # TODO: If the training error is consistently larger than the test error. We remove the crop and add more intermediate FC layers with no dropout.
-    #     # TODO: Or FC layers with more hidden neurons, which ensures more neurons pass through the dropout layer, or with larger learning rate, longer
-    #     # TODO: decay rate.
-    #     # data_transforms = data_transforms_crop if self.split == 'train' else data_transforms_nocrop
-    #     # data_transforms_nonormalize = data_transforms_crop_nonormalize if self.mode=='train' else data_transforms_nocrop_nonormalize
-
-    #     # patch = []
-    #     # for bdb in boxes['bdb2D_pos']:
-    #     #     img = image.crop((bdb[0], bdb[1], bdb[2], bdb[3]))
-    #     #     # img_nonormalize = data_transforms_nonormalize(img)
-    #     #     img = data_transforms(img)
-    #     #     patch.append(img)
-    #     # boxes['patch'] = torch.stack(patch)
-    #     # image = data_transforms_nocrop(image)
-
-    #     # assert boxes['patch'].shape[0] == len(boxes_valid_list)
-
-    #     # return_dict.update({'image':image, 'image_np': image_np, 
-    #     #     # 'rgb_img': torch.from_numpy(sequence['rgb_img']), 
-    #     #     'rgb_img_path': str(sequence['rgb_img_path']), 'pickle_path': file_path, \
-    #     #     'boxes_batch':boxes, 'camera':camera, 'layout':layout, 'sequence_id': sequence['sequence_id'], 
-    #     #     'boxes_valid_list': boxes_valid_list})
-
-    #     if 'lo' in self.opt.cfg.DATA.data_read_list:
-    #         layout = sequence['layout']
-    #         layout_reindexed = sequence_reindexed['layout']
-    #         return_dict.update({'layout_emitter_pickle_path': pickle_path, 'camera':camera, 'layout_':layout, 'layout_reindexed':layout_reindexed}) # 'layout_':layout, should not be used!
-
-    #     # === emitters
-    #     if 'em' in self.opt.cfg.DATA.data_read_list:
-    #         pickle_emitter2wall_assign_info_dict_path = scene_total3d_path / ('layout_obj_%d_emitters_assign_info_%dX%d_V3.pkl'%(frame_id, self.grid_size, self.grid_size))
-        
-    #         with open(pickle_emitter2wall_assign_info_dict_path, 'rb') as f:
-    #             sequence_emitter2wall_assign_info_dict = pickle.load(f)
-    #         emitter2wall_assign_info_list = sequence_emitter2wall_assign_info_dict['emitter2wall_assign_info_list']
-
-    #         if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'wall_prob':
-    #             wall_grid_prob = sequence_emitter2wall_assign_info_dict['wall_grid_prob']
-    #             return_dict.update({'wall_grid_prob': torch.from_numpy(wall_grid_prob).float()})
-    #         elif self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'cell_prob':
-    #             cell_prob_mean = sequence_emitter2wall_assign_info_dict['cell_prob_mean'] # [6, grid_size, grid_size]
-    #             return_dict.update({'cell_prob_mean': torch.from_numpy(cell_prob_mean).float()})
-    #         elif self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'cell_info':
-    #             cell_info_grid = sequence_emitter2wall_assign_info_dict['cell_info_grid']
-    #             assert len(cell_info_grid) == 6 * self.grid_size**2
-    #             cell_light_ratio = np.zeros((6, self.grid_size, self.grid_size), dtype=np.float32)
-    #             cell_cls = np.zeros((6, self.grid_size, self.grid_size), dtype=np.uint8) # [0: None, 1: window, 2: lamp]
-    #             cell_axis_global = np.zeros((6, self.grid_size, self.grid_size, 3), dtype=np.float32)
-    #             cell_intensity = np.zeros((6, self.grid_size, self.grid_size, 3), dtype=np.float32)
-    #             cell_lamb = np.zeros((6, self.grid_size, self.grid_size), dtype=np.float32)
-    #             for wall_idx in range(6):
-    #                 for i in range(self.grid_size):
-    #                     for j in range(self.grid_size):
-    #                         cell_info = cell_info_grid[wall_idx * (self.grid_size**2) + i * self.grid_size + j]
-    #                         if cell_info['obj_type'] not in ['window', 'obj']:
-    #                             continue
-    #                         map_obj_type_int = {'window': 1, 'obj': 2}
-    #                         cell_cls[wall_idx, i, j] = map_obj_type_int[cell_info['obj_type']]
-    #                         cell_light_ratio[wall_idx, i, j] = cell_info['light_ratio']
-    #                         light_dir_offset, normal_outside = cell_info['emitter_info']['light_dir_offset'], cell_info['emitter_info']['normal_outside']
-    #                         if light_dir_offset.shape != (3,):
-    #                             print(light_dir_offset.shape)
-    #                             assert False, str(pickle_emitter2wall_assign_info_dict_path)
-    #                         if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.relative_dir:
-    #                             # try:
-    #                             cell_axis_global[wall_idx, i, j] = light_dir_offset
-    #                             # except ValueError:
-    #                             #     print('[!!!!!]' + str(hdr_image_path))
-    #                             cell_info['emitter_info']['light_dir'] = light_dir_offset
-    #                         else:
-    #                             cell_info['emitter_info']['light_dir'] = light_dir_offset + normal_outside
-    #                             cell_axis_global[wall_idx, i, j] = light_dir_offset + normal_outside
-    #                         cell_info['emitter_info']['light_dir_abs'] = light_dir_offset + normal_outside
-    #                         cell_intensity[wall_idx, i, j] = np.array([cell_info['emitter_info']['intensity_scale'] * x * 255.for x in cell_info['emitter_info']['intensity_scaled']]) # intensity_scaled: [0., 1.]
-    #                         cell_info['emitter_info']['intensity_scalelog'] = np.log(np.clip(np.linalg.norm(cell_intensity[wall_idx, i, j].flatten()) + 1., 1., np.inf))
-    #                         cell_lamb[wall_idx, i, j] = cell_info['emitter_info']['lamb']
-                            
-    #             # !!!!!! log intensity
-    #             cell_intensity_log = np.log(np.clip(cell_intensity + 1., 1., np.inf))
-    #             # !!!!!! log (lamb + 1.)
-    #             cell_lamb = np.log(cell_lamb+1.)
-
-    #             return_dict.update({'cell_light_ratio': torch.from_numpy(cell_light_ratio).float(), \
-    #                 'cell_cls': torch.from_numpy(cell_cls).long(), \
-    #                 'cell_axis_global': torch.from_numpy(cell_axis_global).float(), \
-    #                 'cell_intensity': torch.from_numpy(cell_intensity_log).float(), \
-    #                 'cell_lamb': torch.from_numpy(cell_lamb).float()})
-    #         else:
-    #             raise ValueError('Invalid: config.emitters.est_type')
-
-    #         emitters_obj_list = []
-
-    #         pickle_emitters_path = str(scene_total3d_path / ('layout_obj_%d_emitters.pkl'%frame_id))
-    #         with open(pickle_emitters_path, 'rb') as f:
-    #             sequence_emitters = pickle.load(f)
-
-    #         # assert sequence_emitters['boxes']['bdb3D'].shape[0] == len(emitter2wall_assign_info_list)
-    #         for x in range(sequence_emitters['boxes']['bdb3D'].shape[0]):
-    #             if_lit_up = sequence_emitters['boxes']['emitter_prop'][x]['if_lit_up']
-    #             if if_lit_up:
-    #                 # assert 'light_world_total3d_centeraxis' in sequence_emitters['boxes'], '[!!!!!]' + str(hdr_image_path)
-    #                 obj_dict_new = {'obj_box_3d': sequence_emitters['boxes']['bdb3D'][x], 'cat_id': sequence_emitters['boxes']['size_cls'][x], \
-    #                                 # 'emitter_dict': sequence_emitters['boxes']['emitter_dict'][x], \
-    #                                 'light_world_total3d_centeraxis': sequence_emitters['boxes']['light_world_total3d_centeraxis'][x], \
-    #                                 'emitter_prop': sequence_emitters['boxes']['emitter_prop'][x], 'bdb3D_emitter_part': sequence_emitters['boxes']['bdb3D_emitter_part'][x], \
-    #                                 'cat_name': self.OR_classes[sequence_emitters['boxes']['size_cls'][x]], 'cat_color': RGB_to_01(self.OR_mapping_catInt_to_RGB[sequence_emitters['boxes']['size_cls'][x]])}
-    #                 emitters_obj_list.append(obj_dict_new)
-
-    #         return_dict.update({'emitter2wall_assign_info_list': emitter2wall_assign_info_list, 'emitters_obj_list': emitters_obj_list, 'gt_layout_RAW': layout_reindexed['bdb3D']})
-    #         if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'cell_info':
-    #             return_dict.update({'cell_info_grid': cell_info_grid})
-
-    #     return return_dict
 
     def get_map_aggre_map(self, objMask):
         cad_map = objMask[:, :, 0]
@@ -1079,7 +963,7 @@ class openrooms(data.Dataset):
     def loadImage(self, imName, isGama = False):
         if not(osp.isfile(imName ) ):
             self.logger.warning('File does not exist: ' + imName )
-            assert(False )
+            assert(False), 'File does not exist: ' + imName 
 
         im = Image.open(imName)
         im = im.resize([self.im_width, self.im_height], Image.ANTIALIAS )
@@ -1237,7 +1121,10 @@ def collate_fn_OR(batch):
                 else:
                     # print(subkey)
                     list_of_tensor = [recursive_convert_to_torch(elem[key][subkey]) for elem in batch]
-                    tensor_batch = torch.cat(list_of_tensor)
+                    try:
+                        tensor_batch = torch.cat(list_of_tensor)
+                    except RuntimeError:
+                        print(subkey, [x.shape for x in list_of_tensor])
                 collated_batch[key][subkey] = tensor_batch
         elif key in ['boxes_valid_list', 'emitter2wall_assign_info_list', 'emitters_obj_list', 'gt_layout_RAW', 'cell_info_grid', 'image_index']:
             collated_batch[key] = [elem[key] for elem in batch]

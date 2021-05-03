@@ -962,7 +962,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             depth_gt_batch_vis_sdr_numpy = depth_gt_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
         # print('++++', rough_gt_batch_vis_sdr_numpy.shape, depth_gt_batch_vis_sdr_numpy.shape, albedo_gt_batch_vis_sdr_numpy.shape, albedo_gt_batch_vis_sdr_numpy.dtype)
         # print(np.amax(albedo_gt_batch_vis_sdr_numpy), np.amin(albedo_gt_batch_vis_sdr_numpy), np.mean(albedo_gt_batch_vis_sdr_numpy))
-        depth_min_scale_list = []
+        depth_min_and_scale_list = []
         if not opt.test_real and opt.is_master:
             for sample_idx in range(im_batch_vis_sdr.shape[0]):
                 if 'al' in opt.cfg.MODEL_BRDF.enable_list:
@@ -972,11 +972,11 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
                     writer.add_image('VAL_brdf-rough_GT/%d'%sample_idx, rough_gt_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                 if 'de' in opt.cfg.MODEL_BRDF.enable_list:
-                    depth_normalized, depth_min_scale = vis_disp_colormap(depth_gt_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True)
+                    depth_normalized, depth_min_and_scale = vis_disp_colormap(depth_gt_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True)
                     # ic('--> GT', np.amax(depth_gt_batch_vis_sdr_numpy[sample_idx].squeeze()), np.amin(depth_gt_batch_vis_sdr_numpy[sample_idx].squeeze()), np.median(depth_gt_batch_vis_sdr_numpy[sample_idx].squeeze()))
-                    depth_min_scale_list.append(depth_min_scale)
+                    depth_min_and_scale_list.append(depth_min_and_scale)
                     writer.add_image('VAL_brdf-depth_GT/%d'%sample_idx, depth_normalized, tid, dataformats='HWC')
-                    # ic('----gt', depth_min_scale, np.amax(depth_normalized), np.amin(depth_normalized), np.median(depth_normalized))
+                    # ic('----gt', depth_min_and_scale, np.amax(depth_normalized), np.amin(depth_normalized), np.median(depth_normalized))
 
 
 
@@ -1044,7 +1044,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
                     writer.add_image('VAL_brdf-rough_PRED/%d'%sample_idx, rough_pred_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                 if 'de' in opt.cfg.MODEL_BRDF.enable_list:
-                    depth_normalized, _ = vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True, min_scale=depth_min_scale)
+                    depth_normalized, _ = vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True, min_scale=depth_min_and_scale_list[sample_idx])
                     # ic('--> EST', np.amax(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze()), np.amin(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze()), np.median(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze()))
                     # ic(np.amax(depth_normalized), np.amin(depth_normalized), np.median(depth_normalized))
                     writer.add_image('VAL_brdf-depth_syncScale_PRED/%d'%sample_idx, depth_normalized, tid, dataformats='HWC')
