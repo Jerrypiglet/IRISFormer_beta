@@ -1,6 +1,12 @@
 import torch
 import torch.nn as nn
 from utils.utils_total3D.utils_OR_layout import get_layout_bdb_sunrgbd
+from utils.utils_total3D.utils_OR_cam import get_rotation_matix_result
+from utils.utils_total3D.net_utils_libs import get_layout_bdb_sunrgbd, get_bdb_form_from_corners, \
+    recover_points_to_world_sys, get_rotation_matix_result, get_bdb_3d_result, \
+    get_bdb_2d_result, physical_violation
+
+from icecream import ic
 
 cls_criterion = nn.CrossEntropyLoss(reduction='mean')
 reg_criterion = nn.SmoothL1Loss(reduction='mean')
@@ -91,6 +97,7 @@ def DetLoss(pred_dict, gt_dict, cls_reg_ratio):
     centroid_cls_loss, centroid_reg_loss = cls_reg_loss_none(pred_dict['centroid_cls_result'], gt_dict['centroid_cls'],
                                                         pred_dict['centroid_reg_result'], gt_dict['centroid_reg'], cls_reg_ratio)
     offset_2D_loss = reg_criterion_none(pred_dict['offset_2D_result'], gt_dict['offset_2D'])
+    # ic(pred_dict['offset_2D_result'].cpu().detach().numpy()[:10], gt_dict['offset_2D'].cpu().detach().numpy()[:10])
     # print(size_reg_loss.shape, ori_cls_loss.shape, ori_reg_loss.shape, centroid_cls_loss.shape, centroid_reg_loss.shape, offset_2D_loss.shape) # torch.Size([10, 3]) torch.Size([10]) torch.Size([10]) torch.Size([10]) torch.Size([10]) torch.Size([10, 2])
     # print(size_reg_loss.mean(-1).sum(-1).shape, ori_cls_loss.sum(-1).shape, ori_reg_loss.sum(-1).shape, centroid_cls_loss.sum(-1).shape, centroid_reg_loss.sum(-1).shape, offset_2D_loss.mean(-1).sum(-1).shape) # torch.Size([10, 3]) torch.Size([10]) torch.Size([10]) torch.Size([10]) torch.Size([10]) torch.Size([10, 2])
     object_losses_dict = {'loss_object-size_reg':(size_reg_loss.mean(-1) * flattened_valid_mask_tensor).sum(0)/num_valid_objs, 
@@ -104,7 +111,7 @@ def DetLoss(pred_dict, gt_dict, cls_reg_ratio):
 
 # class JointLoss(BaseLoss):
 #     def __call__(self, pred_dict, gt_dict, bins_tensor, layout_results):
-def JointLoss(pred_dict, gt_dict, bins_tensor, layout_results):
+def JointLoss(pred_dict, gt_dict, bins_tensor, lo_bdb3D_result, cls_reg_ratio):
 
     flattened_valid_mask = [item for sublist in gt_dict['boxes_valid_list'] for item in sublist]
     flattened_valid_mask_tensor = torch.tensor(flattened_valid_mask).float().to(pred_dict['size_reg_result'].device)
@@ -132,7 +139,7 @@ def JointLoss(pred_dict, gt_dict, bins_tensor, layout_results):
                                         gt_dict['size_cls'],
                                         pred_dict['size_reg_result'],
                                         P_result,
-                                        gt_dict['K'],
+                                        gt_dict['cam_K_scaled'],
                                         cam_R_result,
                                         gt_dict['split'])
 
@@ -141,11 +148,11 @@ def JointLoss(pred_dict, gt_dict, bins_tensor, layout_results):
     corner_loss = 5 * cls_reg_ratio * reg_criterion_none(bdb3D_result, gt_dict['bdb3D'])
 
     # 2D bdb loss
-    bdb2D_result = get_bdb_2d_result(bdb3D_result, cam_R_result, gt_dict['K'], gt_dict['split'])
+    bdb2D_result = get_bdb_2d_result(bdb3D_result, cam_R_result, gt_dict['cam_K_scaled'], gt_dict['split'])
     bdb2D_loss = 20 * cls_reg_ratio * reg_criterion_none(bdb2D_result, gt_dict['bdb2D_from_3D_gt'])
 
     # physical violation loss
-    phy_violation, phy_gt = physical_violation(layout_results['lo_bdb3D_result'], bdb3D_result, gt_dict['split'])
+    phy_violation, phy_gt = physical_violation(lo_bdb3D_result, bdb3D_result, gt_dict['split'])
     phy_loss = 20 * mse_criterion_none(phy_violation, phy_gt)
 
     # print(((corner_loss.mean(-1).mean(-1) * flattened_valid_mask_tensor).sum(0)/num_valid_objs).shape, \
@@ -154,11 +161,12 @@ def JointLoss(pred_dict, gt_dict, bins_tensor, layout_results):
     # print(((corner_loss.mean(-1).mean(-1) * flattened_valid_mask_tensor).sum(0)/num_valid_objs), \
     #     ((bdb2D_loss.mean(-1) * flattened_valid_mask_tensor).sum(0)/num_valid_objs), \
     #     ((phy_loss.mean(-1) * flattened_valid_mask_tensor).sum(0)/num_valid_objs)) # torch.Size([10, 8, 3]) torch.Size([10, 4]) torch.Size([10, 3])
-
-    return_dict = {'phy_loss': (phy_loss.mean(-1) * flattened_valid_mask_tensor).sum(0)/num_valid_objs, \
-            'bdb2D_loss': (bdb2D_loss.mean(-1) * flattened_valid_mask_tensor).sum(0)/num_valid_objs, \
-            'corner_loss': (corner_loss.mean(-1).mean(-1) * flattened_valid_mask_tensor).sum(0)/num_valid_objs},\
-            {'cam_R_result': cam_R_result, 'bdb3D_result': bdb3D_result}
+    joint_losses_dict = {
+        'loss_joint-phy': (phy_loss.mean(-1) * flattened_valid_mask_tensor).sum(0)/num_valid_objs, \
+        'loss_joint-bdb2D': (bdb2D_loss.mean(-1) * flattened_valid_mask_tensor).sum(0)/num_valid_objs, \
+        'loss_joint-corner': (corner_loss.mean(-1).mean(-1) * flattened_valid_mask_tensor).sum(0)/num_valid_objs
+        }
+    joint_outputs_dict = {'cam_R_result': cam_R_result, 'bdb3D_result': bdb3D_result}
     # print(return_dict)
 
-    return return_dict
+    return joint_losses_dict, joint_outputs_dict

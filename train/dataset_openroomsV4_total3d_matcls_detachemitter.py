@@ -77,11 +77,11 @@ def get_bdb2d_transform(split, crop_bdb): # crop_bdb: [x1, x2, y1, y2] in float
         data_transforms_crop_nonormalize = transform.Compose(data_transforms_crop_nonormalize)
         return data_transforms_crop_nonormalize
     else:
-        data_transforms_nocrop_nonormalize = T.Compose([
+        data_transforms_nocrop_nonormalize = [
             transform.CropBdb(crop_bdb), 
             transform.Resize((HEIGHT_PATCH, WIDTH_PATCH)),
             transform.ToTensor()
-        ])
+        ]
         data_transforms_nocrop_nonormalize = transform.Compose(data_transforms_nocrop_nonormalize)
         return data_transforms_nocrop_nonormalize
 
@@ -303,7 +303,7 @@ class openrooms(data.Dataset):
             batch_dict = {'image_path': str(hdr_image_path), 'image_index': index}
 
             im_trainval = np.transpose(im_trainval, (1, 2, 0)) # [240, 320, 3], np.ndarray
-            im_SDR_RGB = np.transpose(im_SDR_RGB, (1, 2, 0))
+            im_SDR_RGB = np.transpose(im_SDR_RGB, (1, 2, 0)) # [240, 320, 3], np.ndarray
         
         # image_transformed_fixed: normalized, not augmented [only needed in semseg]
 
@@ -665,11 +665,15 @@ class openrooms(data.Dataset):
             # data_transforms = data_transforms_crop if self.split == 'train' else data_transforms_nocrop
             # data_transforms_nonormalize = data_transforms_crop_nonormalize if self.split=='train' else data_transforms_nocrop_nonormalize
 
+            scale_height = self.opt.cfg.DATA.im_height / self.opt.cfg.DATA.im_height_ori
+            scale_width = self.opt.cfg.DATA.im_width / self.opt.cfg.DATA.im_width_ori
+            assert scale_height == scale_width
+            scale_wh = scale_height
+
             patch = []
+            bdb_crop_list = []
             for box_idx, bdb in enumerate(boxes['bdb2D_pos']): # [x1, y1, x2, y2] in [640, 480]
                 # print(im_trainval.shape, bdb)
-                scale_height = self.opt.cfg.DATA.im_height / self.opt.cfg.DATA.im_height_ori
-                scale_width = self.opt.cfg.DATA.im_width / self.opt.cfg.DATA.im_width_ori
 
                 # x1, y1, x2, y2 = int(np.round(bdb[0]*scale_width)), int(np.round(bdb[1]*scale_height)), int(np.round(bdb[2]*scale_width)), int(np.round(bdb[3]*scale_height))
                 # img = im_trainval[y1:y2, x1:x2, :]
@@ -692,11 +696,24 @@ class openrooms(data.Dataset):
                     #     print(img.shape, bdb_crop, bdb)
 
                 patch.append(img)
+                bdb_crop_list.append(bdb_crop)
+            # ic('-------', boxes.keys())
+            # for key in boxes:
+            #     ic(key, boxes[key][0])
+
+            
+            # 'bdb2D_from_3D': scale invariant
+            # 'delta_2D': scale invariant
+            boxes['bdb2D_pos'] = boxes['bdb2D_pos'] * scale_wh
+            # boxes['bdb2D_pos'] = np.asarray(bdb_crop_list) # [!!!] re-scale bbd2d; nothing needed for bdb3d (?)
+            for bdb2D_full in boxes['bdb2D_full']:
+                for key in ['x1', 'y1', 'x2', 'y2']:
+                    bdb2D_full[key] = bdb2D_full[key] * scale_wh
             boxes['patch'] = torch.stack(patch)
-            # image = data_transforms_nocrop(image)
 
             assert boxes['patch'].shape[0] == len(boxes_valid_list)
 
+            # image = data_transforms_nocrop(image)
             # return_dict.update({'image':image, 'image_np': image_np, 
             #     # 'rgb_img': torch.from_numpy(sequence['rgb_img']), 
             #     'rgb_img_path': str(sequence['rgb_img_path']), 'pickle_path': file_path, \
@@ -713,6 +730,7 @@ class openrooms(data.Dataset):
             cam_K_ratio_H = camera['K'][1][2] / (self.im_height/2.)
             assert cam_K_ratio_W == cam_K_ratio_H
             camera['K_scaled'] = np.vstack([camera['K'][:2, :] / cam_K_ratio_W, camera['K'][2:3, :]])
+            
 
             return_dict.update({'layout_emitter_pickle_path': pickle_path, 'camera':camera, 'layout_':layout, 'layout_reindexed':layout_reindexed}) # 'layout_':layout, should not be used!
 

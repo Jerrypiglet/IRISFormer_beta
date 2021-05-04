@@ -838,8 +838,8 @@ class Box(Scene3D):
                 print('[draw_projected_bdb3d] boxes is None for vis type: %s; skipped'%current_type)
                 continue
 
-            if if_vis_2dbbox:
-                len(boxes['bdb2d']) == len(boxes['coeffs'])
+            if if_vis_2dbbox and current_type=='GT':
+                assert len(boxes['bdb2d']) == len(boxes['coeffs'])
 
             for bbox_idx, (coeffs, centroid, class_id, basis) in enumerate(zip(boxes['coeffs'], boxes['centroid'], boxes['class_id'], boxes['basis'])):
                 if class_id not in self.valid_class_ids:
@@ -893,7 +893,7 @@ class Box(Scene3D):
 
                     ax_2d.text(center_from_3D[0], center_from_3D[1], self.classes[class_id], color=color, fontsize=fontsize)
 
-                    if if_vis_2dbbox:
+                    if if_vis_2dbbox and current_type=='GT':
                         bdb2d = boxes['bdb2d'][bbox_idx]
                         bdb2d = {'x1': bdb2d[0], 'y1': bdb2d[1], 'x2': bdb2d[2], 'y2': bdb2d[3]}
                         rect = patches.Rectangle((bdb2d['x1'], bdb2d['y1']), bdb2d['x2']-bdb2d['x1'], bdb2d['y2']-bdb2d['y1'], linewidth=1, edgecolor=color, facecolor='none', linestyle='-.')

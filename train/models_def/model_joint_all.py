@@ -146,10 +146,10 @@ class Model_Joint(nn.Module):
                 elif self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V2':
                     input_channels = 3
                     if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:                        
-                        if not self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_learn_feats:
-                            input_channels += self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels + 3 # +3 for img input
-                        else:
+                        if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_learn_feats:
                             input_channels += self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels # concat of BRDF feats
+                        else:
+                            input_channels += self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels + 3 # +3 for img input
                     self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu_UNet_V2(opt, input_channels=input_channels)
                 elif self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V3':
                     self.EMITTER_NET = models_layout_emitter_lightAccuScatter.decoder_layout_emitter_lightAccuScatter_UNet_V3(opt)
@@ -442,8 +442,10 @@ class Model_Joint(nn.Module):
                 # print(x1234_feat_concat.shape)
                 img_feat_output = F.interpolate(x1234_feat_concat, scale_factor=2, mode='bilinear')
                 # print(x1234_feat_concat.shape)
+                feat_map = img_feat_output.unsqueeze(2) # [B, D, 1, H, W]
             else:
                 img_feat_output = self.EMITTER_NET_IMG_FEAT_DECODER(input_dict['imBatch'], x1, x2, x3, x4, x5, x6)['x_out'] # [B, 8, 240, 320]
+                feat_map = torch.cat([img_feat_output, input_dict['imBatch']], dim=1).unsqueeze(2) # [B, D+3, 1, H, W]
             assert img_feat_output.shape[2:]==(im_height, im_width)
 
 
@@ -463,7 +465,6 @@ class Model_Joint(nn.Module):
             verts_proj, front_flags = simpleSceneTorch.transform_and_proj(verts_center_all_Total3D.reshape(batch_size, -1, 3)) # assuming align_corners=False, meaning the upper-left corner is 0 and lower corner is (W, H)
             verts_proj[torch.logical_not(front_flags.unsqueeze(-1).repeat(1, 1, 2))] = -100
 
-            feat_map = torch.cat([img_feat_output, input_dict['imBatch']], dim=1).unsqueeze(2) # [B, D+3, 1, H, W]
             feat_height, feat_width = feat_map.shape[-2:]
             verts_proj_reshape = verts_proj.view(batch_size, 6, grid_size, grid_size, 2) # [B, 6, 8, 8, 2]
             wh_tensor = torch.tensor([feat_width, feat_height]).reshape(1, 1, 1, 1, 2).cuda().float()

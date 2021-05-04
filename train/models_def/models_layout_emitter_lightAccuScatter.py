@@ -13,14 +13,19 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
     def __init__(self, opt=None, grid_size = 8, scatterHeight = 8, scatterWidth = 16, envmapFeatsChannels=64, other_flags=[]):
         super(decoder_layout_emitter_lightAccuScatter_UNet_V3, self).__init__()
         self.opt = opt
-        self.cfg = self.opt.cfg
         self.grid_size = grid_size
         self.ngrids = 6 * self.grid_size * self.grid_size
 
         if self.opt is not None:
+            self.cfg = self.opt.cfg
             assert self.cfg.MODEL_LAYOUT_EMITTER.emitter.relative_dir == True
+            self.use_weighted_axis = self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis 
+            self.use_sampled_img_feats_as_input = self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input
+        else:
+            self.use_weighted_axis = 'use_weighted_axis' in other_flags
+            self.use_sampled_img_feats_as_input = 'use_sampled_img_feats_as_input' in other_flags
 
-        self.use_weighted_axis = 'use_weighted_axis' in other_flags or self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis 
+
 
         self.scatterHeight = scatterHeight
         self.scatterWidth = scatterWidth
@@ -44,12 +49,11 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
             self.envmap_decoder_heads = torch.nn.ModuleDict({})
             for head_name, head_channels in [('cell_axis', 3)]:
                 self.envmap_decoder_heads[head_name] = self.get_envmap_decoder(head_name, in_channels=self.envmapFeatsChannels, out_channels=1)
-
         
         # UNet arch - encoders
         self.emitter_encoder_heads = torch.nn.ModuleDict({})
         self.emitter_encoder_decoder_in_channels=self.flattened_envmap_feats_channels
-        if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
+        if self.use_sampled_img_feats_as_input:
             self.emitter_encoder_decoder_in_channels = self.emitter_encoder_decoder_in_channels + self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels + 3 # +3 for img input
 
         for head_name, head_channels in [('cell_light_ratio', 1), ('cell_cls', 3), ('cell_axis', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
@@ -217,7 +221,7 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
             batch_size = x.shape[0]
             x = x.view(batch_size, self.flattened_envmap_feats_channels, 6, self.grid_size, self.grid_size)
 
-            if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
+            if self.use_sampled_img_feats_as_input:
                 img_feat_map_sampled = input_dict['img_feat_map_sampled'] # [B, D, 6, 8, 8]
                 x = torch.cat([x, img_feat_map_sampled], 1)
 

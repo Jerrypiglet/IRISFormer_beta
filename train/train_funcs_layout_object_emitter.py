@@ -13,11 +13,14 @@ from utils.utils_total3D.utils_OR_visualize import Box
 
 from models_def.models_brdf import LSregress
 
-from models_def.losses_total3d import PoseLoss, DetLoss
+from models_def.losses_total3d import JointLoss, PoseLoss, DetLoss
 from models_def.losses_total3d import emitter_cls_criterion_mean, emitter_cls_criterion_L2_mean, cls_criterion_mean, emitter_cls_criterion_L2_none
 
+from utils.utils_total3D.net_utils_libs import get_bdb_evaluation
+from utils.utils_total3D.utils_OR_visualize import format_bboxes
+
 def get_labels_dict_layout_emitter(data_batch, opt):
-    labels_dict = {}
+    labels_dict = {'layout_labels': {}, 'object_labels': {}, 'emitter_labels': {}}
 
     if_layout = 'lo' in opt.cfg.DATA.data_read_list
     if_object = 'ob' in opt.cfg.DATA.data_read_list
@@ -34,7 +37,7 @@ def get_labels_dict_layout_emitter(data_batch, opt):
         lo_centroid = data_batch['layout_reindexed']['centroid_reg'].float().cuda(non_blocking=True)
         lo_coeffs = data_batch['layout_reindexed']['coeffs_reg'].float().cuda(non_blocking=True)
         lo_bdb3D = data_batch['layout_reindexed']['bdb3D'].float().cuda(non_blocking=True)
-        cam_K = data_batch['camera']['K'].float().cuda(non_blocking=True)
+        # cam_K = data_batch['camera']['K'].float().cuda(non_blocking=True)
         cam_K_scaled = data_batch['camera']['K_scaled'].float().cuda(non_blocking=True)
 
         cam_R_gt = get_rotation_matrix_gt(opt.bins_tensor, 
@@ -43,7 +46,7 @@ def get_labels_dict_layout_emitter(data_batch, opt):
 
         layout_labels = {'pitch_reg': pitch_reg, 'pitch_cls': pitch_cls, 'roll_reg': roll_reg,
                         'roll_cls': roll_cls, 'lo_ori_reg': lo_ori_reg, 'lo_ori_cls': lo_ori_cls, 'lo_centroid': lo_centroid,
-                        'lo_coeffs': lo_coeffs, 'lo_bdb3D': lo_bdb3D, 'cam_K': cam_K, 'cam_K_scaled': cam_K_scaled, 'cam_R_gt':cam_R_gt}
+                        'lo_coeffs': lo_coeffs, 'lo_bdb3D': lo_bdb3D, 'cam_K_scaled': cam_K_scaled, 'cam_R_gt':cam_R_gt}
         labels_dict['layout_labels'] = layout_labels
 
     if if_object:
@@ -66,9 +69,12 @@ def get_labels_dict_layout_emitter(data_batch, opt):
         bdb2D_pos = data_batch['boxes_batch']['bdb2D_pos'].float().cuda(non_blocking=True)
         bdb3D = data_batch['boxes_batch']['bdb3D'].float().cuda(non_blocking=True)
 
+        cam_K_scaled = data_batch['camera']['K_scaled'].float().cuda(non_blocking=True)
+
         object_labels = {'patch':patch, 'g_features':g_features, 'size_reg':size_reg, 'size_cls':size_cls,
             'ori_reg':ori_reg, 'ori_cls':ori_cls, 'centroid_reg':centroid_reg, 'centroid_cls':centroid_cls,
-            'offset_2D':offset_2D, 'split':split, 'rel_pair_counts':rel_pair_counts, 'bdb2D_from_3D_gt':bdb2D_from_3D_gt, 'bdb2D_pos':bdb2D_pos, 'bdb3D':bdb3D}
+            'offset_2D':offset_2D, 'split':split, 'rel_pair_counts':rel_pair_counts, 'bdb2D_from_3D_gt':bdb2D_from_3D_gt, 'bdb2D_pos':bdb2D_pos, 'bdb3D':bdb3D, 
+            'cam_K_scaled': cam_K_scaled}
         object_labels.update({'boxes_valid_list': data_batch['boxes_valid_list']})
 
         labels_dict['object_labels'] = object_labels
@@ -109,11 +115,13 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
     output_vis_dict = {}
     if_est_emitter = 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
     if_est_layout = 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
+    if_est_object = 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
     
     batch_size = labels_dict['imBatch'].shape[0]
     grid_size = opt.cfg.MODEL_LAYOUT_EMITTER.emitter.grid_size
 
     gt_dict_lo = labels_dict['layout_labels']
+    gt_dict_ob = labels_dict['object_labels']
     
     if if_est_layout:
         pred_dict_lo = output_dict['layout_est_result']
@@ -124,6 +132,24 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
         cam_R_out = get_rotation_matix_result(opt.bins_tensor,
                                     torch.argmax(pred_dict_lo['pitch_cls_result'], 1), pred_dict_lo['pitch_reg_result'],
                                     torch.argmax(pred_dict_lo['roll_cls_result'], 1), pred_dict_lo['roll_reg_result'])
+
+    if if_est_object:
+        pred_dict_ob = output_dict['object_est_result']
+
+        # projected center
+        P_result = torch.stack(((gt_dict_ob['bdb2D_pos'][:, 0] + gt_dict_ob['bdb2D_pos'][:, 2]) / 2 -
+                                (gt_dict_ob['bdb2D_pos'][:, 2] - gt_dict_ob['bdb2D_pos'][:, 0]) * pred_dict_ob['offset_2D_result'][:, 0],
+                                (gt_dict_ob['bdb2D_pos'][:, 1] + gt_dict_ob['bdb2D_pos'][:, 3]) / 2 -
+                                (gt_dict_ob['bdb2D_pos'][:, 3] - gt_dict_ob['bdb2D_pos'][:, 1]) * pred_dict_ob['offset_2D_result'][:,1]), 1)
+
+        bdb3D_out_form_cpu, bdb3D_out = get_bdb_evaluation(opt.bins_tensor,
+                                                        torch.argmax(pred_dict_ob['ori_cls_result'], 1),
+                                                        pred_dict_ob['ori_reg_result'],
+                                                        torch.argmax(pred_dict_ob['centroid_cls_result'], 1),
+                                                        pred_dict_ob['centroid_reg_result'],
+                                                        gt_dict_ob['size_cls'], pred_dict_ob['size_reg_result'], P_result,
+                                                        gt_dict_ob['cam_K_scaled'], cam_R_out, gt_dict_ob['split'], return_bdb=True)
+
 
     if if_est_emitter:
         gt_dict_em = labels_dict['emitter_labels']
@@ -153,7 +179,7 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
         # print('--- Visualizing sample %d ---'%sample_idx)
         # save_prefix = 'sample%d-LABEL-epoch%d-tid%d-%s'%(sample_idx+batch_size*vis_batch_count, epoch, iter, phase)
         gt_cam_R = gt_dict_lo['cam_R_gt'][sample_idx].cpu().numpy()
-        cam_K = gt_dict_lo['cam_K'][sample_idx].cpu().numpy()
+        cam_K = gt_dict_lo['cam_K_scaled'][sample_idx].cpu().numpy()
         gt_layout = gt_dict_lo['lo_bdb3D'][sample_idx].cpu().numpy()
 
         if if_est_layout:
@@ -168,8 +194,28 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
             pre_layout = gt_layout
             pre_layout_reindexed = gt_layout
 
-        image = (labels_dict['im_trainval_RGB'][sample_idx].detach().cpu().numpy() * 255.).astype(np.uint8)
-        image = np.transpose(image, (1, 2, 0))
+        if if_est_object:
+            interval = gt_dict_ob['split'][sample_idx].cpu().tolist()
+            nyu40class_ids = [int(evaluate_bdb['classid']) for evaluate_bdb in bdb3D_out_form_cpu]
+            # save bounding boxes and camera poses
+            current_cls = nyu40class_ids[interval[0]:interval[1]]
+
+            # bdb3d_mat_path = os.path.join(str(save_path), '%s_bdb_3d.mat'%save_prefix)
+            bdb3d_dict = {'bdb': bdb3D_out_form_cpu[interval[0]:interval[1]], 'class_id': current_cls}
+
+            gt_boxes = format_bboxes({'bdb3D': gt_dict_ob['bdb3D'][interval[0]:interval[1]].cpu().numpy(), 
+                'class_id': gt_dict_ob['size_cls'][interval[0]:interval[1]].cpu().argmax(1).flatten().numpy().tolist()}, 'GT')
+            gt_boxes['bdb2d'] = gt_dict_ob['bdb2D_pos'][interval[0]:interval[1]].cpu().numpy()
+
+            class_ids = gt_dict_ob['size_cls'][interval[0]:interval[1]].cpu().argmax(1).flatten().numpy().tolist()
+            # pre_box_data = sio.loadmat(bdb3d_mat_path)
+            pre_box_data = bdb3d_dict
+            pre_boxes = format_bboxes(pre_box_data, 'prediction')
+        else:
+            gt_boxes, pre_boxes = None, None
+
+        image = (labels_dict['im_SDR_RGB'][sample_idx].detach().cpu().numpy() * 255.).astype(np.uint8)
+        # image = np.transpose(image, (1, 2, 0))
 
         if if_est_emitter:
             emitter2wall_assign_info_list = gt_dict_em['emitter2wall_assign_info_list'][sample_idx]
@@ -237,7 +283,6 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
             cell_info_grid_GT = None
             cell_info_grid_PRED = None
 
-        gt_boxes, pre_boxes = None, None
         save_prefix = ''
 
         scene_box = Box(image, None, cam_K, gt_cam_R, pre_cam_R, gt_layout, pre_layout_reindexed, gt_boxes, pre_boxes, 'prediction', output_mesh = None, \
@@ -283,10 +328,10 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
 def postprocess_layout_object_emitter(labels_dict, output_dict, loss_dict, opt, time_meters, if_vis=False):
     if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
         output_dict, loss_dict = postprocess_layout(labels_dict, output_dict, loss_dict, opt, time_meters)
+    if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+        output_dict, loss_dict = postprocess_object(labels_dict, output_dict, loss_dict, opt, time_meters)
     if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
         output_dict, loss_dict = postprocess_joint(labels_dict, output_dict, loss_dict, opt, time_meters)
-    # if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-    #     output_dict, loss_dict = postprocess_object(labels_dict, output_dict, loss_dict, opt, time_meters)
 
     if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
         output_dict, loss_dict = postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters)
@@ -321,18 +366,22 @@ def postprocess_object(labels_dict, output_dict, loss_dict, opt, time_meters):
 
 def postprocess_joint(labels_dict, output_dict, loss_dict, opt, time_meters):
     cls_reg_ratio = opt.cfg.MODEL_LAYOUT_EMITTER.layout.loss.cls_reg_ratio
-    pred_dict = output_dict['object_est_result']
-    gt_dict = labels_dict['object_labels']
+    pred_dict = {**output_dict['object_est_result'], **output_dict['layout_est_result']}
+    gt_dict = {**labels_dict['object_labels'], **labels_dict['layout_labels']}
 
-    object_losses_dict = DetLoss(pred_dict, gt_dict, cls_reg_ratio)
+    joint_losses_dict, joint_outputs_dict = JointLoss(pred_dict, gt_dict, opt.bins_tensor, output_dict['results_layout']['lo_bdb3D_result'], cls_reg_ratio)
 
-    loss_dict.update(object_losses_dict)
-    loss_dict.update({'loss_object-ALL': sum([object_losses_dict[x] for x in object_losses_dict])})
+    loss_dict.update(joint_losses_dict)
+    loss_dict.update({'loss_joint-ALL': sum([joint_losses_dict[x] for x in joint_losses_dict])})
+
+    output_dict['results_joint'] = joint_outputs_dict
 
     return output_dict, loss_dict
 
+
 def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters):
 
+    
     loss_type = opt.cfg.MODEL_LAYOUT_EMITTER.emitter.loss_type
     assert loss_type in ['L2', 'KL']
     est_type = opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type
@@ -345,6 +394,8 @@ def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters):
     else:
         emitter_light_ratio_gt = labels_dict['emitter_labels']['emitter_light_ratio_prob'].view((B, 6, -1))
 
+    valid_mask = (labels_dict['emitter_labels']['cell_cls'] != 0).float().view((B, 6, -1))
+    window_mask = (labels_dict['emitter_labels']['cell_cls'] == 1).float().view((B, 6, -1))
 
     if loss_type == 'KL':
         assert est_type == 'wall_prob', 'KL loss can only be used with wall_prob where all cells of a wall sum up to 1.'
@@ -356,7 +407,10 @@ def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters):
             emitter_light_ratio_est = torch.sigmoid(emitter_light_ratio_est)
         if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.softmax:
             emitter_light_ratio_est = torch.nn.functional.softmax(emitter_light_ratio_est, dim=2)
-        emitter_light_ratio_loss = emitter_cls_criterion_L2_mean(emitter_light_ratio_est, emitter_light_ratio_gt)
+        # emitter_light_ratio_loss = emitter_cls_criterion_L2_mean(emitter_light_ratio_est, emitter_light_ratio_gt)
+        emitter_light_ratio_loss = emitter_cls_criterion_L2_none(emitter_light_ratio_est, emitter_light_ratio_gt)
+        emitter_light_ratio_loss = torch.sum(emitter_light_ratio_loss * valid_mask) / (torch.sum(valid_mask) + 1e-5)
+
     else:
         raise ValueError('Unrecognized emitter cls loss type: ' + loss_type)
     
@@ -364,8 +418,6 @@ def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters):
     emitter_losses_dict, emitter_results_dict = {'loss_emitter-light_ratio': emitter_light_ratio_loss}, {'emitter_light_ratio_est_from_loss': emitter_light_ratio_est}
 
     if est_type == 'cell_info':
-        valid_mask = (labels_dict['emitter_labels']['cell_cls'] != 0).float().view((B, 6, -1))
-        window_mask = (labels_dict['emitter_labels']['cell_cls'] == 1).float().view((B, 6, -1))
 
         for head_name, head_channels in [('cell_cls', 3), ('cell_axis', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
             emitter_fc_output = output_dict['emitter_est_result'][head_name] # torch.Size([9, 102])

@@ -89,7 +89,7 @@ def get_matcls_meters(opt):
 
 def get_labels_dict_joint(data_batch, opt):
     # prepare input_dict from data_batch (from dataloader)
-    labels_dict = {'im_trainval_RGB': data_batch['im_trainval_RGB'].cuda(non_blocking=True)}
+    labels_dict = {'im_trainval_RGB': data_batch['im_trainval_RGB'].cuda(non_blocking=True), 'im_SDR_RGB': data_batch['im_SDR_RGB'].cuda(non_blocking=True)}
     if opt.cfg.DATA.load_matseg_gt:
         labels_dict_matseg = get_labels_dict_matseg(data_batch, opt)
     else:
@@ -254,6 +254,14 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 'loss_object-offset_2D'
                 'loss_object-ALL'
             ]
+        if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+            loss_keys += [
+                'loss_joint-phy'
+                'loss_joint-bdb2D'
+                'loss_joint-corner'
+                'loss_joint-ALL'
+            ]
+
         if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
             loss_keys += [
                 'loss_emitter-light_ratio', 
@@ -612,6 +620,15 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 scene_box_list, layout_info_dict_list, emitter_info_dict_list = output_vis_dict['scene_box_list'], output_vis_dict['layout_info_dict_list'], output_vis_dict['emitter_info_dict_list']
                 if opt.is_master:
                     logger.info('emitter_layout -------> ' + str(Path(opt.summary_vis_path_task)))
+
+                    if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+                        patch_flattened = data_batch['boxes_batch']['patch'] # [B, 3, ?, ?]
+                        patch_batch = [patch_flattened[x[0]:x[1]].numpy() for x in data_batch['obj_split'].cpu().numpy()] # [[?, 3, D, D], [?, 3, D, D], ...]
+                        # print([x.shape[0] for x in patch_batch], data_batch['obj_split'].cpu().numpy(), patch_flattened.shape)
+                        # print([[x[0], x[1]] for x in data_batch['obj_split'].cpu().numpy()])
+                        assert sum([x.shape[0] for x in patch_batch])==patch_flattened.shape[0]
+
+
                     for sample_idx_batch, (scene_box, layout_info_dict, emitter_info_dict) in enumerate(zip(scene_box_list, layout_info_dict_list, emitter_info_dict_list)):
                         sample_idx = sample_idx_batch+batch_size*batch_id
                         save_prefix = ('results_LABEL_tid%d-%d'%(tid, sample_idx))
@@ -629,11 +646,15 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                             with open(str(pickle_save_path),"wb") as f:
                                 pickle.dump(save_dict, f)
 
-                        # if if_vis_obj:
-                        #     output_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'obj') + '.png')
-                        #     fig_2d = scene_box.draw_projected_bdb3d(draw_mode, return_plt=True, if_use_plt=True)
-                        #     fig_2d.savefig(str(output_path))
-                        #     plt.close(fig_2d)
+                        if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+                            output_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'obj') + '.png')
+                            fig_2d = scene_box.draw_projected_bdb3d(draw_mode, if_vis_2dbbox=True, return_plt=True, if_use_plt=True)
+                            fig_2d.savefig(str(output_path))
+                            plt.close(fig_2d)
+
+                            patch_batch_sample = patch_batch[sample_idx_batch]
+                            for patch_idx, patch_single in enumerate(patch_batch_sample):
+                                writer.add_image('VAL_bdb2d_patch/%d-%d'%(sample_idx, patch_idx), patch_single.transpose(1, 2, 0), tid, dataformats='HWC')
 
                         if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
                             output_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'emitter') + '.png')
