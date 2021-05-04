@@ -51,7 +51,8 @@ class decoder_layout_emitter(nn.Module):
 
 
         # ======== emitter
-        if 'em' in self.opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+        self.if_emitter_vanilla_fc = self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable==False and 'em' in self.opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
+        if self.if_emitter_vanilla_fc:
             # fc for emitter ratio
             self.fc_emitter_1 = nn.Linear(backbone_out_dim, 1024)
             self.relu_emitter_1 = nn.ReLU(inplace=True)
@@ -99,7 +100,7 @@ class decoder_layout_emitter(nn.Module):
 
         # ==== emitter & layout est
         return_dict_emitter  = {}
-        if 'em' in self.opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+        if self.if_emitter_vanilla_fc:
             # --- emitter
             cell_light_ratio = self.fc_emitter_1(x)
             cell_light_ratio = self.relu_emitter_1(cell_light_ratio)

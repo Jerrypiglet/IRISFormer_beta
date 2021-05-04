@@ -99,6 +99,20 @@ def set_up_envs(opt):
 
         if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
             opt.cfg.MODEL_BRDF.enable = True # enable image encoder
+            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_learn_feats:
+                opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels = 64 + 128 + 256 + 256
+
+        # --- deal with enable/loss lists
+        opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.split('_')
+        if opt.cfg.MODEL_LAYOUT_EMITTER.loss_list == '':
+            opt.cfg.MODEL_LAYOUT_EMITTER.loss_list = opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
+        else:
+            opt.cfg.MODEL_LAYOUT_EMITTER.loss_list = opt.cfg.MODEL_LAYOUT_EMITTER.loss_list.split('_')
+        if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+            opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.append('joint')
+        if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list and 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
+            opt.cfg.MODEL_LAYOUT_EMITTER.loss_list.append('joint')
+
 
     # ====== per-pixel lighting =====
     if opt.cfg.MODEL_LIGHT.enable:
@@ -160,11 +174,6 @@ def set_up_envs(opt):
     check_if_in_list(opt.cfg.MODEL_BRDF.enable_list, opt.cfg.MODEL_BRDF.enable_list_allowed)
     check_if_in_list(opt.cfg.MODEL_BRDF.loss_list, opt.cfg.MODEL_BRDF.enable_list_allowed)
 
-    opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.split('_')
-    if opt.cfg.MODEL_LAYOUT_EMITTER.loss_list == '':
-        opt.cfg.MODEL_LAYOUT_EMITTER.loss_list = opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
-    else:
-        opt.cfg.MODEL_LAYOUT_EMITTER.loss_list = opt.cfg.MODEL_LAYOUT_EMITTER.loss_list.split('_')
     check_if_in_list(opt.cfg.MODEL_LAYOUT_EMITTER.enable_list, opt.cfg.MODEL_LAYOUT_EMITTER.enable_list_allowed)
     check_if_in_list(opt.cfg.MODEL_LAYOUT_EMITTER.loss_list, opt.cfg.MODEL_LAYOUT_EMITTER.enable_list_allowed)
 

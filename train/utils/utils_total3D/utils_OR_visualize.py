@@ -411,7 +411,9 @@ class Box(Scene3D):
                                 light_center = np.mean(emitter_dict['bdb3D_emitter_part'], 0).flatten()
                             light_axis = emitter_dict['emitter_prop']['light_axis_world'].flatten()
                         # intensity_scalelog = 5. 
-                        light_axis_end = light_axis / np.linalg.norm(light_axis) * intensity_scalelog * scale_emitter_length + light_center
+                        light_axis_length_vis = intensity_scalelog + 2.
+                        light_axis_end = light_axis / np.linalg.norm(light_axis) * light_axis_length_vis * scale_emitter_length + light_center
+                        # light_axis_end = light_axis / np.linalg.norm(light_axis) * 5 + light_center
                         a_light = Arrow3D([light_center[0], light_axis_end[0]], [light_center[1], light_axis_end[1]], [light_center[2], light_axis_end[2]], mutation_scale=20,
                             lw=2, arrowstyle="-|>", facecolor=intensity_scaled, edgecolor='k')
                         ax_3d.add_artist(a_light)
@@ -604,7 +606,8 @@ class Box(Scene3D):
                                     intensity = extra_info['emitter_info']['intensity_scale255'] * np.array(extra_info['emitter_info']['intensity_scaled01']) * 255.
                                     intensity_scalelog = np.log(np.clip(np.linalg.norm(intensity.flatten()) + 1., 1., np.inf)) / 3. + 0.5 # add 0.5 for vis (otherwise could be too short)
 
-                                light_end = cell_center + light_dir_abs / np.linalg.norm(light_dir_abs) * intensity_scalelog
+                                cell_dir_length = intensity_scalelog + 2.
+                                light_end = cell_center + light_dir_abs / np.linalg.norm(light_dir_abs) * cell_dir_length
                                 # light_end = cell_center + normal_outside
                                 # print(cell_center, light_dir)
                                 # print(extra_info['emitter_info'])

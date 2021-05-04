@@ -1134,6 +1134,10 @@ def collate_fn_OR(batch):
             except TypeError:
                 print('[!!!!] Type error in collate_fn_OR: ', key)
 
+    if 'boxes_batch' in batch[0]:
+        interval_list = [elem['boxes_batch']['patch'].shape[0] for elem in batch]
+        collated_batch['obj_split'] = torch.tensor([[sum(interval_list[:i]), sum(interval_list[:i+1])] for i in range(len(interval_list))])
+
     return collated_batch
 
 def recursive_convert_to_torch(elem):

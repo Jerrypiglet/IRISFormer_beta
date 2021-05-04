@@ -23,7 +23,7 @@ from train_funcs_matseg import get_labels_dict_matseg, postprocess_matseg, val_e
 from train_funcs_semseg import get_labels_dict_semseg, postprocess_semseg
 from train_funcs_brdf import get_labels_dict_brdf, postprocess_brdf
 from train_funcs_light import get_labels_dict_light, postprocess_light
-from train_funcs_layout_emitter import get_labels_dict_layout_emitter, postprocess_layout_emitter
+from train_funcs_layout_object_emitter import get_labels_dict_layout_emitter, postprocess_layout_object_emitter
 from train_funcs_matcls import get_labels_dict_matcls, postprocess_matcls
 from utils.comm import synchronize
 
@@ -36,7 +36,7 @@ from icecream import ic
 import pickle
 import matplotlib.pyplot as plt
 
-from train_funcs_layout_emitter import vis_layout_emitter
+from train_funcs_layout_object_emitter import vis_layout_emitter
 
 def get_time_meters_joint():
     time_meters = {}
@@ -167,7 +167,7 @@ def forward_joint(labels_dict, model, opt, time_meters, if_vis=False):
         time_meters['ts'] = time.time()
 
     if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
-        output_dict, loss_dict = postprocess_layout_emitter(labels_dict, output_dict, loss_dict, opt, time_meters, if_vis=if_vis)
+        output_dict, loss_dict = postprocess_layout_object_emitter(labels_dict, output_dict, loss_dict, opt, time_meters, if_vis=if_vis)
         time_meters['loss_layout_emitter'].update(time.time() - time_meters['ts'])
         time_meters['ts'] = time.time()
 
@@ -231,23 +231,37 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
         ]
 
     if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
-        loss_keys += [
-            'loss_emitter-light_ratio', 
-            'loss_emitter-cell_cls', 
-            'loss_emitter-cell_axis', 
-            'loss_emitter-cell_intensity', 
-            'loss_emitter-cell_lamb', 
-            'loss_emitter-ALL', 
-            'loss_layout-pitch_cls', 
-            'loss_layout-pitch_reg', 
-            'loss_layout-roll_cls', 
-            'loss_layout-roll_reg', 
-            'loss_layout-lo_ori_cls', 
-            'loss_layout-lo_ori_reg', 
-            'loss_layout-lo_centroid', 
-            'loss_layout-lo_coeffs', 
-            'loss_layout-lo_corner', 
-            'loss_layout-ALL'
+        if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+            loss_keys += [
+                'loss_layout-pitch_cls', 
+                'loss_layout-pitch_reg', 
+                'loss_layout-roll_cls', 
+                'loss_layout-roll_reg', 
+                'loss_layout-lo_ori_cls', 
+                'loss_layout-lo_ori_reg', 
+                'loss_layout-lo_centroid', 
+                'loss_layout-lo_coeffs', 
+                'loss_layout-lo_corner', 
+                'loss_layout-ALL'
+            ]
+        if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+            loss_keys += [
+                'loss_object-size_reg'
+                'loss_object-ori_cls'
+                'loss_object-ori_reg'
+                'loss_object-centroid_cls'
+                'loss_object-centroid_reg'
+                'loss_object-offset_2D'
+                'loss_object-ALL'
+            ]
+        if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+            loss_keys += [
+                'loss_emitter-light_ratio', 
+                'loss_emitter-cell_cls', 
+                'loss_emitter-cell_axis', 
+                'loss_emitter-cell_intensity', 
+                'loss_emitter-cell_lamb', 
+                'loss_emitter-ALL', 
         ]
 
     if opt.cfg.MODEL_MATCLS.enable:

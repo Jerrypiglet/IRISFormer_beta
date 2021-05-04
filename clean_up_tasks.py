@@ -17,12 +17,17 @@ for folder in folders:
     # print([x.name for x in log_paths])
     for log_path in log_paths:
         task_name = log_path.name
+        if task_name.endswith('--tmp'):
+            shutil.rmtree(log_path, ignore_errors=True)
+            print('Removed '+str(log_path))
+            continue
+
         for task_datetime in mylist:
             if len(task_datetime.split('-'))==2:
                 restore_task_datetime = task_datetime
             elif len(task_datetime.split('-'))==6:
                 restore_task_datetime = '-'.join([task_datetime.split('-')[3].replace('gpu', ''), task_datetime.split('-')[4]])
-            if task_name.startswith(restore_task_datetime):
+            if task_name.startswith(restore_task_datetime) :
                 # Path(log_path).unlink()
                 shutil.rmtree(log_path, ignore_errors=True)
                 print('Removed '+str(log_path))

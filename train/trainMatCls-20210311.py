@@ -437,6 +437,9 @@ else:
                 if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
                     loss_keys_backward.append('loss_layout-ALL')
                     loss_keys_print.append('loss_layout-ALL')
+                if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
+                    loss_keys_backward.append('loss_object-ALL')
+                    loss_keys_print.append('loss_object-ALL')
                 if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
                     loss_keys_backward.append('loss_emitter-ALL')
                     loss_keys_print.append('loss_emitter-ALL')

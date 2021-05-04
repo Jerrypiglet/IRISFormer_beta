@@ -16,6 +16,7 @@ import models_def.models_brdf_pac_conv as models_brdf_pac_conv
 import models_def.models_brdf_safenet as models_brdf_safenet
 import models_def.models_light as models_light 
 import models_def.models_layout_emitter as models_layout_emitter
+import models_def.models_object_detection as models_object_detection
 import models_def.models_layout_emitter_lightAccu as models_layout_emitter_lightAccu
 import models_def.models_layout_emitter_lightAccuScatter as models_layout_emitter_lightAccuScatter
 import models_def.model_matcls as model_matcls
@@ -144,16 +145,24 @@ class Model_Joint(nn.Module):
                     self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu_(opt)
                 elif self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V2':
                     input_channels = 3
-                    if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
-                        input_channels += self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels + 3 # +3 for img input
+                    if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:                        
+                        if not self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_learn_feats:
+                            input_channels += self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels + 3 # +3 for img input
+                        else:
+                            input_channels += self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels # concat of BRDF feats
                     self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu_UNet_V2(opt, input_channels=input_channels)
                 elif self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V3':
                     self.EMITTER_NET = models_layout_emitter_lightAccuScatter.decoder_layout_emitter_lightAccuScatter_UNet_V3(opt)
                 if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
-                    self.EMITTER_NET_IMG_FEAT_DECODER = self.decoder_to_use(opt, mode=-1, out_channel=self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels) # same as BRDF decoder; mode==-1 means no activation or postprocessing in the end
+                    if not self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_learn_feats:
+                        self.EMITTER_NET_IMG_FEAT_DECODER = self.decoder_to_use(opt, mode=-1, out_channel=self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels) # same as BRDF decoder; mode==-1 means no activation or postprocessing in the end
             else:
-                # the vanilla model
-                self.LAYOUT_EMITTER_NET = models_layout_emitter.decoder_layout_emitter(opt)
+                # the vanilla model: full FC, adapted from Total3D
+                self.LAYOUT_EMITTER_NET_fc = models_layout_emitter.decoder_layout_emitter(opt)
+
+            if 'ob' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+                # object est model from Total3D
+                self.OBJECT_NET = models_object_detection.Bdb3DNet(opt)
 
         if self.cfg.MODEL_MATCLS.enable:
             self.MATCLS_NET = model_matcls.netCS(opt=opt, inChannels=4, base_model=resnet.resnet34, if_est_scale=False, if_est_sup = opt.cfg.MODEL_MATCLS.if_est_sup)
@@ -210,13 +219,26 @@ class Model_Joint(nn.Module):
         return_dict.update(return_dict_light)
 
         if self.cfg.MODEL_LAYOUT_EMITTER.enable:
-            if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
-                assert self.cfg.MODEL_LAYOUT_EMITTER.enable_list == ['em']
-                return_dict_layout_emitter = self.forward_emitter_lightAccu(input_dict, return_dict_brdf=return_dict_brdf, return_dict_light=return_dict_light)
-                return_dict_layout_emitter.update({'layout_est_result': {}})
-            else:
-                encoder_outputs = return_dict_brdf['encoder_outputs']
-                return_dict_layout_emitter = self.LAYOUT_EMITTER_NET(input_feats_dict=encoder_outputs)
+            return_dict_layout_emitter = {}
+
+            # --- objects
+            if 'ob' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+                # self.forward_object_net()
+                output_dict = self.OBJECT_NET(input_dict['object_labels']) # {'obj_est_result': {}}
+                return_dict_layout_emitter.update(output_dict)
+
+            # --- layout / emitters
+            if 'lo' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list or 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+                if not self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
+                    # layout w/ wo/ V1 emitters
+                    encoder_outputs = return_dict_brdf['encoder_outputs']
+                    output_dict = self.LAYOUT_EMITTER_NET_fc(input_feats_dict=encoder_outputs)
+                    return_dict_layout_emitter.update(output_dict)
+                else:
+                    # V2, V3
+                    assert self.cfg.MODEL_LAYOUT_EMITTER.enable_list == ['em']
+                    output_dict = self.forward_emitter_lightAccu(input_dict, return_dict_brdf=return_dict_brdf, return_dict_light=return_dict_light)
+                    return_dict_layout_emitter.update(output_dict)
         else:
             return_dict_layout_emitter = {}
         # print(return_dict_layout_emitter.keys()) # dict_keys(['layout_est_result', 'emitter_est_result'])
@@ -412,7 +434,16 @@ class Model_Joint(nn.Module):
             # x6 torch.Size([2, 1024, 7, 10])
             x1, x2, x3, x4, x5, x6 = return_dict_brdf['encoder_outputs']['x1'], return_dict_brdf['encoder_outputs']['x2'], return_dict_brdf['encoder_outputs']['x3'], \
                 return_dict_brdf['encoder_outputs']['x4'], return_dict_brdf['encoder_outputs']['x5'], return_dict_brdf['encoder_outputs']['x6']
-            img_feat_output = self.EMITTER_NET_IMG_FEAT_DECODER(input_dict['imBatch'], x1, x2, x3, x4, x5, x6)['x_out'] # [B, 8, 240, 320]
+            if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_learn_feats:
+                x2_up = F.interpolate(x2, scale_factor=2, mode='bilinear')
+                x3_up = F.interpolate(x3, scale_factor=4, mode='bilinear')
+                x4_up = F.interpolate(x4, scale_factor=8, mode='bilinear')
+                x1234_feat_concat = torch.cat([x1, x2_up, x3_up, x4_up], axis=1)
+                # print(x1234_feat_concat.shape)
+                img_feat_output = F.interpolate(x1234_feat_concat, scale_factor=2, mode='bilinear')
+                # print(x1234_feat_concat.shape)
+            else:
+                img_feat_output = self.EMITTER_NET_IMG_FEAT_DECODER(input_dict['imBatch'], x1, x2, x3, x4, x5, x6)['x_out'] # [B, 8, 240, 320]
             assert img_feat_output.shape[2:]==(im_height, im_width)
 
 
@@ -519,7 +550,6 @@ class Model_Joint(nn.Module):
         return_dict_layout_emitter['emitter_input'].update({'normalPred_lightAccu':normalBatch, 'depthPred_lightAccu': depthBatch, 'envmapsPredImage_lightAccu': envmapsBatch})
 
         return return_dict_layout_emitter
-
 
     def forward_light(self, input_dict, return_dict_brdf):
         # Normalize Albedo and depth

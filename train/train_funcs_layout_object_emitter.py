@@ -13,49 +13,14 @@ from utils.utils_total3D.utils_OR_visualize import Box
 
 from models_def.models_brdf import LSregress
 
-cls_criterion = nn.CrossEntropyLoss(reduction='mean')
-reg_criterion = nn.SmoothL1Loss(reduction='mean')
-mse_criterion = nn.MSELoss(reduction='mean')
-binary_cls_criterion = nn.BCEWithLogitsLoss(reduction='mean')
-
-cls_criterion_none = nn.CrossEntropyLoss(reduction='none')
-cls_criterion_mean = nn.CrossEntropyLoss(reduction='mean')
-
-reg_criterion_none = nn.SmoothL1Loss(reduction='none')
-mse_criterion_none = nn.MSELoss(reduction='none')
-binary_cls_criterion_none = nn.BCEWithLogitsLoss(reduction='none')
-
-emitter_cls_criterion_none = nn.KLDivLoss(reduction='none')
-emitter_cls_criterion_mean = nn.KLDivLoss(reduction='batchmean')
-
-emitter_cls_criterion_L2_none = nn.MSELoss(reduction='none')
-emitter_cls_criterion_L2_mean = nn.MSELoss(reduction='mean')
-
-def cls_reg_loss(cls_result, cls_gt, reg_result, reg_gt, cls_reg_ratio):
-    cls_loss = cls_criterion(cls_result, cls_gt)
-    if len(reg_result.size()) == 3:
-        reg_result = torch.gather(reg_result, 1, cls_gt.view(reg_gt.size(0), 1, 1).expand(reg_gt.size(0), 1, reg_gt.size(1)))
-    else:
-        reg_result = torch.gather(reg_result, 1, cls_gt.view(reg_gt.size(0), 1).expand(reg_gt.size(0), 1))
-    reg_result = reg_result.squeeze(1)
-    reg_loss = reg_criterion(reg_result, reg_gt)
-    return cls_loss, cls_reg_ratio * reg_loss
-
-def cls_reg_loss_none(cls_result, cls_gt, reg_result, reg_gt, cls_reg_ratio):
-    cls_loss = cls_criterion_none(cls_result, cls_gt)
-    if len(reg_result.size()) == 3:
-        reg_result = torch.gather(reg_result, 1, cls_gt.view(reg_gt.size(0), 1, 1).expand(reg_gt.size(0), 1, reg_gt.size(1)))
-    else:
-        reg_result = torch.gather(reg_result, 1, cls_gt.view(reg_gt.size(0), 1).expand(reg_gt.size(0), 1))
-    reg_result = reg_result.squeeze(1)
-    reg_loss = reg_criterion_none(reg_result, reg_gt)
-    return cls_loss, cls_reg_ratio * reg_loss
-
+from models_def.losses_total3d import PoseLoss, DetLoss
+from models_def.losses_total3d import emitter_cls_criterion_mean, emitter_cls_criterion_L2_mean, cls_criterion_mean, emitter_cls_criterion_L2_none
 
 def get_labels_dict_layout_emitter(data_batch, opt):
     labels_dict = {}
 
     if_layout = 'lo' in opt.cfg.DATA.data_read_list
+    if_object = 'ob' in opt.cfg.DATA.data_read_list
     if_emitter = 'em' in opt.cfg.DATA.data_read_list
     emitter_est_type = opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type
 
@@ -80,6 +45,34 @@ def get_labels_dict_layout_emitter(data_batch, opt):
                         'roll_cls': roll_cls, 'lo_ori_reg': lo_ori_reg, 'lo_ori_cls': lo_ori_cls, 'lo_centroid': lo_centroid,
                         'lo_coeffs': lo_coeffs, 'lo_bdb3D': lo_bdb3D, 'cam_K': cam_K, 'cam_K_scaled': cam_K_scaled, 'cam_R_gt':cam_R_gt}
         labels_dict['layout_labels'] = layout_labels
+
+    if if_object:
+        patch = data_batch['boxes_batch']['patch'].cuda(non_blocking=True)
+        g_features = data_batch['boxes_batch']['g_feature'].float().cuda(non_blocking=True)
+        size_reg = data_batch['boxes_batch']['size_reg'].float().cuda(non_blocking=True)
+        size_cls = data_batch['boxes_batch']['size_cls'].float().cuda(non_blocking=True)
+        ori_reg = data_batch['boxes_batch']['ori_reg'].float().cuda(non_blocking=True)
+        ori_cls = data_batch['boxes_batch']['ori_cls'].long().cuda(non_blocking=True)
+        centroid_reg = data_batch['boxes_batch']['centroid_reg'].float().cuda(non_blocking=True)
+        centroid_cls = data_batch['boxes_batch']['centroid_cls'].long().cuda(non_blocking=True)
+        offset_2D = data_batch['boxes_batch']['delta_2D'].float().cuda(non_blocking=True)
+        split = data_batch['obj_split']
+        # split of relational pairs for batch learning.
+        rel_pair_counts = torch.cat([torch.tensor([0]), torch.cumsum(
+            torch.pow(data_batch['obj_split'][:, 1] - data_batch['obj_split'][:, 0], 2), 0)], 0)
+
+        ''' calculate loss from the interelationship between object and layout.'''
+        bdb2D_from_3D_gt = data_batch['boxes_batch']['bdb2D_from_3D'].float().cuda(non_blocking=True)
+        bdb2D_pos = data_batch['boxes_batch']['bdb2D_pos'].float().cuda(non_blocking=True)
+        bdb3D = data_batch['boxes_batch']['bdb3D'].float().cuda(non_blocking=True)
+
+        object_labels = {'patch':patch, 'g_features':g_features, 'size_reg':size_reg, 'size_cls':size_cls,
+            'ori_reg':ori_reg, 'ori_cls':ori_cls, 'centroid_reg':centroid_reg, 'centroid_cls':centroid_cls,
+            'offset_2D':offset_2D, 'split':split, 'rel_pair_counts':rel_pair_counts, 'bdb2D_from_3D_gt':bdb2D_from_3D_gt, 'bdb2D_pos':bdb2D_pos, 'bdb3D':bdb3D}
+        object_labels.update({'boxes_valid_list': data_batch['boxes_valid_list']})
+
+        labels_dict['object_labels'] = object_labels
+
 
     if if_emitter:
         emitter_labels = {}
@@ -116,15 +109,14 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
     output_vis_dict = {}
     if_est_emitter = 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
     if_est_layout = 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
-
     
     batch_size = labels_dict['imBatch'].shape[0]
     grid_size = opt.cfg.MODEL_LAYOUT_EMITTER.emitter.grid_size
 
     gt_dict_lo = labels_dict['layout_labels']
-    pred_dict_lo = output_dict['layout_est_result']
     
     if if_est_layout:
+        pred_dict_lo = output_dict['layout_est_result']
         lo_bdb3D_out = get_layout_bdb_sunrgbd(opt.bins_tensor, pred_dict_lo['lo_ori_reg_result'],
                                             torch.argmax(pred_dict_lo['lo_ori_cls_result'], 1),
                                             pred_dict_lo['lo_centroid_result'],
@@ -288,15 +280,16 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
     return output_vis_dict
 
 
-def postprocess_layout_emitter(labels_dict, output_dict, loss_dict, opt, time_meters, if_vis=False):
-    if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-        output_dict, loss_dict = postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters)
+def postprocess_layout_object_emitter(labels_dict, output_dict, loss_dict, opt, time_meters, if_vis=False):
     if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
         output_dict, loss_dict = postprocess_layout(labels_dict, output_dict, loss_dict, opt, time_meters)
+    if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+        output_dict, loss_dict = postprocess_joint(labels_dict, output_dict, loss_dict, opt, time_meters)
+    # if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+    #     output_dict, loss_dict = postprocess_object(labels_dict, output_dict, loss_dict, opt, time_meters)
 
-    # if if_vis:
-    #     output_vis_dict = vis_layout_emitter(labels_dict, output_dict, opt, time_meters)
-    #     output_dict['output_vis_dict'] = output_vis_dict
+    if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+        output_dict, loss_dict = postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters)
 
     return output_dict, loss_dict
 
@@ -305,31 +298,36 @@ def postprocess_layout(labels_dict, output_dict, loss_dict, opt, time_meters):
     pred_dict = output_dict['layout_est_result']
     gt_dict = labels_dict['layout_labels']
 
-    pitch_cls_loss, pitch_reg_loss = cls_reg_loss(pred_dict['pitch_cls_result'], gt_dict['pitch_cls'], \
-        pred_dict['pitch_reg_result'], gt_dict['pitch_reg'], cls_reg_ratio)
-    roll_cls_loss, roll_reg_loss = cls_reg_loss(pred_dict['roll_cls_result'], gt_dict['roll_cls'], \
-        pred_dict['roll_reg_result'], gt_dict['roll_reg'], cls_reg_ratio)
-    lo_ori_cls_loss, lo_ori_reg_loss = cls_reg_loss(pred_dict['lo_ori_cls_result'], gt_dict['lo_ori_cls'], \
-        pred_dict['lo_ori_reg_result'], gt_dict['lo_ori_reg'], cls_reg_ratio)
-    lo_centroid_loss = reg_criterion(pred_dict['lo_centroid_result'], gt_dict['lo_centroid']) * cls_reg_ratio
-    lo_coeffs_loss = reg_criterion(pred_dict['lo_coeffs_result'], gt_dict['lo_coeffs']) * cls_reg_ratio
-
-    lo_bdb3D_result = get_layout_bdb_sunrgbd(opt.bins_tensor, pred_dict['lo_ori_reg_result'], gt_dict['lo_ori_cls'], pred_dict['lo_centroid_result'],
-                                                pred_dict['lo_coeffs_result'])
-    # layout bounding box corner loss
-    lo_corner_loss = cls_reg_ratio * reg_criterion(lo_bdb3D_result, gt_dict['lo_bdb3D'])
-
-    layout_losses_dict = {'loss_layout-pitch_cls':pitch_cls_loss, 'loss_layout-pitch_reg':pitch_reg_loss,
-            'loss_layout-roll_cls':roll_cls_loss, 'loss_layout-roll_reg':roll_reg_loss,
-            'loss_layout-lo_ori_cls':lo_ori_cls_loss, 'loss_layout-lo_ori_reg':lo_ori_reg_loss,
-            'loss_layout-lo_centroid':lo_centroid_loss, 'loss_layout-lo_coeffs':lo_coeffs_loss,
-            'loss_layout-lo_corner':lo_corner_loss}
+    layout_losses_dict, lo_bdb3D_result = PoseLoss(pred_dict, gt_dict, opt.bins_tensor, cls_reg_ratio)
 
     loss_dict.update(layout_losses_dict)
     loss_dict.update({'loss_layout-ALL': sum([layout_losses_dict[x] for x in layout_losses_dict])})
 
     output_dict.update({'results_layout': {'lo_bdb3D_result': lo_bdb3D_result}})
 
+    return output_dict, loss_dict
+
+def postprocess_object(labels_dict, output_dict, loss_dict, opt, time_meters):
+    cls_reg_ratio = opt.cfg.MODEL_LAYOUT_EMITTER.layout.loss.cls_reg_ratio
+    pred_dict = output_dict['object_est_result']
+    gt_dict = labels_dict['object_labels']
+
+    object_losses_dict = DetLoss(pred_dict, gt_dict, cls_reg_ratio)
+
+    loss_dict.update(object_losses_dict)
+    loss_dict.update({'loss_object-ALL': sum([object_losses_dict[x] for x in object_losses_dict])})
+
+    return output_dict, loss_dict
+
+def postprocess_joint(labels_dict, output_dict, loss_dict, opt, time_meters):
+    cls_reg_ratio = opt.cfg.MODEL_LAYOUT_EMITTER.layout.loss.cls_reg_ratio
+    pred_dict = output_dict['object_est_result']
+    gt_dict = labels_dict['object_labels']
+
+    object_losses_dict = DetLoss(pred_dict, gt_dict, cls_reg_ratio)
+
+    loss_dict.update(object_losses_dict)
+    loss_dict.update({'loss_object-ALL': sum([object_losses_dict[x] for x in object_losses_dict])})
 
     return output_dict, loss_dict
 

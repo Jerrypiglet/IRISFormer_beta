@@ -65,12 +65,12 @@ _C.DATASET.layout_emitter_path = ''
 # _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitter-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitterRERE-OR45_total3D_train_test_data'
-_C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitterRERERE20210425-OR45_total3D_train_test_data'
+_C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitterRERERE20210502-OR45_total3D_train_test_data'
 
 # _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitter-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitterRERE-OR45_total3D_train_test_data'
-_C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitterRERERE20210425-OR45_total3D_train_test_data_20210430'
+_C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitterRERERE20210502-OR45_total3D_train_test_data'
 
 _C.DATASET.envmap_path = ''
 _C.DATASET.envmap_path_local = '/home/ruizhu/Documents/data/EnvDataset/'
@@ -159,11 +159,11 @@ _C.MODEL_LIGHT.use_scale_aware_loss = False
 
 # _C.MODEL_LIGHT.pretrained_pth_name = ''
 
-# ===== layout, emitter
+# ===== layout, objects, emitter
 _C.MODEL_LAYOUT_EMITTER = CN()
 _C.MODEL_LAYOUT_EMITTER.enable = False # enable model / modules
 _C.MODEL_LAYOUT_EMITTER.enable_list = 'lo_ob_em' # enable model / modules
-_C.MODEL_LAYOUT_EMITTER.enable_list_allowed = ['lo', 'ob', 'em']
+_C.MODEL_LAYOUT_EMITTER.enable_list_allowed = ['lo', 'ob', 'em', 'joint']
 _C.MODEL_LAYOUT_EMITTER.loss_list = ''
 _C.MODEL_LAYOUT_EMITTER.use_depth_as_input = False
 
@@ -201,7 +201,8 @@ _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_envmap = False
 _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_envmap_as_input = False
 
 _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input = False
-_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels = 8
+_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_learn_feats = False
+_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels = 8 # = 64 + 128 + 256 + 256 if sample_BRDF_feats_instead_of_learn_feats
 
 _C.MODEL_LAYOUT_EMITTER.layout = CN()
 _C.MODEL_LAYOUT_EMITTER.layout.loss = CN()
