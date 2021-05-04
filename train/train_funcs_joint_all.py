@@ -246,20 +246,20 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             ]
         if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
             loss_keys += [
-                'loss_object-size_reg'
-                'loss_object-ori_cls'
-                'loss_object-ori_reg'
-                'loss_object-centroid_cls'
-                'loss_object-centroid_reg'
-                'loss_object-offset_2D'
-                'loss_object-ALL'
+                'loss_object-size_reg', 
+                'loss_object-ori_cls', 
+                'loss_object-ori_reg', 
+                'loss_object-centroid_cls', 
+                'loss_object-centroid_reg', 
+                'loss_object-offset_2D', 
+                'loss_object-ALL', 
             ]
         if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
             loss_keys += [
-                'loss_joint-phy'
-                'loss_joint-bdb2D'
-                'loss_joint-corner'
-                'loss_joint-ALL'
+                'loss_joint-phy', 
+                'loss_joint-bdb2D', 
+                'loss_joint-corner', 
+                'loss_joint-ALL', 
             ]
 
         if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
