@@ -65,7 +65,7 @@ _C.DATASET.layout_emitter_path = ''
 # _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitter-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitterRERE-OR45_total3D_train_test_data'
-_C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitterRERERE20210502-OR45_total3D_train_test_data'
+_C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-withMesh20210507-val500-OR45_total3D_train_test_data'
 
 # _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitter-OR45_total3D_train_test_data'
@@ -109,7 +109,7 @@ _C.DATA.load_light_gt = False
 _C.DATA.load_layout_emitter_gt = False
 _C.DATA.data_read_list = ''
 _C.DATA.data_read_list_allowed = ['al', 'no', 'de', 'ro', \
-    'lo', 'em', 'ob']
+    'lo', 'em', 'ob', 'mesh']
 _C.DATA.load_matcls_gt = False
 
 # ===== BRDF
@@ -163,7 +163,7 @@ _C.MODEL_LIGHT.use_scale_aware_loss = False
 _C.MODEL_LAYOUT_EMITTER = CN()
 _C.MODEL_LAYOUT_EMITTER.enable = False # enable model / modules
 _C.MODEL_LAYOUT_EMITTER.enable_list = 'lo_ob_em' # enable model / modules
-_C.MODEL_LAYOUT_EMITTER.enable_list_allowed = ['lo', 'ob', 'em', 'joint']
+_C.MODEL_LAYOUT_EMITTER.enable_list_allowed = ['lo', 'ob', 'em', 'mesh', 'joint']
 _C.MODEL_LAYOUT_EMITTER.loss_list = ''
 _C.MODEL_LAYOUT_EMITTER.use_depth_as_input = False
 
@@ -208,6 +208,29 @@ _C.MODEL_LAYOUT_EMITTER.layout = CN()
 _C.MODEL_LAYOUT_EMITTER.layout.loss = CN()
 _C.MODEL_LAYOUT_EMITTER.layout.loss.cls_reg_ratio = 10
 _C.MODEL_LAYOUT_EMITTER.layout.loss.obj_cam_ratio = 1
+
+_C.MODEL_LAYOUT_EMITTER.mesh = CN()
+_C.MODEL_LAYOUT_EMITTER.mesh.tmn_subnetworks = 2
+_C.MODEL_LAYOUT_EMITTER.mesh.face_samples = 1
+_C.MODEL_LAYOUT_EMITTER.mesh.with_edge_classifier = True
+_C.MODEL_LAYOUT_EMITTER.mesh.neighbors = 30
+_C.MODEL_LAYOUT_EMITTER.mesh.loss = 'SVRLoss' # ['SVRLoss', 'ReconLoss']
+_C.MODEL_LAYOUT_EMITTER.mesh.original_path = ''
+_C.MODEL_LAYOUT_EMITTER.mesh.original_path_local = '/newfoundland2/ruizhu/siggraphasia20dataset/uv_mapped'
+_C.MODEL_LAYOUT_EMITTER.mesh.original_path_cluster = ''
+_C.MODEL_LAYOUT_EMITTER.mesh.sampled_path = ''
+_C.MODEL_LAYOUT_EMITTER.mesh.sampled_path_local = '/home/ruizhu/Documents/data/OR-sampledMeshes'
+_C.MODEL_LAYOUT_EMITTER.mesh.sampled_path_cluster = ''
+
+_C.MODEL_LAYOUT_EMITTER.mesh_obj = CN()
+_C.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs = False
+# filter invalid frames with 0 valid objects, and filter invalid objects in dataloader
+_C.MODEL_LAYOUT_EMITTER.mesh_obj.if_pre_filter_invalid_frames = True # using e.g./home/ruizhu/Documents/Projects/semanticInverse/train/data/openrooms/list_ORmini-val/list/obj_list.pickle
+_C.MODEL_LAYOUT_EMITTER.mesh_obj.if_clip_boxes_train = True # randomly sample N objects if there are too many
+_C.MODEL_LAYOUT_EMITTER.mesh_obj.if_use_only_valid_objs = True
+_C.MODEL_LAYOUT_EMITTER.mesh_obj.valid_bbox_vis_ratio = 0.1
+
+
 
 # ===== material cls (Yu-Ying)
 _C.MODEL_MATCLS = CN()

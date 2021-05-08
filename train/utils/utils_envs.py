@@ -23,6 +23,9 @@ def set_up_envs(opt):
     opt.cfg.DATASET.matpart_path = opt.cfg.DATASET.matpart_path_cluster if opt.if_cluster else opt.cfg.DATASET.matpart_path_local
     opt.cfg.DATASET.matori_path = opt.cfg.DATASET.matori_path_cluster if opt.if_cluster else opt.cfg.DATASET.matori_path_local
     opt.cfg.DATASET.envmap_path = opt.cfg.DATASET.envmap_path_cluster if opt.if_cluster else opt.cfg.DATASET.envmap_path_local
+    opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path = opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path_cluster if opt.if_cluster else opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path_local
+    opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path = opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path_cluster if opt.if_cluster else opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path_local
+
     if opt.data_root is not None:
         opt.cfg.DATASET.dataset_path = opt.data_root
 
@@ -42,6 +45,7 @@ def set_up_envs(opt):
     opt.cfg.PATH.semseg_names_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.semseg_names_path)
     opt.cfg.PATH.total3D_colors_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.total3D_colors_path)
     opt.cfg.PATH.total3D_lists_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.total3D_lists_path)
+    # opt.cfg.PATH.total3D_data_path = opt.cfg.PATH.total3D_lists_path.parent.parent
     opt.cfg.PATH.OR4X_mapping_catInt_to_RGB = [os.path.join(opt.cfg.PATH.root, x) for x in opt.cfg.PATH.OR4X_mapping_catInt_to_RGB]
     opt.cfg.PATH.OR4X_mapping_catStr_to_RGB = [os.path.join(opt.cfg.PATH.root, x) for x in opt.cfg.PATH.OR4X_mapping_catStr_to_RGB]
     opt.cfg.PATH.matcls_matIdG1_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.matcls_matIdG1_path)
@@ -77,9 +81,10 @@ def set_up_envs(opt):
                 opt.cfg.MODEL_BRDF.enable = True
                 opt.cfg.MODEL_BRDF.enable_list += 'no_de'.split('_')
         else:
-            opt.cfg.MODEL_BRDF.enable = True
-            if opt.cfg.MODEL_BRDF.enable_BRDF_decoders == False and not opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
-                opt.cfg.MODEL_BRDF.encoder_exclude = 'x5_x6' # if no BRDF decoder, these two layers are not used in layout net
+            if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+                opt.cfg.MODEL_BRDF.enable = True
+                if opt.cfg.MODEL_BRDF.enable_BRDF_decoders == False and not opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
+                    opt.cfg.MODEL_BRDF.encoder_exclude = 'x5_x6' # if no BRDF decoder, these two layers are not used in layout net
         opt.cfg.DATA.load_brdf_gt = True
         opt.cfg.DATA.load_layout_emitter_gt = True
         opt.cfg.DATA.data_read_list += ['lo']
@@ -112,6 +117,10 @@ def set_up_envs(opt):
             opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.append('joint')
         if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list and 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
             opt.cfg.MODEL_LAYOUT_EMITTER.loss_list.append('joint')
+        if 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+            opt.cfg.DATA.data_read_list += ['de', 'lo', 'ob']
+            # opt.cfg.MODEL_LAYOUT_EMITTER.enable_list += ['ob', 'joint']
+            assert opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss in ['SVRLoss', 'ReconLoss']
 
 
     # ====== per-pixel lighting =====

@@ -5,6 +5,7 @@ from torch.autograd import Variable
 import torch.nn.functional as F
 from tqdm import tqdm
 import numpy as np
+import os
 import statistics
 import torchvision.utils as vutils
 from utils.utils_total3D.utils_OR_cam import get_rotation_matrix_gt, get_rotation_matix_result
@@ -13,17 +14,20 @@ from utils.utils_total3D.utils_OR_visualize import Box
 
 from models_def.models_brdf import LSregress
 
-from models_def.losses_total3d import JointLoss, PoseLoss, DetLoss
+from models_def.losses_total3d import JointLoss, PoseLoss, DetLoss, ReconLoss, SVRLoss
 from models_def.losses_total3d import emitter_cls_criterion_mean, emitter_cls_criterion_L2_mean, cls_criterion_mean, emitter_cls_criterion_L2_none
 
-from utils.utils_total3D.net_utils_libs import get_bdb_evaluation
+from utils.utils_total3D.net_utils_libs import get_bdb_evaluation, get_mask_status
 from utils.utils_total3D.utils_OR_visualize import format_bboxes
+from utils.utils_total3D.libs.tools import write_obj
+from pathlib import Path
 
-def get_labels_dict_layout_emitter(data_batch, opt):
+def get_labels_dict_layout_emitter(labels_dict_input, data_batch, opt):
     labels_dict = {'layout_labels': {}, 'object_labels': {}, 'emitter_labels': {}}
 
     if_layout = 'lo' in opt.cfg.DATA.data_read_list
     if_object = 'ob' in opt.cfg.DATA.data_read_list
+    if_mesh = 'mesh' in opt.cfg.DATA.data_read_list
     if_emitter = 'em' in opt.cfg.DATA.data_read_list
     emitter_est_type = opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type
 
@@ -53,7 +57,7 @@ def get_labels_dict_layout_emitter(data_batch, opt):
         patch = data_batch['boxes_batch']['patch'].cuda(non_blocking=True)
         g_features = data_batch['boxes_batch']['g_feature'].float().cuda(non_blocking=True)
         size_reg = data_batch['boxes_batch']['size_reg'].float().cuda(non_blocking=True)
-        size_cls = data_batch['boxes_batch']['size_cls'].float().cuda(non_blocking=True)
+        size_cls = data_batch['boxes_batch']['size_cls'].float().cuda(non_blocking=True) # one hot vector of shape [n_objects, n_classes]
         ori_reg = data_batch['boxes_batch']['ori_reg'].float().cuda(non_blocking=True)
         ori_cls = data_batch['boxes_batch']['ori_cls'].long().cuda(non_blocking=True)
         centroid_reg = data_batch['boxes_batch']['centroid_reg'].float().cuda(non_blocking=True)
@@ -68,6 +72,8 @@ def get_labels_dict_layout_emitter(data_batch, opt):
         bdb2D_from_3D_gt = data_batch['boxes_batch']['bdb2D_from_3D'].float().cuda(non_blocking=True)
         bdb2D_pos = data_batch['boxes_batch']['bdb2D_pos'].float().cuda(non_blocking=True)
         bdb3D = data_batch['boxes_batch']['bdb3D'].float().cuda(non_blocking=True)
+        random_id = data_batch['boxes_batch']['random_id'] # list of lists
+        cat_name = data_batch['boxes_batch']['cat_name'] # list of lists
 
         cam_K_scaled = data_batch['camera']['K_scaled'].float().cuda(non_blocking=True)
 
@@ -75,10 +81,59 @@ def get_labels_dict_layout_emitter(data_batch, opt):
             'ori_reg':ori_reg, 'ori_cls':ori_cls, 'centroid_reg':centroid_reg, 'centroid_cls':centroid_cls,
             'offset_2D':offset_2D, 'split':split, 'rel_pair_counts':rel_pair_counts, 'bdb2D_from_3D_gt':bdb2D_from_3D_gt, 'bdb2D_pos':bdb2D_pos, 'bdb3D':bdb3D, 
             'cam_K_scaled': cam_K_scaled}
-        object_labels.update({'boxes_valid_list': data_batch['boxes_valid_list']})
+        object_labels.update({'boxes_valid_list': data_batch['boxes_valid_list'], 'random_id': random_id, 'cat_name': cat_name})
 
         labels_dict['object_labels'] = object_labels
 
+    if if_mesh:
+        if opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'SVRLoss':
+            # print(labels_dict['object_labels']['size_cls'].shape, torch.sum(labels_dict['object_labels']['size_cls'], dim=1))
+            # img = data_batch['img'].cuda(non_blocking=True)
+            # cls = data_batch['cls'].float().cuda(non_blocking=True)
+            mesh_points = data_batch['boxes_batch']['mesh_points'].float().cuda(non_blocking=True)
+            densities = data_batch['boxes_batch']['densities'].float().cuda(non_blocking=True)
+            gt_obj_path_alignedNew_normalized_list = data_batch['gt_obj_path_alignedNew_normalized_list'] # list of lists
+            # print(labels_dict['object_labels']['patch'].shape)
+            # print(labels_dict['object_labels']['size_cls'].shape)
+            labels_dict['mesh_labels'] = {
+                # 'img': labels_dict_input['im_trainval_RGB'], 
+                'img': labels_dict['object_labels']['patch'], 
+                'cls': labels_dict['object_labels']['size_cls'], 
+                'mesh_points': mesh_points, 
+                'densities': densities,  
+                'gt_obj_path_alignedNew_normalized_list': gt_obj_path_alignedNew_normalized_list
+            }
+
+
+        elif opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'ReconLoss':
+            # for depth loss
+            # depth_maps = [depth.float().to(device) for depth in data['depth']]
+
+            depth_maps = data_batch['depth'].cuda(non_blocking=True)
+
+            obj_masks = data_batch['boxes_batch']['mask']
+
+            mask_status = get_mask_status(obj_masks, split)
+
+            mask_flag = 1
+            if 1 not in mask_status:
+                mask_flag = 0
+
+            # # Notice: we should conclude the NYU37 classes into pix3d (9) classes before feeding into the network.
+            # cls_codes = torch.zeros([size_cls.size(0), 9]).cuda(non_blocking=True)
+            # cls_codes[range(size_cls.size(0)), [NYU37_TO_PIX3D_CLS_MAPPING[cls.item()] for cls in
+            #                                     torch.argmax(size_cls, dim=1)]] = 1
+            # # cls_codes[range(size_cls.size(0)), [cls.item() for cls in
+            # #                                     torch.argmax(size_cls, dim=1)]] = 1
+
+            cls_codes = size_cls
+
+            patch_for_mesh = patch[mask_status.nonzero()]
+            cls_codes_for_mesh = cls_codes[mask_status.nonzero()]
+
+            labels_dict['mesh_labels'] = {'depth_maps':depth_maps, 
+                            'obj_masks':obj_masks, 'mask_status':mask_status, 'mask_flag':mask_flag, 'patch_for_mesh':patch_for_mesh,
+                            'cls_codes_for_mesh':cls_codes_for_mesh}
 
     if if_emitter:
         emitter_labels = {}
@@ -116,12 +171,19 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
     if_est_emitter = 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
     if_est_layout = 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
     if_est_object = 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
+    if_est_mesh = 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
+
+    if_load_emitter = 'em' in opt.cfg.DATA.data_read_list
+    if_load_layout = 'lo' in opt.cfg.DATA.data_read_list
+    if_load_object = 'ob' in opt.cfg.DATA.data_read_list
+    if_load_mesh = 'mesh' in opt.cfg.DATA.data_read_list
     
     batch_size = labels_dict['imBatch'].shape[0]
     grid_size = opt.cfg.MODEL_LAYOUT_EMITTER.emitter.grid_size
 
     gt_dict_lo = labels_dict['layout_labels']
     gt_dict_ob = labels_dict['object_labels']
+    gt_dict_mesh = labels_dict['mesh_labels']
     
     if if_est_layout:
         pred_dict_lo = output_dict['layout_est_result']
@@ -150,6 +212,14 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
                                                         gt_dict_ob['size_cls'], pred_dict_ob['size_reg_result'], P_result,
                                                         gt_dict_ob['cam_K_scaled'], cam_R_out, gt_dict_ob['split'], return_bdb=True)
 
+    if if_est_mesh:
+        pred_dict_mesh = output_dict['mesh_est_result']
+        mesh_output = pred_dict_mesh['mesh_coordinates_results'][-1] # models/total3d/modules/network.py, L134
+        # mesh_output = mesh_output[-1]
+        # convert to SUNRGBD coordinates
+        # print(mesh_output.shape)
+        # mesh_output[:, 2, :] *= -1 # negate z axis
+        out_faces = pred_dict_mesh['faces']
 
     if if_est_emitter:
         gt_dict_em = labels_dict['emitter_labels']
@@ -175,6 +245,9 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
     scene_box_list = []
     layout_info_dict_list = []
     emitter_info_dict_list = []
+
+    # print(gt_dict_ob['split'])
+    # print(gt_dict_ob['boxes_valid_list'])
     for sample_idx in range(batch_size):
         # print('--- Visualizing sample %d ---'%sample_idx)
         # save_prefix = 'sample%d-LABEL-epoch%d-tid%d-%s'%(sample_idx+batch_size*vis_batch_count, epoch, iter, phase)
@@ -182,6 +255,7 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
         cam_K = gt_dict_lo['cam_K_scaled'][sample_idx].cpu().numpy()
         gt_layout = gt_dict_lo['lo_bdb3D'][sample_idx].cpu().numpy()
 
+        # ---- layout
         if if_est_layout:
             layout_dict = {'layout': lo_bdb3D_out[sample_idx, :, :].cpu().detach().numpy()}
             cam_R_dict = {'cam_R': cam_R_out[sample_idx, :, :].cpu().detach().numpy()}
@@ -194,8 +268,21 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
             pre_layout = gt_layout
             pre_layout_reindexed = gt_layout
 
+        interval = gt_dict_ob['split'][sample_idx].cpu().tolist()
+
+        # ---- objects
+        if if_load_object:
+            gt_boxes = format_bboxes({'bdb3D': gt_dict_ob['bdb3D'][interval[0]:interval[1]].cpu().numpy(), 
+                'class_id': gt_dict_ob['size_cls'][interval[0]:interval[1]].cpu().argmax(1).flatten().numpy().tolist()}, 'GT')
+            gt_boxes['bdb2d'] = gt_dict_ob['bdb2D_pos'][interval[0]:interval[1]].cpu().numpy()
+            gt_boxes['if_valid'] = gt_dict_ob['boxes_valid_list'][sample_idx]
+            gt_boxes['random_id'] = gt_dict_ob['random_id'][sample_idx]
+            gt_boxes['cat_name'] = gt_dict_ob['cat_name'][sample_idx]
+            assert len(gt_boxes['if_valid']) == len(gt_boxes['random_id'])== len(gt_boxes['cat_name'])
+        else:
+            gt_boxes = None
+
         if if_est_object:
-            interval = gt_dict_ob['split'][sample_idx].cpu().tolist()
             nyu40class_ids = [int(evaluate_bdb['classid']) for evaluate_bdb in bdb3D_out_form_cpu]
             # save bounding boxes and camera poses
             current_cls = nyu40class_ids[interval[0]:interval[1]]
@@ -203,20 +290,39 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
             # bdb3d_mat_path = os.path.join(str(save_path), '%s_bdb_3d.mat'%save_prefix)
             bdb3d_dict = {'bdb': bdb3D_out_form_cpu[interval[0]:interval[1]], 'class_id': current_cls}
 
-            gt_boxes = format_bboxes({'bdb3D': gt_dict_ob['bdb3D'][interval[0]:interval[1]].cpu().numpy(), 
-                'class_id': gt_dict_ob['size_cls'][interval[0]:interval[1]].cpu().argmax(1).flatten().numpy().tolist()}, 'GT')
-            gt_boxes['bdb2d'] = gt_dict_ob['bdb2D_pos'][interval[0]:interval[1]].cpu().numpy()
-
             class_ids = gt_dict_ob['size_cls'][interval[0]:interval[1]].cpu().argmax(1).flatten().numpy().tolist()
             # pre_box_data = sio.loadmat(bdb3d_mat_path)
             pre_box_data = bdb3d_dict
             pre_boxes = format_bboxes(pre_box_data, 'prediction')
+            pre_boxes['if_valid'] = gt_dict_ob['boxes_valid_list'][sample_idx]
         else:
-            gt_boxes, pre_boxes = None, None
+            pre_boxes = gt_boxes
+
+        # ---- meshes
+        if if_est_mesh:
+            current_faces = out_faces[interval[0]:interval[1]].cpu().numpy()
+            current_coordinates = mesh_output.transpose(1, 2)[interval[0]:interval[1]].cpu().numpy()
+            pre_meshes = []
+
+            # print(sample_idx, current_faces.shape, current_coordinates.shape, interval)
+            num_objs = interval[1] - interval[0]
+            
+            for obj_id in range(num_objs):
+                save_path = Path(opt.summary_vis_path_task) / ('sample%d-obj%s.obj' % (sample_idx, obj_id))
+                mesh_obj = {'v': current_coordinates[obj_id],
+                            'f': current_faces[obj_id]}
+                write_obj(save_path, mesh_obj)
+                pre_meshes.append([save_path, mesh_obj])
+
+            gt_meshes = gt_dict_mesh['gt_obj_path_alignedNew_normalized_list'][sample_idx]
+        else:
+            gt_meshes = None
+            pre_meshes = None
 
         image = (labels_dict['im_SDR_RGB'][sample_idx].detach().cpu().numpy() * 255.).astype(np.uint8)
         # image = np.transpose(image, (1, 2, 0))
 
+        # ---- emitters
         if if_est_emitter:
             emitter2wall_assign_info_list = gt_dict_em['emitter2wall_assign_info_list'][sample_idx]
             emitters_obj_list = gt_dict_em['emitters_obj_list'][sample_idx]
@@ -285,7 +391,7 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
 
         save_prefix = ''
 
-        scene_box = Box(image, None, cam_K, gt_cam_R, pre_cam_R, gt_layout, pre_layout_reindexed, gt_boxes, pre_boxes, 'prediction', output_mesh = None, \
+        scene_box = Box(image, None, cam_K, gt_cam_R, pre_cam_R, gt_layout, pre_layout_reindexed, gt_boxes, pre_boxes, gt_meshes, pre_meshes, 'prediction', output_mesh = None, \
             opt=opt, dataset='OR', description=save_prefix, if_mute_print=True, OR=opt.cfg.MODEL_LAYOUT_EMITTER.data.OR, \
             emitter2wall_assign_info_list = emitter2wall_assign_info_list, 
             emitters_obj_list = emitters_obj_list, 
@@ -325,13 +431,18 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
     return output_vis_dict
 
 
-def postprocess_layout_object_emitter(labels_dict, output_dict, loss_dict, opt, time_meters, if_vis=False):
+def postprocess_layout_object_emitter(labels_dict, output_dict, loss_dict, opt, time_meters, is_train, if_vis=False, ):
+    flattened_valid_mask = [item for sublist in labels_dict['object_labels']['boxes_valid_list'] for item in sublist]
+    flattened_valid_mask_tensor = torch.tensor(flattened_valid_mask).float().cuda()
+
     if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
         output_dict, loss_dict = postprocess_layout(labels_dict, output_dict, loss_dict, opt, time_meters)
     if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-        output_dict, loss_dict = postprocess_object(labels_dict, output_dict, loss_dict, opt, time_meters)
+        output_dict, loss_dict = postprocess_object(labels_dict, output_dict, loss_dict, opt, time_meters, flattened_valid_mask_tensor=flattened_valid_mask_tensor)
     if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-        output_dict, loss_dict = postprocess_joint(labels_dict, output_dict, loss_dict, opt, time_meters)
+        output_dict, loss_dict = postprocess_joint(labels_dict, output_dict, loss_dict, opt, time_meters, flattened_valid_mask_tensor=flattened_valid_mask_tensor)
+    if 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+        output_dict, loss_dict = postprocess_mesh(labels_dict, output_dict, loss_dict, opt, time_meters, is_train=is_train, flattened_valid_mask_tensor=flattened_valid_mask_tensor)
 
     if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
         output_dict, loss_dict = postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters)
@@ -352,29 +463,46 @@ def postprocess_layout(labels_dict, output_dict, loss_dict, opt, time_meters):
 
     return output_dict, loss_dict
 
-def postprocess_object(labels_dict, output_dict, loss_dict, opt, time_meters):
+def postprocess_object(labels_dict, output_dict, loss_dict, opt, time_meters, flattened_valid_mask_tensor=None):
     cls_reg_ratio = opt.cfg.MODEL_LAYOUT_EMITTER.layout.loss.cls_reg_ratio
     pred_dict = output_dict['object_est_result']
     gt_dict = labels_dict['object_labels']
 
-    object_losses_dict = DetLoss(pred_dict, gt_dict, cls_reg_ratio)
+    object_losses_dict = DetLoss(pred_dict, gt_dict, cls_reg_ratio, flattened_valid_mask_tensor=flattened_valid_mask_tensor)
 
     loss_dict.update(object_losses_dict)
     loss_dict.update({'loss_object-ALL': sum([object_losses_dict[x] for x in object_losses_dict])})
 
     return output_dict, loss_dict
 
-def postprocess_joint(labels_dict, output_dict, loss_dict, opt, time_meters):
+def postprocess_joint(labels_dict, output_dict, loss_dict, opt, time_meters, flattened_valid_mask_tensor=None):
     cls_reg_ratio = opt.cfg.MODEL_LAYOUT_EMITTER.layout.loss.cls_reg_ratio
     pred_dict = {**output_dict['object_est_result'], **output_dict['layout_est_result']}
     gt_dict = {**labels_dict['object_labels'], **labels_dict['layout_labels']}
 
-    joint_losses_dict, joint_outputs_dict = JointLoss(pred_dict, gt_dict, opt.bins_tensor, output_dict['results_layout']['lo_bdb3D_result'], cls_reg_ratio)
+    joint_losses_dict, joint_outputs_dict = JointLoss(pred_dict, gt_dict, opt.bins_tensor, output_dict['results_layout']['lo_bdb3D_result'], cls_reg_ratio, flattened_valid_mask_tensor=flattened_valid_mask_tensor)
 
     loss_dict.update(joint_losses_dict)
     loss_dict.update({'loss_joint-ALL': sum([joint_losses_dict[x] for x in joint_losses_dict])})
 
     output_dict['results_joint'] = joint_outputs_dict
+
+    return output_dict, loss_dict
+
+def postprocess_mesh(labels_dict, output_dict, loss_dict, opt, time_meters, is_train, flattened_valid_mask_tensor=None):
+    cls_reg_ratio = opt.cfg.MODEL_LAYOUT_EMITTER.layout.loss.cls_reg_ratio
+    pred_dict = output_dict['mesh_est_result']
+    gt_dict = labels_dict['mesh_labels']
+
+    if opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'SVRLoss':
+        mesh_losses_dict = SVRLoss(pred_dict, gt_dict, 
+            subnetworks=opt.cfg.MODEL_LAYOUT_EMITTER.mesh.tmn_subnetworks, face_sampling_rate=opt.cfg.MODEL_LAYOUT_EMITTER.mesh.face_samples, 
+            flattened_valid_mask_tensor=flattened_valid_mask_tensor)
+    elif opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'ReconLoss':
+        mesh_losses_dict = ReconLoss(pred_dict, gt_dict, extra_results=output_dict['results_joint'])
+
+    loss_dict.update(mesh_losses_dict)
+    loss_dict.update({'loss_mesh-ALL': sum([mesh_losses_dict[x] for x in mesh_losses_dict])})
 
     return output_dict, loss_dict
 

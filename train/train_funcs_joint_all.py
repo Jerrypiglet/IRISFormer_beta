@@ -88,6 +88,7 @@ def get_matcls_meters(opt):
     return matcls_meters
 
 def get_labels_dict_joint(data_batch, opt):
+
     # prepare input_dict from data_batch (from dataloader)
     labels_dict = {'im_trainval_RGB': data_batch['im_trainval_RGB'].cuda(non_blocking=True), 'im_SDR_RGB': data_batch['im_SDR_RGB'].cuda(non_blocking=True)}
     if opt.cfg.DATA.load_matseg_gt:
@@ -121,7 +122,7 @@ def get_labels_dict_joint(data_batch, opt):
     labels_dict.update(extra_dict_light)
 
     if opt.cfg.DATA.load_layout_emitter_gt:
-        labels_dict_layout_emitter = get_labels_dict_layout_emitter(data_batch, opt)
+        labels_dict_layout_emitter = get_labels_dict_layout_emitter(labels_dict, data_batch, opt)
     else:
         labels_dict_layout_emitter = {}
     labels_dict.update(labels_dict_layout_emitter)
@@ -135,7 +136,7 @@ def get_labels_dict_joint(data_batch, opt):
     # labels_dict = {**labels_dict_matseg, **labels_dict_brdf}
     return labels_dict
 
-def forward_joint(labels_dict, model, opt, time_meters, if_vis=False):
+def forward_joint(is_train, labels_dict, model, opt, time_meters, if_vis=False, ):
     # forward model + compute losses
 
     # Forward model
@@ -167,7 +168,7 @@ def forward_joint(labels_dict, model, opt, time_meters, if_vis=False):
         time_meters['ts'] = time.time()
 
     if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
-        output_dict, loss_dict = postprocess_layout_object_emitter(labels_dict, output_dict, loss_dict, opt, time_meters, if_vis=if_vis)
+        output_dict, loss_dict = postprocess_layout_object_emitter(labels_dict, output_dict, loss_dict, opt, time_meters, is_train=is_train, if_vis=if_vis)
         time_meters['loss_layout_emitter'].update(time.time() - time_meters['ts'])
         time_meters['ts'] = time.time()
 
@@ -262,6 +263,22 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 'loss_joint-ALL', 
             ]
 
+        if 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+            if opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'SVRLoss':
+                loss_keys += [
+                    'loss_mesh-chamfer', 
+                    'loss_mesh-face', 
+                    'loss_mesh-edge', 
+                    'loss_mesh-boundary', 
+                ]
+            elif opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'ReconLoss':
+                loss_keys += [
+                    'loss_mesh-point', 
+                ]
+            loss_keys += [
+                    'loss_mesh-ALL', 
+                ]
+
         if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
             loss_keys += [
                 'loss_emitter-light_ratio', 
@@ -304,7 +321,7 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
             # ======= Forward
             time_meters['ts'] = time.time()
-            output_dict, loss_dict = forward_joint(input_dict, model, opt, time_meters)
+            output_dict, loss_dict = forward_joint(False, input_dict, model, opt, time_meters)
 
             loss_dict_reduced = reduce_loss_dict(loss_dict, mark=tid, logger=logger) # **average** over multi GPUs
             time_meters['ts'] = time.time()
@@ -525,7 +542,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             #     print(input_dict['im_paths'])
 
             # ======= Forward
-            output_dict, loss_dict = forward_joint(input_dict, model, opt, time_meters, if_vis=True)
+            output_dict, loss_dict = forward_joint(False, input_dict, model, opt, time_meters, if_vis=True)
 
             synchronize()
             
@@ -655,6 +672,25 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                             patch_batch_sample = patch_batch[sample_idx_batch]
                             for patch_idx, patch_single in enumerate(patch_batch_sample):
                                 writer.add_image('VAL_bdb2d_patch/%d-%d'%(sample_idx, patch_idx), patch_single.transpose(1, 2, 0), tid, dataformats='HWC')
+
+                        if 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+                            mask_all = np.zeros((240, 320))
+                            obj_idx = 1
+                            for x in data_batch['boxes_batch']['mask'][sample_idx_batch]:
+                                if x is None:
+                                    continue
+                                x1, y1, x2, y2 = x['msk_bdb']
+                                dest_mask = mask_all[y1:y2+1, x1:x2+1]==0
+                                ori_mask = x['msk'].astype(np.uint8)
+                                ori_mask[ori_mask==1] += obj_idx
+                                mask_all[y1:y2+1, x1:x2+1][dest_mask] = ori_mask[dest_mask]
+                                obj_idx += 1
+
+                            mask_all = mask_all.astype(np.float32)
+                            mask_all = mask_all / np.amax(mask_all)
+                            writer.add_image('VAL_bdb2d_masks/%d'%(sample_idx), mask_all, tid, dataformats='HW')
+
+                            fig_3d, ax_3ds = scene_box.draw_3D_scene_plt(draw_mode, if_show_objs=True, hide_random_id=False, if_debug=False, hide_cells=True, if_dump_to_mesh=True, if_show_emitter=False, pickle_id=sample_idx)
 
                         if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
                             output_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'emitter') + '.png')

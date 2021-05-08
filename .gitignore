@@ -24,4 +24,7 @@ tmp
 third-parties_outside/adobe_svbrdf-master/train_list_cs.txt
 tmp.py
 tmp.pickle
+notebooks/scene_mesh_debug*.obj
 __pycache__
+./*.obj
+Summary_vis

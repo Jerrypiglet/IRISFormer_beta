@@ -70,7 +70,7 @@ parser.add_argument("--local_rank", type=int, default=0)
 parser.add_argument('--debug', action='store_true', help='Debug eval')
 
 parser.add_argument('--ifMatMapInput', action='store_true', help='using mask as additional input')
-parser.add_argument('--ifDataloaderOnly', action='store_true', help='benchmark dataloading overhead')
+# parser.add_argument('--ifDataloaderOnly', action='store_true', help='benchmark dataloading overhead')
 parser.add_argument('--if_cluster', action='store_true', help='if using cluster')
 parser.add_argument('--if_hdr_input_matseg', action='store_true', help='if using hdr images')
 parser.add_argument('--eval_every_iter', type=int, default=5000, help='')
@@ -86,7 +86,7 @@ parser.add_argument('--reset_scheduler', action='store_true', help='')
 parser.add_argument('--reset_lr', action='store_true', help='')
 parser.add_argument('--reset_tid', action='store_true', help='')
 # debug
-parser.add_argument("--mini_val", type=str2bool, nargs='?', const=True, default=False)
+# parser.add_argument("--mini_val", type=str2bool, nargs='?', const=True, default=False)
 # to get rid of
 parser.add_argument('--test_real', action='store_true', help='')
 
@@ -231,7 +231,8 @@ if opt.if_val:
         transforms_matseg = transforms_val_matseg,
         transforms_resize = transforms_val_resize, 
         # cascadeLevel = opt.cascadeLevel, split = 'val', logger=logger)
-        cascadeLevel = opt.cascadeLevel, split = 'val', load_first = 20 if opt.mini_val else -1, logger=logger)
+        # cascadeLevel = opt.cascadeLevel, split = 'val', load_first = 20 if opt.mini_val else -1, logger=logger)
+        cascadeLevel = opt.cascadeLevel, split = 'val', load_first = -1, logger=logger)
     brdf_loader_val, _ = make_data_loader(
         opt,
         brdf_dataset_val,
@@ -298,6 +299,16 @@ synchronize()
 # for epoch in list(range(opt.epochIdFineTune+1, opt.cfg.SOLVER.max_epoch)):
 # for epoch_0 in list(range(1, 2) ):
 
+if opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs:
+    assert opt.if_cluster == False
+    obj_nums_dict_file = Path(opt.cfg.DATASET.dataset_list) / 'obj_nums_dict.pickle' # {frame_info: (valid) obj_nums}
+    import pickle
+    if obj_nums_dict_file.exists():
+        with open(obj_nums_dict_file, 'rb') as f:
+            train_obj_dict = pickle.load(f)
+    else:
+        train_obj_dict = {}
+
 if not opt.if_train:
     val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid}
     if opt.if_vis:
@@ -328,9 +339,22 @@ else:
             break
 
         for i, data_batch in tqdm(enumerate(brdf_loader_train)):
+
             if cfg.SOLVER.if_test_dataloader:
                 if i % 100 == 0:
                     print(data_batch.keys())
+                if opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs:
+                    # print(data_batch.keys())
+                    # print(data_batch['boxes_valid_list'])
+                    # print(data_batch['frame_info'])
+                    frame_info_list = data_batch['frame_info']
+                    boxes_valid_list_list = data_batch['boxes_valid_list']
+                    for frame_info, boxes_valid_list in zip(frame_info_list, boxes_valid_list_list):
+                        frame_key = '%s-%s-%d'%(frame_info['meta_split'], frame_info['scene_name'], frame_info['frame_id'])
+                        if frame_key in train_obj_dict:
+                            continue
+                        else:
+                            train_obj_dict[frame_key] = {'valid_obj_num': sum(boxes_valid_list), 'boxes_valid_list': boxes_valid_list}
                 continue
             reset_tictoc = False
             # Evaluation for an epoch```
@@ -367,21 +391,25 @@ else:
             if tid > 5:
                 ts_iter_end_start_list.append(ts_iter_start - ts_iter_end)
 
-            if opt.ifDataloaderOnly:
-                continue
+            # if opt.ifDataloaderOnly:
+            #     continue
             if tid % opt.debug_every_iter == 0:
                 opt.if_vis_debug_pac = True
 
 
             # ======= Load data from cpu to gpu
+
             labels_dict = get_labels_dict_joint(data_batch, opt)
 
             time_meters['data_to_gpu'].update(time.time() - ts_iter_start)
             time_meters['ts'] = time.time()
 
+            if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list or 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+                print('Valid objs num: ', [sum(x) for x in data_batch['boxes_valid_list']], 'Totasl objs num: ', [len(x) for x in data_batch['boxes_valid_list']])
+
             # ======= Forward
             optimizer.zero_grad()
-            output_dict, loss_dict = forward_joint(labels_dict, model, opt, time_meters)
+            output_dict, loss_dict = forward_joint(True, labels_dict, model, opt, time_meters)
             synchronize()
             
             # print('=======loss_dict', loss_dict)
@@ -446,6 +474,14 @@ else:
                 if if_use_layout_loss and if_use_object_loss:
                     loss_keys_backward.append('loss_joint-ALL')
                     loss_keys_print.append('loss_joint-ALL')
+
+                if 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
+                    loss_keys_backward.append('loss_mesh-ALL')
+                    loss_keys_print.append('loss_mesh-ALL')
+                    if opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'SVRLoss':
+                        for loss_name in ['loss_mesh-chamfer', 'loss_mesh-face', 'loss_mesh-edge', 'loss_mesh-boundary']:
+                            loss_keys_print.append(loss_name)
+                        
 
                 if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
                     loss_keys_backward.append('loss_emitter-ALL')
@@ -538,3 +574,9 @@ else:
             tid += 1
             if tid >= opt.max_iter and opt.max_iter != -1:
                 break
+
+
+if opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs:
+    with open(obj_nums_dict_file, 'wb') as f:
+        pickle.dump(train_obj_dict, f)
+    print(white_blue('train_obj_dict dumped to %s'%obj_nums_dict_file))

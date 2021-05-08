@@ -33,10 +33,13 @@ from utils.utils_misc import *
 from utils.utils_total3D.utils_rui import vis_axis_xyz, Arrow3D, vis_axis, vis_cube_plt
 from utils.utils_total3D.utils_OR_vis_labels import set_axes_equal
 from mpl_toolkits.mplot3d.art3d import Poly3DCollection
-from utils.utils_misc import yellow
+from utils.utils_misc import yellow, magenta, white_blue
 
 from SimpleLayout.utils_SL import SimpleScene
 
+import vtk
+from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
+from utils.utils_total3D.utils_OR_mesh import loadMesh, writeMesh
 
 def get_bdb_form_from_corners(corners):
     vec_0 = (corners[:, 2, :] - corners[:, 1, :]) / 2.
@@ -123,17 +126,85 @@ def format_layout(layout_data):
 
     return layout_bdb
 
+def format_mesh(obj_files, bboxes, if_use_vtk=True, validate_classids=False):
+
+    if if_use_vtk:
+        vtk_objects = {}
+    else:
+        vertices_list = []
+        faces_list = []
+        num_vertices = 0
+
+    for idx, obj_file in enumerate(obj_files):
+        # print(obj_file)
+        if validate_classids:
+            filename = '.'.join(os.path.basename(obj_file).split('.')[:-1])
+            obj_idx = int(filename.split('_')[0])
+            class_id = int(filename.split('_')[1].split(' ')[0])
+            assert bboxes['class_id'][obj_idx] == class_id
+        else:
+            obj_idx = idx
+        
+        # print(obj_file)
+        if if_use_vtk:
+            object = vtk.vtkOBJReader()
+            object.SetFileName(obj_file)
+            object.Update()
+
+            # get points from object
+            polydata = object.GetOutput()
+            # read points using vtk_to_numpy
+            points = vtk_to_numpy(polydata.GetPoints().GetData()).astype(np.float)
+        else:
+            points, faces = loadMesh(obj_file)
+
+        mesh_center = (points.max(0) + points.min(0)) / 2.
+        points = points - mesh_center
+
+        mesh_coef = (points.max(0) - points.min(0)) / 2.
+        points = points.dot(np.diag(1./mesh_coef)).dot(np.diag(bboxes['coeffs'][obj_idx]))
+
+        # set orientation
+        points = points.dot(bboxes['basis'][obj_idx])
+
+        # move to center
+        points = points + bboxes['centroid'][obj_idx]
+
+
+        if if_use_vtk:
+            points_array = numpy_to_vtk(points, deep=True)
+            polydata.GetPoints().SetData(points_array)
+            object.Update()
+
+            vtk_objects[obj_idx] = object
+        else:
+            points_swapped = points.copy()
+            # points_swapped[:, 2] = -points_swapped[:, 2] # for OR
+            vertices_list.append(points_swapped)
+            faces_list.append(faces+num_vertices)
+            num_vertices += points.shape[0]
+
+    if if_use_vtk:
+        return vtk_objects, bboxes
+    else:
+        return [vertices_list, faces_list], bboxes
+
+
 
 
 class Box(Scene3D):
 
-    def __init__(self, img_map, depth_map, cam_K, gt_cam_R, pre_cam_R, gt_layout, pre_layout, gt_boxes, pre_boxes, type, output_mesh=None, \
-                    opt=None, dataset='OR', hide_invalid_cats=True, description='', if_mute_print=False, OR=None, \
+    def __init__(self, img_map, depth_map, cam_K, gt_cam_R, pre_cam_R, gt_layout, pre_layout, gt_boxes, pre_boxes, gt_meshes, pre_meshes, \
+                    data_type, output_mesh=None, \
+                    opt=None, dataset='OR', if_hide_invalid_cats=True, description='', if_mute_print=False, OR=None, \
                     cam_fromt_axis_id=0, emitters_obj_list=None, \
                     emitter2wall_assign_info_list=None, emitter_cls_prob_PRED=None, emitter_cls_prob_GT=None, \
                     cell_info_grid_GT=None, cell_info_grid_PRED=None, \
-                    grid_size=4, transform_R=None, transform_t=None, paths={}):
+                    grid_size=4, transform_R=None, transform_t=None, paths={}, pickle_id=-1, \
+                    gt_boxes_valid_mask_extra=None, pre_boxes_valid_mask_extra=None):
         super(Scene3D, self).__init__()
+        self.opt = opt
+
         self._cam_K = cam_K
         self.gt_cam_R = gt_cam_R
         # self._cam_R = gt_cam_R
@@ -142,7 +213,14 @@ class Box(Scene3D):
         self.pre_layout = pre_layout
         self.gt_boxes = gt_boxes
         self.pre_boxes = pre_boxes
-        self.mode = type
+        self.gt_meshes = gt_meshes
+        self.pre_meshes = pre_meshes
+
+        self.gt_boxes_valid_mask_extra = gt_boxes_valid_mask_extra
+        self.pre_boxes_valid_mask_extra = pre_boxes_valid_mask_extra
+
+        self.mode = data_type
+        assert self.mode in ['prediction', 'GT', 'both']
         self._img_map = img_map
         self._depth_map = depth_map
         if self.mode == 'prediction':
@@ -152,6 +230,7 @@ class Box(Scene3D):
 
         self.classes = None
         self.valid_class_ids = None
+        self.pickle_id = pickle_id
 
         assert self.dataset.lower() in ['or', 'sunrgbd'], 'Unsupported dataset in Box class!'
         if self.dataset.lower() == 'or':
@@ -167,9 +246,7 @@ class Box(Scene3D):
             self.valid_class_ids = RECON_3D_CLS
             self.color_palette = nyu_color_palette
 
-        self.hide_invalid_cats = hide_invalid_cats
-        # if not self.hide_invalid_cats:
-        #     self.valid_class_ids = range(1, len(self.classes))
+        self.if_hide_invalid_cats = if_hide_invalid_cats
 
         self.description = description
         self.if_mute_print = if_mute_print
@@ -203,6 +280,25 @@ class Box(Scene3D):
         # ------ other transformations
         self.transform_R = transform_R
         self.transform_t = transform_t
+
+        # --- check objects
+        if self.gt_boxes is not None:
+            all_lengths = [len(self.gt_boxes[key]) for key in self.gt_boxes]
+            # for key in self.gt_boxes:
+            #     print(key, len(self.gt_boxes[key]))
+            assert len(list(set(all_lengths)))==1
+            self.gt_boxes_num = all_lengths[0]
+            if self.gt_boxes_valid_mask_extra is not None:
+                assert len(self.gt_boxes_valid_mask_extra) == self.gt_boxes_num
+                self.gt_boxes['if_valid'] = [x[0] and x[1] for x in zip(self.gt_boxes['if_valid'], self.gt_boxes_valid_mask_extra)]
+
+        if self.pre_boxes is not None:
+            all_lengths = [len(self.pre_boxes[key]) for key in self.pre_boxes]
+            assert len(list(set(all_lengths)))==1
+            self.pre_boxes_num = all_lengths[0]
+            if self.pre_boxes_valid_mask_extra is not None:
+                assert len(self.pre_boxes_valid_mask_extra) == self.pre_boxes_num
+                self.pre_boxes['if_valid'] = [x[0] and x[1] for x in zip(self.pre_boxes['if_valid'], self.pre_boxes_valid_mask_extra)]
 
     def set_cam_K(self, cam_K):
         self.cam_k = cam_K
@@ -305,7 +401,7 @@ class Box(Scene3D):
 
     def draw_3D_scene_plt(self, type = 'prediction', if_save = True, save_path='', fig_or_ax=[None, None],  which_to_vis='cell_info', \
             if_show_emitter=True, if_show_objs=True, if_return_cells_vis_info=False, hide_cells=False, hide_random_id=True, scale_emitter_length=1., \
-            if_print_log=False):
+            if_debug=False, if_dump_to_mesh=False, fig_scale=1., pickle_id=0):
         assert type in ['prediction', 'GT', 'both']
         figs_to_draw = {'prediction': ['prediction'], 'GT': ['GT'],'both': ['prediction', 'GT']}
         figs_to_draw = figs_to_draw[type]
@@ -316,7 +412,7 @@ class Box(Scene3D):
 
         if_new_fig = ax_3d_GT is None and ax_3d_PRED is None
         if if_new_fig:
-            fig = plt.figure(figsize=(15, 8))
+            fig = plt.figure(figsize=(15*fig_scale, 8*fig_scale ))
 
         if 'GT' in figs_to_draw:
             if if_new_fig:
@@ -441,7 +537,7 @@ class Box(Scene3D):
         elif type == 'both':
             layout_list = [self.pre_layout, self.gt_layout]
             boxes_list = [self.pre_boxes, self.gt_boxes]
-            cam_Rs = [self.pre_cam_R, self.gt_cam_R]
+            cam_Rs = [self.pre_cam_R, self.gt_cam_R]    
             colors = [[1., 0., 0.], [0., 0., 1.]]
             types = ['prediction', 'GT']
             line_widths = [5, 3]
@@ -466,18 +562,32 @@ class Box(Scene3D):
         for boxes, cam_R, line_width, linestyle, fontsize, current_type, ax_3d in zip(boxes_list, cam_Rs, line_widths, linestyles, fontsizes, types, ax_3ds):
             if boxes is None or not(if_show_objs):
                 continue
-
+            
+            valid_bbox_idxes = []
+            # for bbox_idx, (coeffs, centroid, class_id, basis, random_id) in enumerate(zip(boxes['coeffs'], boxes['centroid'], boxes['class_id'], boxes['basis'], boxes['random_id'])):
             for bbox_idx, (coeffs, centroid, class_id, basis) in enumerate(zip(boxes['coeffs'], boxes['centroid'], boxes['class_id'], boxes['basis'])):
-                if class_id not in self.valid_class_ids:
-                    if self.hide_invalid_cats or class_id == 0:
-                        # print(class_id)
-                        if not class_id == 0:
-                            print(yellow('%s Detected for %d:%s not in valid_class_ids of dataset: %s'%(self.description, class_id, self.classes[class_id], self.dataset)))
-                            # print(yellow('Skipped')); continue
-                        else:
-                            continue
+                # if class_id != 21: 
+                #     continue
+
+                # if random_id != 'XRZ7U':
+                #     continue
+
+                if_box_valid = self.gt_boxes['if_valid'][bbox_idx]
+                
+                if class_id not in self.valid_class_ids or if_box_valid==False:
+                    message_strs = []
+                    if if_box_valid==False:
+                        message_strs.append('invalid obj')
+                    if class_id not in self.valid_class_ids:
+                        message_strs.append('invalid class of dataset %s'%self.dataset)
+                    message_str = '-'.join(message_strs)
+                    message_str = '%d:%s %s'%(class_id, self.classes[class_id], message_str)
+
+                    if self.if_hide_invalid_cats:
+                        print(magenta('%s [Skipped] %s'%(self.description, message_str)))
+                        continue
                     else:
-                        print(yellow('%s Warning %d:%s in valid_class_ids of dataset: %s'%(self.description, class_id, self.classes[class_id], self.dataset)))
+                        print(yellow('%s [Warning] %s'%(self.description, message_str)))
                         linestyle = 'dashdot'
                         color = 'grey'
                 
@@ -485,6 +595,52 @@ class Box(Scene3D):
 
                 color = [x/255. for x in self.color_palette[class_id]]
                 vis_cube_plt(bdb3d_corners, ax_3d, color, linestyle, self.classes[class_id])
+                # print('Showing obj', self.classes[class_id])
+                
+                for axis_idx, color in zip([0, 1, 2], ['r', 'g', 'b']):
+                    a_x = Arrow3D([centroid[0], centroid[0]+basis[axis_idx][0]], [centroid[1], centroid[1]+basis[axis_idx][1]], [centroid[2], centroid[2]+basis[axis_idx][2]], mutation_scale=1,
+                            lw=1, arrowstyle="Simple", color=color)
+                    ax_3d.add_artist(a_x)
+
+                valid_bbox_idxes.append(bbox_idx)
+
+            if if_dump_to_mesh:
+                obj_path_normalized_paths = self.gt_meshes if current_type=='GT' else [x[0] for x in self.pre_meshes]
+                obj_path_normalized_paths = [obj_path_normalized_paths[x] for x in valid_bbox_idxes]
+                # boxes_valid = [[boxes[key][valid_bbox_idx] for key in ['coeffs', 'centroid', 'class_id', 'basis']] for valid_bbox_idx in valid_bbox_idxes]
+
+
+                boxes_valid = {}
+                for key in ['coeffs', 'centroid', 'class_id', 'basis', 'random_id', 'cat_name']:
+                    boxes_valid[key] = [boxes[key][x] for x in valid_bbox_idxes]
+                if if_debug:
+                    for box_idx, obj_path_normalized_path in enumerate(obj_path_normalized_paths):
+                        print(box_idx, boxes_valid['random_id'][box_idx], boxes_valid['cat_name'][box_idx], obj_path_normalized_path)
+
+                # print('=========>')
+                # for idx, random_id in enumerate(boxes_valid['random_id']):
+                #     if random_id in ['8EFW1', 'NLIQC']:
+                #         idx = boxes_valid['random_id'].index(random_id)
+                #         print(boxes_valid['cat_name'][idx], random_id)
+                #         for key in ['centroid', 'basis', 'coeffs']:
+                #             print(key)
+                #             print(boxes_valid[key][idx])
+
+                # assert len(obj_path_normalized_paths)==len(boxes_valid)
+                # vtk_objects, pre_boxes = format_mesh(obj_path_normalized_paths, boxes_valid)
+                [vertices_list, faces_list], bboxes_ = format_mesh(obj_path_normalized_paths, boxes_valid, if_use_vtk=False)
+                if len(vertices_list) > 0:
+                    vertices_combine = np.vstack(vertices_list)
+                    faces_combine = np.vstack(faces_list)
+                    if if_debug:
+                        scene_mesh_debug_path = 'scene_mesh_debug_val-%d.obj'%self.pickle_id
+                    else:
+                        scene_mesh_debug_path = Path(self.opt.summary_vis_path_task) / ('scene_mesh-%s-%d.obj'%(current_type, pickle_id))
+                    writeMesh(str(scene_mesh_debug_path), vertices_combine, faces_combine)
+                    print(white_blue('[%s] Mesh written to '%current_type+str(scene_mesh_debug_path)))
+                else:
+                    print(yellow('Mesh not written for pickle_id %d: no valid objects'%pickle_id))
+
 
         # if not if_show_emitter:
         #     return None, None
@@ -792,9 +948,9 @@ class Box(Scene3D):
                 os.makedirs(os.path.dirname(save_path))
             img_map.save(save_path)
 
-    def draw_projected_bdb3d(self, type = 'prediction', return_plt = False, if_save = True, save_path='', if_use_plt=False, fig_or_ax=None, if_vis_2dbbox=False, if_vis_2dbbox_iou=False):
+    def draw_projected_bdb3d(self, type = 'prediction', return_plt = False, if_save = True, save_path='', if_use_plt=False, fig_or_ax=None, if_vis_3dbboxproj=True, if_vis_2dbbox=False, if_vis_2dbbox_iou=False, if_vis_2dbbox_random_id=False):
 
-        if if_use_plt:
+        if True:
             if fig_or_ax is None:
                 fig_2d = plt.figure(figsize=(15, 8))
                 ax_2d = fig_2d.gca()
@@ -841,19 +997,28 @@ class Box(Scene3D):
             if if_vis_2dbbox and current_type=='GT':
                 assert len(boxes['bdb2d']) == len(boxes['coeffs'])
 
-            for bbox_idx, (coeffs, centroid, class_id, basis) in enumerate(zip(boxes['coeffs'], boxes['centroid'], boxes['class_id'], boxes['basis'])):
+            for bbox_idx, (coeffs, centroid, class_id, basis, random_id) in enumerate(zip(boxes['coeffs'], boxes['centroid'], boxes['class_id'], boxes['basis'], boxes['random_id'])):
+
+                if_box_valid = self.gt_boxes['if_valid'][bbox_idx]
+
+                message_strs = []
+                if if_box_valid==False:
+                    message_strs.append('invalid obj')
                 if class_id not in self.valid_class_ids:
-                    if self.hide_invalid_cats or class_id == 0:
-                        # print(class_id)
-                        if not class_id == 0:
-                            print(yellow('%s Detected for %d:%s not in valid_class_ids of dataset: %s'%(self.description, class_id, self.classes[class_id], self.dataset)))
-                            # print(yellow('Skipped')); continue
-                        else:
-                            continue
-                    else:
-                        print(yellow('%s Warning %d:%s in valid_class_ids of dataset: %s'%(self.description, class_id, self.classes[class_id], self.dataset)))
-                        linestyle = 'dashdot'
-                        color = 'grey'
+                    message_strs.append('invalid class of dataset %s'%self.dataset)
+                message_str = '-'.join(message_strs)
+                message_str = '%d:%s %s'%(class_id, self.classes[class_id], message_str)
+
+                if self.if_hide_invalid_cats:
+                    print(magenta('%s [Skipped] %s'%(self.description, message_str)))
+                    continue
+                else:
+                    print(yellow('%s [Warning] %s'%(self.description, message_str)))
+                    linestyle = 'dashdot'
+                    color = 'grey'
+
+                    # if current_type=='prediction':
+                    #     continue
                 
                 # print(centroid.shape, self.cam_K.shape, cam_R.shape)
                 center_from_3D, invalid_ids = proj_from_point_to_2d(centroid, self.cam_K, cam_R)
@@ -868,30 +1033,31 @@ class Box(Scene3D):
 
                 # print(type, bdb2D_from_3D, color)
                 if if_use_plt:
-                    extra_transform_matrix = np.array([[0., 0., 1.], [0., -1., 0.], [1., 0., 0.]])
-                    layout_wireframes_proj_list = []
-                    for idx, idx_list in enumerate([[0, 1, 2, 3, 0], [4, 5, 6, 7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]):
-                    # for idx_list in [[3, 0]]:
-                    # for idx_list in [[5,6]]:
-                        v3d_array = bdb3d_corners
-                        for i in range(len(idx_list)-1):
-                            x1x2 = np.vstack((v3d_array[idx_list[i]], v3d_array[idx_list[i+1]]))
-                            # print(cam_dict)
-                            # self.cam_K[0][0] = -self.cam_K[0][0]
-                            # self.cam_K[1][1] = -self.cam_K[1][1]
-                            front_axis = cam_R[:, self.cam_fromt_axis_id:self.cam_fromt_axis_id+1]
+                    if if_vis_3dbboxproj:
+                        extra_transform_matrix = np.array([[0., 0., 1.], [0., -1., 0.], [1., 0., 0.]])
+                        layout_wireframes_proj_list = []
+                        for idx, idx_list in enumerate([[0, 1, 2, 3, 0], [4, 5, 6, 7, 4], [0, 4], [1, 5], [2, 6], [3, 7]]):
+                        # for idx_list in [[3, 0]]:
+                        # for idx_list in [[5,6]]:
+                            v3d_array = bdb3d_corners
+                            for i in range(len(idx_list)-1):
+                                x1x2 = np.vstack((v3d_array[idx_list[i]], v3d_array[idx_list[i+1]]))
+                                # print(cam_dict)
+                                # self.cam_K[0][0] = -self.cam_K[0][0]
+                                # self.cam_K[1][1] = -self.cam_K[1][1]
+                                front_axis = cam_R[:, self.cam_fromt_axis_id:self.cam_fromt_axis_id+1]
 
-                            x1x2_proj = project_3d_line(x1x2, cam_R.T, np.zeros((3, 1), dtype=np.float32), self.cam_K, front_axis*0.01, front_axis, extra_transform_matrix=extra_transform_matrix)
-                            layout_wireframes_proj_list.append(x1x2_proj)
+                                x1x2_proj = project_3d_line(x1x2, cam_R.T, np.zeros((3, 1), dtype=np.float32), self.cam_K, front_axis*0.01, front_axis, extra_transform_matrix=extra_transform_matrix)
+                                layout_wireframes_proj_list.append(x1x2_proj)
 
-                    for x1x2_proj in layout_wireframes_proj_list:
-                        if x1x2_proj is not None:
-                            # color = (int(color[0] * 255), int(color[1] * 255), int(color[2] * 255))
-                            ax_2d.plot([x1x2_proj[0][0], x1x2_proj[1][0]], [x1x2_proj[0][1], x1x2_proj[1][1]], color=color, linewidth=line_width, linestyle=linestyle)
-                        else:
-                            print('x1x2_proj in layout_wireframes_proj_list is None (possibly out of the frame)')
+                        for x1x2_proj in layout_wireframes_proj_list:
+                            if x1x2_proj is not None:
+                                # color = (int(color[0] * 255), int(color[1] * 255), int(color[2] * 255))
+                                ax_2d.plot([x1x2_proj[0][0], x1x2_proj[1][0]], [x1x2_proj[0][1], x1x2_proj[1][1]], color=color, linewidth=line_width, linestyle=linestyle)
+                            else:
+                                print('x1x2_proj in layout_wireframes_proj_list is None (possibly out of the frame)')
 
-                    ax_2d.text(center_from_3D[0], center_from_3D[1], self.classes[class_id], color=color, fontsize=fontsize)
+                        ax_2d.text(center_from_3D[0], center_from_3D[1], self.classes[class_id]+('' if not if_vis_2dbbox_random_id else '-'+random_id), color=color, fontsize=fontsize)
 
                     if if_vis_2dbbox and current_type=='GT':
                         bdb2d = boxes['bdb2d'][bbox_idx]
@@ -903,7 +1069,7 @@ class Box(Scene3D):
                         if if_vis_2dbbox_iou:
                             iou, (interArea, boxAArea, boxBArea) = bb_intersection_over_union(image_bbox, obj_bbox, if_return_areas=True)
                             vis_ratio = interArea / (boxBArea+1e-5)
-                            ax_2d.text(bdb2d['x1'], bdb2d['y1'], '%s-%.2f'%(self.classes[class_id], vis_ratio), color=color)
+                            ax_2d.text(bdb2d['x1'], bdb2d['y1'], '%s-%d-%.2f'%(self.classes[class_id], class_id, vis_ratio)+('' if not if_vis_2dbbox_random_id else '-'+random_id), color=color)
 
 
                 else:

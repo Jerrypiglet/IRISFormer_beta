@@ -17,6 +17,7 @@ import models_def.models_brdf_safenet as models_brdf_safenet
 import models_def.models_light as models_light 
 import models_def.models_layout_emitter as models_layout_emitter
 import models_def.models_object_detection as models_object_detection
+import models_def.models_mesh_reconstruction as models_mesh_reconstruction
 import models_def.models_layout_emitter_lightAccu as models_layout_emitter_lightAccu
 import models_def.models_layout_emitter_lightAccuScatter as models_layout_emitter_lightAccuScatter
 import models_def.model_matcls as model_matcls
@@ -138,31 +139,36 @@ class Model_Joint(nn.Module):
                 self.load_pretrained_MODEL_LIGHT(self.cfg.MODEL_LIGHT.pretrained_pth_name)
 
         if self.cfg.MODEL_LAYOUT_EMITTER.enable:
-            if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
-                self.EMITTER_LIGHT_ACCU_NET = models_layout_emitter_lightAccu.emitter_lightAccu(opt)
-                
-                if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V1':
-                    self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu_(opt)
-                elif self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V2':
-                    input_channels = 3
-                    if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:                        
-                        if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_learn_feats:
-                            input_channels += self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels # concat of BRDF feats
-                        else:
-                            input_channels += self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels + 3 # +3 for img input
-                    self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu_UNet_V2(opt, input_channels=input_channels)
-                elif self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V3':
-                    self.EMITTER_NET = models_layout_emitter_lightAccuScatter.decoder_layout_emitter_lightAccuScatter_UNet_V3(opt)
-                if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
-                    if not self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_learn_feats:
-                        self.EMITTER_NET_IMG_FEAT_DECODER = self.decoder_to_use(opt, mode=-1, out_channel=self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels) # same as BRDF decoder; mode==-1 means no activation or postprocessing in the end
-            else:
-                # the vanilla model: full FC, adapted from Total3D
-                self.LAYOUT_EMITTER_NET_fc = models_layout_emitter.decoder_layout_emitter(opt)
+            if 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+                if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
+                    self.EMITTER_LIGHT_ACCU_NET = models_layout_emitter_lightAccu.emitter_lightAccu(opt)
+                    
+                    if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V1':
+                        self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu_(opt)
+                    elif self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V2':
+                        input_channels = 3
+                        if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:                        
+                            if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_learn_feats:
+                                input_channels += self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels # concat of BRDF feats
+                            else:
+                                input_channels += self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels + 3 # +3 for img input
+                        self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu_UNet_V2(opt, input_channels=input_channels)
+                    elif self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V3':
+                        self.EMITTER_NET = models_layout_emitter_lightAccuScatter.decoder_layout_emitter_lightAccuScatter_UNet_V3(opt)
+                    if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
+                        if not self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_learn_feats:
+                            self.EMITTER_NET_IMG_FEAT_DECODER = self.decoder_to_use(opt, mode=-1, out_channel=self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels) # same as BRDF decoder; mode==-1 means no activation or postprocessing in the end
+                else:
+                    # the vanilla model: full FC, adapted from Total3D
+                    self.LAYOUT_EMITTER_NET_fc = models_layout_emitter.decoder_layout_emitter(opt)
 
             if 'ob' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
                 # object est model from Total3D
                 self.OBJECT_NET = models_object_detection.Bdb3DNet(opt)
+
+            if 'mesh' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+                self.MESH_NET = models_mesh_reconstruction.DensTMNet(opt)
+                
 
         if self.cfg.MODEL_MATCLS.enable:
             self.MATCLS_NET = model_matcls.netCS(opt=opt, inChannels=4, base_model=resnet.resnet34, if_est_scale=False, if_est_sup = opt.cfg.MODEL_MATCLS.if_est_sup)
@@ -225,6 +231,22 @@ class Model_Joint(nn.Module):
             if 'ob' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
                 # self.forward_object_net()
                 output_dict = self.OBJECT_NET(input_dict['object_labels']) # {'obj_est_result': {}}
+                return_dict_layout_emitter.update(output_dict)
+
+            # --- meshes
+            if 'mesh' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+                if self.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'SVRLoss': # total3d: models/mgnet/modules/network.py L41
+                    mesh_output = self.MESH_NET(input_dict['mesh_labels'])
+                elif self.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'ReconLoss':
+                    # output_dict = self.MESH_NET(input_dict['mesh_labels'])
+                    # if input_dict['mesh-labels']['mask_flag'] == 1:
+                    #     mesh_output = self.mesh_reconstruction(input_dict['mesh-labels']['patch_for_mesh'], input_dict['mesh-labels']['cls_codes_for_mesh'])[0][-1]
+                    #     # convert to SUNRGBD coordinates
+                    #     mesh_output[:, 2, :] *= -1
+                    # else:
+                    #     mesh_output = None
+                    assert False, 'not implemented... yet'
+                output_dict = {'mesh_est_result': mesh_output}
                 return_dict_layout_emitter.update(output_dict)
 
             # --- layout / emitters
@@ -406,7 +428,8 @@ class Model_Joint(nn.Module):
             normalBatch = return_dict_brdf['normalPred']
             depthBatch = return_dict_brdf['depthPred'].squeeze(1)
 
-        cam_K_batch = input_dict['layout_labels']['cam_K']
+        # cam_K_batch = input_dict['layout_labels']['cam_K']
+        cam_K_batch = input_dict['layout_labels']['cam_K_scaled']
         cam_R_gt_batch = input_dict['layout_labels']['cam_R_gt']
         layout_gt_batch = input_dict['layout_labels']['lo_bdb3D']
         # print(depthBatch.shape, normalBatch.shape, envmapsBatch.shape, cam_K_batch.shape, cam_R_gt_batch.shape, layout_gt_batch.shape)

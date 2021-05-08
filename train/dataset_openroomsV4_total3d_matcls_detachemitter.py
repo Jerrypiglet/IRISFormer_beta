@@ -21,6 +21,8 @@ import pickle5 as pickle
 from icecream import ic
 from utils.utils_total3D.utils_OR_imageops import loadHdr_simple, to_nonhdr
 import math
+from utils.utils_total3D.data_config import RECON_3D_CLS_OR_dict
+from scipy.spatial import cKDTree
 
 # import math
 
@@ -151,10 +153,30 @@ class openrooms(data.Dataset):
         data_list = os.path.join(data_list, split_to_list[split])
         self.data_list, self.meta_split_scene_name_frame_id_list = make_dataset(split, self.data_root, data_list, logger=self.logger)
         assert len(self.data_list) == len(self.meta_split_scene_name_frame_id_list)
-        # if load_first != -1:
-        self.data_list = self.data_list[:load_first]
-        self.meta_split_scene_name_frame_id_list = self.meta_split_scene_name_frame_id_list[:load_first]
+        if load_first != -1:
+            self.data_list = self.data_list[:load_first] # [('/data/ruizhu/openrooms_mini-val/mainDiffLight_xml1/scene0509_00/im_1.hdr', '/data/ruizhu/openrooms_mini-val/main_xml1/scene0509_00/imsemLabel_1.npy'), ...
+            self.meta_split_scene_name_frame_id_list = self.meta_split_scene_name_frame_id_list[:load_first] # [('mainDiffLight_xml1', 'scene0509_00', 1)
+        if self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_pre_filter_invalid_frames and self.split=='train':
+            obj_nums_dict_file = Path(self.opt.cfg.DATASET.dataset_list) / 'obj_nums_dict.pickle' # {frame_info: (valid) obj_nums}
+            with open(obj_nums_dict_file, 'rb') as f:
+                obj_nums_dict = pickle.load(f)
+            frame_key_list = ['%s-%s-%d'%(frame_info[0], frame_info[1], frame_info[2]) for frame_info in self.meta_split_scene_name_frame_id_list]
+            frame_valid_obj_nums = [obj_nums_dict[frame_key]['valid_obj_num'] if frame_key in obj_nums_dict else 0 for frame_key in frame_key_list]
+            n_frames_ori = len(self.meta_split_scene_name_frame_id_list)
+            valid_frame_idxes = [x for x in range(len(frame_valid_obj_nums)) if frame_valid_obj_nums[x]>=1]
+
+            self.data_list = [self.data_list[x] for x in valid_frame_idxes]
+            self.meta_split_scene_name_frame_id_list = [self.meta_split_scene_name_frame_id_list[x] for x in valid_frame_idxes]
+
+            n_frames_after = len(self.data_list)
+
+            logger.info(white_blue('[%s] [%d frames -> %d frames] Filtering out frames with 0 valid objects with %s...'%(self.split, n_frames_ori, n_frames_after, str(obj_nums_dict_file))))
+
         logger.info(white_blue('%s-%s: total frames: %d'%(self.dataset_name, self.split, len(self.dataset_name))))
+
+        self.OR = opt.cfg.MODEL_LAYOUT_EMITTER.data.OR
+        self.valid_class_ids = RECON_3D_CLS_OR_dict[self.OR]
+
 
         self.cascadeLevel = cascadeLevel
         # self.is_all_light = self.opt.cfg.MODEL_BRDF.is_all_light
@@ -257,6 +279,8 @@ class openrooms(data.Dataset):
 
         hdr_image_path, semseg_label_path = self.data_list[index]
         meta_split, scene_name, frame_id = self.meta_split_scene_name_frame_id_list[index]
+        frame_info = {'meta_split': meta_split, 'scene_name': scene_name, 'frame_id': frame_id}
+        batch_dict = {'image_index': index, 'frame_info': frame_info}
 
         if_load_mask = self.opt.cfg.DATA.load_brdf_gt and not self.opt.cfg.DATA.if_load_png_not_hdr
 
@@ -268,6 +292,10 @@ class openrooms(data.Dataset):
             mask_path = semantics_path.replace('im_', 'imcadmatobj_').replace('hdr', 'dat')
             # mask_path = semantics_path.replace('im_', 'immatPart_').replace('hdr', 'dat')
             mask = self.loadBinary(mask_path, channels = 3, dtype=np.int32, if_resize=True).squeeze() # [h, w, 3]
+        else:
+            seg = None
+            mask_path = None
+            mask = None
 
         hdr_scale = 1.
 
@@ -286,7 +314,7 @@ class openrooms(data.Dataset):
             im_SDR_RGB = im_RGB_uint8.astype(np.float32) / 255.
             im_trainval = im_SDR_RGB # [240, 320, 3], np.ndarray
 
-            batch_dict = {'image_path': str(png_image_path), 'image_index': index}
+            batch_dict.update({'image_path': str(png_image_path)})
 
         else:
             # Read HDR image
@@ -300,7 +328,7 @@ class openrooms(data.Dataset):
             im_SDR_RGB = np.clip(im_SDR_fixedscale**(1.0/2.2), 0., 1.)
             im_RGB_uint8 = (255. * im_SDR_RGB).transpose(1, 2, 0).astype(np.uint8)
             image_transformed_fixed = self.transforms_fixed(im_RGB_uint8)
-            batch_dict = {'image_path': str(hdr_image_path), 'image_index': index}
+            batch_dict.update({'image_path': str(hdr_image_path)})
 
             im_trainval = np.transpose(im_trainval, (1, 2, 0)) # [240, 320, 3], np.ndarray
             im_SDR_RGB = np.transpose(im_SDR_RGB, (1, 2, 0)) # [240, 320, 3], np.ndarray
@@ -321,124 +349,9 @@ class openrooms(data.Dataset):
         # ====== BRDF =====
         # image_path = batch_dict['image_path']
         if self.opt.cfg.DATA.load_brdf_gt:
-            #  or len(self.opt.cfg.DATA.data_read_list) != 0:
-            # Get paths for BRDF params
-            if 'al' in self.cfg.DATA.data_read_list:
-                albedo_path = hdr_image_path.replace('im_', 'imbaseColor_').replace('hdr', 'png').replace('DiffLight', '')
-                # Read albedo
-                albedo = self.loadImage(albedo_path, isGama = False)
-                albedo = (0.5 * (albedo + 1) ) ** 2.2
-                batch_dict.update({'albedo': torch.from_numpy(albedo)})
+            batch_dict_brdf = self.load_brdf_lighting(hdr_image_path, if_load_mask, mask_path, mask, seg, hdr_scale)
+            batch_dict.update(batch_dict_brdf)
 
-            if 'no' in self.cfg.DATA.data_read_list:
-                normal_path = hdr_image_path.replace('im_', 'imnormal_').replace('hdr', 'png').replace('DiffLight', '').replace('DiffMat', '')
-                # normalize the normal vector so that it will be unit length
-                normal = self.loadImage(normal_path )
-                normal = normal / np.sqrt(np.maximum(np.sum(normal * normal, axis=0), 1e-5) )[np.newaxis, :]
-                batch_dict.update({'normal': torch.from_numpy(normal),})
-
-            if 'ro' in self.cfg.DATA.data_read_list:
-                rough_path = hdr_image_path.replace('im_', 'imroughness_').replace('hdr', 'png').replace('DiffLight', '')
-                # Read roughness
-                rough = self.loadImage(rough_path )[0:1, :, :]
-                batch_dict.update({'rough': torch.from_numpy(rough),})
-
-            if 'de' in self.cfg.DATA.data_read_list or 'de' in self.cfg.DATA.data_read_list:
-                depth_path = hdr_image_path.replace('im_', 'imdepth_').replace('hdr', 'dat').replace('DiffLight', '').replace('DiffMat', '')
-                # Read depth
-                depth = self.loadBinary(depth_path)
-                batch_dict.update({'depth': torch.from_numpy(depth),})
-
-            if self.cascadeLevel == 0:
-                env_path = hdr_image_path.replace('im_', 'imenv_')
-            else:
-                env_path = hdr_image_path.replace('im_', 'imenv_')
-                envPre_path = hdr_image_path.replace('im_', 'imenv_').replace('.hdr', '_%d.h5'  % (self.cascadeLevel -1) )
-                
-                albedoPre_path = hdr_image_path.replace('im_', 'imbaseColor_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
-                normalPre_path = hdr_image_path.replace('im_', 'imnormal_').replace('.hdr', '_%d.h5' % (self.cascadeLevel-1) )
-                roughPre_path = hdr_image_path.replace('im_', 'imroughness_').replace('.hdr', '_%d.h5' % (self.cascadeLevel-1) )
-                depthPre_path = hdr_image_path.replace('im_', 'imdepth_').replace('.hdr', '_%d.h5' % (self.cascadeLevel-1) )
-
-                diffusePre_path = hdr_image_path.replace('im_', 'imdiffuse_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
-                specularPre_path = hdr_image_path.replace('im_', 'imspecular_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
-
-            if if_load_mask:
-                segArea = np.logical_and(seg > 0.49, seg < 0.51 ).astype(np.float32 )
-                segEnv = (seg < 0.1).astype(np.float32 )
-                segObj = (seg > 0.9) 
-
-                if self.opt.cfg.MODEL_LIGHT.enable:
-                    segObj = segObj.squeeze()
-                    segObj = ndimage.binary_erosion(segObj, structure=np.ones((7, 7) ),
-                            border_value=1)
-                    segObj = segObj[np.newaxis, :, :]
-
-                segObj = segObj.astype(np.float32 )
-
-            if self.opt.cfg.DATA.load_light_gt:
-                envmaps, envmapsInd = self.loadEnvmap(env_path )
-                envmaps = envmaps * hdr_scale 
-                # print(self.split, hdr_scale, np.amax(envmaps),np.amin(envmaps), np.median(envmaps))
-                if self.cascadeLevel > 0: 
-                    envmapsPre = self.loadH5(envPre_path ) 
-                    if envmapsPre is None:
-                        print("Wrong envmap pred")
-                        envmapsInd = envmapsInd * 0 
-                        envmapsPre = np.zeros((84, 120, 160), dtype=np.float32 ) 
-
-            if self.cascadeLevel > 0:
-                # Read albedo
-                albedoPre = self.loadH5(albedoPre_path )
-                albedoPre = albedoPre / np.maximum(np.mean(albedoPre ), 1e-10) / 3
-
-                # normalize the normal vector so that it will be unit length
-                normalPre = self.loadH5(normalPre_path )
-                normalPre = normalPre / np.sqrt(np.maximum(np.sum(normalPre * normalPre, axis=0), 1e-5) )[np.newaxis, :]
-                normalPre = 0.5 * (normalPre + 1)
-
-                # Read roughness
-                roughPre = self.loadH5(roughPre_path )[0:1, :, :]
-                roughPre = 0.5 * (roughPre + 1)
-
-                # Read depth
-                depthPre = self.loadH5(depthPre_path )
-                depthPre = depthPre / np.maximum(np.mean(depthPre), 1e-10) / 3
-
-                diffusePre = self.loadH5(diffusePre_path )
-                diffusePre = diffusePre / max(diffusePre.max(), 1e-10)
-
-                specularPre = self.loadH5(specularPre_path )
-                specularPre = specularPre / max(specularPre.max(), 1e-10)
-
-            if if_load_mask:
-                batch_dict.update({
-                        'mask': torch.from_numpy(mask), 
-                        'maskPath': mask_path, 
-                        'segArea': torch.from_numpy(segArea),
-                        'segEnv': torch.from_numpy(segEnv),
-                        'segObj': torch.from_numpy(segObj),
-                        'object_type_seg': torch.from_numpy(seg), 
-                        })
-            # if self.transform is not None and not self.opt.if_hdr:
-
-            if self.opt.cfg.DATA.load_light_gt:
-                batch_dict['envmaps'] = envmaps
-                batch_dict['envmapsInd'] = envmapsInd
-                # print(envmaps.shape, envmapsInd.shape)
-
-                if self.cascadeLevel > 0:
-                    batch_dict['envmapsPre'] = envmapsPre
-
-            if self.cascadeLevel > 0:
-                batch_dict['albedoPre'] = albedoPre
-                batch_dict['normalPre'] = normalPre
-                batch_dict['roughPre'] = roughPre
-                batch_dict['depthPre'] = depthPre
-
-                batch_dict['diffusePre'] = diffusePre
-                batch_dict['specularPre'] = specularPre
-        
         # ====== matseg =====
         if self.opt.cfg.DATA.load_matseg_gt:
             mat_seg_dict = self.load_matseg(mask, im_RGB_uint8)
@@ -460,8 +373,129 @@ class openrooms(data.Dataset):
             scene_total3d_Path = Path(self.cfg.DATASET.layout_emitter_path) / meta_split / scene_name
             layout_emitter_dict = self.load_layout_emitter_gt_detach_emitter(im_trainval, frame_info=(scene_total3d_Path, frame_id), hdr_scale=hdr_scale)
             batch_dict.update(layout_emitter_dict)
-        
+
         return batch_dict
+
+    def load_brdf_lighting(self, hdr_image_path, if_load_mask, mask_path, mask, seg, hdr_scale):
+        batch_dict_brdf = {}
+        # Get paths for BRDF params
+        if 'al' in self.cfg.DATA.data_read_list:
+            albedo_path = hdr_image_path.replace('im_', 'imbaseColor_').replace('hdr', 'png').replace('DiffLight', '')
+            # Read albedo
+            albedo = self.loadImage(albedo_path, isGama = False)
+            albedo = (0.5 * (albedo + 1) ) ** 2.2
+            batch_dict_brdf.update({'albedo': torch.from_numpy(albedo)})
+
+        if 'no' in self.cfg.DATA.data_read_list:
+            normal_path = hdr_image_path.replace('im_', 'imnormal_').replace('hdr', 'png').replace('DiffLight', '').replace('DiffMat', '')
+            # normalize the normal vector so that it will be unit length
+            normal = self.loadImage(normal_path )
+            normal = normal / np.sqrt(np.maximum(np.sum(normal * normal, axis=0), 1e-5) )[np.newaxis, :]
+            batch_dict_brdf.update({'normal': torch.from_numpy(normal),})
+
+        if 'ro' in self.cfg.DATA.data_read_list:
+            rough_path = hdr_image_path.replace('im_', 'imroughness_').replace('hdr', 'png').replace('DiffLight', '')
+            # Read roughness
+            rough = self.loadImage(rough_path )[0:1, :, :]
+            batch_dict_brdf.update({'rough': torch.from_numpy(rough),})
+
+        if 'de' in self.cfg.DATA.data_read_list or 'de' in self.cfg.DATA.data_read_list:
+            depth_path = hdr_image_path.replace('im_', 'imdepth_').replace('hdr', 'dat').replace('DiffLight', '').replace('DiffMat', '')
+            # Read depth
+            depth = self.loadBinary(depth_path)
+            batch_dict_brdf.update({'depth': torch.from_numpy(depth),})
+
+        if self.cascadeLevel == 0:
+            env_path = hdr_image_path.replace('im_', 'imenv_')
+        else:
+            env_path = hdr_image_path.replace('im_', 'imenv_')
+            envPre_path = hdr_image_path.replace('im_', 'imenv_').replace('.hdr', '_%d.h5'  % (self.cascadeLevel -1) )
+            
+            albedoPre_path = hdr_image_path.replace('im_', 'imbaseColor_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
+            normalPre_path = hdr_image_path.replace('im_', 'imnormal_').replace('.hdr', '_%d.h5' % (self.cascadeLevel-1) )
+            roughPre_path = hdr_image_path.replace('im_', 'imroughness_').replace('.hdr', '_%d.h5' % (self.cascadeLevel-1) )
+            depthPre_path = hdr_image_path.replace('im_', 'imdepth_').replace('.hdr', '_%d.h5' % (self.cascadeLevel-1) )
+
+            diffusePre_path = hdr_image_path.replace('im_', 'imdiffuse_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
+            specularPre_path = hdr_image_path.replace('im_', 'imspecular_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
+
+        if if_load_mask:
+            segArea = np.logical_and(seg > 0.49, seg < 0.51 ).astype(np.float32 )
+            segEnv = (seg < 0.1).astype(np.float32 )
+            segObj = (seg > 0.9) 
+
+            if self.opt.cfg.MODEL_LIGHT.enable:
+                segObj = segObj.squeeze()
+                segObj = ndimage.binary_erosion(segObj, structure=np.ones((7, 7) ),
+                        border_value=1)
+                segObj = segObj[np.newaxis, :, :]
+
+            segObj = segObj.astype(np.float32 )
+
+        if self.opt.cfg.DATA.load_light_gt:
+            envmaps, envmapsInd = self.loadEnvmap(env_path )
+            envmaps = envmaps * hdr_scale 
+            # print(self.split, hdr_scale, np.amax(envmaps),np.amin(envmaps), np.median(envmaps))
+            if self.cascadeLevel > 0: 
+                envmapsPre = self.loadH5(envPre_path ) 
+                if envmapsPre is None:
+                    print("Wrong envmap pred")
+                    envmapsInd = envmapsInd * 0 
+                    envmapsPre = np.zeros((84, 120, 160), dtype=np.float32 ) 
+
+        if self.cascadeLevel > 0:
+            # Read albedo
+            albedoPre = self.loadH5(albedoPre_path )
+            albedoPre = albedoPre / np.maximum(np.mean(albedoPre ), 1e-10) / 3
+
+            # normalize the normal vector so that it will be unit length
+            normalPre = self.loadH5(normalPre_path )
+            normalPre = normalPre / np.sqrt(np.maximum(np.sum(normalPre * normalPre, axis=0), 1e-5) )[np.newaxis, :]
+            normalPre = 0.5 * (normalPre + 1)
+
+            # Read roughness
+            roughPre = self.loadH5(roughPre_path )[0:1, :, :]
+            roughPre = 0.5 * (roughPre + 1)
+
+            # Read depth
+            depthPre = self.loadH5(depthPre_path )
+            depthPre = depthPre / np.maximum(np.mean(depthPre), 1e-10) / 3
+
+            diffusePre = self.loadH5(diffusePre_path )
+            diffusePre = diffusePre / max(diffusePre.max(), 1e-10)
+
+            specularPre = self.loadH5(specularPre_path )
+            specularPre = specularPre / max(specularPre.max(), 1e-10)
+
+        if if_load_mask:
+            batch_dict_brdf.update({
+                    'mask': torch.from_numpy(mask), 
+                    'maskPath': mask_path, 
+                    'segArea': torch.from_numpy(segArea),
+                    'segEnv': torch.from_numpy(segEnv),
+                    'segObj': torch.from_numpy(segObj),
+                    'object_type_seg': torch.from_numpy(seg), 
+                    })
+        # if self.transform is not None and not self.opt.if_hdr:
+
+        if self.opt.cfg.DATA.load_light_gt:
+            batch_dict_brdf['envmaps'] = envmaps
+            batch_dict_brdf['envmapsInd'] = envmapsInd
+            # print(envmaps.shape, envmapsInd.shape)
+
+            if self.cascadeLevel > 0:
+                batch_dict_brdf['envmapsPre'] = envmapsPre
+
+        if self.cascadeLevel > 0:
+            batch_dict_brdf['albedoPre'] = albedoPre
+            batch_dict_brdf['normalPre'] = normalPre
+            batch_dict_brdf['roughPre'] = roughPre
+            batch_dict_brdf['depthPre'] = depthPre
+
+            batch_dict_brdf['diffusePre'] = diffusePre
+            batch_dict_brdf['specularPre'] = specularPre
+
+        return batch_dict_brdf
 
     def load_mat_cls(self, hdr_image_path=None, frame_info=None, if_gen_on_the_fly=False, if_validate=False):
         #$ load only G1
@@ -574,7 +608,7 @@ class openrooms(data.Dataset):
             'semantic': 1 - torch.FloatTensor(segmentation[num_mat_masks, :, :]).unsqueeze(0), # torch.Size([50, 240, 320]) torch.Size([1, 240, 320])
             'im_matseg_transformed_trainval': im_matseg_transformed_trainval
         }
-
+        
     def load_layout_emitter_gt_detach_emitter(self, im_trainval, frame_info, hdr_scale, if_load_objs=False):
         '''
         Required pickles: (/data/ruizhu/OR-V4full-OR45_total3D_train_test_data)
@@ -620,11 +654,15 @@ class openrooms(data.Dataset):
 
         camera = sequence['camera']
 
-        if_print = pickle_path == '/data/ruizhu/OR-V4full-detachEmitter-OR45_total3D_train_test_data/main_xml1/scene0552_00/layout_obj_1.pkl'
+        # if_print = pickle_path == '/data/ruizhu/OR-V4full-detachEmitter-OR45_total3D_train_test_data/main_xml1/scene0552_00/layout_obj_1.pkl'
+        if_print = False
 
         # ===== objects
         if 'ob' in self.opt.cfg.DATA.data_read_list:
             boxes = sequence['boxes']
+            boxes['random_id'] = [x['random_id'] for x in boxes['bdb2D_full']]
+            boxes['cat_name'] = [self.OR_classes[x] for x in boxes['size_cls']]
+
             n_objects = boxes['bdb2D_pos'].shape[0]
             boxes_valid_list = list(boxes['if_valid'] if 'if_valid' in boxes else [True]*n_objects)
             g_feature = [[((loc2[0] + loc2[2]) / 2. - (loc1[0] + loc1[2]) / 2.) / (loc1[2] - loc1[0]),
@@ -645,19 +683,22 @@ class openrooms(data.Dataset):
             boxes['g_feature'] = pe.view(n_objects * n_objects, rel_cfg.d_g)
 
             # encode class
-            cls_codes = torch.zeros([len(boxes['size_cls']), len(self.OR_classes)])
+            cls_codes = torch.zeros([len(boxes['size_cls']), len(self.OR_classes)]) # [n_boxes, n_clases]
             
             # if self.config['data']['dataset_super'] == 'OR': # OR: set cat_id==0 to invalid, (and [optionally] remap not-detect-cats to 0)
             assert len(boxes['size_cls']) == len(boxes_valid_list)
+
+            # ----- set some objects to invalid
             for idx in range(len(boxes['size_cls'])):
                 if boxes['size_cls'][idx] == 0:
                     boxes_valid_list[idx] = False # set cat_id==0 to invalid
                 if boxes['size_cls'][idx] in OR4XCLASSES_not_detect_mapping_ids_dict[self.OR]: # [optionally] remap not-detect-cats to 0
                     boxes_valid_list[idx] = False
+                if boxes['bdb2D_full'][idx]['vis_ratio'] < self.opy.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.valid_bbox_vis_ratio:
+                    boxes_valid_list[idx] = False
 
             cls_codes[range(len(boxes['size_cls'])), boxes['size_cls']] = 1
             boxes['size_cls'] = cls_codes
-
 
             # TODO: If the training error is consistently larger than the test error. We remove the crop and add more intermediate FC layers with no dropout.
             # TODO: Or FC layers with more hidden neurons, which ensures more neurons pass through the dropout layer, or with larger learning rate, longer
@@ -697,10 +738,6 @@ class openrooms(data.Dataset):
 
                 patch.append(img)
                 bdb_crop_list.append(bdb_crop)
-            # ic('-------', boxes.keys())
-            # for key in boxes:
-            #     ic(key, boxes[key][0])
-
             
             # 'bdb2D_from_3D': scale invariant
             # 'delta_2D': scale invariant
@@ -713,13 +750,64 @@ class openrooms(data.Dataset):
 
             assert boxes['patch'].shape[0] == len(boxes_valid_list)
 
-            # image = data_transforms_nocrop(image)
-            # return_dict.update({'image':image, 'image_np': image_np, 
-            #     # 'rgb_img': torch.from_numpy(sequence['rgb_img']), 
-            #     'rgb_img_path': str(sequence['rgb_img_path']), 'pickle_path': file_path, \
-            #     'boxes_batch':boxes, 'camera':camera, 'layout':layout, 'sequence_id': sequence['sequence_id'], 
-            #     'boxes_valid_list': boxes_valid_list})
-            return_dict.update({'boxes_batch':boxes, 'boxes_valid_list': boxes_valid_list})
+            assert scale_wh==0.5, 'only full and half res masks are available'
+            assert len(boxes['mask'])==len(boxes_valid_list)
+            mask_list_new = []
+            for mask_idx, mask in enumerate(boxes['mask']):
+                if mask is None:
+                    mask_list_new.append(None)
+                    boxes_valid_list[mask_idx] = False # [!!!!!] set objs without masks to False
+                    continue
+                mask_list_new.append({'msk': mask['msk_half'], 'msk_bdb': mask['msk_bdb_half'], 'class_id': mask['class_id']})
+            boxes['mask'] = mask_list_new
+
+
+        # ===== meshes
+        if 'mesh' in self.opt.cfg.DATA.data_read_list:
+            if self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'SVRLoss':
+                gt_obj_paths_list = [x['obj_path'] for x in boxes['bdb2D_full']]
+                assert len(gt_obj_paths_list)==len(boxes_valid_list)
+
+                mesh_dict, boxes_valid_list = self.load_MGNet_Dataset(gt_obj_paths_list, boxes_valid_list, scene_pickle_path=pickle_path)
+                assert len(gt_obj_paths_list)==len(boxes_valid_list)
+
+                gt_points_list = mesh_dict['gt_3dpoints'] # list of N objs
+                gt_obj_path_alignedNew_normalized_list = mesh_dict['gt_obj_path_alignedNew_normalized']
+                densities_list = []
+                for gt_points_single, if_valid in zip(gt_points_list, boxes_valid_list):
+                    if if_valid:
+                        tree = cKDTree(gt_points_single)
+                        dists, indices = tree.query(gt_points_single, k=self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh.neighbors)
+                        densities = np.array([max(dists[point_set, 1]) ** 2 for point_set in indices])
+                    else:
+                        densities = np.zeros(10000, dtype=np.float32)
+                    densities_list.append(densities)
+                    # print(densities.shape, gt_points_single.shape) # [10000,], [10000, 3])
+
+                N_objs = cls_codes.shape[0]
+                mesh_points_N = np.stack(gt_points_list, axis=0)
+                densities_N = np.stack(densities_list, axis=0)
+                boxes.update({
+                    'mesh_points': mesh_points_N, 
+                    'densities': densities_N, 
+                    })
+                return_dict.update({'gt_obj_path_alignedNew_normalized_list': gt_obj_path_alignedNew_normalized_list})
+
+            elif self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'ReconLoss':
+                pass
+
+        # boxes['if_valid'] = boxes_valid_list
+        # del boxes['if_valid']
+        return_dict.update({'boxes_batch':boxes, 'boxes_valid_list': boxes_valid_list})
+        # for key in boxes:
+        #     print(key, type(boxes[key]))
+
+        if self.split=='train' and self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_clip_boxes_train:
+            # print('Clipping......')
+            return_dict = self.clip_box_nums(return_dict, keep_only_valid=self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_use_only_valid_objs)
+        
+        frame_key = '%s-%s-%d'%(frame_info['meta_split'], frame_info['scene_name'], frame_info['frame_id'])
+        assert len(return_dict['boxes_valid_list']) >=1,'Insifficient valid objects at frame %s!'%frame_key
 
         # === layout
         if 'lo' in self.opt.cfg.DATA.data_read_list:
@@ -730,7 +818,6 @@ class openrooms(data.Dataset):
             cam_K_ratio_H = camera['K'][1][2] / (self.im_height/2.)
             assert cam_K_ratio_W == cam_K_ratio_H
             camera['K_scaled'] = np.vstack([camera['K'][:2, :] / cam_K_ratio_W, camera['K'][2:3, :]])
-            
 
             return_dict.update({'layout_emitter_pickle_path': pickle_path, 'camera':camera, 'layout_':layout, 'layout_reindexed':layout_reindexed}) # 'layout_':layout, should not be used!
 
@@ -947,6 +1034,47 @@ class openrooms(data.Dataset):
 
         return return_dict
 
+    def load_MGNet_Dataset(self, gt_obj_paths_list, boxes_valid_list, scene_pickle_path=''):
+        mesh_dict = {'gt_3dpoints': [], 'gt_obj_path_alignedNew_normalized': []}
+        boxes_valid_list_new = []
+        # assert len(gt_obj_paths_list) == len(boxes_valid_list)
+        for obj_idx, (gt_obj_path_ori, if_valid) in enumerate(zip(gt_obj_paths_list, boxes_valid_list)):
+            if if_valid:
+                gt_obj_path = gt_obj_path_ori.replace('/newfoundland2/ruizhu/siggraphasia20dataset/uv_mapped', self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path)
+                # gt_obj_path = gt_obj_path.replace('aligned_shape.obj', 'alignedNew.obj').replace('aligned_light.obj', 'alignedNew.obj')
+                gt_obj_sampled_path = gt_obj_path.replace(self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path, self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path)
+                gt_obj_path_sampled_pickle = gt_obj_sampled_path.replace('.obj', '_sampled.pickle')
+                gt_obj_path_alignedNew_normalized = gt_obj_sampled_path.replace('.obj', '_normalized.obj')
+                # print(gt_obj_path_sampled_pickle)
+                try:
+                    with open(gt_obj_path_sampled_pickle, 'rb') as f:
+                        mesh_sampled_dict = pickle.load(f) # {sampled_points, centre, scale}
+                except FileNotFoundError:
+                    print(yellow('File not found (could be fake (placeholder) objs) in %s-%s (scene picle path %s)'%(str(gt_obj_path_sampled_pickle), str(gt_obj_path_ori), str(scene_pickle_path)))) # could be empty path (e.g. '')
+                    mesh_dict['gt_3dpoints'].append(np.zeros((10000, 3), dtype=np.float32))
+                    mesh_dict['gt_obj_path_alignedNew_normalized'].append('')
+                    boxes_valid_list_new.append(False)
+                    continue
+                except pickle.UnpicklingError:
+                    print(yellow('UnpicklingError at file %s (scene pickle path: %s)'%(str(gt_obj_path_sampled_pickle), str(scene_pickle_path)))) # could be reading layoutMesh (e.g. /newfoundland2/ruizhu/siggraphasia20dataset/layoutMesh/scene0673_02/uv_mapped.obj)
+                    mesh_dict['gt_3dpoints'].append(np.zeros((10000, 3), dtype=np.float32))
+                    mesh_dict['gt_obj_path_alignedNew_normalized'].append('')
+                    # assert False
+                    boxes_valid_list_new.append(False)
+                    continue
+
+                # for key in mesh_sampled_dict:
+                #     print(key, mesh_sampled_dict[key])
+                mesh_dict['gt_3dpoints'].append(mesh_sampled_dict['sampled_points'])
+                mesh_dict['gt_obj_path_alignedNew_normalized'].append(gt_obj_path_alignedNew_normalized)
+            else:
+                mesh_dict['gt_3dpoints'].append(np.zeros((10000, 3), dtype=np.float32))
+                mesh_dict['gt_obj_path_alignedNew_normalized'].append('')
+
+            boxes_valid_list_new.append(if_valid)
+
+        # assert len(gt_obj_paths_list) == len(boxes_valid_list_new)
+        return mesh_dict, boxes_valid_list_new
 
     def get_map_aggre_map(self, objMask):
         cad_map = objMask[:, :, 0]
@@ -969,7 +1097,7 @@ class openrooms(data.Dataset):
 
             # mat_aggre_map[cad_mask] = mat_idx_map[cad_mask] + num_mats
             # num_mats = num_mats + max(mat_idxs)
-            cad_single_map = np.zeros_like(cad_map)
+            cad_single_map = np.zeros_like(cad_map) 
             cad_single_map[cad_mask] = mat_idx_map[cad_mask]
             for i, mat_idx in enumerate(mat_idxes):
         #         mat_single_map = np.zeros_like(cad_map)
@@ -1114,13 +1242,40 @@ class openrooms(data.Dataset):
         depth = np.squeeze(depth)
 
         return depth
+    
+    def clip_box_nums(self, return_dict, keep_only_valid=True, num_clip_to=10):
+        N_objs = len(return_dict['boxes_valid_list'])
+        N_objs_valid = sum(return_dict['boxes_valid_list'])
+
+        valid_idxes = [x for x in range(len(return_dict['boxes_valid_list'])) if return_dict['boxes_valid_list'][x]==True]
+        invalid_idxes = [x for x in range(len(return_dict['boxes_valid_list'])) if return_dict['boxes_valid_list'][x]==False]
+        # print(return_dict['boxes_valid_list'], N_objs_valid)
+        rearranged_indexes = valid_idxes + invalid_idxes
+
+        assert keep_only_valid
+        if N_objs_valid <= num_clip_to:
+            s_idxes = valid_idxes
+        else:
+            # s_idxes = random.sample(range(N_objs), min(num_clip_to, N_objs))
+            s_idxes = random.sample(valid_idxes, min(num_clip_to, N_objs_valid))
+        return_dict['boxes_valid_list'] = [return_dict['boxes_valid_list'][x] for x in s_idxes]
+        return_dict['gt_obj_path_alignedNew_normalized_list'] = [return_dict['gt_obj_path_alignedNew_normalized_list'][x] for x in s_idxes]
+
+        for key in return_dict['boxes_batch']:
+            if key in ['mask', 'random_id', 'cat_name']: # lists
+                return_dict['boxes_batch'][key] = [return_dict['boxes_batch'][key][x] for x in s_idxes]
+            else: # arrays / tensors
+                return_dict['boxes_batch'][key] = return_dict['boxes_batch'][key][s_idxes]
+
+
+        return return_dict
 
 default_collate = torch.utils.data.dataloader.default_collate
 def collate_fn_OR(batch):
     """
     Data collater.
 
-    Assumes each instance is a dict.
+    Assumes each instance is a dict.    
     Applies different collation rules for each field.
     Args:
         batches: List of loaded elements via Dataset.__getitem__
@@ -1134,17 +1289,17 @@ def collate_fn_OR(batch):
             for subkey in batch[0][key]:
                 if subkey in ['bdb2D_full', 'bdb3D_full']: # lists of original & more information (e.g. color)
                     continue
-                if subkey == 'mask':
+                if subkey in ['mask', 'random_id', 'cat_name']: # list of lists
                     tensor_batch = [elem[key][subkey] for elem in batch]
                 else:
-                    # print(subkey)
                     list_of_tensor = [recursive_convert_to_torch(elem[key][subkey]) for elem in batch]
                     try:
                         tensor_batch = torch.cat(list_of_tensor)
+                        # print(subkey, [x['boxes_batch'][subkey].shape for x in batch], tensor_batch.shape)
                     except RuntimeError:
                         print(subkey, [x.shape for x in list_of_tensor])
                 collated_batch[key][subkey] = tensor_batch
-        elif key in ['boxes_valid_list', 'emitter2wall_assign_info_list', 'emitters_obj_list', 'gt_layout_RAW', 'cell_info_grid', 'image_index']:
+        elif key in ['frame_info', 'boxes_valid_list', 'emitter2wall_assign_info_list', 'emitters_obj_list', 'gt_layout_RAW', 'cell_info_grid', 'image_index', 'gt_obj_path_alignedNew_normalized_list']:
             collated_batch[key] = [elem[key] for elem in batch]
         else:
             try:
@@ -1155,6 +1310,14 @@ def collate_fn_OR(batch):
     if 'boxes_batch' in batch[0]:
         interval_list = [elem['boxes_batch']['patch'].shape[0] for elem in batch]
         collated_batch['obj_split'] = torch.tensor([[sum(interval_list[:i]), sum(interval_list[:i+1])] for i in range(len(interval_list))])
+
+    # boxes_valid_list = [item for sublist in collated_batch['boxes_valid_list'] for item in sublist]
+    # boxes_valid_nums = [sum(x) for x in collated_batch['boxes_valid_list']]
+    # boxes_total_nums = [len(x) for x in collated_batch['boxes_valid_list']]
+    # if sum(boxes_valid_list)==0:
+    #     print(boxes_valid_nums, '/', boxes_total_nums, red(sum(boxes_valid_list)), '/', len(boxes_valid_list), boxes_valid_list)
+    # else:
+    #     print(boxes_valid_nums, '/', boxes_total_nums, sum(boxes_valid_list), '/', len(boxes_valid_list), boxes_valid_list)
 
     return collated_batch
 

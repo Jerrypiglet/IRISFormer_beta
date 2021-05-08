@@ -94,7 +94,7 @@ OR45_TO_NYU40_CLS_MAPPING = {0:0, 43:1, 44:2, 28:3, 42:3, 18:4, 21:5, 11:6, 4:7,
 
 number_pnts_on_template = 2562
 
-pix3d_n_classes = 9
+# pix3d_n_classes = 9
 
 cls_reg_ratio = 10
 obj_cam_ratio = 1

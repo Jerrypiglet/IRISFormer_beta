@@ -54,7 +54,10 @@ class decoder_layout_emitter_lightAccuScatter_UNet_V3(nn.Module):
         self.emitter_encoder_heads = torch.nn.ModuleDict({})
         self.emitter_encoder_decoder_in_channels=self.flattened_envmap_feats_channels
         if self.use_sampled_img_feats_as_input:
-            self.emitter_encoder_decoder_in_channels = self.emitter_encoder_decoder_in_channels + self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels + 3 # +3 for img input
+            if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_learn_feats:
+                self.emitter_encoder_decoder_in_channels = self.emitter_encoder_decoder_in_channels + self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels
+            else:
+                self.emitter_encoder_decoder_in_channels = self.emitter_encoder_decoder_in_channels + self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels + 3 # +3 for img input
 
         for head_name, head_channels in [('cell_light_ratio', 1), ('cell_cls', 3), ('cell_axis', 3), ('cell_intensity', 3), ('cell_lamb', 1)]:
             self.get_emitter_encoder(head_name, in_channels=self.emitter_encoder_decoder_in_channels)
