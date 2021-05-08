@@ -371,8 +371,13 @@ class openrooms(data.Dataset):
         # ====== layout, obj, emitters =====
         if self.opt.cfg.DATA.load_layout_emitter_gt:
             scene_total3d_Path = Path(self.cfg.DATASET.layout_emitter_path) / meta_split / scene_name
-            layout_emitter_dict = self.load_layout_emitter_gt_detach_emitter(im_trainval, frame_info=(scene_total3d_Path, frame_id), hdr_scale=hdr_scale)
+            layout_emitter_dict = self.load_layout_emitter_gt_detach_emitter(im_trainval, frame_info=(scene_total3d_Path, frame_id), frame_info_dict=frame_info, hdr_scale=hdr_scale)
             batch_dict.update(layout_emitter_dict)
+
+        if self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_skip_invalid_frames:
+            if batch_dict['num_valid_boxes']==0:
+                print(blue_text('Skipped sample %d because of 0 valid boxes... returning the next one...')%index)
+                return self.__getitem__((index+1)%len(self.data_list))
 
         return batch_dict
 
@@ -609,7 +614,7 @@ class openrooms(data.Dataset):
             'im_matseg_transformed_trainval': im_matseg_transformed_trainval
         }
         
-    def load_layout_emitter_gt_detach_emitter(self, im_trainval, frame_info, hdr_scale, if_load_objs=False):
+    def load_layout_emitter_gt_detach_emitter(self, im_trainval, frame_info, frame_info_dict, hdr_scale, if_load_objs=False):
         '''
         Required pickles: (/data/ruizhu/OR-V4full-OR45_total3D_train_test_data)
         - layout_obj_%d.pkl
@@ -694,7 +699,7 @@ class openrooms(data.Dataset):
                     boxes_valid_list[idx] = False # set cat_id==0 to invalid
                 if boxes['size_cls'][idx] in OR4XCLASSES_not_detect_mapping_ids_dict[self.OR]: # [optionally] remap not-detect-cats to 0
                     boxes_valid_list[idx] = False
-                if boxes['bdb2D_full'][idx]['vis_ratio'] < self.opy.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.valid_bbox_vis_ratio:
+                if boxes['bdb2D_full'][idx]['vis_ratio'] < self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.valid_bbox_vis_ratio:
                     boxes_valid_list[idx] = False
 
             cls_codes[range(len(boxes['size_cls'])), boxes['size_cls']] = 1
@@ -798,16 +803,17 @@ class openrooms(data.Dataset):
 
         # boxes['if_valid'] = boxes_valid_list
         # del boxes['if_valid']
-        return_dict.update({'boxes_batch':boxes, 'boxes_valid_list': boxes_valid_list})
+        return_dict.update({'boxes_batch':boxes, 'boxes_valid_list': boxes_valid_list, 'num_valid_boxes': sum(boxes_valid_list)})
         # for key in boxes:
         #     print(key, type(boxes[key]))
 
-        if self.split=='train' and self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_clip_boxes_train:
+        if (self.split=='train' or self.opt.if_overfit_val) and self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_clip_boxes_train:
             # print('Clipping......')
             return_dict = self.clip_box_nums(return_dict, keep_only_valid=self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_use_only_valid_objs)
         
-        frame_key = '%s-%s-%d'%(frame_info['meta_split'], frame_info['scene_name'], frame_info['frame_id'])
-        assert len(return_dict['boxes_valid_list']) >=1,'Insifficient valid objects at frame %s!'%frame_key
+        frame_key = '%s-%s-%d'%(frame_info_dict['meta_split'], frame_info_dict['scene_name'], frame_info_dict['frame_id'])
+        if self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_pre_filter_invalid_frames:
+            assert len(return_dict['boxes_valid_list']) >=1,'Pre-filtering enabled; BUT Insifficient valid objects at frame %s!'%frame_key
 
         # === layout
         if 'lo' in self.opt.cfg.DATA.data_read_list:

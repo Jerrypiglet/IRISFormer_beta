@@ -43,10 +43,10 @@ RECON_3D_CLS = [3,4,5,6,7,8,10,14,15,17,24,25,29,30,32]
 
 # ------- OR42, OR45, OR46
 OR4XCLASSES_dict = {'OR42': ['void', 
-    'curtain', 'bike', 'washing_machine', 'table', 'dishwasher', 'bowl', 'bookshelf', 'sofa', 'speaker', 'trash_bin', 
-    'piano', 'guitar', 'pillow', 'jar', 'bed', 'bottle', 'clock', 'chair', 'computer_keyboard', 'monitor', 
-    'bathtub', 'stove', 'microwave', 'file_cabinet', 'flowerpot', 'cap', 'window', 'ceiling_lamp', 'telephone', 'printer', 
-    'basket', 'faucet', 'bag', 'laptop', 'lamp', 'can', 'bench', 'door', 'cabinet', 'wall', 
+    'curtain', 'bike', 'washing_machine', 'table', 'dishwasher', 'bowl', 'bookshelf', 'sofa', 'speaker', 'trash_bin', # [1...10]
+    'piano', 'guitar', 'pillow', 'jar', 'bed', 'bottle', 'clock', 'chair', 'computer_keyboard', 'monitor',  # [11...20]
+    'bathtub', 'stove', 'microwave', 'file_cabinet', 'flowerpot', 'cap', 'window', 'ceiling_lamp', 'telephone', 'printer',  # [21...30]
+    'basket', 'faucet', 'bag', 'laptop', 'lamp', 'can', 'bench', 'door', 'cabinet', 'wall',  # [31...40]
     'floor', 'ceiling'],  # [0, ..., 42]
 
     'OR45': ['void',

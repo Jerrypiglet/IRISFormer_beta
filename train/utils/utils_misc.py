@@ -26,6 +26,10 @@ def white_blue(text):
     coloredd = colored(text, 'white', 'on_blue')
     return coloredd
 
+def blue_text(text):
+    coloredd = colored(text, 'blue')
+    return coloredd
+
 def print_white_blue(text):
     print(white_blue(text))
 

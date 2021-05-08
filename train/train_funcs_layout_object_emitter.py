@@ -497,7 +497,7 @@ def postprocess_mesh(labels_dict, output_dict, loss_dict, opt, time_meters, is_t
     if opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'SVRLoss':
         mesh_losses_dict = SVRLoss(pred_dict, gt_dict, 
             subnetworks=opt.cfg.MODEL_LAYOUT_EMITTER.mesh.tmn_subnetworks, face_sampling_rate=opt.cfg.MODEL_LAYOUT_EMITTER.mesh.face_samples, 
-            flattened_valid_mask_tensor=flattened_valid_mask_tensor)
+            flattened_valid_mask_tensor=flattened_valid_mask_tensor, is_train=is_train)
     elif opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'ReconLoss':
         mesh_losses_dict = ReconLoss(pred_dict, gt_dict, extra_results=output_dict['results_joint'])
 

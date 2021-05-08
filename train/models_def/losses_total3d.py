@@ -277,7 +277,7 @@ def SVRLoss_ori(est_dict, gt_dict, subnetworks, face_sampling_rate, flattened_va
 
 
 # def SVRLoss_masked(est_dict, gt_dict, subnetworks, face_sampling_rate, flattened_valid_mask_tensor=None):
-def SVRLoss(est_dict, gt_dict, subnetworks, face_sampling_rate, flattened_valid_mask_tensor=None):
+def SVRLoss(est_dict, gt_dict, subnetworks, face_sampling_rate, flattened_valid_mask_tensor=None, is_train=False):
     if flattened_valid_mask_tensor is None:
         flattened_valid_mask = [item for sublist in gt_dict['boxes_valid_list'] for item in sublist]
         flattened_valid_mask_tensor = torch.tensor(flattened_valid_mask).float().cuda()
@@ -289,7 +289,9 @@ def SVRLoss(est_dict, gt_dict, subnetworks, face_sampling_rate, flattened_valid_
     boundary_loss = torch.tensor(0.).cuda()
     # print(flattened_valid_mask_tensor, flattened_valid_mask_tensor.shape)
     m_bool = flattened_valid_mask_tensor.bool()
-    assert torch.all(m_bool)
+    # print(is_train, m_bool)
+    if is_train:
+        assert torch.all(m_bool)
     mask = flattened_valid_mask_tensor.unsqueeze(-1) # [N, 1]
 
     for stage_id, mesh_coordinates_result in enumerate(est_dict['mesh_coordinates_results']):

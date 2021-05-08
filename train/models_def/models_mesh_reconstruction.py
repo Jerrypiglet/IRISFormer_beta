@@ -136,6 +136,7 @@ class DensTMNet(nn.Module):
     def forward(self, mesh_input_dict, threshold = 0.1, factor = 1.):
         image = mesh_input_dict['img']
         size_cls = mesh_input_dict['cls']
+        # print(size_cls.shape)
 
         mode = 'train' if self.training else 'test'
         device = image.device

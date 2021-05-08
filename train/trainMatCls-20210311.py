@@ -224,7 +224,7 @@ if opt.cfg.MODEL_SEMSEG.enable:
 #     brdf_dataset_val_vis = brdf_dataset_train
 # else:
 
-if opt.if_val:
+if opt.if_val or opt.if_overfit_val:
     brdf_dataset_val = openrooms(opt, 
         transforms_fixed = transforms_val_resize, 
         transforms_semseg = transforms_val_semseg, 
@@ -306,7 +306,11 @@ if opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs:
     if obj_nums_dict_file.exists():
         with open(obj_nums_dict_file, 'rb') as f:
             train_obj_dict = pickle.load(f)
+            print(yellow('Existing keys in obj_nums_dict.pickle (%s):'%(str(obj_nums_dict_file))))
+            for key in train_obj_dict:
+                ic(key)
     else:
+        print(yellow('Empty obj_nums_dict.pickle (%s)'%(str(obj_nums_dict_file))))
         train_obj_dict = {}
 
 if not opt.if_train:
@@ -347,6 +351,7 @@ else:
                     # print(data_batch.keys())
                     # print(data_batch['boxes_valid_list'])
                     # print(data_batch['frame_info'])
+                    ic(data_batch['num_valid_boxes'])
                     frame_info_list = data_batch['frame_info']
                     boxes_valid_list_list = data_batch['boxes_valid_list']
                     for frame_info, boxes_valid_list in zip(frame_info_list, boxes_valid_list_list):
@@ -354,6 +359,8 @@ else:
                         if frame_key in train_obj_dict:
                             continue
                         else:
+                            if sum(boxes_valid_list) == 0:
+                                print(sum(boxes_valid_list), boxes_valid_list)
                             train_obj_dict[frame_key] = {'valid_obj_num': sum(boxes_valid_list), 'boxes_valid_list': boxes_valid_list}
                 continue
             reset_tictoc = False
@@ -406,7 +413,7 @@ else:
 
             if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list or 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
                 print('Valid objs num: ', [sum(x) for x in data_batch['boxes_valid_list']], 'Totasl objs num: ', [len(x) for x in data_batch['boxes_valid_list']])
-
+        
             # ======= Forward
             optimizer.zero_grad()
             output_dict, loss_dict = forward_joint(True, labels_dict, model, opt, time_meters)

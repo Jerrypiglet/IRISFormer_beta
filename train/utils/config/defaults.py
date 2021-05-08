@@ -65,7 +65,10 @@ _C.DATASET.layout_emitter_path = ''
 # _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitter-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitterRERE-OR45_total3D_train_test_data'
-_C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-withMesh20210507-val500-OR45_total3D_train_test_data'
+
+# _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-withMesh20210507-val500-OR45_total3D_train_test_data'
+# _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-withMesh20210507-val-OR45_total3D_train_test_data'
+_C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-withMesh20210507-OR45_total3D_train_test_data'
 
 # _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitter-OR45_total3D_train_test_data'
@@ -225,10 +228,12 @@ _C.MODEL_LAYOUT_EMITTER.mesh.sampled_path_cluster = ''
 _C.MODEL_LAYOUT_EMITTER.mesh_obj = CN()
 _C.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs = False
 # filter invalid frames with 0 valid objects, and filter invalid objects in dataloader
-_C.MODEL_LAYOUT_EMITTER.mesh_obj.if_pre_filter_invalid_frames = True # using e.g./home/ruizhu/Documents/Projects/semanticInverse/train/data/openrooms/list_ORmini-val/list/obj_list.pickle
 _C.MODEL_LAYOUT_EMITTER.mesh_obj.if_clip_boxes_train = True # randomly sample N objects if there are too many
 _C.MODEL_LAYOUT_EMITTER.mesh_obj.if_use_only_valid_objs = True
 _C.MODEL_LAYOUT_EMITTER.mesh_obj.valid_bbox_vis_ratio = 0.1
+
+_C.MODEL_LAYOUT_EMITTER.mesh_obj.if_pre_filter_invalid_frames = False # using e.g./home/ruizhu/Documents/Projects/semanticInverse/train/data/openrooms/list_ORmini-val/list/obj_list.pickle
+_C.MODEL_LAYOUT_EMITTER.mesh_obj.if_skip_invalid_frames = True # skip invalid frames in dataloader.__getitem()__
 
 
 

@@ -118,9 +118,11 @@ def set_up_envs(opt):
         if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list and 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
             opt.cfg.MODEL_LAYOUT_EMITTER.loss_list.append('joint')
         if 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-            opt.cfg.DATA.data_read_list += ['de', 'lo', 'ob']
+            # opt.cfg.DATA.data_read_list += ['de', 'lo', 'ob']
+            opt.cfg.DATA.data_read_list += ['lo', 'ob']
             # opt.cfg.MODEL_LAYOUT_EMITTER.enable_list += ['ob', 'joint']
             assert opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss in ['SVRLoss', 'ReconLoss']
+            assert opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_pre_filter_invalid_frames==False, 'too costy; disabled for now'
 
 
     # ====== per-pixel lighting =====
