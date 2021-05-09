@@ -7,7 +7,7 @@ from torch.utils.cpp_extension import load
 # sys.path.insert(0, '/home/ruizhu/Documents/Projects/semanticInverse/train')
 import os, sys, inspect
 pwdpath = os.path.dirname(os.path.abspath(inspect.getfile(inspect.currentframe())))
-print('+++++ Building ChamferDistanceFunction at', pwdpath)
+print('+++++ Building/Loading ChamferDistanceFunction at', pwdpath)
 cd = load(name="build",
           sources=[pwdpath+"/chamfer_distance.cpp",
                    pwdpath+"/chamfer_distance.cu"],

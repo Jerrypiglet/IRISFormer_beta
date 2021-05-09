@@ -128,11 +128,10 @@ def set_up_envs(opt):
             assert opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss in ['SVRLoss', 'ReconLoss']
             assert opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_pre_filter_invalid_frames==False, 'too costy; disabled for now'
 
-        if opt.if_cluster:
-            os.environ['EXTERNAL_PATH'] = '/viscompfs/users/ruizhu/semanticInverse/external'
-        else:
-            os.environ['EXTERNAL_PATH'] = 'local'
-        # ic(os.environ['EXTERNAL_PATH'], '-=------')
+        # if opt.if_cluster:
+        #     os.environ['EXTERNAL_PATH'] = '/viscompfs/users/ruizhu/semanticInverse/external'
+        # else:
+        #     os.environ['EXTERNAL_PATH'] = 'local'
 
     # ====== per-pixel lighting =====
     if opt.cfg.MODEL_LIGHT.enable:

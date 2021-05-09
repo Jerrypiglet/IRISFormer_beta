@@ -5,9 +5,13 @@ from torch.autograd import Variable
 import numpy as np
 
 class decoder_layout_emitter(nn.Module):
-    def __init__(self, opt):
+    def __init__(self, opt, if_layout, if_emitter_vanilla_fc):
         super(decoder_layout_emitter, self).__init__()
         self.opt = opt
+        self.if_layout = if_layout
+        self.if_emitter_vanilla_fc = if_emitter_vanilla_fc
+
+        assert self.if_layout or self.if_emitter_vanilla_fc
 
         self.pad5 = nn.ZeroPad2d(1)
         self.conv5 = nn.Conv2d(in_channels=256, out_channels=256, kernel_size=4, stride=2, bias=True)
@@ -27,7 +31,7 @@ class decoder_layout_emitter(nn.Module):
 
         # ======== layout
         # '''Module parameters'''
-        if 'lo' in self.opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+        if self.if_layout:
             bin = opt.dataset_config.bins
             self.PITCH_BIN = len(bin['pitch_bin'])
             self.ROLL_BIN = len(bin['roll_bin'])
@@ -51,7 +55,6 @@ class decoder_layout_emitter(nn.Module):
 
 
         # ======== emitter
-        self.if_emitter_vanilla_fc = self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable==False and 'em' in self.opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
         if self.if_emitter_vanilla_fc:
             # fc for emitter ratio
             self.fc_emitter_1 = nn.Linear(backbone_out_dim, 1024)
@@ -120,7 +123,7 @@ class decoder_layout_emitter(nn.Module):
 
         # --- layout
         return_dict_layout = {}
-        if 'lo' in self.opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+        if self.if_layout:
             # branch for camera parameters
             cam = self.fc_layout_1(x)
             cam = self.relu_layout_1(cam)

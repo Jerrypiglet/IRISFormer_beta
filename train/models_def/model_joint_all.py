@@ -139,6 +139,13 @@ class Model_Joint(nn.Module):
                 self.load_pretrained_MODEL_LIGHT(self.cfg.MODEL_LIGHT.pretrained_pth_name)
 
         if self.cfg.MODEL_LAYOUT_EMITTER.enable:
+
+            # the vanilla emitter/layout model: full FC, adapted from Total3D
+            if_vanilla_emitter = 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list and not(self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable)
+            if_layout = 'lo' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list
+            if if_layout or if_vanilla_emitter:
+                self.LAYOUT_EMITTER_NET_fc = models_layout_emitter.decoder_layout_emitter(opt, if_layout=if_layout, if_emitter_vanilla_fc=if_vanilla_emitter)
+
             if 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
                 if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
                     self.EMITTER_LIGHT_ACCU_NET = models_layout_emitter_lightAccu.emitter_lightAccu(opt)
@@ -159,8 +166,8 @@ class Model_Joint(nn.Module):
                         if not self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_learn_feats:
                             self.EMITTER_NET_IMG_FEAT_DECODER = self.decoder_to_use(opt, mode=-1, out_channel=self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels) # same as BRDF decoder; mode==-1 means no activation or postprocessing in the end
                 else:
-                    # the vanilla model: full FC, adapted from Total3D
-                    self.LAYOUT_EMITTER_NET_fc = models_layout_emitter.decoder_layout_emitter(opt)
+                    # self.LAYOUT_EMITTER_NET_fc = models_layout_emitter.decoder_layout_emitter(opt)
+                    pass # already defined  in self.LAYOUT_EMITTER_NET_fc
 
             if 'ob' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
                 # object est model from Total3D

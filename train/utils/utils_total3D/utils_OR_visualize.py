@@ -573,16 +573,17 @@ class Box(Scene3D):
                 #     continue
 
                 if_box_valid = self.gt_boxes['if_valid'][bbox_idx]
-                
-                if class_id not in self.valid_class_ids or if_box_valid==False:
-                    message_strs = []
-                    if if_box_valid==False:
-                        message_strs.append('invalid obj')
-                    if class_id not in self.valid_class_ids:
-                        message_strs.append('invalid class of dataset %s'%self.dataset)
-                    message_str = '-'.join(message_strs)
-                    message_str = '%d:%s %s'%(class_id, self.classes[class_id], message_str)
+                if_box_invalid_cat = class_id not in self.valid_class_ids
 
+                message_strs = []
+                if if_box_valid==False:
+                    message_strs.append('[invalid obj]')
+                if if_box_invalid_cat:
+                    message_strs.append('[invalid class of dataset %s]'%self.dataset)
+                message_str = '-'.join(message_strs)
+                message_str = '%d:%s %s'%(class_id, self.classes[class_id], message_str)
+
+                if if_box_invalid_cat or (not if_box_valid):
                     if self.if_hide_invalid_cats:
                         print(magenta('%s [Skipped] %s'%(self.description, message_str)))
                         continue
@@ -590,7 +591,7 @@ class Box(Scene3D):
                         print(yellow('%s [Warning] %s'%(self.description, message_str)))
                         linestyle = 'dashdot'
                         color = 'grey'
-                
+
                 bdb3d_corners = get_corners_of_bb3d_no_index(basis, coeffs, centroid)
 
                 color = [x/255. for x in self.color_palette[class_id]]
@@ -1000,22 +1001,23 @@ class Box(Scene3D):
             for bbox_idx, (coeffs, centroid, class_id, basis, random_id) in enumerate(zip(boxes['coeffs'], boxes['centroid'], boxes['class_id'], boxes['basis'], boxes['random_id'])):
 
                 if_box_valid = self.gt_boxes['if_valid'][bbox_idx]
-
+                if_box_invalid_cat = class_id not in self.valid_class_ids
                 message_strs = []
                 if if_box_valid==False:
-                    message_strs.append('invalid obj')
-                if class_id not in self.valid_class_ids:
-                    message_strs.append('invalid class of dataset %s'%self.dataset)
+                    message_strs.append('[invalid obj]')
+                if if_box_invalid_cat:
+                    message_strs.append('[invalid class of dataset %s]'%self.dataset)
                 message_str = '-'.join(message_strs)
                 message_str = '%d:%s %s'%(class_id, self.classes[class_id], message_str)
 
-                if self.if_hide_invalid_cats:
-                    print(magenta('%s [Skipped] %s'%(self.description, message_str)))
-                    continue
-                else:
-                    print(yellow('%s [Warning] %s'%(self.description, message_str)))
-                    linestyle = 'dashdot'
-                    color = 'grey'
+                if if_box_invalid_cat or (not if_box_valid):
+                    if self.if_hide_invalid_cats:
+                        print(magenta('%s [Skipped] %s'%(self.description, message_str)))
+                        continue
+                    else:
+                        print(yellow('%s [Warning] %s'%(self.description, message_str)))
+                        linestyle = 'dashdot'
+                        color = 'grey'
 
                     # if current_type=='prediction':
                     #     continue

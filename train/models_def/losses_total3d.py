@@ -9,7 +9,7 @@ import os, sys
 from icecream import ic
 from utils.utils_misc import yellow
 
-print(yellow('Importing Chamfer distance from '+os.environ['EXTERNAL_PATH']))
+# print(yellow('Importing Chamfer distance from '+os.environ['EXTERNAL_PATH']))
 # if os.environ['EXTERNAL_PATH'] == 'local':
 from external.pyTorchChamferDistance.chamfer_distance import ChamferDistance
 # else:

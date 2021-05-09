@@ -375,10 +375,10 @@ class openrooms(data.Dataset):
             layout_emitter_dict = self.load_layout_emitter_gt_detach_emitter(im_trainval, frame_info=(scene_total3d_Path, frame_id), frame_info_dict=frame_info, hdr_scale=hdr_scale)
             batch_dict.update(layout_emitter_dict)
 
-        if self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_skip_invalid_frames and self.if_for_training:
-            if batch_dict['num_valid_boxes']==0:
-                print(blue_text('Skipped sample %d because of 0 valid boxes... returning the next one...')%index)
-                return self.__getitem__((index+1)%len(self.data_list))
+            if self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_skip_invalid_frames and self.if_for_training:
+                if batch_dict['num_valid_boxes']==0:
+                    print(blue_text('[%s] Skipped sample %d because of 0 valid boxes... returning the next one...')%(self.split, index))
+                    return self.__getitem__((index+1)%len(self.data_list))
 
         return batch_dict
 
@@ -671,6 +671,7 @@ class openrooms(data.Dataset):
 
             n_objects = boxes['bdb2D_pos'].shape[0]
             boxes_valid_list = list(boxes['if_valid'] if 'if_valid' in boxes else [True]*n_objects)
+
             g_feature = [[((loc2[0] + loc2[2]) / 2. - (loc1[0] + loc1[2]) / 2.) / (loc1[2] - loc1[0]),
                         ((loc2[1] + loc2[3]) / 2. - (loc1[1] + loc1[3]) / 2.) / (loc1[3] - loc1[1]),
                         math.log((loc2[2] - loc2[0]) / (loc1[2] - loc1[0])),
@@ -1256,8 +1257,7 @@ class openrooms(data.Dataset):
 
         valid_idxes = [x for x in range(len(return_dict['boxes_valid_list'])) if return_dict['boxes_valid_list'][x]==True]
         invalid_idxes = [x for x in range(len(return_dict['boxes_valid_list'])) if return_dict['boxes_valid_list'][x]==False]
-        # print(return_dict['boxes_valid_list'], N_objs_valid)
-        rearranged_indexes = valid_idxes + invalid_idxes
+        # rearranged_indexes = valid_idxes + invalid_idxes
 
         assert keep_only_valid
         if N_objs_valid <= num_clip_to:
@@ -1265,13 +1265,24 @@ class openrooms(data.Dataset):
         else:
             # s_idxes = random.sample(range(N_objs), min(num_clip_to, N_objs))
             s_idxes = random.sample(valid_idxes, min(num_clip_to, N_objs_valid))
+        N_objs_keep = len(s_idxes)
         return_dict['boxes_valid_list'] = [return_dict['boxes_valid_list'][x] for x in s_idxes]
-        return_dict['gt_obj_path_alignedNew_normalized_list'] = [return_dict['gt_obj_path_alignedNew_normalized_list'][x] for x in s_idxes]
+        if 'mesh' in self.opt.cfg.DATA.data_read_list:
+            return_dict['gt_obj_path_alignedNew_normalized_list'] = [return_dict['gt_obj_path_alignedNew_normalized_list'][x] for x in s_idxes]
 
         for key in return_dict['boxes_batch']:
             if key in ['mask', 'random_id', 'cat_name']: # lists
                 return_dict['boxes_batch'][key] = [return_dict['boxes_batch'][key][x] for x in s_idxes]
+            elif key == 'g_feature': # subsample the relation features; g_feature are not symmetrical!
+                assert return_dict['boxes_batch']['g_feature'].shape[0] == N_objs**2
+                g_feature_channels = return_dict['boxes_batch']['g_feature'].shape[-1]
+                g_feature_3d = return_dict['boxes_batch']['g_feature'].view(N_objs, N_objs, g_feature_channels)
+                s_idxes_tensor = torch.tensor(s_idxes).flatten().long()
+                xx, yy = torch.meshgrid(s_idxes_tensor, s_idxes_tensor)
+                g_feature_3d_sampled = g_feature_3d[xx.long(), yy.long(), :]
+                return_dict['boxes_batch']['g_feature'] = g_feature_3d_sampled.view(N_objs_keep**2, g_feature_channels)
             else: # arrays / tensors
+                assert return_dict['boxes_batch'][key].shape[0] == N_objs
                 return_dict['boxes_batch'][key] = return_dict['boxes_batch'][key][s_idxes]
 
 

@@ -166,7 +166,7 @@ _C.MODEL_LIGHT.use_scale_aware_loss = False
 # ===== layout, objects, emitter
 _C.MODEL_LAYOUT_EMITTER = CN()
 _C.MODEL_LAYOUT_EMITTER.enable = False # enable model / modules
-_C.MODEL_LAYOUT_EMITTER.enable_list = 'lo_ob_em' # enable model / modules
+_C.MODEL_LAYOUT_EMITTER.enable_list = '' # enable model / modules
 _C.MODEL_LAYOUT_EMITTER.enable_list_allowed = ['lo', 'ob', 'em', 'mesh', 'joint']
 _C.MODEL_LAYOUT_EMITTER.loss_list = ''
 _C.MODEL_LAYOUT_EMITTER.use_depth_as_input = False

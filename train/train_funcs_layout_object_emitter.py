@@ -167,6 +167,9 @@ def get_labels_dict_layout_emitter(labels_dict_input, data_batch, opt):
     return labels_dict
 
 def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
+    batch_size = labels_dict['imBatch'].shape[0]
+    grid_size = opt.cfg.MODEL_LAYOUT_EMITTER.emitter.grid_size
+
     output_vis_dict = {}
     if_est_emitter = 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
     if_est_layout = 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
@@ -178,12 +181,12 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
     if_load_object = 'ob' in opt.cfg.DATA.data_read_list
     if_load_mesh = 'mesh' in opt.cfg.DATA.data_read_list
     
-    batch_size = labels_dict['imBatch'].shape[0]
-    grid_size = opt.cfg.MODEL_LAYOUT_EMITTER.emitter.grid_size
-
-    gt_dict_lo = labels_dict['layout_labels']
-    gt_dict_ob = labels_dict['object_labels']
-    gt_dict_mesh = labels_dict['mesh_labels']
+    if if_load_layout:
+        gt_dict_lo = labels_dict['layout_labels']
+    if if_load_object:
+        gt_dict_ob = labels_dict['object_labels']
+    if if_load_mesh:
+        gt_dict_mesh = labels_dict['mesh_labels']
     
     if if_est_layout:
         pred_dict_lo = output_dict['layout_est_result']
@@ -291,16 +294,16 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
             current_cls = nyu40class_ids[interval[0]:interval[1]]
 
             # bdb3d_mat_path = os.path.join(str(save_path), '%s_bdb_3d.mat'%save_prefix)
-            bdb3d_dict = {'bdb': bdb3D_out_form_cpu[interval[0]:interval[1]], 'class_id': current_cls}
+            pre_box_data = {'bdb': bdb3D_out_form_cpu[interval[0]:interval[1]], 'class_id': current_cls}
 
             class_ids = gt_dict_ob['size_cls'][interval[0]:interval[1]].cpu().argmax(1).flatten().numpy().tolist()
-            # pre_box_data = sio.loadmat(bdb3d_mat_path)
-            pre_box_data = bdb3d_dict
             if sum(gt_dict_ob['boxes_valid_list'][sample_idx])==0:
-                pre_boxes = format_bboxes(pre_box_data, 'prediction')
-                pre_boxes['if_valid'] = gt_dict_ob['boxes_valid_list'][sample_idx]
-            else:
                 pre_boxes = None
+            else:
+                pre_boxes = format_bboxes(pre_box_data, 'prediction')
+                pre_boxes['if_valid'] = gt_boxes['if_valid']
+                pre_boxes['random_id'] = gt_boxes['random_id']
+                pre_boxes['cat_name'] = gt_boxes['cat_name']
         else:
             pre_boxes = gt_boxes
 
