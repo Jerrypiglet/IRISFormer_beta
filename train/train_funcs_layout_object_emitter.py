@@ -272,13 +272,16 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
 
         # ---- objects
         if if_load_object:
-            gt_boxes = format_bboxes({'bdb3D': gt_dict_ob['bdb3D'][interval[0]:interval[1]].cpu().numpy(), 
-                'class_id': gt_dict_ob['size_cls'][interval[0]:interval[1]].cpu().argmax(1).flatten().numpy().tolist()}, 'GT')
-            gt_boxes['bdb2d'] = gt_dict_ob['bdb2D_pos'][interval[0]:interval[1]].cpu().numpy()
-            gt_boxes['if_valid'] = gt_dict_ob['boxes_valid_list'][sample_idx]
-            gt_boxes['random_id'] = gt_dict_ob['random_id'][sample_idx]
-            gt_boxes['cat_name'] = gt_dict_ob['cat_name'][sample_idx]
-            assert len(gt_boxes['if_valid']) == len(gt_boxes['random_id'])== len(gt_boxes['cat_name'])
+            if sum(gt_dict_ob['boxes_valid_list'][sample_idx])==0: # if there are no objects
+                gt_boxes=None
+            else:
+                gt_boxes = format_bboxes({'bdb3D': gt_dict_ob['bdb3D'][interval[0]:interval[1]].cpu().numpy(), 
+                    'class_id': gt_dict_ob['size_cls'][interval[0]:interval[1]].cpu().argmax(1).flatten().numpy().tolist()}, 'GT')
+                gt_boxes['bdb2d'] = gt_dict_ob['bdb2D_pos'][interval[0]:interval[1]].cpu().numpy()
+                gt_boxes['random_id'] = gt_dict_ob['random_id'][sample_idx]
+                gt_boxes['cat_name'] = gt_dict_ob['cat_name'][sample_idx]
+                gt_boxes['if_valid'] = gt_dict_ob['boxes_valid_list'][sample_idx]
+                assert len(gt_boxes['if_valid']) == len(gt_boxes['random_id'])== len(gt_boxes['cat_name'])
         else:
             gt_boxes = None
 
@@ -293,8 +296,11 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
             class_ids = gt_dict_ob['size_cls'][interval[0]:interval[1]].cpu().argmax(1).flatten().numpy().tolist()
             # pre_box_data = sio.loadmat(bdb3d_mat_path)
             pre_box_data = bdb3d_dict
-            pre_boxes = format_bboxes(pre_box_data, 'prediction')
-            pre_boxes['if_valid'] = gt_dict_ob['boxes_valid_list'][sample_idx]
+            if sum(gt_dict_ob['boxes_valid_list'][sample_idx])==0:
+                pre_boxes = format_bboxes(pre_box_data, 'prediction')
+                pre_boxes['if_valid'] = gt_dict_ob['boxes_valid_list'][sample_idx]
+            else:
+                pre_boxes = None
         else:
             pre_boxes = gt_boxes
 

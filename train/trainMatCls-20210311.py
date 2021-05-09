@@ -20,7 +20,6 @@ print(sys.path)
 
 # from dataset_openroomsV4_total3d_matcls_ import openrooms, collate_fn_OR
 from dataset_openroomsV4_total3d_matcls_detachemitter import openrooms, collate_fn_OR
-from train_funcs_joint_all import get_labels_dict_joint, val_epoch_joint, vis_val_epoch_joint, forward_joint, get_time_meters_joint
 
 from torch.nn.parallel import DistributedDataParallel as DDP
 from utils.config import cfg
@@ -205,7 +204,7 @@ if opt.if_train:
         transforms_semseg = transforms_train_semseg, 
         transforms_matseg = transforms_train_matseg,
         transforms_resize = transforms_train_resize, 
-        cascadeLevel = opt.cascadeLevel, split = 'train', logger=logger)
+        cascadeLevel = opt.cascadeLevel, split = 'train', if_for_training=True, logger=logger)
     brdf_loader_train, _ = make_data_loader(
         opt,
         brdf_dataset_train,
@@ -224,7 +223,7 @@ if opt.cfg.MODEL_SEMSEG.enable:
 #     brdf_dataset_val_vis = brdf_dataset_train
 # else:
 
-if opt.if_val or opt.if_overfit_val:
+if opt.if_val:
     brdf_dataset_val = openrooms(opt, 
         transforms_fixed = transforms_val_resize, 
         transforms_semseg = transforms_val_semseg, 
@@ -232,7 +231,7 @@ if opt.if_val or opt.if_overfit_val:
         transforms_resize = transforms_val_resize, 
         # cascadeLevel = opt.cascadeLevel, split = 'val', logger=logger)
         # cascadeLevel = opt.cascadeLevel, split = 'val', load_first = 20 if opt.mini_val else -1, logger=logger)
-        cascadeLevel = opt.cascadeLevel, split = 'val', load_first = -1, logger=logger)
+        cascadeLevel = opt.cascadeLevel, split = 'val', if_for_training=False, load_first = -1, logger=logger)
     brdf_loader_val, _ = make_data_loader(
         opt,
         brdf_dataset_val,
@@ -246,9 +245,16 @@ if opt.if_val or opt.if_overfit_val:
     )
 
 if opt.if_overfit_val and opt.if_train:
+    brdf_dataset_train = openrooms(opt, 
+        transforms_fixed = transforms_val_resize, 
+        transforms_semseg = transforms_val_semseg, 
+        transforms_matseg = transforms_val_matseg,
+        transforms_resize = transforms_val_resize, 
+        cascadeLevel = opt.cascadeLevel, split = 'val', if_for_training=True, load_first = -1, logger=logger)
+
     brdf_loader_train, _ = make_data_loader(
         opt,
-        brdf_dataset_val,
+        brdf_dataset_train,
         is_train=True,
         start_iter=0,
         logger=logger,
@@ -262,7 +268,7 @@ if opt.if_vis:
         transforms_semseg = transforms_val_semseg, 
         transforms_matseg = transforms_val_matseg,
         transforms_resize = transforms_val_resize, 
-        cascadeLevel = opt.cascadeLevel, split = 'val', load_first = opt.cfg.TEST.vis_max_samples, logger=logger)
+        cascadeLevel = opt.cascadeLevel, split = 'val', if_for_training=False, load_first = opt.cfg.TEST.vis_max_samples, logger=logger)
     brdf_loader_val_vis, batch_size_val_vis = make_data_loader(
         opt,
         brdf_dataset_val_vis,
@@ -282,6 +288,7 @@ from utils.utils_envs import set_up_checkpointing
 checkpointer, tid_start, epoch_start = set_up_checkpointing(opt, model, optimizer, scheduler, logger)
 
 # >>>>>>>>>>>>> TRANING
+from train_funcs_joint_all import get_labels_dict_joint, val_epoch_joint, vis_val_epoch_joint, forward_joint, get_time_meters_joint
 
 tid = tid_start
 albedoErrsNpList = np.ones( [1, 1], dtype = np.float32 )
@@ -295,6 +302,7 @@ num_mat_masks_MAX = 0
 
 model.train(not opt.cfg.MODEL_SEMSEG.fix_bn)
 synchronize()
+
 
 # for epoch in list(range(opt.epochIdFineTune+1, opt.cfg.SOLVER.max_epoch)):
 # for epoch_0 in list(range(1, 2) ):
@@ -413,7 +421,7 @@ else:
 
             if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list or 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
                 print('Valid objs num: ', [sum(x) for x in data_batch['boxes_valid_list']], 'Totasl objs num: ', [len(x) for x in data_batch['boxes_valid_list']])
-        
+
             # ======= Forward
             optimizer.zero_grad()
             output_dict, loss_dict = forward_joint(True, labels_dict, model, opt, time_meters)

@@ -11,6 +11,7 @@ from utils.utils_total3D.data_config import Dataset_Config
 from utils.utils_total3D.utils_OR_layout import to_dict_tensor
 from utils.utils_misc import only1true
 from icecream import ic
+import os
 
 def set_up_envs(opt):
     opt.cfg.PATH.root = opt.cfg.PATH.root_cluster if opt.if_cluster else opt.cfg.PATH.root_local
@@ -25,6 +26,7 @@ def set_up_envs(opt):
     opt.cfg.DATASET.envmap_path = opt.cfg.DATASET.envmap_path_cluster if opt.if_cluster else opt.cfg.DATASET.envmap_path_local
     opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path = opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path_cluster if opt.if_cluster else opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path_local
     opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path = opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path_cluster if opt.if_cluster else opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path_local
+    ic('1', opt.cfg.MODEL_BRDF.enable)
 
     if opt.data_root is not None:
         opt.cfg.DATASET.dataset_path = opt.data_root
@@ -93,19 +95,21 @@ def set_up_envs(opt):
             opt.cfg.DATA.data_read_list.append('de')
         assert opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type in ['cell_prob', 'wall_prob', 'cell_info']
 
+
         opt.dataset_config = Dataset_Config('OR', OR=opt.cfg.MODEL_LAYOUT_EMITTER.data.OR, version=opt.cfg.MODEL_LAYOUT_EMITTER.data.version, opt=opt)
         opt.bins_tensor = to_dict_tensor(opt.dataset_config.bins, if_cuda=True)
 
-        if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable and opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V3':
-            opt.cfg.MODEL_LAYOUT_EMITTER.emitter.relative_dir = True
+        if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
+            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V3':
+                opt.cfg.MODEL_LAYOUT_EMITTER.emitter.relative_dir = True
 
-        if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_envmap_as_input:
-            opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_envmap = True
+            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_envmap_as_input:
+                opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_envmap = True
 
-        if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
-            opt.cfg.MODEL_BRDF.enable = True # enable image encoder
-            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_learn_feats:
-                opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels = 64 + 128 + 256 + 256
+            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
+                opt.cfg.MODEL_BRDF.enable = True # enable image encoder
+                if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_learn_feats:
+                    opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels = 64 + 128 + 256 + 256
 
         # --- deal with enable/loss lists
         opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.split('_')
@@ -124,6 +128,11 @@ def set_up_envs(opt):
             assert opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss in ['SVRLoss', 'ReconLoss']
             assert opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_pre_filter_invalid_frames==False, 'too costy; disabled for now'
 
+        if opt.if_cluster:
+            os.environ['EXTERNAL_PATH'] = '/viscompfs/users/ruizhu/semanticInverse/external'
+        else:
+            os.environ['EXTERNAL_PATH'] = 'local'
+        # ic(os.environ['EXTERNAL_PATH'], '-=------')
 
     # ====== per-pixel lighting =====
     if opt.cfg.MODEL_LIGHT.enable:
@@ -171,7 +180,7 @@ def set_up_envs(opt):
     # ====== BRDF, cont. =====
     opt.cfg.MODEL_BRDF.enable_BRDF_decoders = len(opt.cfg.MODEL_BRDF.enable_list) > 0
 
-    ic(opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders)
+    # ic(opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders)
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
         opt.cfg.DATA.load_brdf_gt = True
         opt.depth_metrics = ['abs_rel', 'sq_rel', 'rmse', 'rmse_log', 'a1', 'a2', 'a3']

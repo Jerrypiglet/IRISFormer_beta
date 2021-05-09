@@ -37,8 +37,8 @@ from utils.utils_misc import yellow, magenta, white_blue
 
 from SimpleLayout.utils_SL import SimpleScene
 
-import vtk
-from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
+# import vtk
+# from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 from utils.utils_total3D.utils_OR_mesh import loadMesh, writeMesh
 
 def get_bdb_form_from_corners(corners):

@@ -5,7 +5,17 @@ from utils.utils_total3D.utils_OR_cam import get_rotation_matix_result
 from utils.utils_total3D.net_utils_libs import get_layout_bdb_sunrgbd, get_bdb_form_from_corners, \
     recover_points_to_world_sys, get_rotation_matix_result, get_bdb_3d_result, \
     get_bdb_2d_result, physical_violation
+import os, sys
+from icecream import ic
+from utils.utils_misc import yellow
+
+print(yellow('Importing Chamfer distance from '+os.environ['EXTERNAL_PATH']))
+# if os.environ['EXTERNAL_PATH'] == 'local':
 from external.pyTorchChamferDistance.chamfer_distance import ChamferDistance
+# else:
+#     sys.path.insert(0, os.environ['EXTERNAL_PATH'])
+#     from pyTorchChamferDistance.chamfer_distance import ChamferDistance
+
 
 dist_chamfer = ChamferDistance()
 

@@ -131,7 +131,7 @@ def make_dataset(split='train', data_root=None, data_list=None, logger=None):
 
 class openrooms(data.Dataset):
     def __init__(self, opt, data_list=None, logger=basic_logger(), transforms_fixed=None, transforms_semseg=None, transforms_matseg=None, transforms_resize=None, 
-            split='train', load_first = -1, rseed = 1, 
+            split='train', if_for_training=True, load_first = -1, rseed = 1, 
             cascadeLevel = 0,
             # is_light = False, is_all_light = False,
             envHeight = 8, envWidth = 16, envRow = 120, envCol = 160, 
@@ -147,6 +147,7 @@ class openrooms(data.Dataset):
         self.dataset_name = self.cfg.DATASET.dataset_name
         self.split = split
         assert self.split in ['train', 'val', 'test']
+        self.if_for_training = if_for_training
         self.data_root = self.opt.cfg.DATASET.dataset_path
         split_to_list = {'train': 'train.txt', 'val': 'val.txt', 'test': 'test.txt'}
         data_list = os.path.join(self.cfg.PATH.root, self.cfg.DATASET.dataset_list)
@@ -374,7 +375,7 @@ class openrooms(data.Dataset):
             layout_emitter_dict = self.load_layout_emitter_gt_detach_emitter(im_trainval, frame_info=(scene_total3d_Path, frame_id), frame_info_dict=frame_info, hdr_scale=hdr_scale)
             batch_dict.update(layout_emitter_dict)
 
-        if self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_skip_invalid_frames:
+        if self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_skip_invalid_frames and self.if_for_training:
             if batch_dict['num_valid_boxes']==0:
                 print(blue_text('Skipped sample %d because of 0 valid boxes... returning the next one...')%index)
                 return self.__getitem__((index+1)%len(self.data_list))

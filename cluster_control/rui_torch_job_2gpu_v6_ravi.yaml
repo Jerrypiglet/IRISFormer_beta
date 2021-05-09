@@ -13,7 +13,7 @@ spec:
       containers:
       - name: gpu-container-rui1
         # image: pytorch/pytorch:1.2-cuda10.0-cudnn7-runtime  # docker image
-        image: jerrypiglet/deeplearningconda38v4
+        image: jerrypiglet/deeplearningconda38v620210508
         # image: docker.io/ak3636/deeplearning:latest
         imagePullPolicy: IfNotPresent
         command:

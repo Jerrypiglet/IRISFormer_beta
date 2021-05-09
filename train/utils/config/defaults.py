@@ -73,7 +73,8 @@ _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-withMesh20210507-
 # _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitter-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitterRERE-OR45_total3D_train_test_data'
-_C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitterRERERE20210502-OR45_total3D_train_test_data'
+# _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitterRERERE20210502-OR45_total3D_train_test_data'
+_C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-withMesh20210507-OR45_total3D_train_test_data'
 
 _C.DATASET.envmap_path = ''
 _C.DATASET.envmap_path_local = '/home/ruizhu/Documents/data/EnvDataset/'
@@ -220,10 +221,10 @@ _C.MODEL_LAYOUT_EMITTER.mesh.neighbors = 30
 _C.MODEL_LAYOUT_EMITTER.mesh.loss = 'SVRLoss' # ['SVRLoss', 'ReconLoss']
 _C.MODEL_LAYOUT_EMITTER.mesh.original_path = ''
 _C.MODEL_LAYOUT_EMITTER.mesh.original_path_local = '/newfoundland2/ruizhu/siggraphasia20dataset/uv_mapped'
-_C.MODEL_LAYOUT_EMITTER.mesh.original_path_cluster = ''
+_C.MODEL_LAYOUT_EMITTER.mesh.original_path_cluster = 'siggraphasia20dataset/uv_mapped'
 _C.MODEL_LAYOUT_EMITTER.mesh.sampled_path = ''
 _C.MODEL_LAYOUT_EMITTER.mesh.sampled_path_local = '/home/ruizhu/Documents/data/OR-sampledMeshes'
-_C.MODEL_LAYOUT_EMITTER.mesh.sampled_path_cluster = ''
+_C.MODEL_LAYOUT_EMITTER.mesh.sampled_path_cluster = '/ruidata/OR-sampledMeshes'
 
 _C.MODEL_LAYOUT_EMITTER.mesh_obj = CN()
 _C.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs = False
