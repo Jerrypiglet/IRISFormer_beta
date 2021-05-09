@@ -28,3 +28,4 @@ notebooks/scene_mesh_debug*.obj
 __pycache__
 ./*.obj
 Summary_vis
+VTK

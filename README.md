@@ -13,6 +13,10 @@ To resume a task, put FULL original task name in --task_name, and use 'resume' f
 --task_name 20210324-113325--semseg_WALL_psp50 --resume resume
 ```
 
+### vtk
+https://docs.pyvista.org/extras/building_vtk.html
+
+> python test_offscreen.py
 ### envs in docker image
 > conda install pytorch==1.7.0 torchvision==0.8.0 torchaudio==0.7.0 cudatoolkit=11.0 -c pytorch
 

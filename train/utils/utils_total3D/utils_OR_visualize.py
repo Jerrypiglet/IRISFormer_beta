@@ -13,8 +13,9 @@ import numpy as np
 # from libs.tools import R_from_yaw_pitch_roll
 import scipy.io as sio
 from glob import glob
-# import vtk
-# from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
+os.environ['LD_LIBRARY_PATH'] = '/home/ruizhu/anaconda3/envs/semanticInverse/lib'
+import vtk
+from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 # from utils.vis_tools import Scene3D, nyu_color_palette
 from utils.utils_total3D.vis_tools import Scene3D, nyu_color_palette
 from utils.utils_total3D.sunrgbd_utils import proj_from_point_to_2d, get_corners_of_bb3d_no_index
@@ -37,8 +38,6 @@ from utils.utils_misc import yellow, magenta, white_blue
 
 from SimpleLayout.utils_SL import SimpleScene
 
-# import vtk
-# from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 from utils.utils_total3D.utils_OR_mesh import loadMesh, writeMesh
 
 def get_bdb_form_from_corners(corners):
@@ -126,7 +125,7 @@ def format_layout(layout_data):
 
     return layout_bdb
 
-def format_mesh(obj_files, bboxes, if_use_vtk=True, validate_classids=False):
+def format_mesh(obj_files, bboxes, if_use_vtk=False, validate_classids=False):
 
     if if_use_vtk:
         vtk_objects = {}
@@ -628,7 +627,7 @@ class Box(Scene3D):
                 #             print(boxes_valid[key][idx])
 
                 # assert len(obj_path_normalized_paths)==len(boxes_valid)
-                # vtk_objects, pre_boxes = format_mesh(obj_path_normalized_paths, boxes_valid)
+                vtk_objects, pre_boxes_ = format_mesh(obj_path_normalized_paths, boxes_valid, if_use_vtk=True)
                 [vertices_list, faces_list], bboxes_ = format_mesh(obj_path_normalized_paths, boxes_valid, if_use_vtk=False)
                 if len(vertices_list) > 0:
                     vertices_combine = np.vstack(vertices_list)
