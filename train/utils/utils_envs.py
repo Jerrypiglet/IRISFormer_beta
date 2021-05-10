@@ -60,10 +60,17 @@ def set_up_envs(opt):
     opt.cfg.MODEL_BRDF.loss_list = [x for x in opt.cfg.MODEL_BRDF.loss_list.split('_') if x != '']
 
     # ====== layout, emitters =====
+    opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.split('_')
+
     if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
         if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_use_est_layout:
+                opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.append('lo')
+                opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.append('ob')
+                opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_differentiable = True
+
             if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
-                opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = 'em'
+                opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.append('em')
 
                 if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_light:
                     opt.cfg.DATA.load_light_gt = True
@@ -97,7 +104,7 @@ def set_up_envs(opt):
         opt.cfg.DATA.load_brdf_gt = True
         opt.cfg.DATA.load_layout_emitter_gt = True
         opt.cfg.DATA.data_read_list += ['lo']
-        opt.cfg.DATA.data_read_list += opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.split('_')
+        opt.cfg.DATA.data_read_list += opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
         if opt.cfg.MODEL_LAYOUT_EMITTER.use_depth_as_input:
             opt.cfg.DATA.data_read_list.append('de')
         assert opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type in ['cell_prob', 'wall_prob', 'cell_info']
@@ -119,7 +126,6 @@ def set_up_envs(opt):
                     opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels = 64 + 128 + 256 + 256
 
         # --- deal with enable/loss lists
-        opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.split('_')
         if opt.cfg.MODEL_LAYOUT_EMITTER.loss_list == '':
             opt.cfg.MODEL_LAYOUT_EMITTER.loss_list = opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
         else:

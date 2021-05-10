@@ -22,6 +22,8 @@ import models_def.models_layout_emitter_lightAccu as models_layout_emitter_light
 import models_def.models_layout_emitter_lightAccuScatter as models_layout_emitter_lightAccuScatter
 import models_def.model_matcls as model_matcls
 from SimpleLayout.SimpleSceneTorchBatch import SimpleSceneTorchBatch
+from utils.utils_total3D.utils_OR_layout import get_layout_bdb_sunrgbd
+from utils.utils_total3D.utils_OR_cam import get_rotation_matix_result
 
 from icecream import ic
 
@@ -262,8 +264,11 @@ class Model_Joint(nn.Module):
 
             # --- layout / emitters
             if 'lo' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list or 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-                if not self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
-                    # layout w/ wo/ V1 emitters
+                if_vanilla_emitter = 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list and not(self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable)
+                if_layout = 'lo' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list
+
+                # layout w/ wo/ V1 emitters
+                if if_layout or if_vanilla_emitter:
                     if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder:
                         x1, x2, x3, x4, x5, x6 = self.LAYOUT_EMITTER_NET_encoder(input_dict['input_batch_brdf'])
                         encoder_outputs = {'x1': x1, 'x2': x2, 'x3': x3, 'x4': x4, 'x5': x5, 'x6': x6}
@@ -271,9 +276,21 @@ class Model_Joint(nn.Module):
                         encoder_outputs = return_dict_brdf['encoder_outputs']
                     output_dict = self.LAYOUT_EMITTER_NET_fc(input_feats_dict=encoder_outputs)
                     return_dict_layout_emitter.update(output_dict)
-                else:
-                    # V2, V3
-                    assert self.cfg.MODEL_LAYOUT_EMITTER.enable_list == ['em']
+
+                # V2, V3
+                if 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list and self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
+                    if self.cfg.MODEL_LAYOUT_EMITTER.emitter.if_use_est_layout:
+                        layout_est_result = output_dict['layout_est_result']
+                        # print(layout_est_result['lo_ori_cls_result'].shape, input_dict['layout_labels']['lo_ori_cls'].shape)
+                        # print(layout_est_result['lo_ori_cls_result'], input_dict['layout_labels']['lo_ori_cls'])
+                        lo_bdb3D_result = get_layout_bdb_sunrgbd(self.opt.bins_tensor, 
+                            layout_est_result['lo_ori_reg_result'], torch.argmax(layout_est_result['lo_ori_cls_result'], dim=1), layout_est_result['lo_centroid_result'], layout_est_result['lo_coeffs_result'])
+                        cam_R_result = get_rotation_matix_result(self.opt.bins_tensor,
+                            torch.argmax(layout_est_result['pitch_cls_result'], 1), layout_est_result['pitch_reg_result'],
+                            torch.argmax(layout_est_result['roll_cls_result'], 1), layout_est_result['roll_reg_result'])
+
+                        input_dict.update({'lo_bdb3D_result': lo_bdb3D_result, 'cam_R_result': cam_R_result})
+
                     output_dict = self.forward_emitter_lightAccu(input_dict, return_dict_brdf=return_dict_brdf, return_dict_light=return_dict_light)
                     return_dict_layout_emitter.update(output_dict)
         else:
@@ -445,11 +462,15 @@ class Model_Joint(nn.Module):
 
         # cam_K_batch = input_dict['layout_labels']['cam_K']
         cam_K_batch = input_dict['layout_labels']['cam_K_scaled']
-        cam_R_gt_batch = input_dict['layout_labels']['cam_R_gt']
-        layout_gt_batch = input_dict['layout_labels']['lo_bdb3D']
-        # print(depthBatch.shape, normalBatch.shape, envmapsBatch.shape, cam_K_batch.shape, cam_R_gt_batch.shape, layout_gt_batch.shape)
+        if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_use_est_layout:
+            cam_R_batch = input_dict['cam_R_result']
+            layout_batch = input_dict['lo_bdb3D_result']
+        else:
+            cam_R_batch = input_dict['layout_labels']['cam_R_gt']
+            layout_batch = input_dict['layout_labels']['lo_bdb3D']
+        # print(depthBatch.shape, normalBatch.shape, envmapsBatch.shape, cam_K_batch.shape, cam_R_batch.shape, layout_batch.shape)
 
-        input_dict_light_accu = {'normalPred_lightAccu':normalBatch, 'depthPred_lightAccu': depthBatch, 'envmapsPredImage_lightAccu': envmapsBatch, 'cam_K': cam_K_batch, 'cam_R': cam_R_gt_batch, 'layout': layout_gt_batch}
+        input_dict_light_accu = {'normalPred_lightAccu':normalBatch, 'depthPred_lightAccu': depthBatch, 'envmapsPredImage_lightAccu': envmapsBatch, 'cam_K': cam_K_batch, 'cam_R': cam_R_batch, 'layout': layout_batch}
         return_dict_layout_emitter = {'emitter_input': {}}
 
         # ---- accu lights
@@ -493,7 +514,7 @@ class Model_Joint(nn.Module):
 
             cam_K_scaled_batch = input_dict['layout_labels']['cam_K_scaled']
             cam_dict = {'origin': torch.tensor([0., 0., 0.]).cuda(), 'cam_K': cam_K_scaled_batch}
-            cam_axes_batch = cam_R_gt_batch # TODO: change to est layout
+            cam_axes_batch = cam_R_batch
 
             simpleSceneTorch = SimpleSceneTorchBatch(cam_dict, im_height=im_height, im_width=im_width)
             simpleSceneTorch.form_camera(cam_axes_batch)

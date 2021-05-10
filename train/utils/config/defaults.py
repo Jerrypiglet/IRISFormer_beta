@@ -176,6 +176,7 @@ _C.MODEL_LAYOUT_EMITTER.data.OR = 'OR45'
 _C.MODEL_LAYOUT_EMITTER.data.version = 'V4full'
 
 _C.MODEL_LAYOUT_EMITTER.emitter = CN()
+_C.MODEL_LAYOUT_EMITTER.emitter.if_use_est_layout = False
 _C.MODEL_LAYOUT_EMITTER.emitter.grid_size = 8
 _C.MODEL_LAYOUT_EMITTER.emitter.est_type = 'cell_info'
 _C.MODEL_LAYOUT_EMITTER.emitter.representation_type = '0ambient' # 0ambient, 1ambient, 2ambient
@@ -214,6 +215,7 @@ _C.MODEL_LAYOUT_EMITTER.layout.loss.cls_reg_ratio = 10
 _C.MODEL_LAYOUT_EMITTER.layout.loss.obj_cam_ratio = 1
 _C.MODEL_LAYOUT_EMITTER.layout.if_train_with_reindexed = False
 _C.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder = True
+_C.MODEL_LAYOUT_EMITTER.layout.if_fully_differentiable = False # get rid of argmax in layout est -> bbox; not implememted yet
 
 _C.MODEL_LAYOUT_EMITTER.mesh = CN()
 _C.MODEL_LAYOUT_EMITTER.mesh.tmn_subnetworks = 2
@@ -227,7 +229,7 @@ _C.MODEL_LAYOUT_EMITTER.mesh.original_path_cluster = '/siggraphasia20dataset/uv_
 _C.MODEL_LAYOUT_EMITTER.mesh.sampled_path = ''
 _C.MODEL_LAYOUT_EMITTER.mesh.sampled_path_local = '/home/ruizhu/Documents/data/OR-sampledMeshes'
 _C.MODEL_LAYOUT_EMITTER.mesh.sampled_path_cluster = '/ruidata/OR-sampledMeshes'
-_C.MODEL_LAYOUT_EMITTER.mesh.if_use_vtk = False
+_C.MODEL_LAYOUT_EMITTER.mesh.if_use_vtk = True
 
 _C.MODEL_LAYOUT_EMITTER.mesh_obj = CN()
 _C.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs = False

@@ -375,10 +375,11 @@ class openrooms(data.Dataset):
             layout_emitter_dict = self.load_layout_emitter_gt_detach_emitter(im_trainval, frame_info=(scene_total3d_Path, frame_id), frame_info_dict=frame_info, hdr_scale=hdr_scale)
             batch_dict.update(layout_emitter_dict)
 
-            if self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_skip_invalid_frames and self.if_for_training:
-                if batch_dict['num_valid_boxes']==0:
-                    print(blue_text('[%s] Skipped sample %d because of 0 valid boxes... returning the next one...')%(self.split, index))
-                    return self.__getitem__((index+1)%len(self.data_list))
+            if 'ob' in self.opt.cfg.DATA.data_read_list or 'mesh' in self.opt.cfg.DATA.data_read_list:
+                if self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_skip_invalid_frames and self.if_for_training:
+                    if batch_dict['num_valid_boxes']==0:
+                        print(blue_text('[%s] Skipped sample %d because of 0 valid boxes... returning the next one...')%(self.split, index))
+                        return self.__getitem__((index+1)%len(self.data_list))
 
         return batch_dict
 
@@ -806,17 +807,16 @@ class openrooms(data.Dataset):
 
         # boxes['if_valid'] = boxes_valid_list
         # del boxes['if_valid']
-        return_dict.update({'boxes_batch':boxes, 'boxes_valid_list': boxes_valid_list, 'num_valid_boxes': sum(boxes_valid_list)})
-        # for key in boxes:
-        #     print(key, type(boxes[key]))
+        if 'ob' in self.opt.cfg.DATA.data_read_list or 'mesh' in self.opt.cfg.DATA.data_read_list:
+            return_dict.update({'boxes_batch':boxes, 'boxes_valid_list': boxes_valid_list, 'num_valid_boxes': sum(boxes_valid_list)})
 
-        if (self.split=='train' or self.opt.if_overfit_val) and self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_clip_boxes_train:
-            # print('Clipping......')
-            return_dict = self.clip_box_nums(return_dict, keep_only_valid=self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_use_only_valid_objs, num_clip_to=self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.clip_boxes_train_to)
+            if (self.split=='train' or self.opt.if_overfit_val) and self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_clip_boxes_train:
+                # print('Clipping......')
+                return_dict = self.clip_box_nums(return_dict, keep_only_valid=self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_use_only_valid_objs, num_clip_to=self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.clip_boxes_train_to)
         
-        frame_key = '%s-%s-%d'%(frame_info_dict['meta_split'], frame_info_dict['scene_name'], frame_info_dict['frame_id'])
-        if self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_pre_filter_invalid_frames:
-            assert len(return_dict['boxes_valid_list']) >=1,'Pre-filtering enabled; BUT Insifficient valid objects at frame %s!'%frame_key
+            frame_key = '%s-%s-%d'%(frame_info_dict['meta_split'], frame_info_dict['scene_name'], frame_info_dict['frame_id'])
+            if self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_pre_filter_invalid_frames:
+                assert len(return_dict['boxes_valid_list']) >=1,'Pre-filtering enabled; BUT Insifficient valid objects at frame %s!'%frame_key
 
         # === layout
         if 'lo' in self.opt.cfg.DATA.data_read_list:

@@ -2,8 +2,8 @@ import torch
 import torch.nn as nn
 from utils.utils_total3D.utils_OR_layout import get_layout_bdb_sunrgbd
 from utils.utils_total3D.utils_OR_cam import get_rotation_matix_result
-from utils.utils_total3D.net_utils_libs import get_layout_bdb_sunrgbd, get_bdb_form_from_corners, \
-    recover_points_to_world_sys, get_rotation_matix_result, get_bdb_3d_result, \
+from utils.utils_total3D.net_utils_libs import get_bdb_form_from_corners, \
+    recover_points_to_world_sys, get_bdb_3d_result, \
     get_bdb_2d_result, physical_violation
 import os, sys
 from icecream import ic

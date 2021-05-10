@@ -284,7 +284,8 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
             pre_layout = gt_layout
             pre_layout_reindexed = gt_layout
 
-        interval = gt_dict_ob['split'][sample_idx].cpu().tolist()
+        if if_load_object or if_load_mesh:
+            interval = gt_dict_ob['split'][sample_idx].cpu().tolist()
 
         # ---- objects
         if if_load_object:
@@ -456,8 +457,9 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
 
 
 def postprocess_layout_object_emitter(labels_dict, output_dict, loss_dict, opt, time_meters, is_train, if_vis=False, ):
-    flattened_valid_mask = [item for sublist in labels_dict['object_labels']['boxes_valid_list'] for item in sublist]
-    flattened_valid_mask_tensor = torch.tensor(flattened_valid_mask).float().cuda()
+    if 'ob' in opt.cfg.DATA.data_read_list or 'mesh' in opt.cfg.DATA.data_read_list:
+        flattened_valid_mask = [item for sublist in labels_dict['object_labels']['boxes_valid_list'] for item in sublist]
+        flattened_valid_mask_tensor = torch.tensor(flattened_valid_mask).float().cuda()
 
     if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
         output_dict, loss_dict = postprocess_layout(labels_dict, output_dict, loss_dict, opt, time_meters)
@@ -469,6 +471,9 @@ def postprocess_layout_object_emitter(labels_dict, output_dict, loss_dict, opt, 
         output_dict, loss_dict = postprocess_mesh(labels_dict, output_dict, loss_dict, opt, time_meters, is_train=is_train, flattened_valid_mask_tensor=flattened_valid_mask_tensor)
 
     if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+        # extra_input_dict = {}
+        # if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_use_est_layout:
+        #     extra_input_dict.update('lo_bdb3D_result': output_dict['results_layout']['lo_bdb3D_result']})
         output_dict, loss_dict = postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters)
 
     return output_dict, loss_dict
@@ -531,7 +536,7 @@ def postprocess_mesh(labels_dict, output_dict, loss_dict, opt, time_meters, is_t
     return output_dict, loss_dict
 
 
-def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters):
+def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters, extra_input_dict={}):
 
     
     loss_type = opt.cfg.MODEL_LAYOUT_EMITTER.emitter.loss_type
