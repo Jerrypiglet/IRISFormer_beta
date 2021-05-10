@@ -14,8 +14,6 @@ import numpy as np
 import scipy.io as sio
 from glob import glob
 os.environ['LD_LIBRARY_PATH'] = '/home/ruizhu/anaconda3/envs/semanticInverse/lib'
-import vtk
-from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 # from utils.vis_tools import Scene3D, nyu_color_palette
 from utils.utils_total3D.vis_tools import Scene3D, nyu_color_palette
 from utils.utils_total3D.sunrgbd_utils import proj_from_point_to_2d, get_corners_of_bb3d_no_index
@@ -38,157 +36,11 @@ from utils.utils_misc import yellow, magenta, white_blue
 
 from SimpleLayout.utils_SL import SimpleScene
 
+import vtk
+from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 from utils.utils_total3D.utils_OR_mesh import loadMesh, writeMesh
 
-def get_bdb_form_from_corners(corners):
-    vec_0 = (corners[:, 2, :] - corners[:, 1, :]) / 2.
-    vec_1 = (corners[:, 0, :] - corners[:, 4, :]) / 2.
-    vec_2 = (corners[:, 1, :] - corners[:, 0, :]) / 2.
-
-    coeffs_0 = np.linalg.norm(vec_0, axis=1)
-    coeffs_1 = np.linalg.norm(vec_1, axis=1)
-    coeffs_2 = np.linalg.norm(vec_2, axis=1)
-    coeffs = np.stack([coeffs_0, coeffs_1, coeffs_2], axis=1)
-
-    centroid = (corners[:, 0, :] + corners[:, 6, :]) / 2.
-
-    basis_0 = np.dot(np.diag(1 / coeffs_0), vec_0)
-    basis_1 = np.dot(np.diag(1 / coeffs_1), vec_1)
-    basis_2 = np.dot(np.diag(1 / coeffs_2), vec_2)
-
-    basis = np.stack([basis_0, basis_1, basis_2], axis=1)
-
-    return {'basis': basis, 'coeffs': coeffs, 'centroid': centroid}
-
-
-def format_bboxes(box, type):
-    # box['bdb']: array, [N, 8, 3]
-    # box['size_cls']: list, [N]
-    assert isinstance(box['class_id'], list)
-
-    if type == 'prediction':
-        boxes = {}
-        basis_list = []
-        centroid_list = []
-        coeff_list = []
-
-        # convert bounding boxes
-        box_data = box['bdb']
-
-        for index in range(len(box_data)):
-            # print(box_data[index])
-            basis = box_data[index]['basis']
-            centroid = box_data[index]['centroid']
-            coeffs = box_data[index]['coeffs']
-            basis_list.append(basis.reshape((3, 3)))
-            centroid_list.append(centroid.reshape((3,)))
-            coeff_list.append(coeffs.reshape((3, 1)))
-
-        boxes['basis'] = np.stack(basis_list, 0)
-        boxes['centroid'] = np.stack(centroid_list, 0)
-        boxes['coeffs'] = np.stack(coeff_list, 0)
-        boxes['class_id'] = box['class_id']
-
-        assert len(box_data) == len(boxes['class_id'])
-
-    elif type == 'GT':
-        assert box['bdb3D'].shape[0] == len(box['class_id'])
-        boxes = get_bdb_form_from_corners(box['bdb3D'])
-        boxes['class_id'] = box['class_id']
-
-    return boxes
-
-def format_layout(layout_data):
-
-    layout_bdb = {}
-
-    centroid = (layout_data.max(0) + layout_data.min(0)) / 2.
-
-    vector_z = (layout_data[1] - layout_data[0]) / 2.
-    coeff_z = np.linalg.norm(vector_z)
-    basis_z = vector_z/coeff_z
-
-    vector_x = (layout_data[2] - layout_data[1]) / 2.
-    coeff_x = np.linalg.norm(vector_x)
-    basis_x = vector_x/coeff_x
-
-    vector_y = (layout_data[0] - layout_data[4]) / 2.
-    coeff_y = np.linalg.norm(vector_y)
-    basis_y = vector_y/coeff_y
-
-    basis = np.array([basis_x, basis_y, basis_z])
-    coeffs = np.array([coeff_x, coeff_y, coeff_z])
-
-    layout_bdb['coeffs'] = coeffs
-    layout_bdb['centroid'] = centroid
-    layout_bdb['basis'] = basis
-
-    return layout_bdb
-
-def format_mesh(obj_files, bboxes, if_use_vtk=False, validate_classids=False):
-
-    if if_use_vtk:
-        vtk_objects = {}
-    else:
-        vertices_list = []
-        faces_list = []
-        num_vertices = 0
-
-    for idx, obj_file in enumerate(obj_files):
-        # print(obj_file)
-        if validate_classids:
-            filename = '.'.join(os.path.basename(obj_file).split('.')[:-1])
-            obj_idx = int(filename.split('_')[0])
-            class_id = int(filename.split('_')[1].split(' ')[0])
-            assert bboxes['class_id'][obj_idx] == class_id
-        else:
-            obj_idx = idx
-        
-        # print(obj_file)
-        if if_use_vtk:
-            object = vtk.vtkOBJReader()
-            object.SetFileName(obj_file)
-            object.Update()
-
-            # get points from object
-            polydata = object.GetOutput()
-            # read points using vtk_to_numpy
-            points = vtk_to_numpy(polydata.GetPoints().GetData()).astype(np.float)
-        else:
-            points, faces = loadMesh(obj_file)
-
-        mesh_center = (points.max(0) + points.min(0)) / 2.
-        points = points - mesh_center
-
-        mesh_coef = (points.max(0) - points.min(0)) / 2.
-        points = points.dot(np.diag(1./mesh_coef)).dot(np.diag(bboxes['coeffs'][obj_idx]))
-
-        # set orientation
-        points = points.dot(bboxes['basis'][obj_idx])
-
-        # move to center
-        points = points + bboxes['centroid'][obj_idx]
-
-
-        if if_use_vtk:
-            points_array = numpy_to_vtk(points, deep=True)
-            polydata.GetPoints().SetData(points_array)
-            object.Update()
-
-            vtk_objects[obj_idx] = object
-        else:
-            points_swapped = points.copy()
-            # points_swapped[:, 2] = -points_swapped[:, 2] # for OR
-            vertices_list.append(points_swapped)
-            faces_list.append(faces+num_vertices)
-            num_vertices += points.shape[0]
-
-    if if_use_vtk:
-        return vtk_objects, bboxes
-    else:
-        return [vertices_list, faces_list], bboxes
-
-
+from utils.utils_total3D.utils_OR_vis_tools import get_bdb_form_from_corners, format_bboxes, format_layout, format_mesh
 
 
 class Box(Scene3D):
@@ -200,9 +52,13 @@ class Box(Scene3D):
                     emitter2wall_assign_info_list=None, emitter_cls_prob_PRED=None, emitter_cls_prob_GT=None, \
                     cell_info_grid_GT=None, cell_info_grid_PRED=None, \
                     grid_size=4, transform_R=None, transform_t=None, paths={}, pickle_id=-1, \
-                    gt_boxes_valid_mask_extra=None, pre_boxes_valid_mask_extra=None):
+                    gt_boxes_valid_mask_extra=None, pre_boxes_valid_mask_extra=None, \
+                    if_use_vtk=False, if_off_screen_vtk=True):
         super(Scene3D, self).__init__()
         self.opt = opt
+        self.if_use_vtk = if_use_vtk
+        self.mode = data_type
+        assert self.mode in ['prediction', 'GT', 'both']
 
         self._cam_K = cam_K
         self.gt_cam_R = gt_cam_R
@@ -212,18 +68,21 @@ class Box(Scene3D):
         self.pre_layout = pre_layout
         self.gt_boxes = gt_boxes
         self.pre_boxes = pre_boxes
+        self.gt_boxes_valid = None
+        self.pre_boxes_valid = None
         self.gt_meshes = gt_meshes
         self.pre_meshes = pre_meshes
 
         self.gt_boxes_valid_mask_extra = gt_boxes_valid_mask_extra
         self.pre_boxes_valid_mask_extra = pre_boxes_valid_mask_extra
 
-        self.mode = data_type
-        assert self.mode in ['prediction', 'GT', 'both']
+        self.output_mesh_pred = None
+        self.output_mesh_gt = None
+        if self.mode == 'prediction' and output_mesh is None:
+            self.output_mesh_pred = output_mesh
+        
         self._img_map = img_map
         self._depth_map = depth_map
-        if self.mode == 'prediction':
-            self.output_mesh = output_mesh
         
         self.dataset = dataset
 
@@ -459,6 +318,7 @@ class Box(Scene3D):
             ax_3d.add_artist(a)
             a_up = Arrow3D([cam_origin[0][0], cam_origin[0][0]+cam_up[0][0]], [cam_origin[1][0], cam_origin[1][0]+cam_up[1][0]], [cam_origin[2][0], cam_origin[2][0]+cam_up[2][0]], mutation_scale=20,
                             lw=1, arrowstyle="->", color="r")
+            # ic(cam_origin, cam_up)
             ax_3d.add_artist(a_up)
             vis_axis(ax_3d)
 
@@ -605,8 +465,8 @@ class Box(Scene3D):
                 valid_bbox_idxes.append(bbox_idx)
 
             if if_dump_to_mesh:
-                obj_path_normalized_paths = self.gt_meshes if current_type=='GT' else [x[0] for x in self.pre_meshes]
-                obj_path_normalized_paths = [obj_path_normalized_paths[x] for x in valid_bbox_idxes]
+                obj_paths = self.gt_meshes if current_type=='GT' else [x[0] for x in self.pre_meshes]
+                obj_paths = [obj_paths[x] for x in valid_bbox_idxes]
                 # boxes_valid = [[boxes[key][valid_bbox_idx] for key in ['coeffs', 'centroid', 'class_id', 'basis']] for valid_bbox_idx in valid_bbox_idxes]
 
 
@@ -614,7 +474,7 @@ class Box(Scene3D):
                 for key in ['coeffs', 'centroid', 'class_id', 'basis', 'random_id', 'cat_name']:
                     boxes_valid[key] = [boxes[key][x] for x in valid_bbox_idxes]
                 if if_debug:
-                    for box_idx, obj_path_normalized_path in enumerate(obj_path_normalized_paths):
+                    for box_idx, obj_path_normalized_path in enumerate(obj_paths):
                         print(box_idx, boxes_valid['random_id'][box_idx], boxes_valid['cat_name'][box_idx], obj_path_normalized_path)
 
                 # print('=========>')
@@ -626,9 +486,8 @@ class Box(Scene3D):
                 #             print(key)
                 #             print(boxes_valid[key][idx])
 
-                # assert len(obj_path_normalized_paths)==len(boxes_valid)
-                vtk_objects, pre_boxes_ = format_mesh(obj_path_normalized_paths, boxes_valid, if_use_vtk=True)
-                [vertices_list, faces_list], bboxes_ = format_mesh(obj_path_normalized_paths, boxes_valid, if_use_vtk=False)
+                # assert len(obj_paths)==len(boxes_valid)
+                [vertices_list, faces_list], bboxes_ = format_mesh(obj_paths, boxes_valid, if_use_vtk=False)
                 if len(vertices_list) > 0:
                     vertices_combine = np.vstack(vertices_list)
                     faces_combine = np.vstack(faces_list)
@@ -640,6 +499,17 @@ class Box(Scene3D):
                     print(white_blue('[%s] Mesh written to '%current_type+str(scene_mesh_debug_path)))
                 else:
                     print(yellow('Mesh not written for pickle_id %d: no valid objects'%pickle_id))
+
+                if self.if_use_vtk: # utils/visualize.py L1194
+                    vtk_objects, pre_boxes_ = format_mesh(obj_paths, boxes_valid, if_use_vtk=True)
+                    assert len(obj_paths)==len(vtk_objects.keys())
+                    if current_type=='prediction':
+                        self.output_mesh_pred = vtk_objects
+                        self.pre_boxes_valid = boxes_valid
+                    elif current_type=='GT':
+                        self.output_mesh_gt = vtk_objects
+                        self.gt_boxes_valid = boxes_valid
+
 
 
         # if not if_show_emitter:
@@ -1150,141 +1020,238 @@ class Box(Scene3D):
             voxel_actors.append(voxel_actor)
         return voxel_actors
 
-    def set_render(self):
+    
+    def set_render(self, mode):
+        assert mode in ['GT', 'prediction']
         renderer = vtk.vtkRenderer()
         renderer.ResetCamera()
 
-        # '''draw layout system'''
+        '''draw layout system'''
         # renderer.AddActor(self.set_axes_actor())
 
         '''draw gt camera orientation'''
-        if self.mode == 'gt' or self.mode == 'both':
-            color = [[1., 0., 0.], [1., 0., 0.], [1., 0., 0.]]
-            center = [0, 0, 0]
-            vectors = self.gt_cam_R.T
-            # for index in range(vectors.shape[0]):
-            #     arrow_actor = self.set_arrow_actor(center, vectors[index])
-            #     arrow_actor.GetProperty().SetColor(color[index])
-            #     renderer.AddActor(arrow_actor)
-            '''set camera property'''
-            camera = self.set_camera(center, vectors, self.cam_K)
-            renderer.SetActiveCamera(camera)
+        if mode == 'GT':
+            cam_R = self.gt_cam_R
+        elif mode == 'prediction':
+            cam_R = self.pre_cam_R
 
-        '''draw predicted camera orientation'''
-        if self.mode == 'prediction' or self.mode == 'both':
-            color = [[0., 1., 1.], [1., 0., 1.], [1., 1., 0.]]
-            center = [0, 0, 0]
-            vectors = self.pre_cam_R.T
-            # for index in range(vectors.shape[0]):
-            #     arrow_actor = self.set_arrow_actor(center, vectors[index])
-            #     arrow_actor.GetProperty().SetColor(color[index])
-            #     renderer.AddActor(arrow_actor)
-            '''set camera property'''
-            camera = self.set_camera(center, vectors, self.cam_K)
-            renderer.SetActiveCamera(camera)
+        color = [[1., 0., 0.], [1., 0., 0.], [1., 0., 0.]]
+        center = [0, 0, 0]
+        vectors = cam_R.T
+        # print(vectors, mode, self.cam_K)
+        # for index in range(vectors.shape[0]):
+        #     arrow_actor = self.set_arrow_actor(center, vectors[index])
+        #     arrow_actor.GetProperty().SetColor(color[index])
+        #     renderer.AddActor(arrow_actor)
+        '''set camera property'''
+        camera = self.set_camera(center, vectors, self.cam_K)
+        renderer.SetActiveCamera(camera)
 
-        '''draw gt layout'''
-        if self.mode == 'gt' or self.mode == 'both':
-            color = (255, 0, 0)
-            opacity = 0.2
-            layout_actor = self.get_bbox_actor(self.gt_layout, color, opacity)
-            renderer.AddActor(layout_actor)
-            layout_line_actor = self.get_bbox_line_actor(self.gt_layout, color, 1.)
-            renderer.AddActor(layout_line_actor)
+        # '''draw predicted camera orientation'''
+        # if mode == 'prediction' or mode == 'both':
+        #     color = [[0., 1., 1.], [1., 0., 1.], [1., 1., 0.]]
+        #     center = [0, 0, 0]
+        #     vectors = self.pre_cam_R.T
+        #     # for index in range(vectors.shape[0]):
+        #     #     arrow_actor = self.set_arrow_actor(center, vectors[index])
+        #     #     arrow_actor.GetProperty().SetColor(color[index])
+        #     #     renderer.AddActor(arrow_actor)
+        #     '''set camera property'''
+        #     camera = self.set_camera(center, vectors, self.cam_K)
+        #     renderer.SetActiveCamera(camera)
 
-        '''draw predicted layout'''
-        if self.mode == 'prediction' or self.mode == 'both':
-            color = (75, 75, 75)
-            opacity = 0.2
-            layout_actor = self.get_bbox_actor(self.pre_layout, color, opacity)
-            renderer.AddActor(layout_actor)
-            layout_line_actor = self.get_bbox_line_actor(self.pre_layout, (75,75,75), 1.)
-            renderer.AddActor(layout_line_actor)
+        # '''draw gt layout'''
+        # if mode == 'gt' or mode == 'both':
+        #     color = (255, 0, 0)
+        #     opacity = 0.2
+        #     layout_actor = self.get_bbox_actor(self.gt_layout, color, opacity)
+        #     renderer.AddActor(layout_actor)
+        #     layout_line_actor = self.get_bbox_line_actor(self.gt_layout, color, 1.)
+        #     renderer.AddActor(layout_line_actor)
 
-        '''draw gt obj bounding boxes'''
-        if self.mode == 'gt' or self.mode == 'both':
-            for coeffs, centroid, class_id, basis in zip(self.gt_boxes['coeffs'],
-                                                         self.gt_boxes['centroid'],
-                                                         self.gt_boxes['class_id'],
-                                                         self.gt_boxes['basis']):
-                if class_id not in self.valid_class_ids:
-                    continue
-                color = [1., 0., 0.]
-                opacity = 0.2
-                box = {'coeffs':coeffs, 'centroid':centroid, 'class_id':class_id, 'basis':basis}
-                bbox_actor = self.get_bbox_actor(box, color, opacity)
-                renderer.AddActor(bbox_actor)
+        # '''draw predicted layout'''
+        # if mode == 'prediction' or mode == 'both':
+        #     color = (75, 75, 75)
+        #     opacity = 0.2
+        #     layout_actor = self.get_bbox_actor(self.pre_layout, color, opacity)
+        #     renderer.AddActor(layout_actor)
+        #     layout_line_actor = self.get_bbox_line_actor(self.pre_layout, (75,75,75), 1.)
+        #     renderer.AddActor(layout_line_actor)
 
-                # draw orientations
-                color = [[0.8, 0.8, 0.8],[0.8, 0.8, 0.8],[1., 0., 0.]]
-                vectors = [box['coeffs'][v_id] * vector for v_id, vector in enumerate(box['basis'])]
+        # '''draw gt obj bounding boxes'''
+        # if mode == 'gt' or mode == 'both':
+        #     for coeffs, centroid, class_id, basis in zip(self.gt_boxes['coeffs'],
+        #                                                  self.gt_boxes['centroid'],
+        #                                                  self.gt_boxes['class_id'],
+        #                                                  self.gt_boxes['basis']):
+        #         if class_id not in self.valid_class_ids:
+        #             continue
+        #         color = [1., 0., 0.]
+        #         opacity = 0.2
+        #         box = {'coeffs':coeffs, 'centroid':centroid, 'class_id':class_id, 'basis':basis}
+        #         bbox_actor = self.get_bbox_actor(box, color, opacity)
+        #         renderer.AddActor(bbox_actor)
 
-                for index in range(3):
-                    arrow_actor = self.get_orientation_actor(box['centroid'], vectors[index], color[index])
-                    renderer.AddActor(arrow_actor)
+        #         # draw orientations
+        #         color = [[0.8, 0.8, 0.8],[0.8, 0.8, 0.8],[1., 0., 0.]]
+        #         vectors = [box['coeffs'][v_id] * vector for v_id, vector in enumerate(box['basis'])]
 
-        '''draw predicted obj bounding boxes'''
-        if self.mode == 'prediction' or self.mode == 'both':
-            for coeffs, centroid, class_id, basis in zip(self.pre_boxes['coeffs'],
-                                                         self.pre_boxes['centroid'],
-                                                         self.pre_boxes['class_id'],
-                                                         self.pre_boxes['basis']):
-                if class_id not in self.valid_class_ids:
-                    continue
-                color = self.color_palette[class_id]
-                opacity = 0.2
-                box = {'coeffs':coeffs, 'centroid':centroid, 'class_id':class_id, 'basis':basis}
-                bbox_actor = self.get_bbox_actor(box, color, opacity)
-                renderer.AddActor(bbox_actor)
+        #         for index in range(3):
+        #             arrow_actor = self.get_orientation_actor(box['centroid'], vectors[index], color[index])
+        #             renderer.AddActor(arrow_actor)
 
-                # draw orientations
-                color = [[0.8, 0.8, 0.8],[0.8, 0.8, 0.8],[1., 0., 0.]]
-                vectors = [box['coeffs'][v_id] * vector for v_id, vector in enumerate(box['basis'])]
+        # '''draw predicted obj bounding boxes'''
+        # if mode == 'prediction' or mode == 'both':
+        #     for coeffs, centroid, class_id, basis in zip(self.pre_boxes['coeffs'],
+        #                                                  self.pre_boxes['centroid'],
+        #                                                  self.pre_boxes['class_id'],
+        #                                                  self.pre_boxes['basis']):
+        #         if class_id not in self.valid_class_ids:
+        #             continue
+        #         color = self.color_palette[class_id]
+        #         opacity = 0.2
+        #         box = {'coeffs':coeffs, 'centroid':centroid, 'class_id':class_id, 'basis':basis}
+        #         bbox_actor = self.get_bbox_actor(box, color, opacity)
+        #         renderer.AddActor(bbox_actor)
 
-                for index in range(3):
-                    arrow_actor = self.get_orientation_actor(box['centroid'], vectors[index], color[index])
-                    renderer.AddActor(arrow_actor)
+        #         # draw orientations
+        #         color = [[0.8, 0.8, 0.8],[0.8, 0.8, 0.8],[1., 0., 0.]]
+        #         vectors = [box['coeffs'][v_id] * vector for v_id, vector in enumerate(box['basis'])]
+
+        #         for index in range(3):
+        #             arrow_actor = self.get_orientation_actor(box['centroid'], vectors[index], color[index])
+        #             renderer.AddActor(arrow_actor)
 
         # draw mesh
-        if self.mode == 'prediction' and self.output_mesh:
-            for obj_idx, class_id in enumerate(self.pre_boxes['class_id']):
-                if class_id not in self.valid_class_ids:
-                    continue
-                color = self.color_palette[class_id]
+        if mode == 'prediction':
+            boxes_valid = self.pre_boxes_valid
+            output_mesh = self.output_mesh_pred
+        elif mode == 'GT':
+            boxes_valid = self.gt_boxes_valid
+            output_mesh = self.output_mesh_gt
 
-                object = self.output_mesh[obj_idx]
+        if output_mesh:
+            for obj_idx, class_id in enumerate(boxes_valid['class_id']):
+                # if class_id not in self.valid_class_ids:
+                #     continue
+                color = self.color_palette[class_id]
+                color = (float(color[0])/255., float(color[1])/255., float(color[2])/255.)
+                # print(obj_idx, color)
+
+                object = output_mesh[obj_idx]
 
                 object_actor = self.set_actor(self.set_mapper(object, 'model'))
                 object_actor.GetProperty().SetColor(color)
                 renderer.AddActor(object_actor)
+        else:
+            print(red('output_mesh is None for mode %s!')%mode)
 
         # '''draw point cloud'''
         # point_actor = self.set_actor(self.set_mapper(self.set_points_property(np.eye(3)), 'box'))
         # point_actor.GetProperty().SetPointSize(1)
         # renderer.AddActor(point_actor)
 
+        light1 = vtk.vtkLight()
+        # light.SetColor(1.0, 1.0, 1.0)
+        # light.SetIntensity(1)
+        # light.SetPosition(0, 0, 0)
+        # light.SetDiffuseColor(1, 1, 1)
+        # renderer.AddLight(light)
+        light1.SetIntensity(.4)
+        light1.SetPosition(5, -5, 5)
+        light1.SetDiffuseColor(1, 1, 1)
+        light2 = vtk.vtkLight()
+        light2.SetIntensity(.2)
+        light2.SetPosition(-5, -5, 5)
+        light2.SetDiffuseColor(1, 1, 1)
+        light3 = vtk.vtkLight()
+        light3.SetIntensity(.2)
+        light3.SetPosition(5, -5, -5)
+        light3.SetDiffuseColor(1, 1, 1)
+        light4 = vtk.vtkLight()
+        light4.SetIntensity(.4)
+        light4.SetPosition(-5, -5, -5)
+        light4.SetDiffuseColor(1, 1, 1)
+        light5 = vtk.vtkLight()
+        light5.SetIntensity(.8)
+        light5.SetPosition(0, 5, 0)
+        light5.SetDiffuseColor(1, 1, 1)
+        light6 = vtk.vtkLight()
+        light6.SetIntensity(.8)
+        light6.SetPosition(0, 0, 0)
+        light6.SetDiffuseColor(1, 1, 1)
+        light7 = vtk.vtkLight()
+        light7.SetIntensity(.8)
+        light7.SetPosition(5, 0, 0)
+        light7.SetDiffuseColor(1, 1, 1)
+        renderer.AddLight(light1)
+        renderer.AddLight(light2)
+        renderer.AddLight(light3)
+        renderer.AddLight(light4)
+        renderer.AddLight(light5)
+        renderer.AddLight(light6)
+        renderer.AddLight(light7)
+
         renderer.SetBackground(1., 1., 1.)
 
         return renderer, None
 
-    def draw3D(self, if_save, save_path):
+    def set_render_window(self, mode):
+        render_window = vtk.vtkRenderWindow()
+        # if self.if_off_screen_vtk:
+            # render_window.SetOffScreenRendering(1)
+        renderer, voxel_proj = self.set_render(mode=mode)
+        render_window.AddRenderer(renderer)
+        render_window.SetSize(self.img_map.shape[1], self.img_map.shape[0])
+
+        if isinstance(voxel_proj, np.ndarray):
+            plt.imshow(voxel_proj); plt.show()
+
+        return render_window
+
+
+    def draw3D(self, mode, if_return_img=True, if_save_img=False, save_path_without_suffix='', if_save_obj=False):
         '''
         Visualize 3D models with their bounding boxes.
         '''
+        assert mode in ['prediction', 'GT']
         render_window_interactor = vtk.vtkRenderWindowInteractor()
-        render_window = self.set_render_window()
+        render_window = self.set_render_window(mode=mode)
         render_window_interactor.SetRenderWindow(render_window)
         render_window.Render()
         render_window_interactor.Start()
 
-        if if_save:
-            if not os.path.exists(os.path.dirname(save_path)):
-                os.makedirs(os.path.dirname(save_path))
+        return_dict = {}
+
+        if if_save_img or if_return_img or if_save_obj:
+            # if not os.path.exists(os.path.dirname(save_path_without_suffix)):
+                # os.makedirs(os.path.dirname(save_path_without_suffix))
             im = vtk.vtkWindowToImageFilter()
             writer = vtk.vtkPNGWriter()
             im.SetInput(render_window)
             im.Update()
-            writer.SetInputConnection(im.GetOutputPort())
-            writer.SetFileName(save_path)
-            writer.Write()
+
+            if if_save_img:
+                writer.SetInputConnection(im.GetOutputPort())
+                writer.SetFileName(save_path_without_suffix+'.png')
+                writer.Write()
+
+            if if_return_img:
+                vtk_image = im.GetOutput()
+                width, height, _ = vtk_image.GetDimensions()
+                vtk_array = vtk_image.GetPointData().GetScalars()
+                components = vtk_array.GetNumberOfComponents()
+
+                arr = vtk_to_numpy(vtk_array).reshape(height, width, components)
+                arr = arr[::-1, :, :]
+                return_dict['im'] = arr
+
+            if if_save_obj:
+                writer = vtk.vtkOBJExporter()
+                writer.SetFilePrefix(save_path_without_suffix) # will be saved to .obj + .mtl to preserve color
+                writer.SetInput(render_window)
+                writer.Write()
+
+        return return_dict
+            
 

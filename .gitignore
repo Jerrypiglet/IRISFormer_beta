@@ -1,3 +1,6 @@
+notebooks/*.obj
+notebooks/*.png
+notebooks/*.mtl
 __pycache__/
 models
 models_ckpt

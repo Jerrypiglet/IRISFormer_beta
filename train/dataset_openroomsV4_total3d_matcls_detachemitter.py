@@ -780,6 +780,7 @@ class openrooms(data.Dataset):
 
                 gt_points_list = mesh_dict['gt_3dpoints'] # list of N objs
                 gt_obj_path_alignedNew_normalized_list = mesh_dict['gt_obj_path_alignedNew_normalized']
+                gt_obj_path_alignedNew_original_list = mesh_dict['gt_obj_path_alignedNew_original']
                 densities_list = []
                 for gt_points_single, if_valid in zip(gt_points_list, boxes_valid_list):
                     if if_valid:
@@ -798,7 +799,7 @@ class openrooms(data.Dataset):
                     'mesh_points': mesh_points_N, 
                     'densities': densities_N, 
                     })
-                return_dict.update({'gt_obj_path_alignedNew_normalized_list': gt_obj_path_alignedNew_normalized_list})
+                return_dict.update({'gt_obj_path_alignedNew_normalized_list': gt_obj_path_alignedNew_normalized_list, 'gt_obj_path_alignedNew_original_list': gt_obj_path_alignedNew_original_list})
 
             elif self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'ReconLoss':
                 pass
@@ -811,7 +812,7 @@ class openrooms(data.Dataset):
 
         if (self.split=='train' or self.opt.if_overfit_val) and self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_clip_boxes_train:
             # print('Clipping......')
-            return_dict = self.clip_box_nums(return_dict, keep_only_valid=self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_use_only_valid_objs)
+            return_dict = self.clip_box_nums(return_dict, keep_only_valid=self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_use_only_valid_objs, num_clip_to=self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.clip_boxes_train_to)
         
         frame_key = '%s-%s-%d'%(frame_info_dict['meta_split'], frame_info_dict['scene_name'], frame_info_dict['frame_id'])
         if self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_pre_filter_invalid_frames:
@@ -1043,7 +1044,7 @@ class openrooms(data.Dataset):
         return return_dict
 
     def load_MGNet_Dataset(self, gt_obj_paths_list, boxes_valid_list, scene_pickle_path=''):
-        mesh_dict = {'gt_3dpoints': [], 'gt_obj_path_alignedNew_normalized': []}
+        mesh_dict = {'gt_3dpoints': [], 'gt_obj_path_alignedNew_normalized': [], 'gt_obj_path_alignedNew_original': []}
         boxes_valid_list_new = []
         # assert len(gt_obj_paths_list) == len(boxes_valid_list)
         for obj_idx, (gt_obj_path_ori, if_valid) in enumerate(zip(gt_obj_paths_list, boxes_valid_list)):
@@ -1061,12 +1062,14 @@ class openrooms(data.Dataset):
                     print(yellow('File not found (could be fake (placeholder) objs) in %s-%s (scene picle path %s)'%(str(gt_obj_path_sampled_pickle), str(gt_obj_path_ori), str(scene_pickle_path)))) # could be empty path (e.g. '')
                     mesh_dict['gt_3dpoints'].append(np.zeros((10000, 3), dtype=np.float32))
                     mesh_dict['gt_obj_path_alignedNew_normalized'].append('')
+                    mesh_dict['gt_obj_path_alignedNew_original'].append('')
                     boxes_valid_list_new.append(False)
                     continue
                 except pickle.UnpicklingError:
                     print(yellow('UnpicklingError at file %s (scene pickle path: %s)'%(str(gt_obj_path_sampled_pickle), str(scene_pickle_path)))) # could be reading layoutMesh (e.g. /newfoundland2/ruizhu/siggraphasia20dataset/layoutMesh/scene0673_02/uv_mapped.obj)
                     mesh_dict['gt_3dpoints'].append(np.zeros((10000, 3), dtype=np.float32))
                     mesh_dict['gt_obj_path_alignedNew_normalized'].append('')
+                    mesh_dict['gt_obj_path_alignedNew_original'].append('')
                     # assert False
                     boxes_valid_list_new.append(False)
                     continue
@@ -1075,9 +1078,11 @@ class openrooms(data.Dataset):
                 #     print(key, mesh_sampled_dict[key])
                 mesh_dict['gt_3dpoints'].append(mesh_sampled_dict['sampled_points'])
                 mesh_dict['gt_obj_path_alignedNew_normalized'].append(gt_obj_path_alignedNew_normalized)
+                mesh_dict['gt_obj_path_alignedNew_original'].append(gt_obj_path)
             else:
                 mesh_dict['gt_3dpoints'].append(np.zeros((10000, 3), dtype=np.float32))
                 mesh_dict['gt_obj_path_alignedNew_normalized'].append('')
+                mesh_dict['gt_obj_path_alignedNew_original'].append('')
 
             boxes_valid_list_new.append(if_valid)
 
@@ -1269,6 +1274,7 @@ class openrooms(data.Dataset):
         return_dict['boxes_valid_list'] = [return_dict['boxes_valid_list'][x] for x in s_idxes]
         if 'mesh' in self.opt.cfg.DATA.data_read_list:
             return_dict['gt_obj_path_alignedNew_normalized_list'] = [return_dict['gt_obj_path_alignedNew_normalized_list'][x] for x in s_idxes]
+            return_dict['gt_obj_path_alignedNew_original_list'] = [return_dict['gt_obj_path_alignedNew_original_list'][x] for x in s_idxes]
 
         for key in return_dict['boxes_batch']:
             if key in ['mask', 'random_id', 'cat_name']: # lists
@@ -1317,7 +1323,7 @@ def collate_fn_OR(batch):
                     except RuntimeError:
                         print(subkey, [x.shape for x in list_of_tensor])
                 collated_batch[key][subkey] = tensor_batch
-        elif key in ['frame_info', 'boxes_valid_list', 'emitter2wall_assign_info_list', 'emitters_obj_list', 'gt_layout_RAW', 'cell_info_grid', 'image_index', 'gt_obj_path_alignedNew_normalized_list']:
+        elif key in ['frame_info', 'boxes_valid_list', 'emitter2wall_assign_info_list', 'emitters_obj_list', 'gt_layout_RAW', 'cell_info_grid', 'image_index', 'gt_obj_path_alignedNew_normalized_list', 'gt_obj_path_alignedNew_original_list']:
             collated_batch[key] = [elem[key] for elem in batch]
         else:
             try:

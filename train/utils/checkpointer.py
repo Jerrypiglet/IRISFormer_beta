@@ -134,14 +134,21 @@ class Checkpointer(object):
         return os.path.join(ckpt_path, ckpt_list[idx_sort[-1]])
 
     def get_checkpoint_file(self, task_name=None):
+        save_file = None
         if task_name is not None:
             task_name_splits = task_name.split('/')
             if len(task_name_splits) == 1:
                 ckpt_folder = os.path.join(self.checkpoint_all_dir, task_name)
+            elif len(task_name_splits) == 2:
+                save_file = os.path.join(self.checkpoint_all_dir, task_name)
             else:
                 ckpt_folder = os.path.join(self.opt.pwdpath, task_name)
         else:
             ckpt_folder = self.save_dir
+
+        if save_file is not None:
+            return save_file
+            
         save_file = os.path.join(ckpt_folder, "last_checkpoint")
         if os.path.exists(save_file):
             try:

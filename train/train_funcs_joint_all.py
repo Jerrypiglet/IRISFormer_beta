@@ -692,6 +692,14 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
                             fig_3d, ax_3ds = scene_box.draw_3D_scene_plt(draw_mode, if_show_objs=True, hide_random_id=False, if_debug=False, hide_cells=True, if_dump_to_mesh=True, if_show_emitter=False, pickle_id=sample_idx)
 
+                            if opt.cfg.MODEL_LAYOUT_EMITTER.mesh.if_use_vtk:
+                                im_meshes_GT = scene_box.draw3D('GT', if_return_img=True, if_save_img=False, if_save_obj=False, save_path_without_suffix = 'recon')['im']
+                                im_meshes_pred = scene_box.draw3D('prediction', if_return_img=True, if_save_img=False, if_save_obj=False, save_path_without_suffix = 'recon')['im']
+                                writer.add_image('VAL_mesh_GT/%d'%(sample_idx), im_meshes_GT, tid, dataformats='HWC')
+                                writer.add_image('VAL_mesh_pred/%d'%(sample_idx), im_meshes_pred, tid, dataformats='HWC')
+
+
+
                         if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
                             output_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'emitter') + '.png')
                             fig_3d, ax_3ds = scene_box.draw_3D_scene_plt(draw_mode, if_return_cells_vis_info=True, if_show_emitter=not(if_real_image))

@@ -110,11 +110,14 @@ def LSregressDiffSpec(diff, spec, imOrig, diffOrig, specOrig):
 
 
 class encoder0(nn.Module):
-    def __init__(self, opt, cascadeLevel = 0, isSeg = False, in_channels = 3):
+    def __init__(self, opt, cascadeLevel = 0, isSeg = False, in_channels = 3, encoder_exclude=[]):
+
         super(encoder0, self).__init__()
         self.isSeg = isSeg
         self.opt = opt
         self.cascadeLevel = cascadeLevel
+
+        self.encoder_exclude = encoder_exclude + self.opt.cfg.MODEL_BRDF.encoder_exclude
 
         self.pad1 = nn.ReplicationPad2d(1)
         if self.cascadeLevel == 0:
@@ -136,12 +139,12 @@ class encoder0(nn.Module):
         self.conv4 = nn.Conv2d(in_channels=256, out_channels=256, kernel_size=4, stride=2, bias=True)
         self.gn4 = nn.GroupNorm(num_groups=16, num_channels=256)
 
-        if 'x5' not in self.opt.cfg.MODEL_BRDF.encoder_exclude:
+        if 'x5' not in self.encoder_exclude:
             self.pad5 = nn.ZeroPad2d(1)
             self.conv5 = nn.Conv2d(in_channels=256, out_channels=512, kernel_size=4, stride=2, bias=True)
             self.gn5 = nn.GroupNorm(num_groups=32, num_channels=512)
 
-        if 'x6' not in self.opt.cfg.MODEL_BRDF.encoder_exclude:
+        if 'x6' not in self.encoder_exclude:
             self.pad6 = nn.ZeroPad2d(1)
             self.conv6 = nn.Conv2d(in_channels=512, out_channels=1024, kernel_size=3, stride=1, bias=True)
             self.gn6 = nn.GroupNorm(num_groups=64, num_channels=1024)
@@ -152,12 +155,12 @@ class encoder0(nn.Module):
         x3 = F.relu(self.gn3(self.conv3(self.pad3(x2))), True)
         x4 = F.relu(self.gn4(self.conv4(self.pad4(x3))), True)
         
-        if 'x5' not in self.opt.cfg.MODEL_BRDF.encoder_exclude:
+        if 'x5' not in self.encoder_exclude:
             x5 = F.relu(self.gn5(self.conv5(self.pad5(x4))), True)
         else:
             x5 = x1
 
-        if 'x6' not in self.opt.cfg.MODEL_BRDF.encoder_exclude:
+        if 'x6' not in self.encoder_exclude:
             x6 = F.relu(self.gn6(self.conv6(self.pad6(x5))), True)
         else:
             x6 = x1

@@ -143,7 +143,11 @@ class Model_Joint(nn.Module):
             # the vanilla emitter/layout model: full FC, adapted from Total3D
             if_vanilla_emitter = 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list and not(self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable)
             if_layout = 'lo' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list
+
             if if_layout or if_vanilla_emitter:
+                if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder:
+                    self.LAYOUT_EMITTER_NET_encoder = models_brdf.encoder0(opt, cascadeLevel = 0, in_channels = 3, encoder_exclude = ['x5', 'x6'])
+
                 self.LAYOUT_EMITTER_NET_fc = models_layout_emitter.decoder_layout_emitter(opt, if_layout=if_layout, if_emitter_vanilla_fc=if_vanilla_emitter)
 
             if 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
@@ -260,7 +264,11 @@ class Model_Joint(nn.Module):
             if 'lo' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list or 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
                 if not self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
                     # layout w/ wo/ V1 emitters
-                    encoder_outputs = return_dict_brdf['encoder_outputs']
+                    if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder:
+                        x1, x2, x3, x4, x5, x6 = self.LAYOUT_EMITTER_NET_encoder(input_dict['input_batch_brdf'])
+                        encoder_outputs = {'x1': x1, 'x2': x2, 'x3': x3, 'x4': x4, 'x5': x5, 'x6': x6}
+                    else:
+                        encoder_outputs = return_dict_brdf['encoder_outputs']
                     output_dict = self.LAYOUT_EMITTER_NET_fc(input_feats_dict=encoder_outputs)
                     return_dict_layout_emitter.update(output_dict)
                 else:

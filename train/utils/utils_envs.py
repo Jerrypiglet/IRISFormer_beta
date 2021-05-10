@@ -26,7 +26,6 @@ def set_up_envs(opt):
     opt.cfg.DATASET.envmap_path = opt.cfg.DATASET.envmap_path_cluster if opt.if_cluster else opt.cfg.DATASET.envmap_path_local
     opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path = opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path_cluster if opt.if_cluster else opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path_local
     opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path = opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path_cluster if opt.if_cluster else opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path_local
-    ic('1', opt.cfg.MODEL_BRDF.enable)
 
     if opt.data_root is not None:
         opt.cfg.DATASET.dataset_path = opt.data_root
@@ -62,31 +61,39 @@ def set_up_envs(opt):
 
     # ====== layout, emitters =====
     if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
-        if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
-            opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = 'em'
+        if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
+                opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = 'em'
 
-            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_light:
-                opt.cfg.DATA.load_light_gt = True
-            else: # use LIGHT_Net prediction
-                opt.cfg.MODEL_LIGHT.enable = True
-                opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_brdf = False
-                opt.cfg.MODEL_LIGHT.load_pretrained_MODEL_BRDF = True
-                opt.cfg.MODEL_LIGHT.load_pretrained_MODEL_LIGHT = True
-                if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.freeze_lightnet:
-                    opt.cfg.MODEL_LIGHT.if_freeze = True
-            
-            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_brdf:
-                opt.cfg.DATA.load_brdf_gt = True
-                opt.cfg.DATA.data_read_list.append('de') # used to get 3d points
-                opt.cfg.DATA.data_read_list.append('no')
-            else: # use BRDF_Net prediction
-                opt.cfg.MODEL_BRDF.enable = True
-                opt.cfg.MODEL_BRDF.enable_list += 'no_de'.split('_')
-        else:
-            if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+                if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_light:
+                    opt.cfg.DATA.load_light_gt = True
+                else: # use LIGHT_Net prediction
+                    opt.cfg.MODEL_LIGHT.enable = True
+                    opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_brdf = False
+                    opt.cfg.MODEL_LIGHT.load_pretrained_MODEL_BRDF = True
+                    opt.cfg.MODEL_LIGHT.load_pretrained_MODEL_LIGHT = True
+                    if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.freeze_lightnet:
+                        opt.cfg.MODEL_LIGHT.if_freeze = True
+                
+                if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_brdf:
+                    opt.cfg.DATA.load_brdf_gt = True
+                    opt.cfg.DATA.data_read_list.append('de') # used to get 3d points
+                    opt.cfg.DATA.data_read_list.append('no')
+                else: # use BRDF_Net prediction
+                    opt.cfg.MODEL_BRDF.enable = True
+                    opt.cfg.MODEL_BRDF.enable_list += 'no_de'.split('_')
+            else: # vanilla fc-layout-emitter net using BRDF encoder feats or indept feats
+                if not opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder:
+                    opt.cfg.MODEL_BRDF.enable = True
+                    if opt.cfg.MODEL_BRDF.enable_BRDF_decoders == False and not opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
+                        opt.cfg.MODEL_BRDF.encoder_exclude = 'x5_x6' # if no BRDF decoder, these two layers are not used in layout net
+
+        if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+            if not opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder:
                 opt.cfg.MODEL_BRDF.enable = True
                 if opt.cfg.MODEL_BRDF.enable_BRDF_decoders == False and not opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
                     opt.cfg.MODEL_BRDF.encoder_exclude = 'x5_x6' # if no BRDF decoder, these two layers are not used in layout net
+
         opt.cfg.DATA.load_brdf_gt = True
         opt.cfg.DATA.load_layout_emitter_gt = True
         opt.cfg.DATA.data_read_list += ['lo']

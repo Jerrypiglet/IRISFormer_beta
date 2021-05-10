@@ -6,8 +6,8 @@ Created on April, 2019
 Toolkit functions used for visualizing rooms.
 """
 
-# import vtk
-# from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
+import vtk
+from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 from utils.utils_total3D.data_config import NYU40CLASSES
 from utils.utils_total3D.sunrgbd_utils import get_cam_KRT, get_layout_info, correct_flipped_objects
 from utils.utils_total3D.libs.tools import cvt2nyuclass_map, get_inst_classes, get_world_R
@@ -61,8 +61,9 @@ class Scene3D(object):
     '''
     A class used to visualize 3D scene contents.
     '''
-    def __init__(self, sample):
+    def __init__(self, sample, if_off_screen_vtk=True):
         # self.cam_paras = sample['cam_paras']
+        # self._if_off_screen_vtk = if_off_screen_vtk
         self._inst_map = cv2.imread(sample['instance_map_path'], -1)
         nyuclass_mapping = np.load('data/nyu40class_mapping.npy')
         self._cls_map = cvt2nyuclass_map(cv2.imread(sample['category_map_path'], -1), nyuclass_mapping)
@@ -74,6 +75,8 @@ class Scene3D(object):
         self._instance_info = sample['instance_info']
         self._cam_K, self._cam_R, self._cam_T = get_cam_KRT(sample['cam_paras'],
                                                                [self.img_map.shape[1], self.img_map.shape[0]])
+
+
     @property
     def inst_map(self):
         return self._inst_map
@@ -117,6 +120,10 @@ class Scene3D(object):
     @property
     def cam_T(self):
         return self._cam_T
+
+    # @property
+    # def if_off_screen_vtk(self):
+    #     return self._if_off_screen_vtk
 
     def draw_image(self):
         plt.imshow(self.img_map)
@@ -214,6 +221,7 @@ class Scene3D(object):
     def set_mapper(self, prop, mode):
 
         mapper = vtk.vtkPolyDataMapper()
+        mapper.ScalarVisibilityOff()
 
         if mode == 'model':
             mapper.SetInputConnection(prop.GetOutputPort())
@@ -525,7 +533,7 @@ class Scene3D(object):
         camera.SetViewAngle((2*np.arctan(cam_K[1][2]/cam_K[0][0]))/np.pi*180)
         return camera
 
-    def set_render(self):
+    def set_render(self, mode='prediction'):
         renderer = vtk.vtkRenderer()
         renderer.ResetCamera()
 
@@ -629,10 +637,12 @@ class Scene3D(object):
 
         return renderer, voxel_image
 
-    def set_render_window(self):
+    def set_render_window(self, mode):
 
         render_window = vtk.vtkRenderWindow()
-        renderer, voxel_proj = self.set_render()
+        # if self.if_off_screen_vtk:
+            # render_window.SetOffScreenRendering(1)
+        renderer, voxel_proj = self.set_render(mode=mode)
         render_window.AddRenderer(renderer)
         render_window.SetSize(self.img_map.shape[1], self.img_map.shape[0])
 

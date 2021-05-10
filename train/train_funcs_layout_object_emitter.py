@@ -36,11 +36,21 @@ def get_labels_dict_layout_emitter(labels_dict_input, data_batch, opt):
         pitch_cls = data_batch['camera']['pitch_cls'].long().cuda(non_blocking=True)
         roll_reg = data_batch['camera']['roll_reg'].float().cuda(non_blocking=True)
         roll_cls = data_batch['camera']['roll_cls'].long().cuda(non_blocking=True)
-        lo_ori_reg = data_batch['layout_reindexed']['ori_reg'].float().cuda(non_blocking=True)
-        lo_ori_cls = data_batch['layout_reindexed']['ori_cls'].long().cuda(non_blocking=True)
-        lo_centroid = data_batch['layout_reindexed']['centroid_reg'].float().cuda(non_blocking=True)
-        lo_coeffs = data_batch['layout_reindexed']['coeffs_reg'].float().cuda(non_blocking=True)
-        lo_bdb3D = data_batch['layout_reindexed']['bdb3D'].float().cuda(non_blocking=True)
+        if opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_train_with_reindexed:
+            lo_ori_reg = data_batch['layout_reindexed']['ori_reg'].float().cuda(non_blocking=True)
+            lo_ori_cls = data_batch['layout_reindexed']['ori_cls'].long().cuda(non_blocking=True)
+            lo_centroid = data_batch['layout_reindexed']['centroid_reg'].float().cuda(non_blocking=True)
+            lo_coeffs = data_batch['layout_reindexed']['coeffs_reg'].float().cuda(non_blocking=True)
+            lo_bdb3D = data_batch['layout_reindexed']['bdb3D'].float().cuda(non_blocking=True)
+            lo_bdb3D_reindexed = lo_bdb3D
+        else:
+            lo_ori_reg = data_batch['layout_']['ori_reg'].float().cuda(non_blocking=True)
+            lo_ori_cls = data_batch['layout_']['ori_cls'].long().cuda(non_blocking=True)
+            lo_centroid = data_batch['layout_']['centroid_reg'].float().cuda(non_blocking=True)
+            lo_coeffs = data_batch['layout_']['coeffs_reg'].float().cuda(non_blocking=True)
+            lo_bdb3D = data_batch['layout_']['bdb3D'].float().cuda(non_blocking=True)
+            lo_bdb3D_reindexed = data_batch['layout_reindexed']['bdb3D'].float().cuda(non_blocking=True)
+
         # cam_K = data_batch['camera']['K'].float().cuda(non_blocking=True)
         cam_K_scaled = data_batch['camera']['K_scaled'].float().cuda(non_blocking=True)
 
@@ -50,7 +60,7 @@ def get_labels_dict_layout_emitter(labels_dict_input, data_batch, opt):
 
         layout_labels = {'pitch_reg': pitch_reg, 'pitch_cls': pitch_cls, 'roll_reg': roll_reg,
                         'roll_cls': roll_cls, 'lo_ori_reg': lo_ori_reg, 'lo_ori_cls': lo_ori_cls, 'lo_centroid': lo_centroid,
-                        'lo_coeffs': lo_coeffs, 'lo_bdb3D': lo_bdb3D, 'cam_K_scaled': cam_K_scaled, 'cam_R_gt':cam_R_gt}
+                        'lo_coeffs': lo_coeffs, 'lo_bdb3D': lo_bdb3D, 'lo_bdb3D_reindexed': lo_bdb3D_reindexed, 'cam_K_scaled': cam_K_scaled, 'cam_R_gt':cam_R_gt}
         labels_dict['layout_labels'] = layout_labels
 
     if if_object:
@@ -93,6 +103,7 @@ def get_labels_dict_layout_emitter(labels_dict_input, data_batch, opt):
             mesh_points = data_batch['boxes_batch']['mesh_points'].float().cuda(non_blocking=True)
             densities = data_batch['boxes_batch']['densities'].float().cuda(non_blocking=True)
             gt_obj_path_alignedNew_normalized_list = data_batch['gt_obj_path_alignedNew_normalized_list'] # list of lists
+            gt_obj_path_alignedNew_original_list = data_batch['gt_obj_path_alignedNew_original_list'] # list of lists
             # print(labels_dict['object_labels']['patch'].shape)
             # print(labels_dict['object_labels']['size_cls'].shape)
             labels_dict['mesh_labels'] = {
@@ -101,7 +112,8 @@ def get_labels_dict_layout_emitter(labels_dict_input, data_batch, opt):
                 'cls': labels_dict['object_labels']['size_cls'], 
                 'mesh_points': mesh_points, 
                 'densities': densities,  
-                'gt_obj_path_alignedNew_normalized_list': gt_obj_path_alignedNew_normalized_list
+                'gt_obj_path_alignedNew_normalized_list': gt_obj_path_alignedNew_normalized_list, 
+                'gt_obj_path_alignedNew_original_list': gt_obj_path_alignedNew_original_list
             }
 
 
@@ -256,7 +268,8 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
         # save_prefix = 'sample%d-LABEL-epoch%d-tid%d-%s'%(sample_idx+batch_size*vis_batch_count, epoch, iter, phase)
         gt_cam_R = gt_dict_lo['cam_R_gt'][sample_idx].cpu().numpy()
         cam_K = gt_dict_lo['cam_K_scaled'][sample_idx].cpu().numpy()
-        gt_layout = gt_dict_lo['lo_bdb3D'][sample_idx].cpu().numpy()
+        # gt_layout = gt_dict_lo['lo_bdb3D'][sample_idx].cpu().numpy()
+        gt_layout = gt_dict_lo['lo_bdb3D_reindexed'][sample_idx].cpu().numpy()
 
         # ---- layout
         if if_est_layout:
@@ -323,7 +336,8 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
                 write_obj(save_path, mesh_obj)
                 pre_meshes.append([save_path, mesh_obj])
 
-            gt_meshes = gt_dict_mesh['gt_obj_path_alignedNew_normalized_list'][sample_idx]
+            # gt_meshes = gt_dict_mesh['gt_obj_path_alignedNew_normalized_list'][sample_idx]
+            gt_meshes = gt_dict_mesh['gt_obj_path_alignedNew_original_list'][sample_idx]
         else:
             gt_meshes = None
             pre_meshes = None
@@ -409,7 +423,8 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
             emitter_cls_prob_GT = emitter_cls_prob_GT_np, 
             cell_info_grid_GT = cell_info_grid_GT, 
             cell_info_grid_PRED = cell_info_grid_PRED, 
-            grid_size = grid_size)
+            grid_size = grid_size,
+            if_use_vtk = opt.cfg.MODEL_LAYOUT_EMITTER.mesh.if_use_vtk)
 
         scene_box_list.append(scene_box)
         layout_info_dict_list.append({'est_data': None, 'gt_cam_R': gt_cam_R, 'cam_K': cam_K, 'gt_layout': gt_layout, 'pre_layout': pre_layout, 'pre_cam_R': pre_cam_R, 'image': image})

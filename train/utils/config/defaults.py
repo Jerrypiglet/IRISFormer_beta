@@ -212,6 +212,8 @@ _C.MODEL_LAYOUT_EMITTER.layout = CN()
 _C.MODEL_LAYOUT_EMITTER.layout.loss = CN()
 _C.MODEL_LAYOUT_EMITTER.layout.loss.cls_reg_ratio = 10
 _C.MODEL_LAYOUT_EMITTER.layout.loss.obj_cam_ratio = 1
+_C.MODEL_LAYOUT_EMITTER.layout.if_train_with_reindexed = False
+_C.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder = True
 
 _C.MODEL_LAYOUT_EMITTER.mesh = CN()
 _C.MODEL_LAYOUT_EMITTER.mesh.tmn_subnetworks = 2
@@ -221,15 +223,17 @@ _C.MODEL_LAYOUT_EMITTER.mesh.neighbors = 30
 _C.MODEL_LAYOUT_EMITTER.mesh.loss = 'SVRLoss' # ['SVRLoss', 'ReconLoss']
 _C.MODEL_LAYOUT_EMITTER.mesh.original_path = ''
 _C.MODEL_LAYOUT_EMITTER.mesh.original_path_local = '/newfoundland2/ruizhu/siggraphasia20dataset/uv_mapped'
-_C.MODEL_LAYOUT_EMITTER.mesh.original_path_cluster = 'siggraphasia20dataset/uv_mapped'
+_C.MODEL_LAYOUT_EMITTER.mesh.original_path_cluster = '/siggraphasia20dataset/uv_mapped'
 _C.MODEL_LAYOUT_EMITTER.mesh.sampled_path = ''
 _C.MODEL_LAYOUT_EMITTER.mesh.sampled_path_local = '/home/ruizhu/Documents/data/OR-sampledMeshes'
 _C.MODEL_LAYOUT_EMITTER.mesh.sampled_path_cluster = '/ruidata/OR-sampledMeshes'
+_C.MODEL_LAYOUT_EMITTER.mesh.if_use_vtk = False
 
 _C.MODEL_LAYOUT_EMITTER.mesh_obj = CN()
 _C.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs = False
 # filter invalid frames with 0 valid objects, and filter invalid objects in dataloader
 _C.MODEL_LAYOUT_EMITTER.mesh_obj.if_clip_boxes_train = True # randomly sample N objects if there are too many
+_C.MODEL_LAYOUT_EMITTER.mesh_obj.clip_boxes_train_to = 5
 _C.MODEL_LAYOUT_EMITTER.mesh_obj.if_use_only_valid_objs = True
 _C.MODEL_LAYOUT_EMITTER.mesh_obj.valid_bbox_vis_ratio = 0.1
 

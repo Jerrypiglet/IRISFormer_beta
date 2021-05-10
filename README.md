@@ -14,7 +14,14 @@ To resume a task, put FULL original task name in --task_name, and use 'resume' f
 ```
 
 ### vtk
+
 https://docs.pyvista.org/extras/building_vtk.html
+
+dependencies:
+> sudo apt-get install libegl1-mesa-dev
+> sudo apt-get install libglu1-mesa-dev freeglut3-dev mesa-common-dev
+> apt-get install -y libz-dev
+
 
 > python test_offscreen.py
 ### envs in docker image
