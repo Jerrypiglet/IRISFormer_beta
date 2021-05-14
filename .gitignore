@@ -30,5 +30,8 @@ tmp.pickle
 notebooks/scene_mesh_debug*.obj
 __pycache__
 ./*.obj
+*.obj
 Summary_vis
 VTK
+*.pkl
+*-copy.py

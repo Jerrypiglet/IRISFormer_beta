@@ -11,13 +11,14 @@ from utils.utils_misc import yellow
 
 # print(yellow('Importing Chamfer distance from '+os.environ['EXTERNAL_PATH']))
 # if os.environ['EXTERNAL_PATH'] == 'local':
-from external.pyTorchChamferDistance.chamfer_distance import ChamferDistance
+if os.environ['IF_MESH'] == 'True':
+    from external.pyTorchChamferDistance.chamfer_distance import ChamferDistance
+    dist_chamfer = ChamferDistance()
 # else:
 #     sys.path.insert(0, os.environ['EXTERNAL_PATH'])
 #     from pyTorchChamferDistance.chamfer_distance import ChamferDistance
 
 
-dist_chamfer = ChamferDistance()
 
 from icecream import ic
 

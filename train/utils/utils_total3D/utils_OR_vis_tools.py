@@ -132,7 +132,9 @@ def format_mesh(obj_files, bboxes, if_use_vtk=False, validate_classids=False):
     else:
         vertices_list = []
         faces_list = []
+        faces_notAdd_list = []
         num_vertices = 0
+        # transform_lists = []
 
     for idx, obj_file in enumerate(obj_files):
         # print(obj_file)
@@ -162,9 +164,11 @@ def format_mesh(obj_files, bboxes, if_use_vtk=False, validate_classids=False):
         # normalize points
         mesh_center = (points.max(0) + points.min(0)) / 2.
         points = points - mesh_center
+        # transform_lists.append({'translation': mesh_center.flatten()})
 
         mesh_coef = (points.max(0) - points.min(0)) / 2.
         points = points.dot(np.diag(1./mesh_coef)).dot(np.diag(bboxes['coeffs'][obj_idx]))
+        # transform_lists.append({'scale': np.array(bboxes['coeffs'][obj_idx]).flatten() * np.array(1./mesh_coef).flatten})
 
         # set orientation
         points = points.dot(bboxes['basis'][obj_idx])
@@ -184,9 +188,11 @@ def format_mesh(obj_files, bboxes, if_use_vtk=False, validate_classids=False):
             # points_swapped[:, 2] = -points_swapped[:, 2] # for OR
             vertices_list.append(points_swapped)
             faces_list.append(faces+num_vertices)
+            faces_notAdd_list.append(faces)
+            # print(faces)
             num_vertices += points.shape[0]
 
     if if_use_vtk:
         return vtk_objects, bboxes
     else:
-        return [vertices_list, faces_list], bboxes
+        return [vertices_list, faces_list, faces_notAdd_list], bboxes

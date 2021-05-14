@@ -69,7 +69,7 @@ class Checkpointer(object):
 
         return save_file
 
-    def load(self, f=None, use_latest=True, skip_kws=[], only_load_kws=[], replace_kws=[], replace_with_kws=[], task_name=None):
+    def load(self, f=None, use_latest=True, skip_kws=[], only_load_kws=[], replace_kws=[], replace_with_kws=[], task_name=None, prefix=''):
         task_name = str(task_name)
         if f is None:
             if task_name is not None:
@@ -86,7 +86,7 @@ class Checkpointer(object):
             self.logger.error("No checkpoint found. Initializing model from scratch")
             raise ValueError('No checkpoint found for task_name %s!'%task_name)
             return {}
-        self.logger.info(colored("Loading checkpoint from %s."%f, 'white', 'on_magenta'))
+        self.logger.info(colored(prefix+"Loading checkpoint from %s."%f, 'white', 'on_magenta'))
         checkpoint = self._load_file(f)
 
         current_keys, loaded_keys = self._load_model(checkpoint, self.logger, skip_kws=skip_kws, only_load_kws=only_load_kws, replace_kws=replace_kws, replace_with_kws=replace_with_kws)
@@ -148,7 +148,7 @@ class Checkpointer(object):
 
         if save_file is not None:
             return save_file
-            
+
         save_file = os.path.join(ckpt_folder, "last_checkpoint")
         if os.path.exists(save_file):
             try:

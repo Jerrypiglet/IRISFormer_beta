@@ -65,7 +65,7 @@ def get_corners_of_bb3d(basis, coeffs, centroid):
 
     return corners
 
-def get_layout_bdb_sunrgbd(bins_tensor, lo_ori_reg, lo_ori_cls, centroid_reg, coeffs_reg):
+def get_layout_bdb_sunrgbd(bins_tensor, lo_ori_reg, lo_ori_cls, centroid_reg, coeffs_reg, if_return_full=False):
     """
     get the eight corners of 3D bounding box
     :param bins_tensor:
@@ -87,7 +87,10 @@ def get_layout_bdb_sunrgbd(bins_tensor, lo_ori_reg, lo_ori_cls, centroid_reg, co
 
     bdb = get_corners_of_bb3d(basis, coeffs_reg, centroid_reg)
 
-    return bdb
+    if if_return_full:
+        return bdb, basis, coeffs_reg, centroid_reg
+    else:
+        return bdb
 
 def shift_left(seq, n):
     return seq[n:]+seq[:n]

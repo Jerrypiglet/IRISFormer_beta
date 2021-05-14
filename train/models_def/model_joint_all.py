@@ -139,7 +139,7 @@ class Model_Joint(nn.Module):
 
             if self.cfg.MODEL_LIGHT.load_pretrained_MODEL_LIGHT:
                 self.load_pretrained_MODEL_LIGHT(self.cfg.MODEL_LIGHT.pretrained_pth_name)
-
+        
         if self.cfg.MODEL_LAYOUT_EMITTER.enable:
 
             # the vanilla emitter/layout model: full FC, adapted from Total3D
@@ -149,12 +149,18 @@ class Model_Joint(nn.Module):
             if if_layout or if_vanilla_emitter:
                 if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder:
                     self.LAYOUT_EMITTER_NET_encoder = models_brdf.encoder0(opt, cascadeLevel = 0, in_channels = 3, encoder_exclude = ['x5', 'x6'])
+                    if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_freeze:
+                        self.turn_off_names(['LAYOUT_EMITTER_NET_encoder'])
+                        freeze_bn_in_module(self.LAYOUT_EMITTER_NET_encoder)
 
                 self.LAYOUT_EMITTER_NET_fc = models_layout_emitter.decoder_layout_emitter(opt, if_layout=if_layout, if_emitter_vanilla_fc=if_vanilla_emitter)
+                if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_freeze:
+                    self.turn_off_names(['LAYOUT_EMITTER_NET_fc'])
+                    freeze_bn_in_module(self.LAYOUT_EMITTER_NET_fc)
 
             if 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
                 if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
-                    self.EMITTER_LIGHT_ACCU_NET = models_layout_emitter_lightAccu.emitter_lightAccu(opt)
+                    self.EMITTER_LIGHT_ACCU_NET = models_layout_emitter_lightAccu.emitter_lightAccu(opt, envHeight=self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.envHeight, envWidth=self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.envWidth)
                     
                     if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V1':
                         self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu_(opt)
@@ -283,13 +289,17 @@ class Model_Joint(nn.Module):
                         layout_est_result = output_dict['layout_est_result']
                         # print(layout_est_result['lo_ori_cls_result'].shape, input_dict['layout_labels']['lo_ori_cls'].shape)
                         # print(layout_est_result['lo_ori_cls_result'], input_dict['layout_labels']['lo_ori_cls'])
-                        lo_bdb3D_result = get_layout_bdb_sunrgbd(self.opt.bins_tensor, 
-                            layout_est_result['lo_ori_reg_result'], torch.argmax(layout_est_result['lo_ori_cls_result'], dim=1), layout_est_result['lo_centroid_result'], layout_est_result['lo_coeffs_result'])
+                        lo_bdb3D_result, basis_result, coeffs_result, centroid_result = get_layout_bdb_sunrgbd(self.opt.bins_tensor, \
+                            layout_est_result['lo_ori_reg_result'], torch.argmax(layout_est_result['lo_ori_cls_result'], dim=1), \
+                            layout_est_result['lo_centroid_result'], layout_est_result['lo_coeffs_result'], \
+                            if_return_full=True)
                         cam_R_result = get_rotation_matix_result(self.opt.bins_tensor,
                             torch.argmax(layout_est_result['pitch_cls_result'], 1), layout_est_result['pitch_reg_result'],
                             torch.argmax(layout_est_result['roll_cls_result'], 1), layout_est_result['roll_reg_result'])
+                        # pre_layout_reindexed = reindex_layout(pre_layout, pre_cam_R)
 
-                        input_dict.update({'lo_bdb3D_result': lo_bdb3D_result, 'cam_R_result': cam_R_result})
+
+                        input_dict.update({'lo_bdb3D_result': lo_bdb3D_result, 'basis_result': basis_result, 'coeffs_result': coeffs_result, 'centroid_result': centroid_result, 'cam_R_result': cam_R_result})
 
                     output_dict = self.forward_emitter_lightAccu(input_dict, return_dict_brdf=return_dict_brdf, return_dict_light=return_dict_light)
                     return_dict_layout_emitter.update(output_dict)
@@ -465,12 +475,23 @@ class Model_Joint(nn.Module):
         if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_use_est_layout:
             cam_R_batch = input_dict['cam_R_result']
             layout_batch = input_dict['lo_bdb3D_result']
+            basis_batch, coeffs_batch, centroid_batch = input_dict['basis_result'], input_dict['coeffs_result'], input_dict['centroid_result']
         else:
             cam_R_batch = input_dict['layout_labels']['cam_R_gt']
-            layout_batch = input_dict['layout_labels']['lo_bdb3D']
+            if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_train_with_reindexed_layout:
+                layout_batch = input_dict['layout_labels']['lo_bdb3D_reindexed']
+            else:
+                layout_batch = input_dict['layout_labels']['lo_bdb3D']
+            # basis_batch, coeffs_batch, centroid_batch = {key: gt_dict_lo['lo_bdb3D_full'][key][sample_idx].detach().cpu().numpy() for key in gt_dict_lo['lo_bdb3D_full']}
+            basis_batch = input_dict['layout_labels']['lo_bdb3D_full']['basis'].cuda().float()
+            coeffs_batch = input_dict['layout_labels']['lo_bdb3D_full']['coeffs'].cuda().float()
+            centroid_batch = input_dict['layout_labels']['lo_bdb3D_full']['centroid'].cuda().float()
+
+
         # print(depthBatch.shape, normalBatch.shape, envmapsBatch.shape, cam_K_batch.shape, cam_R_batch.shape, layout_batch.shape)
 
-        input_dict_light_accu = {'normalPred_lightAccu':normalBatch, 'depthPred_lightAccu': depthBatch, 'envmapsPredImage_lightAccu': envmapsBatch, 'cam_K': cam_K_batch, 'cam_R': cam_R_batch, 'layout': layout_batch}
+        input_dict_light_accu = {'normalPred_lightAccu':normalBatch, 'depthPred_lightAccu': depthBatch, 'envmapsPredImage_lightAccu': envmapsBatch, 'cam_K': cam_K_batch, 'cam_R': cam_R_batch, \
+            'layout': layout_batch, 'basis': basis_batch, 'coeffs': coeffs_batch, 'centroid': centroid_batch, }
         return_dict_layout_emitter = {'emitter_input': {}}
 
         # ---- accu lights
@@ -605,7 +626,8 @@ class Model_Joint(nn.Module):
             raise ValueError('Invalid self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version')
 
 
-        return_dict_layout_emitter['emitter_est_result'].update({'envmap_lightAccu_mean': envmap_lightAccu_mean, 'points_sampled_mask_expanded': return_dict_lightAccu['points_sampled_mask_expanded']})
+        return_dict_layout_emitter['emitter_est_result'].update({'envmap_lightAccu_mean': envmap_lightAccu_mean, 'points_sampled_mask_expanded': return_dict_lightAccu['points_sampled_mask_expanded'], \
+            'emitter_outdirs_meshgrid_Total3D_outside_abs': emitter_outdirs_meshgrid_Total3D_outside_abs, 'normal_outside_Total3D': normal_outside_Total3D})
 
         return_dict_layout_emitter['emitter_input'].update({'normalPred_lightAccu':normalBatch, 'depthPred_lightAccu': depthBatch, 'envmapsPredImage_lightAccu': envmapsBatch})
 

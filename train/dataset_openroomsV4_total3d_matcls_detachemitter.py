@@ -837,6 +837,7 @@ class openrooms(data.Dataset):
             with open(pickle_emitter2wall_assign_info_dict_path, 'rb') as f:
                 sequence_emitter2wall_assign_info_dict = pickle.load(f)
             emitter2wall_assign_info_list = sequence_emitter2wall_assign_info_dict['emitter2wall_assign_info_list']
+            wall_params_ori_list = sequence_emitter2wall_assign_info_dict['wall_params_ori_list']
 
             emitter_representation_type = self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.representation_type
             emitters_prop_dict_representation_dict_path = scene_total3d_path / ('emitters_prop_dict_%s_%d.pkl'%(self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.representation_type, frame_id))
@@ -859,7 +860,9 @@ class openrooms(data.Dataset):
 
                 cell_axis_abs = np.zeros((6, self.grid_size, self.grid_size, 3), dtype=np.float32)
                 cell_axis_relative = np.zeros((6, self.grid_size, self.grid_size, 3), dtype=np.float32)
-                cell_normal_outside = np.zeros((6, self.grid_size, self.grid_size, 3), dtype=np.float32)
+                # cell_normal_outside = np.zeros((6, self.grid_size, self.grid_size, 3), dtype=np.float32)
+                cell_normal_outside = np.stack([-wall_params_ori['basis_3_unit'].flatten() for wall_params_ori in wall_params_ori_list]).reshape(6, 1, 1, 3)
+                cell_normal_outside = np.tile(cell_normal_outside, (1, self.grid_size, self.grid_size, 1))
 
                 if emitter_representation_type in ['1ambient']:
                     cell_ambient = np.zeros((6, self.grid_size, self.grid_size, 3), dtype=np.float32)
@@ -889,8 +892,8 @@ class openrooms(data.Dataset):
                                 print(cell_random_id, cell_info['obj_type'], pickle_emitter2wall_assign_info_dict_path)
                             if cell_info['obj_type'] == 'window':
                                 # light_center_world_total3d = emitters_prop_dict_representation_dict[cell_random_id]['emitter_prop_total3d']['light_center_world_total3d']
-                                light_axis_world_total3d = emitter_prop_total3d['light_axis_world_total3d'].reshape(3,)
                                 normal_outside = cell_info['emitter_info']['normal_outside']
+                                light_axis_world_total3d = emitter_prop_total3d['light_axis_world_total3d'].reshape(3,)
                                 light_dir_offset = light_axis_world_total3d - normal_outside # [!!!] normal_outside, light_axis_world_total3d are already normalized
 
                                 if light_dir_offset.shape != (3,):
@@ -902,9 +905,10 @@ class openrooms(data.Dataset):
                                     cell_info['emitter_info']['light_dir'] = light_axis_world_total3d
                                 cell_info['emitter_info']['light_dir_abs'] = light_axis_world_total3d
 
+                                # cell_normal_outside[wall_idx, i, j] = normal_outside
+                                assert np.amax(np.abs(cell_normal_outside[wall_idx, i, j] - normal_outside)) < 1e-3
                                 cell_axis_relative[wall_idx, i, j] = light_dir_offset
                                 cell_axis_abs[wall_idx, i, j] = light_axis_world_total3d
-                                cell_normal_outside[wall_idx, i, j] = normal_outside
 
                                 # cell_info['emitter_info']['light_dir'] = cell_info['emitter_info']['light_dir'] / (1e-6+np.linalg.norm(cell_info['emitter_info']['light_dir']))
                                 # cell_info['emitter_info']['light_dir_abs'] = cell_info['emitter_info']['light_dir_abs'] / (1e-6+np.linalg.norm(cell_info['emitter_info']['light_dir_abs']))

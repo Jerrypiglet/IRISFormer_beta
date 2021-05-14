@@ -80,6 +80,7 @@ parser.add_argument('--invalid_index', type=int, default = 0, help='index for in
 
 # Pre-training
 parser.add_argument('--resume', type=str, help='resume training; can be full path (e.g. tmp/checkpoint0.pth.tar) or taskname (e.g. tmp); [to continue the current task, use: resume]', default='NoCkpt')
+parser.add_argument('--resumes_extra', type=str, help='list of extra resumed checkpoints; strings concat by |', default='NoCkpt')
 parser.add_argument('--reset_latest_ckpt', action='store_true', help='remove latest_checkpoint file')
 parser.add_argument('--reset_scheduler', action='store_true', help='')
 parser.add_argument('--reset_lr', action='store_true', help='')
@@ -289,6 +290,7 @@ checkpointer, tid_start, epoch_start = set_up_checkpointing(opt, model, optimize
 
 # >>>>>>>>>>>>> TRANING
 from train_funcs_joint_all import get_labels_dict_joint, val_epoch_joint, vis_val_epoch_joint, forward_joint, get_time_meters_joint
+from train_funcs_dump import dump_joint
 
 tid = tid_start
 albedoErrsNpList = np.ones( [1, 1], dtype = np.float32 )
@@ -381,6 +383,8 @@ else:
                 if opt.if_vis:
                     val_params.update({'batch_size_val_vis': batch_size_val_vis})
                     with torch.no_grad():
+                        if opt.cfg.DEBUG.if_dump_anything:
+                            dump_joint(brdf_loader_val_vis, model, val_params)
                         vis_val_epoch_joint(brdf_loader_val_vis, model, bin_mean_shift, val_params)
                     synchronize()                
                 if opt.if_val:

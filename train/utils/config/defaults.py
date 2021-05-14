@@ -46,6 +46,12 @@ _C.PATH.torch_home_cluster = '/viscompfs/users/ruizhu/'
 _C.PATH.OR4X_mapping_catInt_to_RGB = ['data/openrooms/total3D_colors/OR4X_mapping_catInt_to_RGB_light.pkl', 'data/openrooms/total3D_colors/OR4X_mapping_catInt_to_RGB_dark.pkl']
 _C.PATH.OR4X_mapping_catStr_to_RGB = ['data/openrooms/total3D_colors/OR4X_mapping_catStr_to_RGB_light.pkl', 'data/openrooms/total3D_colors/OR4X_mapping_catStr_to_RGB_dark.pkl']
 
+# ===== debug
+
+_C.DEBUG = CN()
+_C.DEBUG.if_dump_anything = False
+_C.DEBUG.if_dump_shadow_renderer = False
+
 # ===== dataset
 
 _C.DATASET = CN()
@@ -68,13 +74,15 @@ _C.DATASET.layout_emitter_path = ''
 
 # _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-withMesh20210507-val500-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-withMesh20210507-val-OR45_total3D_train_test_data'
-_C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-withMesh20210507-OR45_total3D_train_test_data'
+# _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-withMesh20210507-OR45_total3D_train_test_data'
+_C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-withMesh20210510-assign2NotReindex-OR45_total3D_train_test_data'
 
 # _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitter-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitterRERE-OR45_total3D_train_test_data'
 # _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitterRERERE20210502-OR45_total3D_train_test_data'
-_C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-withMesh20210507-OR45_total3D_train_test_data'
+# _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-withMesh20210507-OR45_total3D_train_test_data'
+_C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-withMesh20210510-assign2NotReindex-OR45_total3D_train_test_data'
 
 _C.DATASET.envmap_path = ''
 _C.DATASET.envmap_path_local = '/home/ruizhu/Documents/data/EnvDataset/'
@@ -177,18 +185,19 @@ _C.MODEL_LAYOUT_EMITTER.data.version = 'V4full'
 
 _C.MODEL_LAYOUT_EMITTER.emitter = CN()
 _C.MODEL_LAYOUT_EMITTER.emitter.if_use_est_layout = False
+_C.MODEL_LAYOUT_EMITTER.emitter.if_train_with_reindexed_layout = False
 _C.MODEL_LAYOUT_EMITTER.emitter.grid_size = 8
 _C.MODEL_LAYOUT_EMITTER.emitter.est_type = 'cell_info'
 _C.MODEL_LAYOUT_EMITTER.emitter.representation_type = '0ambient' # 0ambient, 1ambient, 2ambient
-_C.MODEL_LAYOUT_EMITTER.emitter.relative_dir = True
 _C.MODEL_LAYOUT_EMITTER.emitter.loss_type = 'L2' # [L2, KL]
-_C.MODEL_LAYOUT_EMITTER.emitter.scale_invariant_loss_for_cell_axis = True
 _C.MODEL_LAYOUT_EMITTER.emitter.sigmoid = False
 _C.MODEL_LAYOUT_EMITTER.emitter.softmax = False
+_C.MODEL_LAYOUT_EMITTER.emitter.relative_dir = True
+_C.MODEL_LAYOUT_EMITTER.emitter.scale_invariant_loss_for_cell_axis = True
 _C.MODEL_LAYOUT_EMITTER.emitter.cls_agnostric = False
 _C.MODEL_LAYOUT_EMITTER.emitter.loss = CN()
 _C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_axis_global = 4.
-_C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_light_ratio = 100.
+_C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_light_ratio = 10.
 _C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_cls = 10.
 _C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_intensity = 0.2
 _C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_lamb = 0.3
@@ -201,6 +210,8 @@ _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_brdf = True # use GT brdf 
 _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.freeze_lightnet = True # freeze LIGHT_NET when using predictiion from LIGHT_NET
 _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.freeze_brdfnet = True # freeze LIGHT_NET when using predictiion from LIGHT_NET
 _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis = True
+_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.envHeight = 8
+_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.envWidth = 16
 
 _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_envmap = False
 _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_envmap_as_input = False
@@ -210,6 +221,7 @@ _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_lear
 _C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels = 8 # = 64 + 128 + 256 + 256 if sample_BRDF_feats_instead_of_learn_feats
 
 _C.MODEL_LAYOUT_EMITTER.layout = CN()
+_C.MODEL_LAYOUT_EMITTER.layout.if_freeze = False
 _C.MODEL_LAYOUT_EMITTER.layout.loss = CN()
 _C.MODEL_LAYOUT_EMITTER.layout.loss.cls_reg_ratio = 10
 _C.MODEL_LAYOUT_EMITTER.layout.loss.obj_cam_ratio = 1
@@ -241,8 +253,6 @@ _C.MODEL_LAYOUT_EMITTER.mesh_obj.valid_bbox_vis_ratio = 0.1
 
 _C.MODEL_LAYOUT_EMITTER.mesh_obj.if_pre_filter_invalid_frames = False # using e.g./home/ruizhu/Documents/Projects/semanticInverse/train/data/openrooms/list_ORmini-val/list/obj_list.pickle
 _C.MODEL_LAYOUT_EMITTER.mesh_obj.if_skip_invalid_frames = True # skip invalid frames in dataloader.__getitem()__
-
-
 
 # ===== material cls (Yu-Ying)
 _C.MODEL_MATCLS = CN()

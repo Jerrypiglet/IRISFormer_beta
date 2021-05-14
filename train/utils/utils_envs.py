@@ -66,7 +66,7 @@ def set_up_envs(opt):
         if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
             if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_use_est_layout:
                 opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.append('lo')
-                opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.append('ob')
+                # opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.append('ob')
                 opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_differentiable = True
 
             if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
@@ -134,12 +134,14 @@ def set_up_envs(opt):
             opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.append('joint')
         if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list and 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
             opt.cfg.MODEL_LAYOUT_EMITTER.loss_list.append('joint')
+        os.environ['IF_MESH'] = 'False'
         if 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
             # opt.cfg.DATA.data_read_list += ['de', 'lo', 'ob']
             opt.cfg.DATA.data_read_list += ['lo', 'ob']
             # opt.cfg.MODEL_LAYOUT_EMITTER.enable_list += ['ob', 'joint']
             assert opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss in ['SVRLoss', 'ReconLoss']
             assert opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_pre_filter_invalid_frames==False, 'too costy; disabled for now'
+            os.environ['IF_MESH'] = 'True'
 
         # if opt.if_cluster:
         #     os.environ['EXTERNAL_PATH'] = '/viscompfs/users/ruizhu/semanticInverse/external'
@@ -253,6 +255,24 @@ def set_up_envs(opt):
     # mis
     if opt.cfg.SOLVER.if_test_dataloader:
         opt.cfg.SOLVER.max_epoch = 1
+
+    # dump
+    if opt.cfg.DEBUG.if_dump_shadow_renderer:
+        opt.cfg.DEBUG.if_dump_anything = True
+        opt.if_vis = True
+
+        opt.cfg.MODEL_LAYOUT_EMITTER.enable = True
+        opt.cfg.DATA.if_load_png_not_hdr = False
+        opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable = True
+        opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version = 'V3'
+        opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_light = False
+        opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_brdf = False
+        opt.cfg.MODEL_LIGHT.load_pretrained_MODEL_BRDF = False
+        opt.cfg.MODEL_LIGHT.load_pretrained_MODEL_LIGHT = False
+        opt.cfg.MODEL_BRDF.use_scale_aware_depth = True
+        opt.cfg.MODEL_BRDF.depth_activation = 'relu'
+        opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = 'em'
+        opt.cfg.DATA.data_read_list += ['mesh', 'de']
 
 def check_if_in_list(list_to_check, list_allowed, module_name='Unknown Module'):
     if len(list_to_check) == 0:
@@ -425,8 +445,13 @@ def set_up_checkpointing(opt, model, optimizer, scheduler, logger):
         # if 'train_POD_matseg_DDP' in opt.resume:
         #     replace_kws = ['hourglass_model.seq_L2.1', 'hourglass_model.seq_L2.3', 'hourglass_model.disp_res_pred_layer_L2']
         #     replace_with_kws = ['hourglass_model.seq.1', 'hourglass_model.seq.3', 'hourglass_model.disp_res_pred_layer']
-        ic(opt.resume)
         checkpoint_restored, _, _ = checkpointer.load(task_name=opt.resume, replace_kws=replace_kws, replace_with_kws=replace_with_kws)
+    
+        if opt.resumes_extra != 'NoCkpt':
+            resumes_extra_list = opt.resumes_extra.split('|')
+            for resume_extra in resumes_extra_list:
+                checkpoint_restored, _, _ = checkpointer.load(task_name=resume_extra, replace_kws=replace_kws, replace_with_kws=replace_with_kws, prefix='[RESUME EXTRA] ')
+
         if 'iteration' in checkpoint_restored and not opt.reset_tid:
             tid_start = checkpoint_restored['iteration']
         if 'epoch' in checkpoint_restored and not opt.reset_tid:

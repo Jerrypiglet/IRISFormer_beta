@@ -21,6 +21,8 @@ from utils.utils_total3D.net_utils_libs import get_bdb_evaluation, get_mask_stat
 from utils.utils_total3D.utils_OR_visualize import format_bboxes
 from utils.utils_total3D.libs.tools import write_obj
 from pathlib import Path
+from icecream import ic
+
 
 def get_labels_dict_layout_emitter(labels_dict_input, data_batch, opt):
     labels_dict = {'layout_labels': {}, 'object_labels': {}, 'emitter_labels': {}}
@@ -43,6 +45,7 @@ def get_labels_dict_layout_emitter(labels_dict_input, data_batch, opt):
             lo_coeffs = data_batch['layout_reindexed']['coeffs_reg'].float().cuda(non_blocking=True)
             lo_bdb3D = data_batch['layout_reindexed']['bdb3D'].float().cuda(non_blocking=True)
             lo_bdb3D_reindexed = lo_bdb3D
+            lo_bdb3D_full = data_batch['layout_reindexed']
         else:
             lo_ori_reg = data_batch['layout_']['ori_reg'].float().cuda(non_blocking=True)
             lo_ori_cls = data_batch['layout_']['ori_cls'].long().cuda(non_blocking=True)
@@ -50,6 +53,7 @@ def get_labels_dict_layout_emitter(labels_dict_input, data_batch, opt):
             lo_coeffs = data_batch['layout_']['coeffs_reg'].float().cuda(non_blocking=True)
             lo_bdb3D = data_batch['layout_']['bdb3D'].float().cuda(non_blocking=True)
             lo_bdb3D_reindexed = data_batch['layout_reindexed']['bdb3D'].float().cuda(non_blocking=True)
+            lo_bdb3D_full = data_batch['layout_']
 
         # cam_K = data_batch['camera']['K'].float().cuda(non_blocking=True)
         cam_K_scaled = data_batch['camera']['K_scaled'].float().cuda(non_blocking=True)
@@ -60,7 +64,7 @@ def get_labels_dict_layout_emitter(labels_dict_input, data_batch, opt):
 
         layout_labels = {'pitch_reg': pitch_reg, 'pitch_cls': pitch_cls, 'roll_reg': roll_reg,
                         'roll_cls': roll_cls, 'lo_ori_reg': lo_ori_reg, 'lo_ori_cls': lo_ori_cls, 'lo_centroid': lo_centroid,
-                        'lo_coeffs': lo_coeffs, 'lo_bdb3D': lo_bdb3D, 'lo_bdb3D_reindexed': lo_bdb3D_reindexed, 'cam_K_scaled': cam_K_scaled, 'cam_R_gt':cam_R_gt}
+                        'lo_coeffs': lo_coeffs, 'lo_bdb3D': lo_bdb3D, 'lo_bdb3D_reindexed': lo_bdb3D_reindexed, 'lo_bdb3D_full': lo_bdb3D_full, 'cam_K_scaled': cam_K_scaled, 'cam_R_gt':cam_R_gt}
         labels_dict['layout_labels'] = layout_labels
 
     if if_object:
@@ -158,8 +162,7 @@ def get_labels_dict_layout_emitter(labels_dict_input, data_batch, opt):
             # emitter_labels['emitter_cls_prob'] = emitter_cls_prob
             raise ValueError('Not implemented!')
         elif emitter_est_type == 'cell_info':
-            cell_light_ratio = data_batch['cell_light_ratio'].cuda(non_blocking=True)
-            emitter_labels['cell_light_ratio'] = cell_light_ratio
+            emitter_labels['cell_light_ratio'] = data_batch['cell_light_ratio'].cuda(non_blocking=True)
             emitter_labels['cell_cls'] = data_batch['cell_cls'].cuda(non_blocking=True)
             emitter_labels['cell_axis_abs'] = data_batch['cell_axis_abs'].cuda(non_blocking=True)
             emitter_labels['cell_axis_relative'] = data_batch['cell_axis_relative'].cuda(non_blocking=True)
@@ -202,10 +205,12 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
     
     if if_est_layout:
         pred_dict_lo = output_dict['layout_est_result']
-        lo_bdb3D_out = get_layout_bdb_sunrgbd(opt.bins_tensor, pred_dict_lo['lo_ori_reg_result'],
+        lo_bdb3D_out, basis_out, coeffs_out, centroid_out = get_layout_bdb_sunrgbd(opt.bins_tensor, pred_dict_lo['lo_ori_reg_result'],
                                             torch.argmax(pred_dict_lo['lo_ori_cls_result'], 1),
                                             pred_dict_lo['lo_centroid_result'],
-                                            pred_dict_lo['lo_coeffs_result'])
+                                            pred_dict_lo['lo_coeffs_result'], 
+                                            if_return_full=True)
+        # ic(basis_out.shape, coeffs_out.shape, centroid_out.shape) # [4, 3, 3], [4, 3], [4, 3]
         cam_R_out = get_rotation_matix_result(opt.bins_tensor,
                                     torch.argmax(pred_dict_lo['pitch_cls_result'], 1), pred_dict_lo['pitch_reg_result'],
                                     torch.argmax(pred_dict_lo['roll_cls_result'], 1), pred_dict_lo['roll_reg_result'])
@@ -219,13 +224,14 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
                                 (gt_dict_ob['bdb2D_pos'][:, 1] + gt_dict_ob['bdb2D_pos'][:, 3]) / 2 -
                                 (gt_dict_ob['bdb2D_pos'][:, 3] - gt_dict_ob['bdb2D_pos'][:, 1]) * pred_dict_ob['offset_2D_result'][:,1]), 1)
 
+        cam_R_use = gt_dict_lo['cam_R_gt'] if not if_est_layout else cam_R_out
         bdb3D_out_form_cpu, bdb3D_out = get_bdb_evaluation(opt.bins_tensor,
                                                         torch.argmax(pred_dict_ob['ori_cls_result'], 1),
                                                         pred_dict_ob['ori_reg_result'],
                                                         torch.argmax(pred_dict_ob['centroid_cls_result'], 1),
                                                         pred_dict_ob['centroid_reg_result'],
                                                         gt_dict_ob['size_cls'], pred_dict_ob['size_reg_result'], P_result,
-                                                        gt_dict_ob['cam_K_scaled'], cam_R_out, gt_dict_ob['split'], return_bdb=True)
+                                                        gt_dict_ob['cam_K_scaled'], cam_R_use, gt_dict_ob['split'], return_bdb=True)
 
     if if_est_mesh:
         pred_dict_mesh = output_dict['mesh_est_result']
@@ -237,6 +243,7 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
         out_faces = pred_dict_mesh['faces']
 
     if if_est_emitter:
+        if_lightAccu = False
         gt_dict_em = labels_dict['emitter_labels']
         pred_dict_em = output_dict['emitter_est_result']
         emitter_cls_result = pred_dict_em['cell_light_ratio'].view((batch_size, 6, -1))
@@ -255,6 +262,12 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
             cell_axis = pred_dict_em['cell_axis'].view((batch_size, 6, grid_size, grid_size, 3)).detach().cpu().numpy()
             cell_intensity = pred_dict_em['cell_intensity'].view((batch_size, 6, grid_size, grid_size, 3)).detach().cpu().numpy()
             cell_lamb = pred_dict_em['cell_lamb'].view((batch_size, 6, grid_size, grid_size)).detach().cpu().numpy()
+            if 'emitter_outdirs_meshgrid_Total3D_outside_abs' in pred_dict_em:
+                if_lightAccu = True
+                envHeight = opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.envHeight
+                envWidth = opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.envWidth
+                emitter_outdirs_meshgrid_Total3D_outside_abs = pred_dict_em['emitter_outdirs_meshgrid_Total3D_outside_abs'].detach().cpu().numpy().reshape(batch_size, 6, grid_size, grid_size, envHeight, envWidth, 3)
+                normal_outside_Total3D = pred_dict_em['normal_outside_Total3D'].detach().cpu().numpy().reshape(batch_size, 6, grid_size, grid_size, 3)
 
 
     scene_box_list = []
@@ -269,25 +282,31 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
         gt_cam_R = gt_dict_lo['cam_R_gt'][sample_idx].cpu().numpy()
         cam_K = gt_dict_lo['cam_K_scaled'][sample_idx].cpu().numpy()
         # gt_layout = gt_dict_lo['lo_bdb3D'][sample_idx].cpu().numpy()
-        gt_layout = gt_dict_lo['lo_bdb3D_reindexed'][sample_idx].cpu().numpy()
+        if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_train_with_reindexed_layout:
+            gt_layout = gt_dict_lo['lo_bdb3D_reindexed'][sample_idx].cpu().numpy()
+        else:
+            gt_layout = gt_dict_lo['lo_bdb3D'][sample_idx].cpu().numpy()
+
+        gt_layout_full = {key: gt_dict_lo['lo_bdb3D_full'][key][sample_idx].detach().cpu().numpy() for key in gt_dict_lo['lo_bdb3D_full']}
 
         # ---- layout
         if if_est_layout:
-            layout_dict = {'layout': lo_bdb3D_out[sample_idx, :, :].cpu().detach().numpy()}
-            cam_R_dict = {'cam_R': cam_R_out[sample_idx, :, :].cpu().detach().numpy()}
-
-            pre_layout = layout_dict['layout']                
-            pre_cam_R = cam_R_dict['cam_R']
-            pre_layout_reindexed = reindex_layout(pre_layout, pre_cam_R)
+            pre_layout = lo_bdb3D_out[sample_idx, :, :].cpu().detach().numpy()
+            pre_layout_full = {'bdb3D': pre_layout, 'coeffs': coeffs_out[sample_idx].cpu().detach().numpy(), 'basis': basis_out[sample_idx].cpu().detach().numpy(), 'centroid': centroid_out[sample_idx].cpu().detach().numpy()}
+            pre_cam_R = cam_R_out[sample_idx, :, :].cpu().detach().numpy()
+            if opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_train_with_reindexed:
+                pre_layout = reindex_layout(pre_layout, pre_cam_R)
+                pre_layout_full['bdb3D'] = pre_layout
+            
         else:
             pre_cam_R = gt_cam_R
             pre_layout = gt_layout
-            pre_layout_reindexed = gt_layout
+            pre_layout_full = gt_layout_full
 
+        # ---- objects
         if if_load_object or if_load_mesh:
             interval = gt_dict_ob['split'][sample_idx].cpu().tolist()
 
-        # ---- objects
         if if_load_object:
             if sum(gt_dict_ob['boxes_valid_list'][sample_idx])==0: # if there are no objects
                 gt_boxes=None
@@ -310,7 +329,7 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
             # bdb3d_mat_path = os.path.join(str(save_path), '%s_bdb_3d.mat'%save_prefix)
             pre_box_data = {'bdb': bdb3D_out_form_cpu[interval[0]:interval[1]], 'class_id': current_cls}
 
-            class_ids = gt_dict_ob['size_cls'][interval[0]:interval[1]].cpu().argmax(1).flatten().numpy().tolist()
+            # class_ids = gt_dict_ob['size_cls'][interval[0]:interval[1]].cpu().argmax(1).flatten().numpy().tolist()
             if sum(gt_dict_ob['boxes_valid_list'][sample_idx])==0:
                 pre_boxes = None
             else:
@@ -347,47 +366,72 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
         # image = np.transpose(image, (1, 2, 0))
 
         # ---- emitters
-        if if_est_emitter:
-            emitter2wall_assign_info_list = gt_dict_em['emitter2wall_assign_info_list'][sample_idx]
-            emitters_obj_list = gt_dict_em['emitters_obj_list'][sample_idx]
-            gt_layout_RAW = gt_dict_em['gt_layout_RAW'][sample_idx]
-            emitter_cls_result_postprocessed_np = emitter_cls_result_postprocessed[sample_idx].detach().cpu().numpy() # [102]
+        if if_load_emitter:
+            emitters_obj_list_gt = gt_dict_em['emitters_obj_list'][sample_idx]
+            emitter2wall_assign_info_list_gt = gt_dict_em['emitter2wall_assign_info_list'][sample_idx]
             if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'cell_info':
                 emitter_cls_prob_GT_np = gt_dict_em['cell_light_ratio'][sample_idx].detach().cpu().numpy()
             else:
                 emitter_cls_prob_GT_np = gt_dict_em['emitter_cls_prob'][sample_idx].detach().cpu().numpy()
 
-            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'cell_info':
-                face_v_idxes = [(1, 0, 2, 3), (4, 5, 7, 6), (0, 1, 4, 5), (1, 2, 5, 6), (3, 7, 2, 6), (4, 7, 0, 3)]
+            assert opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'cell_info'
+            cell_info_grid_GT_includeempty = gt_dict_em['cell_info_grid'][sample_idx]
+            cell_info_grid_GT = []
+            for wall_idx in range(6):
+                for i in range(grid_size):
+                    for j in range(grid_size):
+                        cell_info = cell_info_grid_GT_includeempty[wall_idx * grid_size**2 + i * grid_size + j]
+                        if cell_info['obj_type'] is not None:
+                            cell_info['wallidx_i_j'] = (wall_idx, i, j)
+                            cell_info_grid_GT.append(cell_info)
+            cell_normal_outside_gt_np = gt_dict_em['cell_normal_outside'][sample_idx].detach().cpu().numpy() # [6, 8, 8, 3]
+        else:
+            emitters_obj_list_gt = None
+            emitter2wall_assign_info_list_gt = None
+            emitter_cls_prob_GT_np = None
+            cell_info_grid_GT = None
+            cell_normal_outside_gt_np = None
 
-                cell_info_grid_GT_includeempty = gt_dict_em['cell_info_grid'][sample_idx]
-                cell_info_grid_GT = []
-                for wall_idx in range(6):
-                    for i in range(grid_size):
-                        for j in range(grid_size):
-                            cell_info = cell_info_grid_GT_includeempty[wall_idx * grid_size**2 + i * grid_size + j]
-                            if cell_info['obj_type'] is not None:
-                                cell_info['wallidx_i_j'] = (wall_idx, i, j)
-                                cell_info_grid_GT.append(cell_info)
+        if if_est_emitter:
+            # gt_layout_RAW = gt_dict_em['gt_layout_RAW'][sample_idx]
+            emitter_cls_result_postprocessed_np = emitter_cls_result_postprocessed[sample_idx].detach().cpu().numpy() # [102]
+
+            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'cell_info':
+                if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_train_with_reindexed_layout:
+                    face_v_idxes = [(1, 0, 2, 3), (4, 5, 7, 6), (0, 1, 4, 5), (1, 2, 5, 6), (3, 7, 2, 6), (4, 7, 0, 3)]
 
                 map_obj_type_int = {1: 'window', 2: 'obj', 0: 'null'}
                 cell_info_grid_PRED = []
                 for wall_idx in range(6):
-                    basis_index = face_v_idxes[wall_idx]
-                    normal_outside = - np.cross(gt_layout_RAW[basis_index[1]] - gt_layout_RAW[basis_index[0]], gt_layout_RAW[basis_index[2]] - gt_layout_RAW[basis_index[0]]).flatten() # [TODO] change to use EST layout when joint training!!!
-                    normal_outside = normal_outside / np.linalg.norm(normal_outside)
+                    # if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_train_with_reindexed_layout:
+                    #     basis_index = face_v_idxes[wall_idx]
+                    #     normal_outside = - np.cross(gt_layout_RAW[basis_index[1]] - gt_layout_RAW[basis_index[0]], gt_layout_RAW[basis_index[2]] - gt_layout_RAW[basis_index[0]]).flatten() # [TODO] change to use EST layout when joint training!!!
+                    #     normal_outside = normal_outside / np.linalg.norm(normal_outside)
                     for i in range(grid_size):
                         for j in range(grid_size):
                             if not opt.cfg.MODEL_LAYOUT_EMITTER.emitter.cls_agnostric:
                                 if cell_cls[sample_idx][wall_idx][i][j] == 0:
                                     continue
+                            # if not opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_train_with_reindexed_layout:
+                            #     normal_outside = cell_normal_outside_gt_np[wall_idx, i, j]
+
                             cell_info = {'obj_type': map_obj_type_int[cell_cls[sample_idx][wall_idx][i][j]], 'emitter_info': {}, 'wallidx_i_j': (wall_idx, i, j)}
                             if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.relative_dir:
-                                cell_info['emitter_info']['light_dir_abs'] = cell_axis[sample_idx][wall_idx][i][j].flatten() + normal_outside
+                                cell_info['emitter_info']['light_dir_offset'] = cell_axis[sample_idx][wall_idx][i][j].flatten()
+                                # cell_info['emitter_info']['light_dir_abs'] = cell_info['emitter_info']['light_dir_offset'] + normal_outside
                             else:
                                 cell_info['emitter_info']['light_dir_abs'] = cell_axis[sample_idx][wall_idx][i][j].flatten()
 
-                            cell_info['emitter_info']['light_dir_abs'] = cell_info['emitter_info']['light_dir_abs'] / (np.linalg.norm(cell_info['emitter_info']['light_dir_abs'])+1e-6)
+                            # cell_info['emitter_info']['normal_outside'] = normal_outside
+
+                            if if_lightAccu:
+                                emitter_outdirs_meshgrid_Total3D_outside_abs_single = emitter_outdirs_meshgrid_Total3D_outside_abs[sample_idx, wall_idx, i, j]
+                                normal_outside_Total3D_single = normal_outside_Total3D[sample_idx, wall_idx, i, j]
+                                # if not opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_use_est_layout:
+                                #     assert np.amax(np.abs(normal_outside_Total3D_single - normal_outside)) < 1e-3
+                                # print(wall_idx, i, j, normal_outside_Total3D_single, normal_outside)
+                                cell_info['emitter_info']['emitter_outdirs_meshgrid_Total3D_outside_abs'] = emitter_outdirs_meshgrid_Total3D_outside_abs_single # [8, 16, 3]
+                                cell_info['emitter_info']['normal_outside_Total3D_single'] = normal_outside_Total3D_single
                             
                             intensity_log = cell_intensity[sample_idx][wall_idx][i][j].flatten() # actually predicts LOG intensity!
                             assert intensity_log.shape == (3,)
@@ -403,22 +447,18 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
                             cell_info['light_ratio'] = emitter_cls_result_postprocessed_np[wall_idx][i * grid_size + j]
                             cell_info_grid_PRED.append(cell_info)
             else:
-                cell_info_grid_PRED, cell_info_grid_GT = None, None
+                cell_info_grid_PRED = None
         else:
-            emitter2wall_assign_info_list = None
-            emitters_obj_list = None
             # gt_layout_RAW = None
             emitter_cls_result_postprocessed_np = None
-            emitter_cls_prob_GT_np = None
-            cell_info_grid_GT = None
             cell_info_grid_PRED = None
 
         save_prefix = ''
 
-        scene_box = Box(image, None, cam_K, gt_cam_R, pre_cam_R, gt_layout, pre_layout_reindexed, gt_boxes, pre_boxes, gt_meshes, pre_meshes, 'prediction', output_mesh = None, \
+        scene_box = Box(image, None, cam_K, gt_cam_R, pre_cam_R, gt_layout_full, pre_layout_full, gt_boxes, pre_boxes, gt_meshes, pre_meshes, 'prediction', output_mesh = None, \
             opt=opt, dataset='OR', description=save_prefix, if_mute_print=True, OR=opt.cfg.MODEL_LAYOUT_EMITTER.data.OR, \
-            emitter2wall_assign_info_list = emitter2wall_assign_info_list, 
-            emitters_obj_list = emitters_obj_list, 
+            emitter2wall_assign_info_list_gt = emitter2wall_assign_info_list_gt, 
+            emitters_obj_list_gt = emitters_obj_list_gt, 
             # gt_layout_RAW = gt_layout_RAW, 
             emitter_cls_prob_PRED = emitter_cls_result_postprocessed_np, 
             emitter_cls_prob_GT = emitter_cls_prob_GT_np, 
@@ -519,7 +559,6 @@ def postprocess_joint(labels_dict, output_dict, loss_dict, opt, time_meters, fla
     return output_dict, loss_dict
 
 def postprocess_mesh(labels_dict, output_dict, loss_dict, opt, time_meters, is_train, flattened_valid_mask_tensor=None):
-    cls_reg_ratio = opt.cfg.MODEL_LAYOUT_EMITTER.layout.loss.cls_reg_ratio
     pred_dict = output_dict['mesh_est_result']
     gt_dict = labels_dict['mesh_labels']
 
@@ -537,7 +576,6 @@ def postprocess_mesh(labels_dict, output_dict, loss_dict, opt, time_meters, is_t
 
 
 def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters, extra_input_dict={}):
-
     
     loss_type = opt.cfg.MODEL_LAYOUT_EMITTER.emitter.loss_type
     assert loss_type in ['L2', 'KL']
@@ -565,8 +603,12 @@ def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters, e
         if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.softmax:
             emitter_light_ratio_est = torch.nn.functional.softmax(emitter_light_ratio_est, dim=2)
         # emitter_light_ratio_loss = emitter_cls_criterion_L2_mean(emitter_light_ratio_est, emitter_light_ratio_gt)
+        # print(emitter_light_ratio_est[valid_mask!=0.].detach().cpu().numpy())
+        # print(emitter_light_ratio_gt[valid_mask!=0.].detach().cpu().numpy())
+        # print(valid_mask.shape)
         emitter_light_ratio_loss = emitter_cls_criterion_L2_none(emitter_light_ratio_est, emitter_light_ratio_gt)
         emitter_light_ratio_loss = torch.sum(emitter_light_ratio_loss * valid_mask) / (torch.sum(valid_mask) + 1e-5)
+        # print('------', emitter_light_ratio_loss*opt.cfg.MODEL_LAYOUT_EMITTER.emitter.loss.weight_light_ratio, emitter_light_ratio_loss)
 
     else:
         raise ValueError('Unrecognized emitter cls loss type: ' + loss_type)

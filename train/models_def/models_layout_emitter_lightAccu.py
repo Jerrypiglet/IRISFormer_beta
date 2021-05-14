@@ -195,8 +195,11 @@ class emitter_lightAccu(nn.Module):
         self.vv_im, self.uu_im = torch.meshgrid(torch.arange(self.im_height), torch.arange(self.im_width))
         self.uu_im, self.vv_im = self.uu_im.cuda(), self.vv_im.cuda()
 
-        basis_v_indexes = [(3, 2, 0), (7, 4, 6), (4, 0, 5), (6, 5, 2), (7, 6, 3), (7, 3, 4)]
-        self.origin_v1_v2_list = [basis_v_indexes[wall_idx] for wall_idx in range(6)]
+        if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_train_with_reindexed_layout:
+            basis_v_indexes = [(3, 2, 0), (7, 4, 6), (4, 0, 5), (6, 5, 2), (7, 6, 3), (7, 3, 4)]
+            self.origin_v1_v2_list = [basis_v_indexes[wall_idx] for wall_idx in range(6)]
+        else:
+            self.faces_basis_indexes = [['x', 'z', '-y'], ['z', 'x', 'y'], ['y', 'z', 'x'], ['x', '-y', '-z'], ['z', 'y', '-x'], ['x', 'y', 'z']]
         ii, jj = torch.meshgrid(torch.arange(self.grid_size), torch.arange(self.grid_size))
         self.ii, self.jj = ii.cuda().unsqueeze(0).unsqueeze(0).unsqueeze(-1).float(), jj.cuda().unsqueeze(0).unsqueeze(0).unsqueeze(-1).float() # [B, 1, 8, 8, 1]
         self.extra_transform_matrix = torch.tensor([[0., 0., 1.], [0., -1., 0.], [1., 0., 0.]]).unsqueeze(0).cuda().float() # [1, 3, 3]
@@ -206,11 +209,16 @@ class emitter_lightAccu(nn.Module):
     def forward(self, input_dict):
         normalPred, depthPred, envmapsPredImage = input_dict['normalPred_lightAccu'], input_dict['depthPred_lightAccu'], input_dict['envmapsPredImage_lightAccu']
         cam_K, cam_R, layout = input_dict['cam_K'], input_dict['cam_R'], input_dict['layout'] # cam_R: cam axes, not transformation matrix!
+        basis, coeffs, centroid = input_dict['basis'], input_dict['coeffs'], input_dict['centroid']
+
         assert len(normalPred.shape) == 4 and normalPred.shape[1:] == (3, self.im_height, self.im_width)
         assert len(depthPred.shape) == 3 and depthPred.shape[1:] == (self.im_height, self.im_width)
         assert len(envmapsPredImage.shape) == 6 and envmapsPredImage.shape[1:] == (3, self.envRow, self.envCol, self.envHeight, self.envWidth)
         assert len(cam_K.shape) == 3 and cam_K.shape[1:] == (3, 3)
         assert len(layout.shape) == 3 and layout.shape[1:] == (8, 3)
+        assert len(basis.shape) == 3 and basis.shape[1:] == (3, 3)
+        assert len(centroid.shape) == 2 and centroid.shape[1:] == (3,)
+        assert len(coeffs.shape) == 2 and coeffs.shape[1:] == (3,)
 
         f_W_scale = self.im_width / 2. / cam_K[:, 0:1, 2:3]
         f_H_scale = self.im_height / 2. / cam_K[:, 1:2, 2:3]
@@ -224,9 +232,15 @@ class emitter_lightAccu(nn.Module):
         # normal is normalized here:
         ls_coords, camx, camy, normalPred = self.rL.forwardEnv(normalPred, envmapsPredImage, if_normal_only=True) # torch.Size([B, 128, 3, 120, 160]), [B, 3, 120, 160], [B, 3, 120, 160], [B, 3, 120, 160]
 
+        layout_dict = {
+            'layout': layout, 
+            'basis': basis, 
+            'coeffs': coeffs, 
+            'centroid': centroid, 
+        }
         verts_all_Total3D, verts_center_lightNet, verts_lightNet, \
             origin_0_array_lightNet, basis_1_array_lightNet, basis_2_array_lightNet, normal_array_lightNet, \
-                Total3D_to_LightNet_transform_params = self.get_grid_centers(layout, cam_R) # [B, 6, 8, 8, 3]
+                Total3D_to_LightNet_transform_params = self.get_grid_centers(layout_dict, cam_R) # [B, 6, 8, 8, 3]
 
         envmap_lightAccu, points_sampled_mask_expanded, points_sampled_mask, vec_to_t = self.accu_light(points, verts_center_lightNet, camx, camy, normalPred, envmapsPredImage) # [B, 3, #grids, 120, 160]
         # ic(envmap_lightAccu.shape, points_sampled_mask_expanded.shape)
@@ -457,15 +471,45 @@ class emitter_lightAccu(nn.Module):
         emitter_outdirs_meshgrid = emitter_outdirs_meshgrid.squeeze(-1) # [2, 384, 8, 16, 3]
         return emitter_outdirs_meshgrid
 
-    def get_grid_centers(self, layout, cam_R, if_return_in_Total3D_coords=False):
+    def get_grid_centers(self, layout_dict, cam_R, if_return_in_Total3D_coords=False):
         # layout in Total3D coords; cam_R is camera axes in Total3D coords
-        basis_1_list = [(layout[:, origin_v1_v2[1], :] - layout[:, origin_v1_v2[0], :]) / self.grid_size for origin_v1_v2 in self.origin_v1_v2_list]
-        basis_2_list = [(layout[:, origin_v1_v2[2], :] - layout[:, origin_v1_v2[0], :]) / self.grid_size for origin_v1_v2 in self.origin_v1_v2_list]
-        origin_0_list = [layout[:, origin_v1_v2[0], :] for origin_v1_v2 in self.origin_v1_v2_list]
+        if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_train_with_reindexed_layout:
+            layout = layout_dict['layout']
+            basis_1_list = [(layout[:, origin_v1_v2[1], :] - layout[:, origin_v1_v2[0], :]) / self.grid_size for origin_v1_v2 in self.origin_v1_v2_list]
+            basis_2_list = [(layout[:, origin_v1_v2[2], :] - layout[:, origin_v1_v2[0], :]) / self.grid_size for origin_v1_v2 in self.origin_v1_v2_list]
+            origin_0_list = [layout[:, origin_v1_v2[0], :] for origin_v1_v2 in self.origin_v1_v2_list]
+        else:
+            layout_basis_dict = {'x': layout_dict['basis'][:, 0], 'y': layout_dict['basis'][:, 1], 'z': layout_dict['basis'][:, 2], '-x': -layout_dict['basis'][:, 0], '-y': -layout_dict['basis'][:, 1], '-z': -layout_dict['basis'][:, 2]}
+            layout_coeffs_dict = {'x': layout_dict['coeffs'][:, 0], 'y': layout_dict['coeffs'][:, 1], 'z': layout_dict['coeffs'][:, 2], '-x': layout_dict['coeffs'][:, 0], '-y': layout_dict['coeffs'][:, 1], '-z': layout_dict['coeffs'][:, 2]}
+
+            axis_1_list = [self.faces_basis_indexes[wall_idx][0] for wall_idx in range(6)]
+            axis_2_list = [self.faces_basis_indexes[wall_idx][1] for wall_idx in range(6)]
+            axis_3_list = [self.faces_basis_indexes[wall_idx][2] for wall_idx in range(6)]
+            basis_1_unit_list = [layout_basis_dict[axis_1] for axis_1 in axis_1_list]
+            basis_2_unit_list = [layout_basis_dict[axis_2] for axis_2 in axis_2_list]
+            basis_3_unit_list = [layout_basis_dict[axis_3] for axis_3 in axis_3_list]
+            origin_0_list = [layout_dict['centroid'] - basis_1_unit * layout_coeffs_dict[axis_1].unsqueeze(-1) - basis_2_unit * layout_coeffs_dict[axis_2].unsqueeze(-1) - basis_3_unit * layout_coeffs_dict[axis_3].unsqueeze(-1) \
+                for basis_1_unit, basis_2_unit, basis_3_unit, axis_1, axis_2, axis_3 in zip(basis_1_unit_list, basis_2_unit_list, basis_3_unit_list, axis_1_list, axis_2_list, axis_3_list)]
+            basis_1_list = [basis_1_unit * layout_coeffs_dict[axis_1].unsqueeze(-1) * 2 / self.grid_size\
+                for basis_1_unit, axis_1 in zip(basis_1_unit_list, axis_1_list)]
+            basis_2_list = [basis_2_unit * layout_coeffs_dict[axis_2].unsqueeze(-1) * 2 / self.grid_size\
+                for basis_2_unit, axis_2 in zip(basis_2_unit_list, axis_2_list)]
+            basis_3_list = [basis_3_unit * layout_coeffs_dict[axis_3].unsqueeze(-1) * 2 / self.grid_size\
+                for basis_3_unit, axis_3 in zip(basis_3_unit_list, axis_3_list)]
+
 
         basis_1_array = torch.stack(basis_1_list).permute(1, 0, 2).unsqueeze(2).unsqueeze(2).float() # [B, 6, 1, 1, 3]
         basis_2_array = torch.stack(basis_2_list).permute(1, 0, 2).unsqueeze(2).unsqueeze(2).float()
+        basis_3_array = torch.stack(basis_3_list).permute(1, 0, 2).unsqueeze(2).unsqueeze(2).float()
         origin_0_array = torch.stack(origin_0_list).permute(1, 0, 2).unsqueeze(2).unsqueeze(2).float()
+
+        # a = basis_1_array[0, 0].squeeze().detach().cpu().numpy()
+        # a = a / np.linalg.norm(a)
+        # b = basis_2_array[0, 0].squeeze().detach().cpu().numpy()
+        # b = b / np.linalg.norm(b)
+        # c = basis_3_array[0, 0].squeeze().detach().cpu().numpy()
+        # c = c / np.linalg.norm(c)
+        # print(a.shape, np.cross(a, b), c, np.linalg.norm(a), np.linalg.norm(b))
 
         x_ij = basis_1_array * self.ii + basis_2_array * self.jj + origin_0_array # [B, 6, 8, 8, 3]
         x_i1j = basis_1_array * (self.ii+1.) + basis_2_array * self.jj + origin_0_array

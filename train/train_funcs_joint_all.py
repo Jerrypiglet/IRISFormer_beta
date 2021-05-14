@@ -665,7 +665,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
                         if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
                             output_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'obj') + '.png')
-                            fig_2d = scene_box.draw_projected_bdb3d(draw_mode, if_vis_2dbbox=True, return_plt=True, if_use_plt=True)
+                            fig_2d = scene_box.draw_projected_bdb3d(draw_mode, if_vis_2dbbox=False, return_plt=True, if_use_plt=True)
                             fig_2d.savefig(str(output_path))
                             plt.close(fig_2d)
 
@@ -690,7 +690,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                             mask_all = mask_all / np.amax(mask_all)
                             writer.add_image('VAL_bdb2d_masks/%d'%(sample_idx), mask_all, tid, dataformats='HW')
 
-                            fig_3d, ax_3ds = scene_box.draw_3D_scene_plt(draw_mode, if_show_objs=True, hide_random_id=False, if_debug=False, hide_cells=True, if_dump_to_mesh=True, if_show_emitter=False, pickle_id=sample_idx)
+                            fig_3d, _, ax_3ds = scene_box.draw_3D_scene_plt(draw_mode, if_show_objs=True, hide_random_id=False, if_debug=False, hide_cells=True, if_dump_to_mesh=True, if_show_emitter=False, pickle_id=sample_idx)
 
                             if opt.cfg.MODEL_LAYOUT_EMITTER.mesh.if_use_vtk:
                                 im_meshes_GT = scene_box.draw3D('GT', if_return_img=True, if_save_img=False, if_save_obj=False, save_path_without_suffix = 'recon')['im']
@@ -702,7 +702,13 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
                         if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
                             output_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'emitter') + '.png')
-                            fig_3d, ax_3ds = scene_box.draw_3D_scene_plt(draw_mode, if_return_cells_vis_info=True, if_show_emitter=not(if_real_image))
+                            fig_3d, _, ax_3ds = scene_box.draw_3D_scene_plt(draw_mode, if_return_cells_vis_info=True, if_show_emitter=not(if_real_image), if_show_objs='ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list, \
+                                if_show_cell_normals=False, if_show_cell_meshgrid=False)
+                            az = 90
+                            elev = 0
+                            ax_3ds[1].view_init(elev=elev, azim=az)
+                            ax_3ds[0].view_init(elev=elev, azim=az)
+
                             fig_3d.savefig(str(output_path))
                             plt.close(fig_3d)
                             cells_vis_info_list = ax_3ds[-1]
@@ -716,7 +722,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                             emitter_input_dict = {'hdr_scale': data_batch['hdr_scale'].cpu().numpy()[sample_idx_batch]}
 
                             if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
-                                fig_3d, ax_3d = scene_box.draw_3D_scene_plt('GT', )
+                                fig_3d, _, ax_3d = scene_box.draw_3D_scene_plt('GT', )
                                 ax_3d[1] = fig_3d.add_subplot(122, projection='3d')
                                 scene_box.draw_3D_scene_plt('GT', fig_or_ax=[ax_3d[1], ax_3d[0]], hide_cells=True)
                                 
@@ -781,6 +787,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
                                 emitter_input_dict.update({x: output_dict['emitter_input'][x].detach().cpu().numpy()[sample_idx_batch] for x in output_dict['emitter_input']})
                                 emitter_input_dict.update({'env_scale': data_batch['env_scale'].cpu().numpy()[sample_idx_batch], 'envmap_path': data_batch['envmap_path'][sample_idx_batch]})
+
 
                             pickle_save_path = Path(opt.summary_vis_path_task) / ('results_emitter_input_%d.pickle'%sample_idx)
                             # normalPred_lightAccu (3, 240, 320)

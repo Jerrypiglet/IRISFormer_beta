@@ -17,7 +17,7 @@ for folder in folders:
     # print([x.name for x in log_paths])
     for log_path in log_paths:
         task_name = log_path.name
-        if task_name.endswith('--tmp'):
+        if task_name.endswith('--tmp') or task_name.endswith('--tmp_new'):
             shutil.rmtree(log_path, ignore_errors=True)
             print('Removed '+str(log_path))
             continue
