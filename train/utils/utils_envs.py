@@ -448,7 +448,7 @@ def set_up_checkpointing(opt, model, optimizer, scheduler, logger):
         checkpoint_restored, _, _ = checkpointer.load(task_name=opt.resume, replace_kws=replace_kws, replace_with_kws=replace_with_kws)
     
         if opt.resumes_extra != 'NoCkpt':
-            resumes_extra_list = opt.resumes_extra.split('|')
+            resumes_extra_list = opt.resumes_extra.split('#')
             for resume_extra in resumes_extra_list:
                 checkpoint_restored, _, _ = checkpointer.load(task_name=resume_extra, replace_kws=replace_kws, replace_with_kws=replace_with_kws, prefix='[RESUME EXTRA] ')
 

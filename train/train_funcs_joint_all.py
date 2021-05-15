@@ -629,7 +629,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
             # ======= Vis layout-emitter
             if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
-                output_vis_dict = vis_layout_emitter(input_dict, output_dict, opt, time_meters)
+                output_vis_dict = vis_layout_emitter(input_dict, output_dict, data_batch, opt, time_meters, batch_size_id=[batch_size, batch_id])
                 # output_dict['output_layout_emitter_vis_dict'] = output_vis_dict
                 if_real_image = False
                 draw_mode = 'both' if not if_real_image else 'prediction'
@@ -704,10 +704,10 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                             output_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'emitter') + '.png')
                             fig_3d, _, ax_3ds = scene_box.draw_3D_scene_plt(draw_mode, if_return_cells_vis_info=True, if_show_emitter=not(if_real_image), if_show_objs='ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list, \
                                 if_show_cell_normals=False, if_show_cell_meshgrid=False)
-                            az = 90
-                            elev = 0
-                            ax_3ds[1].view_init(elev=elev, azim=az)
-                            ax_3ds[0].view_init(elev=elev, azim=az)
+                            # az = 90
+                            # elev = 0
+                            # ax_3ds[1].view_init(elev=elev, azim=az)
+                            # ax_3ds[0].view_init(elev=elev, azim=az)
 
                             fig_3d.savefig(str(output_path))
                             plt.close(fig_3d)
@@ -731,7 +731,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                                 # ic(sample_idx, hdr_scale)
                                 # lightAccu_color_array_GT = np.clip(lightAccu_color_array_GT * hdr_scale, 0., 1.)
                                 lightAccu_color_array_GT = np.clip(lightAccu_color_array_GT, 0., 1.)
-                                scene_box.draw_all_cells(ax_3d[1], scene_box.gt_layout, lightnet_array_GT=lightAccu_color_array_GT, alpha=1.)
+                                scene_box.draw_all_cells(ax_3d[1], scene_box.gt_layout, current_type='GT', lightnet_array_GT=lightAccu_color_array_GT, alpha=1.)
 
                                 output_path = Path(opt.summary_vis_path_task) / (('results_LABEL-%d'%(sample_idx)).replace('LABEL', 'lightAccu_view1') + '.png')
                                 fig_3d.savefig(str(output_path))
@@ -766,6 +766,13 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                                             'scattered_light': output_dict['emitter_est_result']['scattered_light'].detach().cpu().numpy()[sample_idx_batch], \
                                             'emitter_outdirs_meshgrid_Total3D_outside': output_dict['emitter_est_result']['emitter_outdirs_meshgrid_Total3D_outside'].detach().cpu().numpy()[sample_idx_batch], \
                                             'normal_outside_Total3D': output_dict['emitter_est_result']['normal_outside_Total3D'].detach().cpu().numpy()[sample_idx_batch], \
+                                            'depthPred': output_dict['emitter_est_result']['depthPred'].detach().cpu().numpy()[sample_idx_batch], \
+                                            'points_backproj': output_dict['emitter_est_result']['points_backproj'].detach().cpu().numpy()[sample_idx_batch], \
+                                            # 'points': output_dict['emitter_est_result']['points'].detach().cpu().numpy()[sample_idx_batch], \
+                                            'depthGT': input_dict['depthBatch'].detach().cpu().numpy()[sample_idx_batch], \
+                                            'normalGT': input_dict['normalBatch'].detach().cpu().numpy()[sample_idx_batch], \
+                                            'normalPred': output_dict['normalPred'].detach().cpu().numpy()[sample_idx_batch], \
+                                            'T_LightNet2Total3D_rightmult': output_dict['emitter_est_result']['T_LightNet2Total3D_rightmult'].detach().cpu().numpy()[sample_idx_batch], 
                                         })
                                         if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis:
                                             results_emitter_save_dict.update({'cell_axis_weights': output_dict['emitter_est_result']['cell_axis_weights'].detach().cpu().numpy()[sample_idx_batch]})

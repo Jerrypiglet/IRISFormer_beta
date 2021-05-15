@@ -844,6 +844,14 @@ class openrooms(data.Dataset):
             with open(emitters_prop_dict_representation_dict_path, 'rb') as f:
                 emitters_prop_dict_representation_dict = pickle.load(f)
 
+            # read transformation matrices from RAW OR -> Total3D
+            transform_to_total3d_coords_dict_path = str(scene_total3d_path / ('transform_to_total3d_coords_dict_%d.pkl'%frame_id))
+            with open(transform_to_total3d_coords_dict_path, 'rb') as f:
+                transform_to_total3d_coords_dict = pickle.load(f)
+            transform_R_RAW2Total3D, transform_t_RAW2Total3D = transform_to_total3d_coords_dict['transform_R'], transform_to_total3d_coords_dict['transform_t']
+            return_dict.update({'transform_R_RAW2Total3D': transform_R_RAW2Total3D.astype(np.float32), 'transform_t_RAW2Total3D': transform_t_RAW2Total3D.astype(np.float32)})
+
+
             if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'wall_prob':
                 wall_grid_prob = sequence_emitter2wall_assign_info_dict['wall_grid_prob']
                 return_dict.update({'wall_grid_prob': torch.from_numpy(wall_grid_prob).float()})
@@ -1026,12 +1034,6 @@ class openrooms(data.Dataset):
             return_dict.update({'env_scale': env_scale, 'envmap_path': envmap_path})
 
             if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_envmap:
-                # read transformation matrices from RAW OR -> Total3D
-                transform_to_total3d_coords_dict_path = str(scene_total3d_path / ('transform_to_total3d_coords_dict_%d.pkl'%frame_id))
-                with open(transform_to_total3d_coords_dict_path, 'rb') as f:
-                    transform_to_total3d_coords_dict = pickle.load(f)
-                transform_R_RAW2Total3D, transform_t_RAW2Total3D = transform_to_total3d_coords_dict['transform_R'], transform_to_total3d_coords_dict['transform_t']
-                return_dict.update({'transform_R_RAW2Total3D': transform_R_RAW2Total3D.astype(np.float32), 'transform_t_RAW2Total3D': transform_t_RAW2Total3D.astype(np.float32)})
 
                 # read original full envmap
                 if len(envMapPaths) > 0:

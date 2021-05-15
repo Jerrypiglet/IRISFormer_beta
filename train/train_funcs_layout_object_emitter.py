@@ -181,8 +181,10 @@ def get_labels_dict_layout_emitter(labels_dict_input, data_batch, opt):
 
     return labels_dict
 
-def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
+def vis_layout_emitter(labels_dict, output_dict, data_batch, opt, time_meters=None, batch_size_id=[]):
     batch_size = labels_dict['imBatch'].shape[0]
+
+    batch_size, batch_id = batch_size_id[0], batch_size_id[1]
     grid_size = opt.cfg.MODEL_LAYOUT_EMITTER.emitter.grid_size
 
     output_vis_dict = {}
@@ -276,24 +278,25 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
 
     # print(gt_dict_ob['split'])
     # print(gt_dict_ob['boxes_valid_list'])
-    for sample_idx in range(batch_size):
-        # print('--- Visualizing sample %d ---'%sample_idx)
-        # save_prefix = 'sample%d-LABEL-epoch%d-tid%d-%s'%(sample_idx+batch_size*vis_batch_count, epoch, iter, phase)
-        gt_cam_R = gt_dict_lo['cam_R_gt'][sample_idx].cpu().numpy()
-        cam_K = gt_dict_lo['cam_K_scaled'][sample_idx].cpu().numpy()
-        # gt_layout = gt_dict_lo['lo_bdb3D'][sample_idx].cpu().numpy()
+    for sample_idx_batch in range(batch_size):
+        sample_idx = sample_idx_batch+batch_size*batch_id
+        # print('--- Visualizing sample %d ---'%sample_idx_batch)
+        # save_prefix = 'sample%d-LABEL-epoch%d-tid%d-%s'%(sample_idx_batch+batch_size*vis_batch_count, epoch, iter, phase)
+        gt_cam_R = gt_dict_lo['cam_R_gt'][sample_idx_batch].cpu().numpy()
+        cam_K = gt_dict_lo['cam_K_scaled'][sample_idx_batch].cpu().numpy()
+        # gt_layout = gt_dict_lo['lo_bdb3D'][sample_idx_batch].cpu().numpy()
         if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_train_with_reindexed_layout:
-            gt_layout = gt_dict_lo['lo_bdb3D_reindexed'][sample_idx].cpu().numpy()
+            gt_layout = gt_dict_lo['lo_bdb3D_reindexed'][sample_idx_batch].cpu().numpy()
         else:
-            gt_layout = gt_dict_lo['lo_bdb3D'][sample_idx].cpu().numpy()
+            gt_layout = gt_dict_lo['lo_bdb3D'][sample_idx_batch].cpu().numpy()
 
-        gt_layout_full = {key: gt_dict_lo['lo_bdb3D_full'][key][sample_idx].detach().cpu().numpy() for key in gt_dict_lo['lo_bdb3D_full']}
+        gt_layout_full = {key: gt_dict_lo['lo_bdb3D_full'][key][sample_idx_batch].detach().cpu().numpy() for key in gt_dict_lo['lo_bdb3D_full']}
 
         # ---- layout
         if if_est_layout:
-            pre_layout = lo_bdb3D_out[sample_idx, :, :].cpu().detach().numpy()
-            pre_layout_full = {'bdb3D': pre_layout, 'coeffs': coeffs_out[sample_idx].cpu().detach().numpy(), 'basis': basis_out[sample_idx].cpu().detach().numpy(), 'centroid': centroid_out[sample_idx].cpu().detach().numpy()}
-            pre_cam_R = cam_R_out[sample_idx, :, :].cpu().detach().numpy()
+            pre_layout = lo_bdb3D_out[sample_idx_batch, :, :].cpu().detach().numpy()
+            pre_layout_full = {'bdb3D': pre_layout, 'coeffs': coeffs_out[sample_idx_batch].cpu().detach().numpy(), 'basis': basis_out[sample_idx_batch].cpu().detach().numpy(), 'centroid': centroid_out[sample_idx_batch].cpu().detach().numpy()}
+            pre_cam_R = cam_R_out[sample_idx_batch, :, :].cpu().detach().numpy()
             if opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_train_with_reindexed:
                 pre_layout = reindex_layout(pre_layout, pre_cam_R)
                 pre_layout_full['bdb3D'] = pre_layout
@@ -305,18 +308,18 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
 
         # ---- objects
         if if_load_object or if_load_mesh:
-            interval = gt_dict_ob['split'][sample_idx].cpu().tolist()
+            interval = gt_dict_ob['split'][sample_idx_batch].cpu().tolist()
 
         if if_load_object:
-            if sum(gt_dict_ob['boxes_valid_list'][sample_idx])==0: # if there are no objects
+            if sum(gt_dict_ob['boxes_valid_list'][sample_idx_batch])==0: # if there are no objects
                 gt_boxes=None
             else:
                 gt_boxes = format_bboxes({'bdb3D': gt_dict_ob['bdb3D'][interval[0]:interval[1]].cpu().numpy(), 
                     'class_id': gt_dict_ob['size_cls'][interval[0]:interval[1]].cpu().argmax(1).flatten().numpy().tolist()}, 'GT')
                 gt_boxes['bdb2d'] = gt_dict_ob['bdb2D_pos'][interval[0]:interval[1]].cpu().numpy()
-                gt_boxes['random_id'] = gt_dict_ob['random_id'][sample_idx]
-                gt_boxes['cat_name'] = gt_dict_ob['cat_name'][sample_idx]
-                gt_boxes['if_valid'] = gt_dict_ob['boxes_valid_list'][sample_idx]
+                gt_boxes['random_id'] = gt_dict_ob['random_id'][sample_idx_batch]
+                gt_boxes['cat_name'] = gt_dict_ob['cat_name'][sample_idx_batch]
+                gt_boxes['if_valid'] = gt_dict_ob['boxes_valid_list'][sample_idx_batch]
                 assert len(gt_boxes['if_valid']) == len(gt_boxes['random_id'])== len(gt_boxes['cat_name'])
         else:
             gt_boxes = None
@@ -330,7 +333,7 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
             pre_box_data = {'bdb': bdb3D_out_form_cpu[interval[0]:interval[1]], 'class_id': current_cls}
 
             # class_ids = gt_dict_ob['size_cls'][interval[0]:interval[1]].cpu().argmax(1).flatten().numpy().tolist()
-            if sum(gt_dict_ob['boxes_valid_list'][sample_idx])==0:
+            if sum(gt_dict_ob['boxes_valid_list'][sample_idx_batch])==0:
                 pre_boxes = None
             else:
                 pre_boxes = format_bboxes(pre_box_data, 'prediction')
@@ -346,7 +349,7 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
             current_coordinates = mesh_output.transpose(1, 2)[interval[0]:interval[1]].cpu().numpy()
             pre_meshes = []
 
-            # print(sample_idx, current_faces.shape, current_coordinates.shape, interval)
+            # print(sample_idx_batch, current_faces.shape, current_coordinates.shape, interval)
             num_objs = interval[1] - interval[0]
             
             for obj_id in range(num_objs):
@@ -356,26 +359,26 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
                 write_obj(save_path, mesh_obj)
                 pre_meshes.append([save_path, mesh_obj])
 
-            # gt_meshes = gt_dict_mesh['gt_obj_path_alignedNew_normalized_list'][sample_idx]
-            gt_meshes = gt_dict_mesh['gt_obj_path_alignedNew_original_list'][sample_idx]
+            # gt_meshes = gt_dict_mesh['gt_obj_path_alignedNew_normalized_list'][sample_idx_batch]
+            gt_meshes = gt_dict_mesh['gt_obj_path_alignedNew_original_list'][sample_idx_batch]
         else:
             gt_meshes = None
             pre_meshes = None
 
-        image = (labels_dict['im_SDR_RGB'][sample_idx].detach().cpu().numpy() * 255.).astype(np.uint8)
+        image = (labels_dict['im_SDR_RGB'][sample_idx_batch].detach().cpu().numpy() * 255.).astype(np.uint8)
         # image = np.transpose(image, (1, 2, 0))
 
         # ---- emitters
         if if_load_emitter:
-            emitters_obj_list_gt = gt_dict_em['emitters_obj_list'][sample_idx]
-            emitter2wall_assign_info_list_gt = gt_dict_em['emitter2wall_assign_info_list'][sample_idx]
+            emitters_obj_list_gt = gt_dict_em['emitters_obj_list'][sample_idx_batch]
+            emitter2wall_assign_info_list_gt = gt_dict_em['emitter2wall_assign_info_list'][sample_idx_batch]
             if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'cell_info':
-                emitter_cls_prob_GT_np = gt_dict_em['cell_light_ratio'][sample_idx].detach().cpu().numpy()
+                emitter_cls_prob_GT_np = gt_dict_em['cell_light_ratio'][sample_idx_batch].detach().cpu().numpy()
             else:
-                emitter_cls_prob_GT_np = gt_dict_em['emitter_cls_prob'][sample_idx].detach().cpu().numpy()
+                emitter_cls_prob_GT_np = gt_dict_em['emitter_cls_prob'][sample_idx_batch].detach().cpu().numpy()
 
             assert opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'cell_info'
-            cell_info_grid_GT_includeempty = gt_dict_em['cell_info_grid'][sample_idx]
+            cell_info_grid_GT_includeempty = gt_dict_em['cell_info_grid'][sample_idx_batch]
             cell_info_grid_GT = []
             for wall_idx in range(6):
                 for i in range(grid_size):
@@ -384,7 +387,7 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
                         if cell_info['obj_type'] is not None:
                             cell_info['wallidx_i_j'] = (wall_idx, i, j)
                             cell_info_grid_GT.append(cell_info)
-            cell_normal_outside_gt_np = gt_dict_em['cell_normal_outside'][sample_idx].detach().cpu().numpy() # [6, 8, 8, 3]
+            cell_normal_outside_gt_np = gt_dict_em['cell_normal_outside'][sample_idx_batch].detach().cpu().numpy() # [6, 8, 8, 3]
         else:
             emitters_obj_list_gt = None
             emitter2wall_assign_info_list_gt = None
@@ -393,8 +396,8 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
             cell_normal_outside_gt_np = None
 
         if if_est_emitter:
-            # gt_layout_RAW = gt_dict_em['gt_layout_RAW'][sample_idx]
-            emitter_cls_result_postprocessed_np = emitter_cls_result_postprocessed[sample_idx].detach().cpu().numpy() # [102]
+            # gt_layout_RAW = gt_dict_em['gt_layout_RAW'][sample_idx_batch]
+            emitter_cls_result_postprocessed_np = emitter_cls_result_postprocessed[sample_idx_batch].detach().cpu().numpy() # [102]
 
             if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'cell_info':
                 if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_train_with_reindexed_layout:
@@ -410,30 +413,30 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
                     for i in range(grid_size):
                         for j in range(grid_size):
                             if not opt.cfg.MODEL_LAYOUT_EMITTER.emitter.cls_agnostric:
-                                if cell_cls[sample_idx][wall_idx][i][j] == 0:
+                                if cell_cls[sample_idx_batch][wall_idx][i][j] == 0:
                                     continue
                             # if not opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_train_with_reindexed_layout:
                             #     normal_outside = cell_normal_outside_gt_np[wall_idx, i, j]
 
-                            cell_info = {'obj_type': map_obj_type_int[cell_cls[sample_idx][wall_idx][i][j]], 'emitter_info': {}, 'wallidx_i_j': (wall_idx, i, j)}
+                            cell_info = {'obj_type': map_obj_type_int[cell_cls[sample_idx_batch][wall_idx][i][j]], 'emitter_info': {}, 'wallidx_i_j': (wall_idx, i, j)}
                             if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.relative_dir:
-                                cell_info['emitter_info']['light_dir_offset'] = cell_axis[sample_idx][wall_idx][i][j].flatten()
+                                cell_info['emitter_info']['light_dir_offset'] = cell_axis[sample_idx_batch][wall_idx][i][j].flatten()
                                 # cell_info['emitter_info']['light_dir_abs'] = cell_info['emitter_info']['light_dir_offset'] + normal_outside
                             else:
-                                cell_info['emitter_info']['light_dir_abs'] = cell_axis[sample_idx][wall_idx][i][j].flatten()
+                                cell_info['emitter_info']['light_dir_abs'] = cell_axis[sample_idx_batch][wall_idx][i][j].flatten()
 
                             # cell_info['emitter_info']['normal_outside'] = normal_outside
 
                             if if_lightAccu:
-                                emitter_outdirs_meshgrid_Total3D_outside_abs_single = emitter_outdirs_meshgrid_Total3D_outside_abs[sample_idx, wall_idx, i, j]
-                                normal_outside_Total3D_single = normal_outside_Total3D[sample_idx, wall_idx, i, j]
+                                emitter_outdirs_meshgrid_Total3D_outside_abs_single = emitter_outdirs_meshgrid_Total3D_outside_abs[sample_idx_batch, wall_idx, i, j]
+                                normal_outside_Total3D_single = normal_outside_Total3D[sample_idx_batch, wall_idx, i, j]
                                 # if not opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_use_est_layout:
                                 #     assert np.amax(np.abs(normal_outside_Total3D_single - normal_outside)) < 1e-3
                                 # print(wall_idx, i, j, normal_outside_Total3D_single, normal_outside)
                                 cell_info['emitter_info']['emitter_outdirs_meshgrid_Total3D_outside_abs'] = emitter_outdirs_meshgrid_Total3D_outside_abs_single # [8, 16, 3]
                                 cell_info['emitter_info']['normal_outside_Total3D_single'] = normal_outside_Total3D_single
                             
-                            intensity_log = cell_intensity[sample_idx][wall_idx][i][j].flatten() # actually predicts LOG intensity!
+                            intensity_log = cell_intensity[sample_idx_batch][wall_idx][i][j].flatten() # actually predicts LOG intensity!
                             assert intensity_log.shape == (3,)
                             intensity = np.exp(intensity_log) - 1.
                             intensity_scale255 = np.amax(intensity) / 255.
@@ -443,7 +446,7 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
                             cell_info['emitter_info']['intensity_scalelog'] = intensity_scalelog # log of norm of intensity
                             cell_info['emitter_info']['intensity_scaled01'] = intensity_scaled01
                             cell_info['emitter_info']['intensity'] = intensity  
-                            cell_info['emitter_info']['lamb'] = cell_lamb[sample_idx][wall_idx][i][j].item()
+                            cell_info['emitter_info']['lamb'] = cell_lamb[sample_idx_batch][wall_idx][i][j].item()
                             cell_info['light_ratio'] = emitter_cls_result_postprocessed_np[wall_idx][i * grid_size + j]
                             cell_info_grid_PRED.append(cell_info)
             else:
@@ -455,7 +458,12 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
 
         save_prefix = ''
 
-        scene_box = Box(image, None, cam_K, gt_cam_R, pre_cam_R, gt_layout_full, pre_layout_full, gt_boxes, pre_boxes, gt_meshes, pre_meshes, 'prediction', output_mesh = None, \
+        transform_R = data_batch['transform_R_RAW2Total3D'][sample_idx_batch].cpu().numpy().reshape(3, 3)
+        transform_t = data_batch['transform_t_RAW2Total3D'][sample_idx_batch].cpu().numpy().reshape(3, 1)
+        hdr_scale = data_batch['hdr_scale'][sample_idx_batch].cpu().numpy().item()
+        env_scale = data_batch['env_scale'][sample_idx_batch].cpu().numpy().item()
+
+        scene_box = Box(image, None, cam_K, gt_cam_R, pre_cam_R, gt_layout_full, pre_layout_full, gt_boxes, pre_boxes, gt_meshes, pre_meshes, \
             opt=opt, dataset='OR', description=save_prefix, if_mute_print=True, OR=opt.cfg.MODEL_LAYOUT_EMITTER.data.OR, \
             emitter2wall_assign_info_list_gt = emitter2wall_assign_info_list_gt, 
             emitters_obj_list_gt = emitters_obj_list_gt, 
@@ -465,15 +473,19 @@ def vis_layout_emitter(labels_dict, output_dict, opt, time_meters):
             cell_info_grid_GT = cell_info_grid_GT, 
             cell_info_grid_PRED = cell_info_grid_PRED, 
             grid_size = grid_size,
-            if_use_vtk = opt.cfg.MODEL_LAYOUT_EMITTER.mesh.if_use_vtk)
+            if_use_vtk = opt.cfg.MODEL_LAYOUT_EMITTER.mesh.if_use_vtk, 
+            transform_R=transform_R, transform_t=transform_t, hdr_scale=hdr_scale, env_scale=env_scale)
 
         scene_box_list.append(scene_box)
-        layout_info_dict_list.append({'est_data': None, 'gt_cam_R': gt_cam_R, 'cam_K': cam_K, 'gt_layout': gt_layout, 'pre_layout': pre_layout, 'pre_cam_R': pre_cam_R, 'image': image})
+        layout_info_dict_list.append({'est_data': None, 'gt_cam_R': gt_cam_R, 'cam_K': cam_K, \
+            'gt_layout': gt_layout, 'pre_layout': pre_layout, 'gt_layout_full': gt_layout_full, 'pre_layout_full': pre_layout_full, \
+            'gt_meshes': gt_meshes, 'pre_meshes': pre_meshes, 'gt_boxes': gt_boxes, 'pre_boxes': pre_boxes, \
+            'pre_cam_R': pre_cam_R, 'image': image})
         emitter_info_dict = {'cell_info_grid_GT': cell_info_grid_GT, 'cell_info_grid_PRED': cell_info_grid_PRED, \
                                 'emitter_cls_prob_PRED': emitter_cls_result_postprocessed_np, 'emitter_cls_prob_GT': emitter_cls_prob_GT_np, \
                                 'pre_layout': pre_layout, 'pre_cam_R': pre_cam_R}
         if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
-            envmap_lightAccu_mean = pred_dict_em['envmap_lightAccu_mean'][sample_idx].detach().cpu().numpy()
+            envmap_lightAccu_mean = pred_dict_em['envmap_lightAccu_mean'][sample_idx_batch].detach().cpu().numpy()
             # print(envmap_lightAccu_mean.shape) # (6, 3, 8, 8)
             envmap_lightAccu_mean_vis = envmap_lightAccu_mean**(1.0/2.2)
 

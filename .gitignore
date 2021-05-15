@@ -34,4 +34,5 @@ __pycache__
 Summary_vis
 VTK
 *.pkl
+*.mtl
 *-copy.py

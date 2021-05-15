@@ -25,6 +25,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from icecream import ic
+from copy import deepcopy
 
 import matplotlib.patches as patches
 from utils.utils_total3D.utils_OR_geo import bb_intersection_over_union
@@ -39,58 +40,85 @@ from SimpleLayout.utils_SL import SimpleScene
 
 import vtk
 from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
+
 from utils.utils_total3D.utils_OR_mesh import loadMesh, writeMesh
-
 from utils.utils_total3D.utils_OR_vis_tools import get_bdb_form_from_corners, format_bboxes, format_layout, format_mesh
+from utils.utils_total3D.utils_OR_mesh import writeMesh_rect
+from utils.utils_total3D.utils_OR_write_shape_to_xml import transformToXml, addShape, addAreaLight
+from utils.utils_total3D.sunrgbd_utils import get_corners_of_bb3d_no_index
+from utils.utils_total3D.utils_OR_xml import get_XML_root
 
+from utils.utils_total3D import SGOptim
 
 class Box(Scene3D):
 
-    def __init__(self, img_map, depth_map, cam_K, gt_cam_R, pre_cam_R, gt_layout, pre_layout, gt_boxes, pre_boxes, gt_meshes, pre_meshes, \
-                    data_type, output_mesh=None, \
+    def __init__(self, img_map, depth_map, cam_K, gt_cam_R, pred_cam_R, gt_layout, pred_layout, gt_boxes, pre_boxes, gt_meshes_paths, pre_meshes_paths, \
+                    transform_R=None, transform_t=None, hdr_scale=1., env_scale=1., \
                     opt=None, dataset='OR', if_hide_invalid_cats=True, description='', if_mute_print=False, OR=None, \
                     cam_fromt_axis_id=0, emitters_obj_list_gt=None, \
                     emitter2wall_assign_info_list_gt=None, emitter_cls_prob_PRED=None, emitter_cls_prob_GT=None, \
                     cell_info_grid_GT=None, cell_info_grid_PRED=None, \
-                    grid_size=4, transform_R=None, transform_t=None, paths={}, pickle_id=-1, \
+                    grid_size=4, paths={}, pickle_id=-1, tid=0, \
                     gt_boxes_valid_mask_extra=None, pre_boxes_valid_mask_extra=None, \
                     if_use_vtk=False, if_off_screen_vtk=True, \
-                    if_index_faces_with_basis=True):
+                    if_index_faces_with_basis=True, summary_path='.'):
         super(Scene3D, self).__init__()
         self.opt = opt
-        self.if_use_vtk = if_use_vtk
-        self.mode = data_type
-        assert self.mode in ['prediction', 'GT', 'both']
-        self.if_index_faces_with_basis = if_index_faces_with_basis # if indexing faces with combination of basis of layout, insetad of using self.faces_v_indexes
+        if self.opt is not None:
+            self.summary_path = self.opt.summary_vis_path_task
+            self.envHeight = self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.envHeight
+            self.envWidth = self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.envWidth
+        else:
+            self.summary_path = summary_path
+            self.envHeight = 8
+            self.envWidth = 16
 
+        if 'root_path' in paths:
+            self.root_path = paths['root_path']
+        else:
+            self.root_path = None
+
+        self.envOptim = SGOptim.SGEnvOptimSky(weightValue=np.zeros(3,), thetaValue=0., phiValue=0., ambientValue=np.zeros(3,), isCuda=True)
+
+        self.if_use_vtk = if_use_vtk
+        # self.mode = data_type
+        # assert self.mode in ['prediction', 'GT', 'both']
+        self.if_index_faces_with_basis = if_index_faces_with_basis # if indexing faces with combination of basis of layout, insetad of using self.faces_v_indexes
+        
         self.faces_v_indexes = [(3, 2, 0), (7, 4, 6), (4, 0, 5), (6, 5, 2), (7, 6, 3), (7, 3, 4)]
         self.faces_basis_indexes = [['x', 'z', '-y'], ['z', 'x', 'y'], ['y', 'z', 'x'], ['x', '-y', '-z'], ['z', 'y', '-x'], ['x', 'y', 'z']]
 
-
         self._cam_K = cam_K
         self.gt_cam_R = gt_cam_R
-        # self._cam_R = gt_cam_R
-        self.pre_cam_R = pre_cam_R
+        self.pred_cam_R = pred_cam_R
+        self.grid_size = grid_size
         
         # both layout and object should be dict of basis, coeffs, and centroid
         self.gt_layout = gt_layout
-        self.pre_layout = pre_layout
+        self.pred_layout = pred_layout
         self.gt_boxes = gt_boxes
         self.pre_boxes = pre_boxes
         self.gt_boxes_valid = None
         self.pre_boxes_valid = None
 
         # meshes are paths to objs
-        self.gt_meshes = gt_meshes
-        self.pre_meshes = pre_meshes
+        self.gt_meshes_paths = gt_meshes_paths
+        self.pre_meshes_paths = pre_meshes_paths
 
         self.gt_boxes_valid_mask_extra = gt_boxes_valid_mask_extra
         self.pre_boxes_valid_mask_extra = pre_boxes_valid_mask_extra
 
-        self.output_mesh_pred = None
-        self.output_mesh_gt = None
-        if self.mode == 'prediction' and output_mesh is None:
-            self.output_mesh_pred = output_mesh
+        # --- after post-processing
+        self.valid_bbox_idxes_dict = {'prediction': [], 'GT': []}
+        self.valid_bbox_meshes_dict = {'prediction': {}, 'GT': {}}
+        self.scene_meshes_dict = {'prediction': [], 'GT': []}
+        self.layout_info_dict = {'prediction': {}, 'GT': {}}
+        self.sg_envmap_info_dict = {'prediction': {}, 'GT': {}}
+        self.get_layout_info()
+        # self.output_mesh_pred = None
+        # self.output_mesh_gt = None
+        # if self.mode == 'prediction' and output_mesh is None:
+        #     self.output_mesh_pred = output_mesh
         
         self._img_map = img_map
         self._depth_map = depth_map
@@ -99,7 +127,8 @@ class Box(Scene3D):
 
         self.classes = None
         self.valid_class_ids = None
-        self.pickle_id = pickle_id
+        self.sample_idx = pickle_id
+        self.tid = 0
 
         assert self.dataset.lower() in ['or', 'sunrgbd'], 'Unsupported dataset in Box class!'
         if self.dataset.lower() == 'or':
@@ -126,7 +155,6 @@ class Box(Scene3D):
         # self.gt_layout = gt_layout
         
         # ------ emitters
-        self.grid_size = grid_size
         self.emitters_obj_list_gt = emitters_obj_list_gt
         self.emitter2wall_assign_info_list_gt = emitter2wall_assign_info_list_gt
         self.emitter_cls_prob_PRED = emitter_cls_prob_PRED
@@ -146,9 +174,13 @@ class Box(Scene3D):
         if self.cell_info_grid_PRED is not None:
             assert len(self.cell_info_grid_PRED) <= 6 * self.grid_size * self.grid_size, 'Wrong length of self.cell_info_grid_PRED: %d VS %d'%(len(self.cell_info_grid_PRED), 6 * self.grid_size * self.grid_size)
 
-        # ------ other transformations
+        # ------ transform_to_total3d_coords:RAW -> total3D
         self.transform_R = transform_R
         self.transform_t = transform_t
+
+        # ------ envmaps
+        self.hdr_scale = hdr_scale
+        self.env_scale = env_scale
 
         # --- check objects
         if self.gt_boxes is not None:
@@ -177,7 +209,6 @@ class Box(Scene3D):
     def get_valid_class_ids(self):
         return [(x, self.classes[x]) for x in self.valid_class_ids]
 
-    
     def save_img(self, save_path):
         img_map = Image.fromarray(self.img_map[:])
         img_map.save(str(save_path))
@@ -208,14 +239,14 @@ class Box(Scene3D):
         #     ax_2d.set_ylim([im_height, 0])
 
         if type == 'prediction':
-            boxes = [self.pre_layout]
-            cam_Rs = [self.pre_cam_R]
+            boxes = [self.pred_layout]
+            cam_Rs = [self.pred_cam_R]
             colors = [[1., 0., 0.]]
             line_widths = [5]
             linestyles = ['-']
         elif type == 'both':
-            boxes = [self.pre_layout, self.gt_layout]
-            cam_Rs = [self.pre_cam_R, self.gt_cam_R]
+            boxes = [self.pred_layout, self.gt_layout]
+            cam_Rs = [self.pred_cam_R, self.gt_cam_R]
             colors = [[1., 0., 0.], [0., 0., 1.]]
             line_widths = [5, 3]
             linestyles = ['-', '--']
@@ -247,7 +278,7 @@ class Box(Scene3D):
             simpleScene.vis_mask_combined(mask_combined, ax_2d=ax_2d)
 
             invd_list = simpleScene.param_planes()
-            depth_masked_list = [face_idx_mask[1]/invd_list[face_idx_mask[0]] for face_idx_mask in mask_list]
+            depth_masked_list = [wall_idx_mask[1]/invd_list[wall_idx_mask[0]] for wall_idx_mask in mask_list]
             depth_combined = np.sum(np.stack(depth_masked_list), 0)
 
             if if_vis:
@@ -269,10 +300,421 @@ class Box(Scene3D):
             print("[draw_projected_depth] Returned.")
 
         return depth_combined, mask_conflict
+    
+    def get_layout_info(self):
+        for current_type in ['prediction', 'GT']:
+            if current_type=='prediction':
+                layout = self.pred_layout
+            else:
+                layout = self.gt_layout
+
+            layout_basis_dict = {'x': layout['basis'][0], 'y': layout['basis'][1], 'z': layout['basis'][2], '-x': -layout['basis'][0], '-y': -layout['basis'][1], '-z': -layout['basis'][2]}
+            layout_coeffs_dict = {'x': layout['coeffs'][0], 'y': layout['coeffs'][1], 'z': layout['coeffs'][2], '-x': layout['coeffs'][0], '-y': layout['coeffs'][1], '-z': layout['coeffs'][2]}
+
+            self.layout_info_dict[current_type] = {
+                'layout_basis_dict' : layout_basis_dict, 
+                'layout_coeffs_dict' : layout_coeffs_dict, 
+            }
+
+            for wall_idx in range(6):
+                axis_1 = self.faces_basis_indexes[wall_idx][0]
+                axis_2 = self.faces_basis_indexes[wall_idx][1]
+                axis_3 = self.faces_basis_indexes[wall_idx][2]
+                basis_1_unit = layout_basis_dict[axis_1]
+                basis_2_unit = layout_basis_dict[axis_2]
+                basis_3_unit = layout_basis_dict[axis_3]
+                normal_outside = -basis_3_unit
+                origin_0 = layout['centroid'] - basis_1_unit * layout_coeffs_dict[axis_1] - basis_2_unit * layout_coeffs_dict[axis_2] - basis_3_unit * layout_coeffs_dict[axis_3]
+                basis_1 = basis_1_unit * layout_coeffs_dict[axis_1] * 2 / self.grid_size
+                basis_2 = basis_2_unit * layout_coeffs_dict[axis_2] * 2 / self.grid_size
+                basis_3 = basis_3_unit * layout_coeffs_dict[axis_3] * 2 / self.grid_size
+
+                self.layout_info_dict[current_type][str(wall_idx)] = {
+                    'basis_1_unit' : basis_1_unit, 
+                    'basis_2_unit' : basis_2_unit, 
+                    'basis_3_unit' : basis_3_unit, 
+                    'normal_outside' : normal_outside, 
+                    'origin_0' : origin_0, 
+                    'basis_1' : basis_1, 
+                    'basis_2' : basis_2, 
+                    'basis_3' : basis_3, 
+                }
+
+    def scene_to_xml(self, split_type='prediction', ):
+        assert split_type in ['prediction', 'GT']
+        main_xml_file = '/home/ruizhu/Documents/Projects/semanticInverse/train/utils/utils_total3D/sample_xml.xml'
+        root = get_XML_root(main_xml_file)
+        rec_root = deepcopy(root )
+
+        sg_params_list = self.convert_layout_windows_to_mesh(split_type=split_type, rec_root=rec_root)
+        self.sg_envmap_info_dict[split_type]['sg_params_list'] = sg_params_list
+        im_envmap_gen = self.convert_SG_params_to_envmap(sg_params_list)
+        self.sg_envmap_info_dict[split_type]['im_envmap_gen'] = im_envmap_gen
+
+        self.convert_lamps_to_mesh(split_type=split_type, rec_root=rec_root)
+        self.convert_objs_to_mesh(split_type=split_type, rec_root=rec_root)
+
+        target_xml_file = Path(self.summary_path) / ('xml-%s-tid%d-%d.xml'%(split_type, self.tid, self.sample_idx))
+        xmlString = transformToXml(rec_root )
+        with open(str(target_xml_file), 'w') as xmlOut:
+            xmlOut.write(xmlString )
+        print('XML written to %s'%str(target_xml_file))
+        return target_xml_file
+
+
+    def convert_objs_to_mesh(self, split_type='prediction', if_dump_to_mesh=True, if_transform_to_RAW=True, rec_root=None):
+        assert split_type in ['prediction', 'GT']
+        current_type = split_type
+
+        self.postprocess_objs(split_type=split_type)
+
+        # remove added scene_objs_GT
+        # scene_objs_shapes = [x for x in rec_root.findall('shape') if 'scene_obj' in x.get('id')]
+        # for x in scene_objs_shapes:
+        #     print(x)
+        #     rec_root.remove(x)
+
+        for mesh_idx, mesh_obj_dict in enumerate(self.valid_bbox_meshes_dict[current_type]['mesh_objs']):
+            vertices = mesh_obj_dict['v']
+            if if_transform_to_RAW:
+                vertices = self.transform_R.T @ (vertices.T - self.transform_t) # transform back to the RAW world
+                vertices = vertices.T
+            obj_path = Path(self.summary_path) / ('mesh_obj%d-tid%d-%d.obj'%(mesh_idx, self.tid, self.sample_idx))
+            writeMesh(str(obj_path), vertices, mesh_obj_dict['f'])
+            print('Written objs to %s'%obj_path)
+            # print(mesh_obj_dict['obj_path'],'--->', obj_path)
+            self.scene_meshes_dict[current_type].append(obj_path)
+            
+            if rec_root is not None:
+                rec_root = addShape(rec_root, 'obj_%d'%mesh_idx, str(obj_path), None, scaleValue=1.)
+
+
+    def convert_lamps_to_mesh(self, split_type='prediction', if_dump_to_mesh=True, if_transform_to_RAW=True, rec_root=None):
+        assert split_type in ['prediction', 'GT']
+        current_type = split_type
+        
+        if split_type=='prediction':
+            cell_info_grid = self.cell_info_grid_GT
+        else:
+            cell_info_grid = self.cell_info_grid_PRED
+
+        cells_vis_info_list_filtered = [x for x in cell_info_grid if x['obj_type'] == 'obj']
+
+        for cell_idx, cell_info in enumerate(cells_vis_info_list_filtered):
+            if cell_info['light_ratio'] < 0.05:
+                continue
+            intensity = cell_info['emitter_info']['intensity']
+            verts = np.array(cell_info['verts']).squeeze()
+            if if_transform_to_RAW:
+                verts = self.transform_R.T @ (verts.T - self.transform_t) # transform back to the RAW world
+                verts = verts.T
+            verts = (verts - np.mean(verts, axis=0, keepdims=True)) * cell_info['light_ratio'] + np.mean(verts, axis=0, keepdims=True)
+            verts[:, 1] = verts[:, 1] - 0.1
+
+            wall_idx, i, j = cell_info['wallidx_i_j']
+
+            layout_info_dict = self.layout_info_dict[current_type][str(wall_idx)]
+            basis_1_unit = layout_info_dict['basis_1_unit']
+            basis_2_unit = layout_info_dict['basis_2_unit']
+            basis_3_unit = layout_info_dict['basis_3_unit']
+            normal_outside = layout_info_dict['normal_outside']
+            origin_0 = layout_info_dict['origin_0']
+            basis_1 = layout_info_dict['basis_1']
+            basis_2 = layout_info_dict['basis_2']
+            basis_3 = layout_info_dict['basis_3']
+            
+
+            edge_length = np.sqrt(cell_info['light_ratio'])
+            box_center = basis_1 * (i+0.5) + basis_2 * (j+0.5) + basis_3 * 0.5 + origin_0
+            
+            lamp_box = get_corners_of_bb3d_no_index(np.vstack([basis_1_unit, basis_2_unit, basis_3_unit]), [edge_length/2., edge_length/2., edge_length/2.], box_center)
+            if if_transform_to_RAW:
+                lamp_box = self.transform_R.T @ (lamp_box.T - self.transform_t) # transform back to the RAW world
+                lamp_box = lamp_box.T
+            
+            obj_path = Path(self.summary_path) / ('mesh_lamp_cell%d-tid%d-%d.obj'%(cell_idx, self.tid, self.sample_idx))
+            writeMesh_rect(str(obj_path), lamp_box)
+            print('Written lamps to %s'%obj_path)
+            
+            if rec_root is not None:
+                rec_root = addAreaLight(rec_root, 'lamp_cell_on%d_%d'%(wall_idx, cell_idx), str(obj_path), rgbColor=intensity)
+            
+    def convert_layout_windows_to_mesh(self, split_type='prediction', if_dump_to_mesh=True, if_transform_to_RAW=True, layout_scale=1., rec_root=None):
+        assert split_type in ['prediction', 'GT']
+        current_type = split_type
+        
+        if self.scene_meshes_dict[current_type]!=[]:
+            return
+
+        if split_type=='prediction':
+            # layout = self.pred_layout
+            cell_info_grid = self.cell_info_grid_PRED
+            # cam_R = self.pred_cam_R
+        else:
+            # layout = self.gt_layout
+            cell_info_grid = self.cell_info_grid_GT
+            # cam_R = self.gt_cam_R
+            
+        sg_params_list = []
+
+        for wall_idx in range(6):
+            valid_cell_list = []
+            light_ratio_sum = 0.
+            
+            layout_info_dict = self.layout_info_dict[current_type][str(wall_idx)]
+            basis_1_unit = layout_info_dict['basis_1_unit']
+            basis_2_unit = layout_info_dict['basis_2_unit']
+            basis_3_unit = layout_info_dict['basis_3_unit']
+            normal_outside = layout_info_dict['normal_outside']
+            origin_0 = layout_info_dict['origin_0']
+            basis_1 = layout_info_dict['basis_1']
+            basis_2 = layout_info_dict['basis_2']
+            basis_3 = layout_info_dict['basis_3']
+
+            for cell_info in cell_info_grid:
+                wall_idx_cell, i, j = cell_info['wallidx_i_j']
+                if wall_idx_cell != wall_idx:
+                    continue
+
+                if not(cell_info['obj_type'] == 'window' and cell_info['light_ratio'] > 0.1):
+                    continue
+
+                
+                x_ij = basis_1 * i + basis_2 * j + origin_0
+                x_i1j = basis_1 * (i+1) + basis_2 * j + origin_0
+                x_i1j1 = basis_1 * (i+1) + basis_2 * (j+1) + origin_0
+                x_ij1 = basis_1 * i + basis_2 * (j+1) + origin_0
+                verts = [[list(x_ij), list(x_i1j), list(x_i1j1), list(x_ij1)]]
+                verts_array = np.array(verts).squeeze()
+                if if_transform_to_RAW:
+                    verts_array = self.transform_R.T @ (verts_array.T - self.transform_t) # transform back to the RAW world
+                    verts_array = verts_array.T
+                
+                light_ratio_sum += cell_info['light_ratio']
+
+                # get SG params
+                # light_dir_offset = cell_info['emitter_info']['light_dir_offset']
+                # light_dir_abs = light_dir_offset + normal_outside
+                if 'light_dir_abs' in cell_info['emitter_info']:
+                    light_dir_abs = cell_info['emitter_info']['light_dir_abs']
+                else:
+                    light_dir_abs = cell_info['emitter_info']['light_dir_offset'] + cell_info['normal_outside']
+                light_dir_abs = light_dir_abs / (np.linalg.norm(light_dir_abs)+1e-6)
+                if if_transform_to_RAW:
+                    light_dir_abs = self.transform_R.T @ light_dir_abs.reshape(3, 1) # transform back to the RAW world
+                    light_dir_abs = light_dir_abs.flatten()
+                intensity = cell_info['emitter_info']['intensity']
+                lamb = cell_info['emitter_info']['lamb']
+                if isinstance(lamb, np.ndarray):
+                    lamb = lamb.squeeze().item()
+
+
+                valid_cell_list.append({'basis_1_unit': basis_1_unit, 'basis_2_unit': basis_2_unit, 'light_ratio': cell_info['light_ratio'], 'center': np.mean(verts_array, axis=0), \
+                                        'center_axis1': (verts_array[1]+verts_array[0])/2., 'center_axis2': (verts_array[3]+verts_array[0])/2., 'i': i+0.5, 'j': j+0.5, \
+                                        'light_dir_abs': light_dir_abs, 
+                                        'intensity': intensity, 
+                                        'lamb': lamb, 'wall_idx': wall_idx})
+                                        
+            if light_ratio_sum < 1.:
+                verts_face_total3d = np.stack([origin_0, origin_0+basis_1*self.grid_size, origin_0+basis_1*self.grid_size+basis_2*self.grid_size, origin_0+basis_2*self.grid_size]).reshape((4,3))
+                if if_transform_to_RAW:
+                    verts_face = self.transform_R.T @ (verts_face_total3d.T - self.transform_t) # transform back to the RAW world
+                    verts_face = verts_face.T
+
+                obj_path = Path(self.summary_path) / ('mesh_wall%d-tid%d-%d.obj'%(wall_idx, self.tid, self.sample_idx))
+                writeMesh_rect(str(obj_path), verts_face)
+                self.scene_meshes_dict[current_type].append(obj_path)
+                print('Written wall to %s'%obj_path)
+                if rec_root is not None:
+                    rec_root = addShape(rec_root, 'wall_%d'%wall_idx, str(obj_path), None, scaleValue=layout_scale)
+                
+            else:
+                # merge window cells and write one wall as patches
+                axis_1_cell = basis_1
+                axis_2_cell = basis_2
+                weights = np.array([x['light_ratio'] for x in valid_cell_list])
+                weights = weights / np.sum(weights)
+                weighted_center = np.sum(weights.reshape(-1, 1) * np.array([x['center'] for x in valid_cell_list]), 0)
+
+                area_ori = np.linalg.norm(axis_1_cell) * np.linalg.norm(axis_2_cell)
+                area_sum = sum([x['light_ratio'] for x in valid_cell_list]) * area_ori
+                edge_length = np.sqrt(area_sum)
+
+                coeffs_axis1 = (np.array([x['i'] for x in valid_cell_list])).reshape(-1, 1)
+                centers_axis1 = np.outer(coeffs_axis1, basis_1.reshape(1, 3))
+                weighted_center_axis1 = np.sum(weights.reshape(-1, 1) * centers_axis1, 0) # offset w.r.t. origin_0
+                coeffs_axis2 = (np.array([x['j'] for x in valid_cell_list])).reshape(-1, 1)
+                centers_axis2 = np.outer(coeffs_axis2, basis_2.reshape(1, 3))
+                weighted_center_axis2 = np.sum(weights.reshape(-1, 1) * centers_axis2, 0) # offset w.r.t. origin_0
+
+                weighted_center_axis1_coeff = np.sum(weights.reshape(-1, 1) * coeffs_axis1, 0).item()
+                weighted_center_axis2_coeff = np.sum(weights.reshape(-1, 1) * coeffs_axis2, 0).item()
+                half_edge_axis1_coeff = edge_length / 2. / np.linalg.norm(basis_1)
+                half_edge_axis2_coeff = edge_length / 2. / np.linalg.norm(basis_2)
+                c1, c2 = weighted_center_axis1_coeff, weighted_center_axis2_coeff
+                h1, h2 = half_edge_axis1_coeff, half_edge_axis2_coeff
+
+                for patch_idx, coeffs in enumerate([\
+                                                    [[0., 0.], [c1-h1, 0], [c1-h1, c2-h2], [0., c2-h2]], \
+                                                    [[c1-h1, 0], [c1+h1, 0], [c1+h1, c2-h2], [c1-h1, c2-h2]], \
+                                                    [[c1+h1, 0], [self.grid_size, 0], [self.grid_size, c2-h2], [c1+h1, c2-h2]], \
+                                                    [[0, c2-h2], [c1-h1, c2-h2], [c1-h1, c2+h2], [0, c2+h2]], \
+                                                    [[c1+h1, c2-h2], [self.grid_size, c2-h2], [self.grid_size, c2+h2], [c2+h1, c2+h2]], \
+                                                    [[0, c2+h2], [c1+h1, c2+h2], [c1+h1, self.grid_size], [0, self.grid_size]], \
+                                                    [[c1-h1, c2+h2], [c1+h1, c2+h2], [c1+h1, self.grid_size], [c1-h1, self.grid_size]], \
+                                                    [[c1+h1, c2+h2], [self.grid_size, c2+h2], [self.grid_size, self.grid_size], [c1+h1, self.grid_size]]
+                                                    ]):
+                    patch = np.stack([origin_0 + basis_1*coeff_1 + basis_2*coeff_2 for coeff_1, coeff_2 in coeffs])
+                    if if_transform_to_RAW:
+                        patch = self.transform_R.T @ (patch.T - self.transform_t) # transform back to the RAW world
+                        patch = patch.T
+                    obj_path = Path(self.summary_path) / ('mesh_patch%d_on%d-tid%d-%d.obj'%(patch_idx, wall_idx, self.tid, self.sample_idx))
+
+                    writeMesh_rect(str(obj_path), patch)
+                    self.scene_meshes_dict[current_type].append(obj_path)
+                    print('Written wall to %s'%obj_path)
+
+                    if rec_root is not None:
+                        rec_root = addShape(rec_root, 'window_patch_on%d_%d'%(wall_idx, patch_idx), str(obj_path), None, scaleValue=layout_scale)
+
+            # convert to SG params for envmap
+            # for valid_cell in valid_cell_list:
+            if len(valid_cell_list) > 0:
+                light_dir_abs = np.vstack([x['light_dir_abs'] for x in valid_cell_list]) # [N, 3]
+                intensity = np.vstack([x['intensity'] for x in valid_cell_list]) # [N, 3]
+                lamb = np.vstack([x['lamb'] for x in valid_cell_list]) # [N.]
+                light_dir_abs_median = np.median(light_dir_abs, axis=0)
+                intensity_median = np.median(intensity, axis=0)
+                lamb_median = np.median(lamb, axis=0)
+
+                sg_params_list.append({'wall_idx': wall_idx, 'intensity': intensity_median, 'lamb': lamb_median, 'light_dir_abs': light_dir_abs_median})
+
+                # intensity
+                # lamb
+        return sg_params_list
+
+    def convert_SG_params_to_envmap(self, sg_params_list):
+        im_envmap_gen_list = []
+        for sg_params in sg_params_list:
+            intensity_SG = sg_params['intensity'] / self.hdr_scale / self.env_scale
+            lamb_SG = sg_params['lamb']
+            light_dir_abs_RAW = sg_params['light_dir_abs']
+
+            weight_SG = intensity_SG
+            light_axis_world_SG = np.array([light_dir_abs_RAW[2], -light_dir_abs_RAW[0], light_dir_abs_RAW[1]])
+            light_axis_world_SG = light_axis_world_SG / np.linalg.norm(light_axis_world_SG)
+            cos_theta = light_axis_world_SG[2]
+            theta_SG = np.arccos(cos_theta) # [0, pi]
+            cos_phi = light_axis_world_SG[0] / np.sin(theta_SG)
+            sin_phi = light_axis_world_SG[1] / np.sin(theta_SG)
+            phi_SG = np.arctan2(sin_phi, cos_phi)
+            assert phi_SG >= -np.pi and phi_SG <= np.pi
+            ambient_SG = np.zeros(3, dtype=np.float32)
+
+            recImg = self.envOptim.renderSG(torch.tensor(theta_SG).reshape((1, 1, 1, 1, 1, 1)).cuda(), torch.tensor(phi_SG).reshape((1, 1, 1, 1, 1, 1)).cuda(), \
+                                    torch.tensor(lamb_SG).reshape((1, 1, 1, 1, 1)).cuda(), torch.tensor(weight_SG).reshape((1, 1, 3, 1, 1)).cuda(), \
+                                    ambient=torch.tensor(ambient_SG).reshape((1, 1, 3, 1, 1)).cuda())
+            im_envmap_gen = recImg.cpu().numpy().squeeze().transpose(1, 2, 0)
+
+            im_envmap_gen_list.append(im_envmap_gen_list)
+        
+        im_envmap_gen = np.stack([im_envmap_gen, im_envmap_gen]).sum(0)
+        return im_envmap_gen
+
+
+
+
+    def postprocess_objs(self, split_type='prediction', if_dump_objs_to_mesh=False, if_dump_scene_to_mesh=False, if_debug=False):
+        assert split_type in ['prediction', 'GT', 'both']
+        if split_type == 'prediction':
+            boxes_list = [self.pre_boxes]
+            types = ['prediction']
+        elif split_type == 'both':
+            boxes_list = [self.pre_boxes, self.gt_boxes]
+            types = ['prediction', 'GT']
+        elif split_type == 'GT':
+            boxes_list = [self.gt_boxes]
+            types = ['GT']
+
+        assert not if_dump_objs_to_mesh, 'not implemented yet...'
+
+        for boxes, current_type in zip(boxes_list, types):
+            if boxes is None or self.valid_bbox_idxes_dict[current_type]!=[]:
+                print('[!!!] Skipped processing boxes for %s'%current_type, boxes is None, self.valid_bbox_idxes_dict[current_type])
+                continue
+
+            
+            for bbox_idx, (coeffs, centroid, class_id, basis) in enumerate(zip(boxes['coeffs'], boxes['centroid'], boxes['class_id'], boxes['basis'])):
+                if_box_valid = self.gt_boxes['if_valid'][bbox_idx]
+                if_box_invalid_cat = class_id not in self.valid_class_ids
+
+                message_strs = []
+                if not if_box_valid:
+                    message_strs.append('[invalid obj]')
+                if if_box_invalid_cat:
+                    message_strs.append('[invalid class of dataset %s]'%self.dataset)
+                message_str = '-'.join(message_strs)
+                message_str = '%d:%s %s'%(class_id, self.classes[class_id], message_str)
+
+                if if_box_invalid_cat or (not if_box_valid):
+                    if self.if_hide_invalid_cats:
+                        print(magenta('%s [Skipped] %s'%(self.description, message_str)))
+                        continue
+                    else:
+                        print(yellow('%s [Warning] %s'%(self.description, message_str)))
+                        linestyle = 'dashdot'
+                        color = 'grey'
+
+                self.valid_bbox_idxes_dict[current_type].append(bbox_idx)
+
+            if self.valid_bbox_meshes_dict[current_type]!={}:
+                continue
+
+            obj_paths = self.gt_meshes_paths if current_type=='GT' else [x[0] for x in self.pre_meshes_paths]
+            obj_paths = [obj_paths[x] for x in self.valid_bbox_idxes_dict[current_type]]
+            if self.root_path is not None:
+                obj_paths = [str(Path(self.root_path) / x) for x in obj_paths]
+
+            boxes_valid = {}
+            for key in ['coeffs', 'centroid', 'class_id', 'basis', 'random_id', 'cat_name']:
+                boxes_valid[key] = [boxes[key][x] for x in self.valid_bbox_idxes_dict[current_type]]
+            if if_debug:
+                for box_idx, obj_path_normalized_path in enumerate(obj_paths):
+                    print(box_idx, boxes_valid['random_id'][box_idx], boxes_valid['cat_name'][box_idx], obj_path_normalized_path)
+            self.valid_bbox_meshes_dict[current_type]['boxes_valid'] = boxes_valid
+
+            [vertices_list, faces_list, faces_notAdd_list], bboxes_ = format_mesh(obj_paths, boxes_valid, if_use_vtk=False)
+
+            if if_dump_scene_to_mesh:
+                if len(vertices_list) > 0:
+                    vertices_combine = np.vstack(vertices_list)
+                    faces_combine = np.vstack(faces_list)
+                    if if_debug:
+                        scene_mesh_path = 'scene_mesh_debug_val-%d.obj'%self.sample_idx
+                    else:
+                        scene_mesh_path = Path(self.summary_path) / ('scene_mesh-%s-%d.obj'%(current_type, self.sample_idx))
+                    writeMesh(str(scene_mesh_path), vertices_combine, faces_combine)
+                    print(white_blue('[%s] Mesh written to '%current_type+str(scene_mesh_path)))
+                else:
+                    print(yellow('Mesh not written for pickle_id %d: no valid objects'%self.sample_idx))
+                self.valid_bbox_meshes_dict[current_type]['mesh_path_scene'] = str(scene_mesh_path)
+
+            self.valid_bbox_meshes_dict[current_type]['mesh_objs'] = []
+            for v, f, obj_path in zip(vertices_list, faces_notAdd_list, obj_paths):
+                mesh_obj = {'v': v, 'f': f, 'obj_path': obj_path}
+                self.valid_bbox_meshes_dict[current_type]['mesh_objs'].append(mesh_obj)
+                # if if_dump_objs_to_mesh:
+                #     obj_mesh_path = Path(self.opt.summary_vis_path_task) / ('obj_mesh-%s-tid%d-%d.obj'%(current_type, self.tid,     self.sample_idx))
+
+            if self.if_use_vtk: # utils/visualize.py L1194
+                vtk_objects, pre_boxes_ = format_mesh(obj_paths, boxes_valid, if_use_vtk=True)
+                assert len(obj_paths)==len(vtk_objects.keys())
+                self.valid_bbox_meshes_dict[current_type]['vtk_objs'] = vtk_objects
 
     def draw_3D_scene_plt(self, type = 'prediction', if_save = True, save_path='', fig_or_ax=[None, None],  which_to_vis='cell_info', \
-            if_show_emitter=True, if_show_objs=True, if_show_layout_axes=True, if_return_cells_vis_info=False, hide_cells=False, if_show_cell_normals=False, if_show_cell_meshgrid=False, hide_random_id=True, scale_emitter_length=1., \
-            if_debug=False, if_dump_to_mesh=False, fig_scale=1., pickle_id=0):
+            if_show_emitter=True, if_show_objs=True, if_show_objs_axes=False, if_show_layout_axes=True, if_return_cells_vis_info=False, hide_cells=False, if_show_cell_normals=False, if_show_cell_meshgrid=False, hide_random_id=True, scale_emitter_length=1., \
+            if_debug=False, if_dump_to_mesh=False, fig_scale=1., pickle_id=0, \
+            points_backproj=None, points_backproj_color=None):
         assert type in ['prediction', 'GT', 'both']
         figs_to_draw = {'prediction': ['prediction'], 'GT': ['GT'],'both': ['prediction', 'GT']}
         figs_to_draw = figs_to_draw[type]
@@ -309,16 +751,16 @@ class Box(Scene3D):
 
         if type == 'prediction':
             axes = [ax_3d_PRED]
-            boxes = [self.pre_layout]
-            cam_Rs = [self.pre_cam_R]
+            boxes = [self.pred_layout]
+            cam_Rs = [self.pred_cam_R]
         elif type == 'GT':
             axes = [ax_3d_GT]
             boxes = [self.gt_layout]
             cam_Rs = [self.gt_cam_R]
         elif type == 'both':
             axes = [ax_3d_PRED, ax_3d_GT]
-            boxes = [self.pre_layout, self.gt_layout]
-            cam_Rs = [self.pre_cam_R, self.gt_cam_R]
+            boxes = [self.pred_layout, self.gt_layout]
+            cam_Rs = [self.pred_cam_R, self.gt_cam_R]
 
         for ax_3d, layout, cam_R in zip(axes, boxes, cam_Rs):
             if ax_3d is None:
@@ -405,9 +847,9 @@ class Box(Scene3D):
         # === draw objs
         cell_info_grid_dict = {'GT': self.cell_info_grid_GT, 'prediction': self.cell_info_grid_PRED}
         if type == 'prediction':
-            layout_list = [self.pre_layout]
+            layout_list = [self.pred_layout]
             boxes_list = [self.pre_boxes]
-            cam_Rs = [self.pre_cam_R]
+            cam_Rs = [self.pred_cam_R]
             colors = [[1., 0., 0.]]
             types = ['prediction']
             line_widths = [5]
@@ -416,9 +858,9 @@ class Box(Scene3D):
             ax_3ds = [ax_3d_PRED]
             cells_vis_info_lists = [cells_vis_info_list_pred]
         elif type == 'both':
-            layout_list = [self.pre_layout, self.gt_layout]
+            layout_list = [self.pred_layout, self.gt_layout]
             boxes_list = [self.pre_boxes, self.gt_boxes]
-            cam_Rs = [self.pre_cam_R, self.gt_cam_R]    
+            cam_Rs = [self.pred_cam_R, self.gt_cam_R]    
             colors = [[1., 0., 0.], [0., 0., 1.]]
             types = ['prediction', 'GT']
             line_widths = [5, 3]
@@ -440,16 +882,14 @@ class Box(Scene3D):
         else:
             assert False, 'not valid Type!'
 
-        if if_dump_to_mesh:
-            return_dict['mesh_paths'] = {}
-            return_dict['mesh_objs'] = {}
-
         for boxes, cam_R, line_width, linestyle, fontsize, current_type, ax_3d in zip(boxes_list, cam_Rs, line_widths, linestyles, fontsizes, types, ax_3ds):
             if boxes is None or not(if_show_objs):
                 continue
             
-            valid_bbox_idxes = []
-            # for bbox_idx, (coeffs, centroid, class_id, basis, random_id) in enumerate(zip(boxes['coeffs'], boxes['centroid'], boxes['class_id'], boxes['basis'], boxes['random_id'])):
+            if self.valid_bbox_idxes_dict[current_type] == []:
+                self.postprocess_objs(split_type=current_type)
+            valid_bbox_idxes = self.valid_bbox_idxes_dict[current_type]
+
             for bbox_idx, (coeffs, centroid, class_id, basis) in enumerate(zip(boxes['coeffs'], boxes['centroid'], boxes['class_id'], boxes['basis'])):
                 # if class_id != 21: 
                 #     continue
@@ -457,25 +897,8 @@ class Box(Scene3D):
                 # if random_id != 'XRZ7U':
                 #     continue
 
-                if_box_valid = self.gt_boxes['if_valid'][bbox_idx]
-                if_box_invalid_cat = class_id not in self.valid_class_ids
-
-                message_strs = []
-                if if_box_valid==False:
-                    message_strs.append('[invalid obj]')
-                if if_box_invalid_cat:
-                    message_strs.append('[invalid class of dataset %s]'%self.dataset)
-                message_str = '-'.join(message_strs)
-                message_str = '%d:%s %s'%(class_id, self.classes[class_id], message_str)
-
-                if if_box_invalid_cat or (not if_box_valid):
-                    if self.if_hide_invalid_cats:
-                        print(magenta('%s [Skipped] %s'%(self.description, message_str)))
-                        continue
-                    else:
-                        print(yellow('%s [Warning] %s'%(self.description, message_str)))
-                        linestyle = 'dashdot'
-                        color = 'grey'
+                if bbox_idx not in valid_bbox_idxes:
+                    continue
 
                 bdb3d_corners = get_corners_of_bb3d_no_index(basis, coeffs, centroid)
 
@@ -483,70 +906,11 @@ class Box(Scene3D):
                 vis_cube_plt(bdb3d_corners, ax_3d, color, linestyle, self.classes[class_id])
                 # print('Showing obj', self.classes[class_id])
                 
-                for axis_idx, color, axis_name in zip([0, 1, 2], ['r', 'g', 'b'], ['x', 'y', 'z']):
-                    a_x = Arrow3D([centroid[0], centroid[0]+basis[axis_idx][0]], [centroid[1], centroid[1]+basis[axis_idx][1]], [centroid[2], centroid[2]+basis[axis_idx][2]], mutation_scale=1,
-                            lw=1, arrowstyle="Simple", color=color)
-                    ax_3d.add_artist(a_x)
-                    # ax_3d.text3D(centroid[0]+basis[axis_idx][0], centroid[1]+basis[axis_idx][1], centroid[2]+basis[axis_idx][2], axis_name, color=color, fontsize=5*fig_scale)
-
-
-                valid_bbox_idxes.append(bbox_idx)
-
-            if if_dump_to_mesh:
-                obj_paths = self.gt_meshes if current_type=='GT' else [x[0] for x in self.pre_meshes]
-                obj_paths = [obj_paths[x] for x in valid_bbox_idxes]
-                # boxes_valid = [[boxes[key][valid_bbox_idx] for key in ['coeffs', 'centroid', 'class_id', 'basis']] for valid_bbox_idx in valid_bbox_idxes]
-
-
-                boxes_valid = {}
-                for key in ['coeffs', 'centroid', 'class_id', 'basis', 'random_id', 'cat_name']:
-                    boxes_valid[key] = [boxes[key][x] for x in valid_bbox_idxes]
-                if if_debug:
-                    for box_idx, obj_path_normalized_path in enumerate(obj_paths):
-                        print(box_idx, boxes_valid['random_id'][box_idx], boxes_valid['cat_name'][box_idx], obj_path_normalized_path)
-
-                # print('=========>')
-                # for idx, random_id in enumerate(boxes_valid['random_id']):
-                #     if random_id in ['8EFW1', 'NLIQC']:
-                #         idx = boxes_valid['random_id'].index(random_id)
-                #         print(boxes_valid['cat_name'][idx], random_id)
-                #         for key in ['centroid', 'basis', 'coeffs']:
-                #             print(key)
-                #             print(boxes_valid[key][idx])
-
-                # assert len(obj_paths)==len(boxes_valid)
-                [vertices_list, faces_list, faces_notAdd_list], bboxes_ = format_mesh(obj_paths, boxes_valid, if_use_vtk=False)
-                if len(vertices_list) > 0:
-                    vertices_combine = np.vstack(vertices_list)
-                    faces_combine = np.vstack(faces_list)
-                    if if_debug:
-                        scene_mesh_debug_path = 'scene_mesh_debug_val-%d.obj'%self.pickle_id
-                    else:
-                        scene_mesh_debug_path = Path(self.opt.summary_vis_path_task) / ('scene_mesh-%s-%d.obj'%(current_type, pickle_id))
-                    writeMesh(str(scene_mesh_debug_path), vertices_combine, faces_combine)
-                    print(white_blue('[%s] Mesh written to '%current_type+str(scene_mesh_debug_path)))
-                else:
-                    print(yellow('Mesh not written for pickle_id %d: no valid objects'%pickle_id))
-
-                # return_dict['valid_bbox_idxes'] = valid_bbox_idxes
-                return_dict['mesh_paths'][current_type] = str(scene_mesh_debug_path)
-                return_dict['mesh_objs'][current_type] = []
-                for v, f, obj_path in zip(vertices_list, faces_notAdd_list, obj_paths):
-                    mesh_obj = {'v': v, 'f': f, 'obj_path': obj_path}
-                    return_dict['mesh_objs'][current_type].append(mesh_obj)
-                
-
-                if self.if_use_vtk: # utils/visualize.py L1194
-                    vtk_objects, pre_boxes_ = format_mesh(obj_paths, boxes_valid, if_use_vtk=True)
-                    assert len(obj_paths)==len(vtk_objects.keys())
-                    if current_type=='prediction':
-                        self.output_mesh_pred = vtk_objects
-                        self.pre_boxes_valid = boxes_valid
-                    elif current_type=='GT':
-                        self.output_mesh_gt = vtk_objects
-                        self.gt_boxes_valid = boxes_valid
-
-
+                if if_show_objs_axes:
+                    for axis_idx, color, axis_name in zip([0, 1, 2], ['r', 'g', 'b'], ['x', 'y', 'z']):
+                        a_x = Arrow3D([centroid[0], centroid[0]+basis[axis_idx][0]], [centroid[1], centroid[1]+basis[axis_idx][1]], [centroid[2], centroid[2]+basis[axis_idx][2]], mutation_scale=1,
+                                lw=1, arrowstyle="Simple", color=color)
+                        ax_3d.add_artist(a_x)
 
         # if not if_show_emitter:
         #     return None, None
@@ -564,11 +928,11 @@ class Box(Scene3D):
 
             # face_belong_idx_list = [x['face_belong_idx'] for x in self.emitter2wall_assign_info_list_gt]
 
-            for color, type0, layout, cells_vis_info_list in zip(colors, types, layout_list, cells_vis_info_lists):
-                layout_basis_dict = {'x': layout['basis'][0], 'y': layout['basis'][1], 'z': layout['basis'][2], '-x': -layout['basis'][0], '-y': -layout['basis'][1], '-z': -layout['basis'][2]}
-                layout_coeffs_dict = {'x': layout['coeffs'][0], 'y': layout['coeffs'][1], 'z': layout['coeffs'][2], '-x': layout['coeffs'][0], '-y': layout['coeffs'][1], '-z': layout['coeffs'][2]}
+            for color, current_type, layout, cells_vis_info_list in zip(colors, types, layout_list, cells_vis_info_lists):
+                # layout_basis_dict = {'x': layout['basis'][0], 'y': layout['basis'][1], 'z': layout['basis'][2], '-x': -layout['basis'][0], '-y': -layout['basis'][1], '-z': -layout['basis'][2]}
+                # layout_coeffs_dict = {'x': layout['coeffs'][0], 'y': layout['coeffs'][1], 'z': layout['coeffs'][2], '-x': layout['coeffs'][0], '-y': layout['coeffs'][1], '-z': layout['coeffs'][2]}
 
-                if type0 == 'GT':
+                if current_type == 'GT':
                     assert self.emitter_cls_prob_GT is not None
                     if self.emitter_cls_prob_GT is not None:
                         emitter_cls_prob = self.emitter_cls_prob_GT
@@ -577,7 +941,7 @@ class Box(Scene3D):
                     emitter_cls_prob = np.clip(emitter_cls_prob, 0., 1.)
                 
                 assert which_to_vis in ['cell_info', 'cell_prob'], 'Illegal which_to_vis: '+which_to_vis
-                cell_info_grid = cell_info_grid_dict[type0]
+                cell_info_grid = cell_info_grid_dict[current_type]
                 if cell_info_grid is None: continue
                 assert which_to_vis == 'cell_info', 'others not supported for now!'
 
@@ -585,16 +949,15 @@ class Box(Scene3D):
                     wall_idx, i, j = cell_info['wallidx_i_j']
 
                     if self.if_index_faces_with_basis:
-                        axis_1 = self.faces_basis_indexes[wall_idx][0]
-                        axis_2 = self.faces_basis_indexes[wall_idx][1]
-                        axis_3 = self.faces_basis_indexes[wall_idx][2]
-                        basis_1_unit = layout_basis_dict[axis_1]
-                        basis_2_unit = layout_basis_dict[axis_2]
-                        basis_3_unit = layout_basis_dict[axis_3]
-                        origin_0 = layout['centroid'] - basis_1_unit * layout_coeffs_dict[axis_1] - basis_2_unit * layout_coeffs_dict[axis_2] - basis_3_unit * layout_coeffs_dict[axis_3]
-                        basis_1 = basis_1_unit * layout_coeffs_dict[axis_1] * 2 / self.grid_size
-                        basis_2 = basis_2_unit * layout_coeffs_dict[axis_2] * 2 / self.grid_size
-                        normal_outside = -basis_3_unit
+                        layout_info_dict = self.layout_info_dict[current_type][str(wall_idx)]
+                        basis_1_unit = layout_info_dict['basis_1_unit']
+                        basis_2_unit = layout_info_dict['basis_2_unit']
+                        basis_3_unit = layout_info_dict['basis_3_unit']
+                        normal_outside = layout_info_dict['normal_outside']
+                        origin_0 = layout_info_dict['origin_0']
+                        basis_1 = layout_info_dict['basis_1']
+                        basis_2 = layout_info_dict['basis_2']
+                        basis_3 = layout_info_dict['basis_3']
                     else:
                         origin_v1_v2 = self.faces_v_indexes[wall_idx]
                         basis_1 = (layout[origin_v1_v2[1]] - layout[origin_v1_v2[0]]) / self.grid_size
@@ -640,7 +1003,7 @@ class Box(Scene3D):
                             poly = Poly3DCollection(verts, facecolor=intensity_color, edgecolor=color)
 
                             if if_debug:
-                                if type0 == 'GT' and cell_info['obj_type'] == 'window':
+                                if current_type == 'GT' and cell_info['obj_type'] == 'window':
                                     # ic('------')
                                     print(wall_idx, i, j)
 
@@ -665,7 +1028,7 @@ class Box(Scene3D):
 
                     if if_draw_cell:
                         cell_vis['poly'].set_alpha(alpha / 1.2)
-                        if type0 == 'GT':
+                        if current_type == 'GT':
                             ax_3d_GT.add_collection3d(cell_vis['poly'])
                         else:
                             ax_3d_PRED.add_collection3d(cell_vis['poly'])
@@ -677,11 +1040,9 @@ class Box(Scene3D):
                                 # checking meshgrid and normal from LightAccuNet against normal from Layout
                                 if 'emitter_outdirs_meshgrid_Total3D_outside_abs' in extra_info['emitter_info']:
                                     emitter_outdirs_meshgrid_Total3D_outside_abs = extra_info['emitter_info']['emitter_outdirs_meshgrid_Total3D_outside_abs']
-                                    envHeight = self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.envHeight
-                                    envWidth = self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.envWidth
-                                    assert emitter_outdirs_meshgrid_Total3D_outside_abs.shape==(envHeight, envWidth, 3)
-                                    for ii in range(envHeight):
-                                        for jj in range(envWidth):
+                                    assert emitter_outdirs_meshgrid_Total3D_outside_abs.shape==(self.envHeight, self.envWidth, 3)
+                                    for ii in range(self.envHeight):
+                                        for jj in range(self.envWidth):
                                             dot_prod = np.dot(normal_outside.flatten(), emitter_outdirs_meshgrid_Total3D_outside_abs[ii, jj].flatten())
                                             assert dot_prod >= 0
                                 if 'normal_outside_Total3D_single' in extra_info['emitter_info']:
@@ -710,7 +1071,7 @@ class Box(Scene3D):
                                 # print(extra_info['emitter_info'])
                                 a = Arrow3D([cell_center[0], light_end[0]], [cell_center[1], light_end[1]], [cell_center[2], light_end[2]], mutation_scale=20,
                                     lw=1, arrowstyle="-|>", facecolor=extra_info['emitter_info']['intensity_scaled01'], edgecolor='grey')
-                                if type0 == 'GT':
+                                if current_type == 'GT':
                                     ax_3d_GT.add_artist(a)
                                 else:
                                     ax_3d_PRED.add_artist(a)
@@ -719,18 +1080,18 @@ class Box(Scene3D):
                                     normal_end = cell_center + normal_outside * 10.
                                     a = Arrow3D([cell_center[0], normal_end[0]], [cell_center[1], normal_end[1]], [cell_center[2], normal_end[2]], mutation_scale=20,
                                         lw=1, arrowstyle="->", edgecolor='k')
-                                    if type0 == 'GT':
+                                    if current_type == 'GT':
                                         ax_3d_GT.add_artist(a)
                                     else:
                                         ax_3d_PRED.add_artist(a)
 
                                 if if_show_cell_meshgrid and 'emitter_outdirs_meshgrid_Total3D_outside_abs' in extra_info['emitter_info']: # visualize the meshgrid of outer hemisphere of cells: https://i.imgur.com/aoJszVa.png
-                                    for ii in range(envHeight):
-                                        for jj in range(envWidth):
+                                    for ii in range(self.envHeight):
+                                        for jj in range(self.envWidth):
                                             meshgrid_end = cell_center + emitter_outdirs_meshgrid_Total3D_outside_abs[ii, jj].flatten()*2
                                             a = Arrow3D([cell_center[0], meshgrid_end[0]], [cell_center[1], meshgrid_end[1]], [cell_center[2], meshgrid_end[2]], mutation_scale=20,
                                                 lw=1, arrowstyle="->", edgecolor='k')
-                                            if type0 == 'GT':
+                                            if current_type == 'GT':
                                                 ax_3d_GT.add_artist(a)
                                             else:
                                                 ax_3d_PRED.add_artist(a)
@@ -739,41 +1100,43 @@ class Box(Scene3D):
                                             #     dot_prod = np.dot(normal_outside.flatten(), emitter_outdirs_meshgrid_Total3D_outside_abs[ii, jj].flatten())
                                                 # assert dot_prod >= 0
 
-
-
-    
-
         for ax_3d in [ax_3d_GT, ax_3d_PRED]:
             if ax_3d is not None:
                 ax_3d.set_box_aspect([1,1,1])
                 set_axes_equal(ax_3d) # IMPORTANT - this is also required
+
+
+        if points_backproj is not None:
+            for ii in np.arange(0, points_backproj.shape[0], 10):
+                for jj in np.arange(0, points_backproj.shape[1], 10):
+                    p = points_backproj[ii, jj]
+                    color = (points_backproj_color[ii, jj]).astype(np.float32) / 255.
+                    ax_3d_GT.scatter3D(p[0], p[1], p[2], color=color)
+
 
         if fig_or_ax == [None, None]    :
             return fig, return_dict, [ax_3d_GT, ax_3d_PRED, [cells_vis_info_list_pred, cells_vis_info_list_GT]]
         else:
             return ax_3d, return_dict, [ax_3d_GT, ax_3d_PRED, [cells_vis_info_list_pred, cells_vis_info_list_GT]]
 
-    def draw_all_cells(self, ax_3d, layout, lightnet_array_GT, alpha=0.5, if_debug=False, highlight_cells=[]):
+    def draw_all_cells(self, ax_3d, layout, lightnet_array_GT, current_type='GT', alpha=0.5, if_debug=False, highlight_cells=[]):
         assert lightnet_array_GT.shape == (6, self.grid_size, self.grid_size, 3)
         # self.faces_v_indexes = [(3, 2, 0), (7, 6, 4), (4, 5, 0), (6, 2, 5), (7, 6, 3), (7, 3, 4)]
         # self.faces_v_indexes = [(3, 2, 0), (7, 4, 6), (4, 0, 5), (6, 5, 2), (7, 6, 3), (7, 3, 4)]
-
-        layout_basis_dict = {'x': layout['basis'][0], 'y': layout['basis'][1], 'z': layout['basis'][2], '-x': -layout['basis'][0], '-y': -layout['basis'][1], '-z': -layout['basis'][2]}
-        layout_coeffs_dict = {'x': layout['coeffs'][0], 'y': layout['coeffs'][1], 'z': layout['coeffs'][2], '-x': layout['coeffs'][0], '-y': layout['coeffs'][1], '-z': layout['coeffs'][2]}
 
         for wall_idx in range(6):
             for i in range(self.grid_size):                    
                 for j in range(self.grid_size): 
                     if self.if_index_faces_with_basis:
-                        axis_1 = self.faces_basis_indexes[wall_idx][0]
-                        axis_2 = self.faces_basis_indexes[wall_idx][1]
-                        axis_3 = self.faces_basis_indexes[wall_idx][2]
-                        basis_1_unit = layout_basis_dict[axis_1]
-                        basis_2_unit = layout_basis_dict[axis_2]
-                        basis_3_unit = layout_basis_dict[axis_3]
-                        origin_0 = layout['centroid'] - basis_1_unit * layout_coeffs_dict[axis_1] - basis_2_unit * layout_coeffs_dict[axis_2] - basis_3_unit * layout_coeffs_dict[axis_3]
-                        basis_1 = basis_1_unit * layout_coeffs_dict[axis_1] * 2 / self.grid_size
-                        basis_2 = basis_2_unit * layout_coeffs_dict[axis_2] * 2 / self.grid_size
+                        layout_info_dict = self.layout_info_dict[current_type][str(wall_idx)]
+                        basis_1_unit = layout_info_dict['basis_1_unit']
+                        basis_2_unit = layout_info_dict['basis_2_unit']
+                        basis_3_unit = layout_info_dict['basis_3_unit']
+                        normal_outside = layout_info_dict['normal_outside']
+                        origin_0 = layout_info_dict['origin_0']
+                        basis_1 = layout_info_dict['basis_1']
+                        basis_2 = layout_info_dict['basis_2']
+                        basis_3 = layout_info_dict['basis_3']
                     else:
                         origin_v1_v2 = self.faces_v_indexes[wall_idx]
                         basis_1 = (layout[origin_v1_v2[1]] - layout[origin_v1_v2[0]]) / self.grid_size
@@ -795,7 +1158,6 @@ class Box(Scene3D):
                     cell_vis.update({'poly': poly})
                     cell_vis['poly'].set_alpha(alpha)
                     ax_3d.add_collection3d(cell_vis['poly'])
-
 
     def draw_projected_layout(self, type = 'prediction', return_plt = False, if_save = True, save_path='', if_use_plt=False, fig_or_ax=None, cam_K_override=None, if_original_lim=False, override_img=None):
         if cam_K_override is not None:
@@ -827,14 +1189,14 @@ class Box(Scene3D):
             draw = ImageDraw.Draw(img_map)
 
         if type == 'prediction':
-            boxes = [self.pre_layout]
-            cam_Rs = [self.pre_cam_R]
+            boxes = [self.pred_layout]
+            cam_Rs = [self.pred_cam_R]
             colors = [[1., 0., 0.]]
             line_widths = [5]
             linestyles = ['-']
         elif type == 'both':
-            boxes = [self.pre_layout, self.gt_layout]
-            cam_Rs = [self.pre_cam_R, self.gt_cam_R]
+            boxes = [self.pred_layout, self.gt_layout]
+            cam_Rs = [self.pred_cam_R, self.gt_cam_R]
             colors = [[1., 0., 0.], [0., 0., 1.]]
             line_widths = [5, 3]
             linestyles = ['-', '--']
@@ -949,7 +1311,7 @@ class Box(Scene3D):
         if type == 'prediction':
             current_types = ['prediction']
             boxes_list = [self.pre_boxes]
-            cam_Rs = [self.pre_cam_R]
+            cam_Rs = [self.pred_cam_R]
             line_widths = [3]
             linestyles = ['-']
             fontsizes = [15]
@@ -963,7 +1325,7 @@ class Box(Scene3D):
         elif type == 'both':
             current_types = ['prediction', 'GT']
             boxes_list = [self.pre_boxes, self.gt_boxes]
-            cam_Rs = [self.pre_cam_R, self.gt_cam_R]
+            cam_Rs = [self.pred_cam_R, self.gt_cam_R]
             line_widths = [3, 1]
             linestyles = ['-', '--']
             fontsizes = [15, 12]
@@ -1130,7 +1492,6 @@ class Box(Scene3D):
             voxel_actor = self.set_actor(self.set_mapper(self.set_cube_prop(corners, faces, color), 'box'))
             voxel_actors.append(voxel_actor)
         return voxel_actors
-
     
     def set_render(self, mode):
         assert mode in ['GT', 'prediction']
@@ -1144,7 +1505,7 @@ class Box(Scene3D):
         if mode == 'GT':
             cam_R = self.gt_cam_R
         elif mode == 'prediction':
-            cam_R = self.pre_cam_R
+            cam_R = self.pred_cam_R
 
         color = [[1., 0., 0.], [1., 0., 0.], [1., 0., 0.]]
         center = [0, 0, 0]
@@ -1162,7 +1523,7 @@ class Box(Scene3D):
         # if mode == 'prediction' or mode == 'both':
         #     color = [[0., 1., 1.], [1., 0., 1.], [1., 1., 0.]]
         #     center = [0, 0, 0]
-        #     vectors = self.pre_cam_R.T
+        #     vectors = self.pred_cam_R.T
         #     # for index in range(vectors.shape[0]):
         #     #     arrow_actor = self.set_arrow_actor(center, vectors[index])
         #     #     arrow_actor.GetProperty().SetColor(color[index])
@@ -1184,9 +1545,9 @@ class Box(Scene3D):
         # if mode == 'prediction' or mode == 'both':
         #     color = (75, 75, 75)
         #     opacity = 0.2
-        #     layout_actor = self.get_bbox_actor(self.pre_layout, color, opacity)
+        #     layout_actor = self.get_bbox_actor(self.pred_layout, color, opacity)
         #     renderer.AddActor(layout_actor)
-        #     layout_line_actor = self.get_bbox_line_actor(self.pre_layout, (75,75,75), 1.)
+        #     layout_line_actor = self.get_bbox_line_actor(self.pred_layout, (75,75,75), 1.)
         #     renderer.AddActor(layout_line_actor)
 
         # '''draw gt obj bounding boxes'''
@@ -1234,14 +1595,17 @@ class Box(Scene3D):
         #             renderer.AddActor(arrow_actor)
 
         # draw mesh
-        if mode == 'prediction':
-            boxes_valid = self.pre_boxes_valid
-            output_mesh = self.output_mesh_pred
-        elif mode == 'GT':
-            boxes_valid = self.gt_boxes_valid
-            output_mesh = self.output_mesh_gt
+        # if mode == 'prediction':
+        #     boxes_valid = self.pre_boxes_valid
+        #     output_mesh = self.output_mesh_pred
+        # elif mode == 'GT':
+        #     boxes_valid = self.gt_boxes_valid
+        #     output_mesh = self.output_mesh_gt
 
-        if output_mesh:
+        if 'boxes_valid' in self.valid_bbox_meshes_dict[mode]:
+            boxes_valid = self.valid_bbox_meshes_dict[mode]['boxes_valid']
+            output_mesh = self.valid_bbox_meshes_dict[mode]['vtk_objs']
+
             for obj_idx, class_id in enumerate(boxes_valid['class_id']):
                 # if class_id not in self.valid_class_ids:
                 #     continue
@@ -1319,7 +1683,6 @@ class Box(Scene3D):
             plt.imshow(voxel_proj); plt.show()
 
         return render_window
-
 
     def draw3D(self, mode, if_return_img=True, if_save_img=False, save_path_without_suffix='', if_save_obj=False):
         '''

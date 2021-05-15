@@ -621,7 +621,8 @@ class Model_Joint(nn.Module):
             return_dict_layout_emitter['emitter_est_result'].update({'scattered_light': scattered_light})
 
             return_dict_layout_emitter['emitter_est_result'].update({'envmap_lightAccu': return_dict_lightAccu['envmap_lightAccu'], \
-                'emitter_outdirs_meshgrid_Total3D_outside': emitter_outdirs_meshgrid_Total3D_outside, 'normal_outside_Total3D': normal_outside_Total3D})
+                'emitter_outdirs_meshgrid_Total3D_outside': emitter_outdirs_meshgrid_Total3D_outside, 'normal_outside_Total3D': normal_outside_Total3D, \
+                'points_backproj': return_dict_lightAccu['points_backproj'], 'depthPred': return_dict_lightAccu['depthPred'], 'T_LightNet2Total3D_rightmult': T_LightNet2Total3D_rightmult})
         else:
             raise ValueError('Invalid self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version')
 

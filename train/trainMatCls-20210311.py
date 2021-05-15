@@ -377,7 +377,7 @@ else:
             # Evaluation for an epoch```
 
             synchronize()
-            
+            print((tid - tid_start) % opt.eval_every_iter, opt.eval_every_iter)
             if opt.eval_every_iter != -1 and (tid - tid_start) % opt.eval_every_iter == 0:
                 val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid}
                 if opt.if_vis:

@@ -167,7 +167,8 @@ def format_mesh(obj_files, bboxes, if_use_vtk=False, validate_classids=False):
         # transform_lists.append({'translation': mesh_center.flatten()})
 
         mesh_coef = (points.max(0) - points.min(0)) / 2.
-        points = points.dot(np.diag(1./mesh_coef)).dot(np.diag(bboxes['coeffs'][obj_idx]))
+        box_coeffs = bboxes['coeffs'][obj_idx].flatten()
+        points = points.dot(np.diag(1./mesh_coef)).dot(np.diag(box_coeffs))
         # transform_lists.append({'scale': np.array(bboxes['coeffs'][obj_idx]).flatten() * np.array(1./mesh_coef).flatten})
 
         # set orientation

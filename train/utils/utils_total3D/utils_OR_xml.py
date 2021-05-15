@@ -1,7 +1,7 @@
 import xml.etree.ElementTree as et
 import numpy as np
 from pathlib import Path
-from utils_OR_mesh import loadMesh, computeBox, computeTransform, writeMesh
+from utils.utils_total3D.utils_OR_mesh import loadMesh, computeBox, computeTransform, writeMesh
 import copy
 import random, string
 

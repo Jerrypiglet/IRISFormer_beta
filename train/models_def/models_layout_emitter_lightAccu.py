@@ -250,7 +250,7 @@ class emitter_lightAccu(nn.Module):
         envmap_lightAccu_mean = (envmap_lightAccu.sum(-1).sum(-1) / (points_sampled_mask_expanded.sum(-1).sum(-1)+1e-6)).permute(0, 2, 1) # -> [1, 384, 3]
 
         
-        return_dict = {'envmap_lightAccu': envmap_lightAccu, 'points_sampled_mask_expanded': points_sampled_mask_expanded, 'points_sampled_mask': points_sampled_mask, 'envmap_lightAccu_mean': envmap_lightAccu_mean, \
+        return_dict = {'envmap_lightAccu': envmap_lightAccu, 'points_backproj': points, 'depthPred': depthPred, 'points_sampled_mask_expanded': points_sampled_mask_expanded, 'points_sampled_mask': points_sampled_mask, 'envmap_lightAccu_mean': envmap_lightAccu_mean, \
             'verts_all_Total3D': verts_all_Total3D, 'verts_center_lightNet': verts_center_lightNet, 'verts_lightNet': verts_lightNet, \
             'origin_0_array_lightNet': origin_0_array_lightNet, 'basis_1_array_lightNet': basis_1_array_lightNet, 'basis_2_array_lightNet': basis_2_array_lightNet, 'normal_array_lightNet': normal_array_lightNet, \
             'vec_to_t': vec_to_t, 'Total3D_to_LightNet_transform_params': Total3D_to_LightNet_transform_params}

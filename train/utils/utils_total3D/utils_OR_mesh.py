@@ -276,3 +276,31 @@ def minimum_bounding_rectangle(points):
     rval[3] = np.dot([x1, y1], r)
 
     return rval
+
+def writeMesh_rect(name, vertices):
+    if vertices.shape==(4, 3):
+        faces = np.array([[1, 2, 3], [1, 3, 4]])
+    elif vertices.shape==(8, 3):
+        # faces = np.array([[1, 3, 2], [1, 3, 4], [5, 7, 6], [5, 7, 8], \
+        #                  [4, 7, 3], [4, 7, 8], [1, 6, 2], [1, 6, 5], \
+        #                   [3, 6, 2], [3, 6, 7], [4, 5, 1], [4, 5, 8]])
+        faces = np.array([[0, 3, 4], [7, 4, 3], \
+            [6, 2, 1], [1, 5, 6], \
+                [0, 4, 1], [5, 1, 4], \
+                    [3, 2, 7], [6, 7, 2], \
+                        [7, 6, 4], [5, 4, 6], \
+                            [1, 2, 3], [0, 1, 3]
+                            ])
+        faces += 1
+        # faces = np.array([[0, 3, 4], [7, 4, 3]])
+#
+    else:
+        raise ValueError('writeMesh_rect: vertices of invalid shape!')
+
+    with open(name, 'w') as meshOut:
+        for n in range(0, vertices.shape[0]):
+            meshOut.write('v %.3f %.3f %.3f\n' %
+                    (vertices[n, 0], vertices[n, 1], vertices[n, 2] ) )
+        for n in range(0,faces.shape[0] ):
+            meshOut.write('f %d %d %d\n' %
+                    (faces[n, 0], faces[n, 1], faces[n, 2]) )
