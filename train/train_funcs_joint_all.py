@@ -542,7 +542,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             #     print(input_dict['im_paths'])
 
             # ======= Forward
-            output_dict, loss_dict = forward_joint(False, input_dict, model, opt, time_meters, if_vis=True)
+            output_dict, _ = forward_joint(False, input_dict, model, opt, time_meters, if_vis=True)
 
             synchronize()
             
@@ -629,7 +629,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
             # ======= Vis layout-emitter
             if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
-                output_vis_dict = vis_layout_emitter(input_dict, output_dict, data_batch, opt, time_meters, batch_size_id=[batch_size, batch_id])
+                output_vis_dict = vis_layout_emitter(input_dict, output_dict, data_batch, opt, time_meters=time_meters, batch_size_id=[batch_size, batch_id])
                 # output_dict['output_layout_emitter_vis_dict'] = output_vis_dict
                 if_real_image = False
                 draw_mode = 'both' if not if_real_image else 'prediction'

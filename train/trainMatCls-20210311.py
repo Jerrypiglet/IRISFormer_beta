@@ -72,7 +72,7 @@ parser.add_argument('--ifMatMapInput', action='store_true', help='using mask as 
 # parser.add_argument('--ifDataloaderOnly', action='store_true', help='benchmark dataloading overhead')
 parser.add_argument('--if_cluster', action='store_true', help='if using cluster')
 parser.add_argument('--if_hdr_input_matseg', action='store_true', help='if using hdr images')
-parser.add_argument('--eval_every_iter', type=int, default=5000, help='')
+parser.add_argument('--eval_every_iter', type=int, default=2000, help='')
 parser.add_argument('--save_every_iter', type=int, default=5000, help='')
 parser.add_argument('--debug_every_iter', type=int, default=2000, help='')
 parser.add_argument('--max_iter', type=int, default=-1, help='')
@@ -457,7 +457,7 @@ else:
             if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
                 if not opt.cfg.MODEL_BRDF.if_freeze:
                     loss_keys_backward.append('loss_brdf-ALL')
-                loss_keys_print.append('loss_brdf-ALL')
+                    loss_keys_print.append('loss_brdf-ALL')
                 if 'al' in opt.cfg.MODEL_BRDF.enable_list and 'al' in opt.cfg.MODEL_BRDF.loss_list:
                     loss_keys_print.append('loss_brdf-albedo') 
                 if 'no' in opt.cfg.MODEL_BRDF.enable_list and 'no' in opt.cfg.MODEL_BRDF.loss_list:
@@ -470,7 +470,7 @@ else:
             if opt.cfg.MODEL_LIGHT.enable:
                 if not opt.cfg.MODEL_LIGHT.if_freeze:
                     loss_keys_backward.append('loss_light-ALL')
-                loss_keys_print.append('loss_light-ALL')
+                    loss_keys_print.append('loss_light-ALL')
 
             if opt.cfg.MODEL_MATCLS.enable:
                 loss_keys_backward.append('loss_matcls-ALL')
@@ -485,8 +485,19 @@ else:
                 if_use_object_loss = 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list
 
                 if if_use_layout_loss:
-                    loss_keys_backward.append('loss_layout-ALL')
+                    if not opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_freeze:
+                        loss_keys_backward.append('loss_layout-ALL')
                     loss_keys_print.append('loss_layout-ALL')
+                    loss_keys_print += ['loss_layout-pitch_cls', 
+                        'loss_layout-pitch_reg', 
+                        'loss_layout-roll_cls', 
+                        'loss_layout-roll_reg', 
+                        'loss_layout-lo_ori_cls', 
+                        'loss_layout-lo_ori_reg', 
+                        'loss_layout-lo_centroid', 
+                        'loss_layout-lo_coeffs', 
+                        'loss_layout-lo_corner', ]
+
                 if if_use_object_loss:
                     loss_keys_backward.append('loss_object-ALL')
                     loss_keys_print.append('loss_object-ALL')
@@ -503,22 +514,38 @@ else:
                         
 
                 if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
-                    loss_keys_backward.append('loss_emitter-ALL')
+                    if not opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_freeze:
+                        loss_keys_backward.append('loss_emitter-ALL')
                     loss_keys_print.append('loss_emitter-ALL')
+                    loss_keys_print += ['loss_emitter-light_ratio', 
+                        'loss_emitter-cell_cls', 
+                        'loss_emitter-cell_axis', 
+                        'loss_emitter-cell_intensity', 
+                        'loss_emitter-cell_lamb'] 
+
 
             loss = sum([loss_dict[loss_key] for loss_key in loss_keys_backward])
             if opt.is_master and tid % 20 == 0:
                 print('----loss_dict', loss_dict.keys())
                 print('----loss_keys_backward', loss_keys_backward)
             loss.backward()
+
+            # clip_to = 1.
+            # torch.nn.utils.clip_grad_norm_(model.LAYOUT_EMITTER_NET_fc.parameters(), clip_to)
+            # torch.nn.utils.clip_grad_norm_(model.LAYOUT_EMITTER_NET_encoder.parameters(), clip_to)
+            # print(model.LAYOUT_EMITTER_NET_fc.fc_layout_5.weight)
+            # print(model.LAYOUT_EMITTER_NET_fc.fc_layout_5.weight.grad)
+
+            
             optimizer.step()
             time_meters['backward'].update(time.time() - time_meters['ts'])
             time_meters['ts'] = time.time()
             synchronize()
 
             if opt.is_master:
+                loss_keys_print = [x for x in loss_keys_print if 'ALL' in x] + [x for x in loss_keys_print if 'ALL' not in x]
                 logger_str = 'Epoch %d - Tid %d -'%(epoch, tid) + ', '.join(['%s %.3f'%(loss_key, loss_dict_reduced[loss_key]) for loss_key in loss_keys_print])
-                logger.info(logger_str)
+                logger.info(white_blue(logger_str))
 
                 for loss_key in loss_dict_reduced:
                     writer.add_scalar('loss_train/%s'%loss_key, loss_dict_reduced[loss_key].item(), tid)

@@ -184,7 +184,9 @@ _C.MODEL_LAYOUT_EMITTER.data.OR = 'OR45'
 _C.MODEL_LAYOUT_EMITTER.data.version = 'V4full'
 
 _C.MODEL_LAYOUT_EMITTER.emitter = CN()
+_C.MODEL_LAYOUT_EMITTER.emitter.if_freeze = False
 _C.MODEL_LAYOUT_EMITTER.emitter.if_use_est_layout = False
+_C.MODEL_LAYOUT_EMITTER.emitter.if_differentiable_layout_input = False
 _C.MODEL_LAYOUT_EMITTER.emitter.if_train_with_reindexed_layout = False
 _C.MODEL_LAYOUT_EMITTER.emitter.grid_size = 8
 _C.MODEL_LAYOUT_EMITTER.emitter.est_type = 'cell_info'
@@ -225,9 +227,12 @@ _C.MODEL_LAYOUT_EMITTER.layout.if_freeze = False
 _C.MODEL_LAYOUT_EMITTER.layout.loss = CN()
 _C.MODEL_LAYOUT_EMITTER.layout.loss.cls_reg_ratio = 10
 _C.MODEL_LAYOUT_EMITTER.layout.loss.obj_cam_ratio = 1
+_C.MODEL_LAYOUT_EMITTER.layout.loss.weight_all = 1
 _C.MODEL_LAYOUT_EMITTER.layout.if_train_with_reindexed = False
 _C.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder = True
-_C.MODEL_LAYOUT_EMITTER.layout.if_fully_differentiable = False # get rid of argmax in layout est -> bbox; not implememted yet
+# _C.MODEL_LAYOUT_EMITTER.layout.if_fully_differentiable = False # get rid of argmax in layout est -> bbox; not implememted yet
+_C.MODEL_LAYOUT_EMITTER.layout.if_estcls_in_loss = False
+_C.MODEL_LAYOUT_EMITTER.layout.if_argmax_in_results = True
 
 _C.MODEL_LAYOUT_EMITTER.mesh = CN()
 _C.MODEL_LAYOUT_EMITTER.mesh.tmn_subnetworks = 2
@@ -351,7 +356,7 @@ _C.TRAINING.MAX_CKPT_KEEP = 5
 
 _C.TEST = CN()
 _C.TEST.ims_per_batch = 16
-_C.TEST.vis_max_samples = 50
+_C.TEST.vis_max_samples = 20
 
 _C.seed = 123
 # _C.num_gpus = 1

@@ -157,11 +157,20 @@ class Model_Joint(nn.Module):
                 if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_freeze:
                     self.turn_off_names(['LAYOUT_EMITTER_NET_fc'])
                     freeze_bn_in_module(self.LAYOUT_EMITTER_NET_fc)
+                    if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_freeze_cls_heads:
+                        self.turn_off_names(['LAYOUT_EMITTER_NET_fc'])
+                        freeze_bn_in_module(self.LAYOUT_EMITTER_NET_fc)
+                        
 
             if 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
                 if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
+                    # --- lightAccuNet
                     self.EMITTER_LIGHT_ACCU_NET = models_layout_emitter_lightAccu.emitter_lightAccu(opt, envHeight=self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.envHeight, envWidth=self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.envWidth)
-                    
+                    if self.cfg.MODEL_LAYOUT_EMITTER.emitter.if_freeze:
+                        self.turn_off_names(['EMITTER_LIGHT_ACCU_NET'])
+                        freeze_bn_in_module(self.EMITTER_LIGHT_ACCU_NET)
+
+                    # --- emitterNet
                     if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V1':
                         self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu_(opt)
                     elif self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V2':
@@ -174,9 +183,17 @@ class Model_Joint(nn.Module):
                         self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu_UNet_V2(opt, input_channels=input_channels)
                     elif self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V3':
                         self.EMITTER_NET = models_layout_emitter_lightAccuScatter.decoder_layout_emitter_lightAccuScatter_UNet_V3(opt)
+
+                    if self.cfg.MODEL_LAYOUT_EMITTER.emitter.if_freeze:
+                        self.turn_off_names(['EMITTER_NET'], exclude_names=['LAYOUT_EMITTER_NET'])
+                        freeze_bn_in_module(self.EMITTER_NET)
+
                     if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
                         if not self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_learn_feats:
                             self.EMITTER_NET_IMG_FEAT_DECODER = self.decoder_to_use(opt, mode=-1, out_channel=self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels) # same as BRDF decoder; mode==-1 means no activation or postprocessing in the end
+                            if self.cfg.MODEL_LAYOUT_EMITTER.emitter.if_freeze:
+                                self.turn_off_names(['EMITTER_NET_IMG_FEAT_DECODER'])
+                                freeze_bn_in_module(self.EMITTER_NET_IMG_FEAT_DECODER)
                 else:
                     # self.LAYOUT_EMITTER_NET_fc = models_layout_emitter.decoder_layout_emitter(opt)
                     pass # already defined  in self.LAYOUT_EMITTER_NET_fc
@@ -287,17 +304,19 @@ class Model_Joint(nn.Module):
                 if 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list and self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
                     if self.cfg.MODEL_LAYOUT_EMITTER.emitter.if_use_est_layout:
                         layout_est_result = output_dict['layout_est_result']
-                        # print(layout_est_result['lo_ori_cls_result'].shape, input_dict['layout_labels']['lo_ori_cls'].shape)
-                        # print(layout_est_result['lo_ori_cls_result'], input_dict['layout_labels']['lo_ori_cls'])
+
                         lo_bdb3D_result, basis_result, coeffs_result, centroid_result = get_layout_bdb_sunrgbd(self.opt.bins_tensor, \
-                            layout_est_result['lo_ori_reg_result'], torch.argmax(layout_est_result['lo_ori_cls_result'], dim=1), \
+                            layout_est_result['lo_ori_reg_result'], layout_est_result['lo_ori_cls_result'], \
                             layout_est_result['lo_centroid_result'], layout_est_result['lo_coeffs_result'], \
-                            if_return_full=True)
+                            if_return_full=True, if_differentiable=self.cfg.MODEL_LAYOUT_EMITTER.emitter.if_differentiable_layout_input)
+                        
                         cam_R_result = get_rotation_matix_result(self.opt.bins_tensor,
-                            torch.argmax(layout_est_result['pitch_cls_result'], 1), layout_est_result['pitch_reg_result'],
-                            torch.argmax(layout_est_result['roll_cls_result'], 1), layout_est_result['roll_reg_result'])
+                            layout_est_result['pitch_cls_result'], layout_est_result['pitch_reg_result'],
+                            layout_est_result['roll_cls_result'], layout_est_result['roll_reg_result'], 
+                            if_differentiable=self.cfg.MODEL_LAYOUT_EMITTER.emitter.if_differentiable_layout_input)
                         # pre_layout_reindexed = reindex_layout(pre_layout, pre_cam_R)
 
+                        # input_dict.update({'lo_bdb3D_result': lo_bdb3D_result, 'basis_result': basis_result.detach(), 'coeffs_result': coeffs_result, 'centroid_result': centroid_result.detach(), 'cam_R_result': cam_R_result.detach()})
 
                         input_dict.update({'lo_bdb3D_result': lo_bdb3D_result, 'basis_result': basis_result, 'coeffs_result': coeffs_result, 'centroid_result': centroid_result, 'cam_R_result': cam_R_result})
 
@@ -747,7 +766,7 @@ class Model_Joint(nn.Module):
         count_grads = 0
         for name, param in self.named_parameters():
             if_trainable_str = white_blue('True') if param.requires_grad else green('False')
-            self.logger.info(name + str(param.shape) + if_trainable_str)
+            self.logger.info(name + str(param.shape) + ' ' + if_trainable_str)
             if param.requires_grad:
                 count_grads += 1
         self.logger.info(magenta('---> ALL %d params; %d trainable'%(len(list(self.named_parameters())), count_grads)))
@@ -845,11 +864,12 @@ class Model_Joint(nn.Module):
                     param.requires_grad = True
                     self.logger.info(colored('turn_ON_names: ' + in_name, 'white', 'on_red'))
 
-    def turn_off_names(self, in_names):
+    def turn_off_names(self, in_names, exclude_names=[]):
         for name, param in self.named_parameters():
             for in_name in in_names:
             # if 'roi_heads.box.predictor' in name or 'classifier_c' in name:
-                if in_name in name:
+                if_not_in_exclude = all([exclude_name not in name for exclude_name in exclude_names]) # any item in exclude_names must not be in the paramater name
+                if in_name in name and if_not_in_exclude:
                     param.requires_grad = False
                     self.logger.info(colored('turn_OFF_names: ' + in_name, 'white', 'on_red'))
 

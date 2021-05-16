@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import copy
 import numpy as np
-from utils.utils_total3D.utils_OR_cam import num_from_bins
+from utils.utils_total3D.utils_OR_cam import num_from_bins, num_from_bins_differentiable
 from sympy import Point3D, Line3D, Plane, sympify, Rational
 from utils.utils_total3D.utils_OR_geo import rotation_matrix_from_vectors
 
@@ -65,7 +65,7 @@ def get_corners_of_bb3d(basis, coeffs, centroid):
 
     return corners
 
-def get_layout_bdb_sunrgbd(bins_tensor, lo_ori_reg, lo_ori_cls, centroid_reg, coeffs_reg, if_return_full=False):
+def get_layout_bdb_sunrgbd(bins_tensor, lo_ori_reg, lo_ori_cls_result, centroid_reg, coeffs_reg, if_return_full=False, if_differentiable=False, if_input_after_argmax=False):
     """
     get the eight corners of 3D bounding box
     :param bins_tensor:
@@ -75,9 +75,17 @@ def get_layout_bdb_sunrgbd(bins_tensor, lo_ori_reg, lo_ori_cls, centroid_reg, co
     :param coeffs_reg: layout coefficients regression results
     :return: bdb: b x 8 x 3 tensor: the bounding box of layout in layout system.
     """
+    if if_input_after_argmax:
+        lo_ori_cls = lo_ori_cls_result
+        assert if_differentiable==False
+    else:
+        lo_ori_cls = torch.argmax(lo_ori_cls_result, dim=1)
 
     ori_reg = torch.gather(lo_ori_reg, 1, lo_ori_cls.view(lo_ori_cls.size(0), 1).expand(lo_ori_cls.size(0), 1)).squeeze(1)
-    ori = num_from_bins(bins_tensor['layout_ori_bin'], lo_ori_cls, ori_reg)
+    if if_differentiable:
+        ori = num_from_bins_differentiable(bins_tensor['layout_ori_bin'], lo_ori_cls_result, ori_reg)
+    else:
+        ori = num_from_bins(bins_tensor['layout_ori_bin'], lo_ori_cls, ori_reg)
 
     basis = layout_basis_from_ori(ori)
 
@@ -91,6 +99,7 @@ def get_layout_bdb_sunrgbd(bins_tensor, lo_ori_reg, lo_ori_cls, centroid_reg, co
         return bdb, basis, coeffs_reg, centroid_reg
     else:
         return bdb
+
 
 def shift_left(seq, n):
     return seq[n:]+seq[:n]

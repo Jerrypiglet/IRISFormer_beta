@@ -664,6 +664,13 @@ class openrooms(data.Dataset):
         # if_print = pickle_path == '/data/ruizhu/OR-V4full-detachEmitter-OR45_total3D_train_test_data/main_xml1/scene0552_00/layout_obj_1.pkl'
         if_print = False
 
+        # read transformation matrices from RAW OR -> Total3D
+        transform_to_total3d_coords_dict_path = str(scene_total3d_path / ('transform_to_total3d_coords_dict_%d.pkl'%frame_id))
+        with open(transform_to_total3d_coords_dict_path, 'rb') as f:
+            transform_to_total3d_coords_dict = pickle.load(f)
+        transform_R_RAW2Total3D, transform_t_RAW2Total3D = transform_to_total3d_coords_dict['transform_R'], transform_to_total3d_coords_dict['transform_t']
+        return_dict.update({'transform_R_RAW2Total3D': transform_R_RAW2Total3D.astype(np.float32), 'transform_t_RAW2Total3D': transform_t_RAW2Total3D.astype(np.float32)})
+
         # ===== objects
         if 'ob' in self.opt.cfg.DATA.data_read_list:
             boxes = sequence['boxes']
@@ -844,12 +851,6 @@ class openrooms(data.Dataset):
             with open(emitters_prop_dict_representation_dict_path, 'rb') as f:
                 emitters_prop_dict_representation_dict = pickle.load(f)
 
-            # read transformation matrices from RAW OR -> Total3D
-            transform_to_total3d_coords_dict_path = str(scene_total3d_path / ('transform_to_total3d_coords_dict_%d.pkl'%frame_id))
-            with open(transform_to_total3d_coords_dict_path, 'rb') as f:
-                transform_to_total3d_coords_dict = pickle.load(f)
-            transform_R_RAW2Total3D, transform_t_RAW2Total3D = transform_to_total3d_coords_dict['transform_R'], transform_to_total3d_coords_dict['transform_t']
-            return_dict.update({'transform_R_RAW2Total3D': transform_R_RAW2Total3D.astype(np.float32), 'transform_t_RAW2Total3D': transform_t_RAW2Total3D.astype(np.float32)})
 
 
             if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'wall_prob':

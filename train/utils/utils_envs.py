@@ -198,7 +198,8 @@ def set_up_envs(opt):
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
         opt.cfg.DATA.load_brdf_gt = True
         opt.depth_metrics = ['abs_rel', 'sq_rel', 'rmse', 'rmse_log', 'a1', 'a2', 'a3']
-        opt.cfg.MODEL_BRDF.loss_list += opt.cfg.MODEL_BRDF.enable_list
+        if not opt.cfg.MODEL_LIGHT.freeze_BRDF_Net:
+            opt.cfg.MODEL_BRDF.loss_list += opt.cfg.MODEL_BRDF.enable_list
         ic(opt.cfg.DATA.load_brdf_gt)
 
 

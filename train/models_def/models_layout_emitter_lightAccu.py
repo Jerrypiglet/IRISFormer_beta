@@ -156,7 +156,6 @@ class decoder_layout_emitter_lightAccu_UNet_V2(nn.Module):
 
             head_out = dx5_8.view(batch_size, 6, head_channels, self.grid_size, self.grid_size).permute(0, 1, 3, 4, 2) # [2, 6, head_channels, 8, 8] -> [2, 6, 8, 8, head_channels]
             return_dict_emitter.update({head_name: head_out})
-            # print(head_name, head_out.shape)
 
         return {'emitter_est_result': return_dict_emitter}
 
@@ -282,7 +281,7 @@ class emitter_lightAccu(nn.Module):
         # print(AT.shape, b.shape)
 
         l_local = torch.matmul(AT, b) # ldirections (one point on the hemisphere; local) [#grids, B, 120, 160, 3, 1]
-        l_local = l_local / torch.linalg.norm(l_local, dim=-2, keepdim=True) # [#grids, B, 120, 160, 3, 1]
+        l_local = l_local / (torch.linalg.norm(l_local, dim=-2, keepdim=True) + 1e-6) # [#grids, B, 120, 160, 3, 1]
 
         # l_local -> pixel coords in envmap
         cos_theta = l_local[:, :, :, :, 2, :]
@@ -535,10 +534,10 @@ class emitter_lightAccu(nn.Module):
         origin_0_array_lightNet = origin_0_array @ self.extra_transform_matrix @ self.extra_transform_matrix_LightNet
         basis_1_array = (cam_R_transform @ basis_1_array.transpose(1, 2)).transpose(1, 2) #  [2, 6, 3]
         basis_1_array_lightNet = basis_1_array @ self.extra_transform_matrix @ self.extra_transform_matrix_LightNet
-        basis_1_array_lightNet = basis_1_array_lightNet / torch.linalg.norm(basis_1_array_lightNet, dim=-1, keepdim=True)
+        basis_1_array_lightNet = basis_1_array_lightNet / (torch.linalg.norm(basis_1_array_lightNet, dim=-1, keepdim=True) + 1e-6)
         basis_2_array = (cam_R_transform @ basis_2_array.transpose(1, 2)).transpose(1, 2)
         basis_2_array_lightNet = basis_2_array @ self.extra_transform_matrix @ self.extra_transform_matrix_LightNet
-        basis_2_array_lightNet = basis_2_array_lightNet / torch.linalg.norm(basis_2_array_lightNet, dim=-1, keepdim=True)
+        basis_2_array_lightNet = basis_2_array_lightNet / (torch.linalg.norm(basis_2_array_lightNet, dim=-1, keepdim=True) + 1e-6)
         normal_array_lightNet = torch.cross(basis_1_array_lightNet, basis_2_array_lightNet, dim=-1)
 
         verts_center_lightNet = torch.mean(verts_lightNet, 4) # [B, 6, 8, 8, 3]

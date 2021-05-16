@@ -10,17 +10,28 @@ import torch
 
 # ======= total3d
 
-def get_rotation_matix_result(bins_tensor, pitch_cls_gt, pitch_reg_result, roll_cls_gt, roll_reg_result):
+def get_rotation_matix_result(bins_tensor, pitch_cls_result, pitch_reg_result, roll_cls_result, roll_reg_result, if_differentiable=False, if_input_after_argmax=False):
     '''
     get rotation matrix from predicted camera pitch, roll angles.
     '''
+    if if_input_after_argmax:
+        pitch_cls = pitch_cls_result
+        roll_cls = roll_cls_result
+        assert if_differentiable==False
+    else:
+        pitch_cls = torch.argmax(pitch_cls_result, 1)
+        roll_cls = torch.argmax(roll_cls_result, 1)
 
     pitch_result = torch.gather(pitch_reg_result, 1,
-                              pitch_cls_gt.view(pitch_cls_gt.size(0), 1).expand(pitch_cls_gt.size(0), 1)).squeeze(1)
+                              pitch_cls.view(pitch_cls.size(0), 1).expand(pitch_cls.size(0), 1)).squeeze(1)
     roll_result = torch.gather(roll_reg_result, 1,
-                               roll_cls_gt.view(roll_cls_gt.size(0), 1).expand(roll_cls_gt.size(0), 1)).squeeze(1)
-    pitch = num_from_bins(bins_tensor['pitch_bin'], pitch_cls_gt, pitch_result)
-    roll = num_from_bins(bins_tensor['roll_bin'], roll_cls_gt, roll_result)
+                               roll_cls.view(roll_cls.size(0), 1).expand(roll_cls.size(0), 1)).squeeze(1)
+    if if_differentiable:
+        pitch = num_from_bins_differentiable(bins_tensor['pitch_bin'], pitch_cls_result, pitch_result)
+        roll = num_from_bins_differentiable(bins_tensor['roll_bin'], roll_cls_result, roll_result)
+    else:
+        pitch = num_from_bins(bins_tensor['pitch_bin'], pitch_cls, pitch_result)
+        roll = num_from_bins(bins_tensor['roll_bin'], roll_cls, roll_result)
     cam_R = R_from_yaw_pitch_roll(torch.zeros_like(pitch), pitch, roll)
     return cam_R
 
@@ -43,6 +54,24 @@ def num_from_bins(bins, cls, reg):
     bin_width = (bins[0][1] - bins[0][0])
     bin_center = (bins[cls, 0] + bins[cls, 1]) / 2
     return bin_center + reg * bin_width
+
+def num_from_bins_differentiable(bins, cls_results, reg):
+    """
+    :param bins: batchsize x 2 tensors
+    # :param cls: batchsize long tensors
+    :param cls_prob: batchsize x nbins(2) tensors
+    :param reg: batchsize tensors
+    :return: bin_center: batchsize tensors
+    """
+    bin_width = (bins[0][1] - bins[0][0])
+    cls_probs = torch.softmax(cls_results, dim=1) # [batchsize, nbins]
+    # print(cls_probs.shape, cls.shape, bins.shape, bins)
+    # bin_center = (bins[cls, 0] + bins[cls, 1]) / 2
+    bin_centers = (bins[:, 0] + bins[:, 1]) / 2
+    bin_centers = bin_centers.view(1, -1) # [1, nbins]
+    bin_cls_softargmax = (cls_probs * bin_centers).sum(1) # [batchsize]
+
+    return bin_cls_softargmax + reg * bin_width
 
 def R_from_yaw_pitch_roll(yaw, pitch, roll):
     '''

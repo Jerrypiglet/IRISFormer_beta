@@ -69,7 +69,7 @@ def cls_reg_loss_none(cls_result, cls_gt, reg_result, reg_gt, cls_reg_ratio):
 
 # class PoseLoss(BaseLoss):
 #     def __call__(self, pred_dict, gt_dict, bins_tensor, cls_reg_ratio):
-def PoseLoss(pred_dict, gt_dict, bins_tensor, cls_reg_ratio):
+def PoseLoss(opt, pred_dict, gt_dict, bins_tensor, cls_reg_ratio):
     pitch_cls_loss, pitch_reg_loss = cls_reg_loss(pred_dict['pitch_cls_result'], gt_dict['pitch_cls'], \
         pred_dict['pitch_reg_result'], gt_dict['pitch_reg'], cls_reg_ratio)
     roll_cls_loss, roll_reg_loss = cls_reg_loss(pred_dict['roll_cls_result'], gt_dict['roll_cls'], \
@@ -79,8 +79,13 @@ def PoseLoss(pred_dict, gt_dict, bins_tensor, cls_reg_ratio):
     lo_centroid_loss = reg_criterion(pred_dict['lo_centroid_result'], gt_dict['lo_centroid']) * cls_reg_ratio
     lo_coeffs_loss = reg_criterion(pred_dict['lo_coeffs_result'], gt_dict['lo_coeffs']) * cls_reg_ratio
 
-    lo_bdb3D_result = get_layout_bdb_sunrgbd(bins_tensor, pred_dict['lo_ori_reg_result'], gt_dict['lo_ori_cls'], pred_dict['lo_centroid_result'],
-                                                pred_dict['lo_coeffs_result'])
+    if opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_estcls_in_loss:
+        lo_bdb3D_result = get_layout_bdb_sunrgbd(bins_tensor, pred_dict['lo_ori_reg_result'], pred_dict['lo_ori_cls_result'], pred_dict['lo_centroid_result'], 
+            pred_dict['lo_coeffs_result'], if_differentiable=True, if_input_after_argmax=False)
+    else:
+        lo_bdb3D_result = get_layout_bdb_sunrgbd(bins_tensor, pred_dict['lo_ori_reg_result'], gt_dict['lo_ori_cls'], pred_dict['lo_centroid_result'], 
+            pred_dict['lo_coeffs_result'], if_differentiable=False, if_input_after_argmax=True)
+
     # layout bounding box corner loss
     lo_corner_loss = cls_reg_ratio * reg_criterion(lo_bdb3D_result, gt_dict['lo_bdb3D'])
 
@@ -137,8 +142,8 @@ def JointLoss(pred_dict, gt_dict, bins_tensor, lo_bdb3D_result, cls_reg_ratio, f
 
     # predicted camera rotation
     cam_R_result = get_rotation_matix_result(bins_tensor,
-                                                gt_dict['pitch_cls'], pred_dict['pitch_reg_result'],
-                                                gt_dict['roll_cls'], pred_dict['roll_reg_result'])
+                                            gt_dict['pitch_cls'], pred_dict['pitch_reg_result'],
+                                            gt_dict['roll_cls'], pred_dict['roll_reg_result'], if_differentiable=False, if_input_after_argmax=True)
 
     # projected center
     P_result = torch.stack(

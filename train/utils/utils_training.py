@@ -256,8 +256,12 @@ def freeze_bn_in_module(module):
     if isinstance(module, torch.nn.modules.instancenorm._InstanceNorm):
         return module
     if isinstance(module, torch.nn.modules.batchnorm._BatchNorm) or isinstance(module, apex.parallel.optimized_sync_batchnorm.SyncBatchNorm):
-        # print('--convert_syncbn_model_hvd converting...', module)
+        print(red('-- turning off BN in '), module)
         mod.eval()
+
+    # if isinstance(module, torch.nn.modules.groupnorm._GroupNorm):
+    #     # print('--convert_syncbn_model_hvd converting...', module)
+    #     mod.eval()
         # print(mod)
         # mod.weight.requires_grad = False
         # mod.bias.requires_grad = False

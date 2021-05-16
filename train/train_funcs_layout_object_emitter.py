@@ -184,7 +184,7 @@ def get_labels_dict_layout_emitter(labels_dict_input, data_batch, opt):
 def vis_layout_emitter(labels_dict, output_dict, data_batch, opt, time_meters=None, batch_size_id=[]):
     batch_size = labels_dict['imBatch'].shape[0]
 
-    batch_size, batch_id = batch_size_id[0], batch_size_id[1]
+    batch_size_fixed, batch_id = batch_size_id[0], batch_size_id[1]
     grid_size = opt.cfg.MODEL_LAYOUT_EMITTER.emitter.grid_size
 
     output_vis_dict = {}
@@ -208,14 +208,16 @@ def vis_layout_emitter(labels_dict, output_dict, data_batch, opt, time_meters=No
     if if_est_layout:
         pred_dict_lo = output_dict['layout_est_result']
         lo_bdb3D_out, basis_out, coeffs_out, centroid_out = get_layout_bdb_sunrgbd(opt.bins_tensor, pred_dict_lo['lo_ori_reg_result'],
-                                            torch.argmax(pred_dict_lo['lo_ori_cls_result'], 1),
+                                            pred_dict_lo['lo_ori_cls_result'],
                                             pred_dict_lo['lo_centroid_result'],
                                             pred_dict_lo['lo_coeffs_result'], 
-                                            if_return_full=True)
+                                            if_return_full=True, 
+                                            if_differentiable=opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_argmax_in_results)
         # ic(basis_out.shape, coeffs_out.shape, centroid_out.shape) # [4, 3, 3], [4, 3], [4, 3]
         cam_R_out = get_rotation_matix_result(opt.bins_tensor,
-                                    torch.argmax(pred_dict_lo['pitch_cls_result'], 1), pred_dict_lo['pitch_reg_result'],
-                                    torch.argmax(pred_dict_lo['roll_cls_result'], 1), pred_dict_lo['roll_reg_result'])
+                                    pred_dict_lo['pitch_cls_result'], pred_dict_lo['pitch_reg_result'],
+                                    pred_dict_lo['roll_cls_result'], pred_dict_lo['roll_reg_result'], \
+                                    if_differentiable=opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_argmax_in_results)
 
     if if_est_object:
         pred_dict_ob = output_dict['object_est_result']
@@ -279,7 +281,7 @@ def vis_layout_emitter(labels_dict, output_dict, data_batch, opt, time_meters=No
     # print(gt_dict_ob['split'])
     # print(gt_dict_ob['boxes_valid_list'])
     for sample_idx_batch in range(batch_size):
-        sample_idx = sample_idx_batch+batch_size*batch_id
+        sample_idx = sample_idx_batch+batch_size_fixed*batch_id
         # print('--- Visualizing sample %d ---'%sample_idx_batch)
         # save_prefix = 'sample%d-LABEL-epoch%d-tid%d-%s'%(sample_idx_batch+batch_size*vis_batch_count, epoch, iter, phase)
         gt_cam_R = gt_dict_lo['cam_R_gt'][sample_idx_batch].cpu().numpy()
@@ -460,9 +462,12 @@ def vis_layout_emitter(labels_dict, output_dict, data_batch, opt, time_meters=No
 
         transform_R = data_batch['transform_R_RAW2Total3D'][sample_idx_batch].cpu().numpy().reshape(3, 3)
         transform_t = data_batch['transform_t_RAW2Total3D'][sample_idx_batch].cpu().numpy().reshape(3, 1)
-        hdr_scale = data_batch['hdr_scale'][sample_idx_batch].cpu().numpy().item()
-        env_scale = data_batch['env_scale'][sample_idx_batch].cpu().numpy().item()
-
+        if if_load_emitter:
+            hdr_scale = data_batch['hdr_scale'][sample_idx_batch].cpu().numpy().item()
+            env_scale = data_batch['env_scale'][sample_idx_batch].cpu().numpy().item()
+        else:
+            hdr_scale = 1.
+            env_scale = 1.
         scene_box = Box(image, None, cam_K, gt_cam_R, pre_cam_R, gt_layout_full, pre_layout_full, gt_boxes, pre_boxes, gt_meshes, pre_meshes, \
             opt=opt, dataset='OR', description=save_prefix, if_mute_print=True, OR=opt.cfg.MODEL_LAYOUT_EMITTER.data.OR, \
             emitter2wall_assign_info_list_gt = emitter2wall_assign_info_list_gt, 
@@ -484,7 +489,7 @@ def vis_layout_emitter(labels_dict, output_dict, data_batch, opt, time_meters=No
         emitter_info_dict = {'cell_info_grid_GT': cell_info_grid_GT, 'cell_info_grid_PRED': cell_info_grid_PRED, \
                                 'emitter_cls_prob_PRED': emitter_cls_result_postprocessed_np, 'emitter_cls_prob_GT': emitter_cls_prob_GT_np, \
                                 'pre_layout': pre_layout, 'pre_cam_R': pre_cam_R}
-        if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
+        if if_est_emitter and opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
             envmap_lightAccu_mean = pred_dict_em['envmap_lightAccu_mean'][sample_idx_batch].detach().cpu().numpy()
             # print(envmap_lightAccu_mean.shape) # (6, 3, 8, 8)
             envmap_lightAccu_mean_vis = envmap_lightAccu_mean**(1.0/2.2)
@@ -535,10 +540,12 @@ def postprocess_layout(labels_dict, output_dict, loss_dict, opt, time_meters):
     pred_dict = output_dict['layout_est_result']
     gt_dict = labels_dict['layout_labels']
 
-    layout_losses_dict, lo_bdb3D_result = PoseLoss(pred_dict, gt_dict, opt.bins_tensor, cls_reg_ratio)
+    layout_losses_dict, lo_bdb3D_result = PoseLoss(opt, pred_dict, gt_dict, opt.bins_tensor, cls_reg_ratio)
 
     loss_dict.update(layout_losses_dict)
-    loss_dict.update({'loss_layout-ALL': sum([layout_losses_dict[x] for x in layout_losses_dict])})
+    loss_dict.update({'loss_layout-ALL': sum([layout_losses_dict[x] for x in layout_losses_dict]) * opt.cfg.MODEL_LAYOUT_EMITTER.layout.loss.weight_all})
+    # print('=======', [x for x in layout_losses_dict if 'cls' not in x])
+    # loss_dict.update({'loss_layout-ALL': sum([layout_losses_dict[x] if 'cls' not in x else torch.zeros(1).cuda() for x in layout_losses_dict])})
 
     output_dict.update({'results_layout': {'lo_bdb3D_result': lo_bdb3D_result}})
 
@@ -640,6 +647,7 @@ def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters, e
             elif head_name in ['cell_axis', 'cell_intensity']:
                 emitter_fc_output = emitter_fc_output.view((B, 6, -1, 3))
                 emitter_property_gt = labels_dict['emitter_labels'][label_name].view((B, 6, -1, 3))
+
             elif head_name in ['cell_lamb']:
                 emitter_fc_output = emitter_fc_output.view((B, 6, -1))
                 emitter_property_gt = labels_dict['emitter_labels'][label_name].view((B, 6, -1))
@@ -699,8 +707,13 @@ def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters, e
                     loss = loss * opt.cfg.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_lamb
 
 
-            emitter_losses_dict.update({'loss_emitter-'+head_name: loss})
             emitter_results_dict.update({head_name+'_result_from_loss': emitter_fc_output})
+
+            # if head_name == 'cell_axis':
+            #     emitter_losses_dict.update({'loss_emitter-'+head_name: torch.zeros(1).cuda()})
+            #     continue
+
+            emitter_losses_dict.update({'loss_emitter-'+head_name: loss})
 
     loss_dict.update(emitter_losses_dict)
     loss_dict.update({'loss_emitter-ALL': sum([emitter_losses_dict[x] for x in emitter_losses_dict])})
