@@ -326,9 +326,10 @@ def vis_layout_emitter(labels_dict, output_dict, data_batch, opt, time_meters=No
                 assert len(gt_boxes['if_valid']) == len(gt_boxes['random_id'])== len(gt_boxes['cat_name'])
                 # print(len(gt_dict_ob['bdb3D']), data_batch['obj_split'])
                 # print(len(gt_dict_mesh['obj_masks']), len(gt_dict_mesh['obj_masks'][0]), gt_dict_mesh['obj_masks'][0][0].keys())
-                obj_masks = gt_dict_mesh['obj_masks'][sample_idx_batch]
-                assert len(gt_boxes['if_valid'])==len(obj_masks)
-                gt_boxes['obj_masks'] = obj_masks
+                if if_load_mesh:
+                    obj_masks = gt_dict_mesh['obj_masks'][sample_idx_batch]
+                    assert len(gt_boxes['if_valid'])==len(obj_masks)
+                    gt_boxes['obj_masks'] = obj_masks
         else:
             gt_boxes = None
 

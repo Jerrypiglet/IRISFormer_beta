@@ -35,4 +35,5 @@ Summary_vis
 VTK
 *.pkl
 *.mtl
+*.rgbe
 *-copy.py

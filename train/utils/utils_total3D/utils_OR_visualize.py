@@ -26,6 +26,7 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from icecream import ic
 from copy import deepcopy
+import math
 
 import matplotlib.patches as patches
 from utils.utils_total3D.utils_OR_geo import bb_intersection_over_union
@@ -86,7 +87,7 @@ class Box(Scene3D):
         self.if_index_faces_with_basis = if_index_faces_with_basis # if indexing faces with combination of basis of layout, insetad of using self.faces_v_indexes
         
         self.faces_v_indexes = [(3, 2, 0), (7, 4, 6), (4, 0, 5), (6, 5, 2), (7, 6, 3), (7, 3, 4)]
-        self.faces_basis_indexes = [['x', 'z', '-y'], ['z', 'x', 'y'], ['y', 'z', 'x'], ['x', '-y', '-z'], ['z', 'y', '-x'], ['x', 'y', 'z']]
+        self.faces_basis_indexes = [['x', 'z', '-y'], ['z', 'x', 'y'], ['y', 'z', 'x'], ['x', '-y', '-z'], ['z', 'y', '-x'], ['x', 'y', 'z']] # 0 for ceiling, 1 for floor
 
         self._cam_K = cam_K
         self.gt_cam_R = gt_cam_R
@@ -391,33 +392,29 @@ class Box(Scene3D):
             if self.material_dict is not None:
                 obj_mask = mesh_obj_dict['obj_mask']
                 # material_dict = self.material_dict[current_type]
-                material_dict = self.material_dict['GT']                
-                albedo, rough, normal = material_dict['albedo'], material_dict['rough'], material_dict['normal']
+                material_dict = self.material_dict[split_type]                
+                albedo, rough = material_dict['albedo'], material_dict['rough']
                 x1, y1, x2, y2 = obj_mask['msk_bdb_half'] # [x1, y1, x2, y2]
                 msk_half_bool = obj_mask['msk_half'].astype(np.bool)
                 
                 albedo_masked = albedo[y1:y2+1, x1:x2+1]
                 rough_masked = rough[y1:y2+1, x1:x2+1]
-                normal_masked = normal[y1:y2+1, x1:x2+1]
+                # normal_masked = normal[y1:y2+1, x1:x2+1]
                 assert(msk_half_bool.shape==albedo_masked.shape[:2])
                 albedo_masked = albedo_masked[msk_half_bool]
                 rough_masked = rough_masked[msk_half_bool]
-                normal_masked = normal_masked[msk_half_bool]
+                # normal_masked = normal_masked[msk_half_bool]
 
                 albedo_median_diffuse = np.median(albedo_masked, axis=0).flatten().tolist()
                 rough_median_diffuse = np.median(rough_masked, axis=0).flatten().item()
-                normal_median_diffuse = np.median(normal_masked, axis=0).flatten()
-                normal_median_diffuse = normal_median_diffuse / (np.linalg.norm(normal_median_diffuse)+1e-6)
-                normal_median_diffuse = normal_median_diffuse.tolist()
-                # <rgb name="albedo" value="0.242 0.242 0.242"/>
-                # <rgb name="albedoScale" value="1.172 1.183 0.728"/>
-                # <float name="roughness" value="0.100"/>
-                # <float name="roughnessScale" value="1.286"/>
+                # normal_median_diffuse = np.median(normal_masked, axis=0).flatten()
+                # normal_median_diffuse = normal_median_diffuse / (np.linalg.norm(normal_median_diffuse)+1e-6)
+                # normal_median_diffuse = normal_median_diffuse.tolist()
 
             if rec_root is not None:
                 obj_id = 'obj_%d'%mesh_idx
                 if self.material_dict is not None:
-                    addMaterial_diffuse(rec_root, obj_id, albedo_rough_normal_list=[[albedo_median_diffuse, rough_median_diffuse, normal_median_diffuse]])
+                    addMaterial_diffuse(rec_root, obj_id, albedo_rough_list=[[albedo_median_diffuse, rough_median_diffuse]])
                     rec_root = addShape(rec_root, obj_id, str(obj_path), materials=[[0, 'diffuseAlbedo']], scaleValue=1.)
                 else:
                     rec_root = addShape(rec_root, obj_id, str(obj_path), None, scaleValue=1.)
@@ -489,7 +486,32 @@ class Box(Scene3D):
             # layout = self.gt_layout
             cell_info_grid = self.cell_info_grid_GT
             # cam_R = self.gt_cam_R
-            
+    
+        if self.material_dict is not None:
+            material_dict = self.material_dict[split_type]
+            semseg = material_dict['semseg']
+            wall_mask = semseg==43
+            floor_mask = semseg==44
+            ceiling_mask = semseg==45
+            albedo, rough = material_dict['albedo'], material_dict['rough']
+            layout_mat_dict = {}
+            for layout_name, wall_idxes, mask in zip(['ceiling', 'floor', 'wall'], [[0], [1], [2, 3, 4, 5]], [ceiling_mask, floor_mask, wall_mask]):
+                albedo_masked = albedo[mask]
+                rough_masked = rough[mask]
+                if albedo_masked.shape[0]>0:
+                    albedo_median_diffuse = np.median(albedo_masked, axis=0).flatten().tolist()
+                    print('[!!!!] median albedo for '+layout_name, albedo_median_diffuse)
+                else:
+                    print('[!!!!] no mask for albedo for '+layout_name)
+                    albedo_median_diffuse = [0.5, 0.5, 0.5]
+                if rough_masked.shape[0]>0:
+                    rough_median_diffuse = np.median(rough_masked, axis=0).flatten().item()
+                else:
+                    rough_median_diffuse = 0.5
+                assert not math.isnan(rough_median_diffuse)
+
+                layout_mat_dict[layout_name] = [wall_idxes, albedo_median_diffuse, rough_median_diffuse]
+
         sg_params_list = []
 
         for wall_idx in range(6):
@@ -561,7 +583,15 @@ class Box(Scene3D):
                 self.scene_meshes_dict[current_type].append(obj_path)
                 print('Written wall to %s'%obj_path)
                 if rec_root is not None:
-                    rec_root = addShape(rec_root, 'wall_%d'%wall_idx, str(obj_path), None, scaleValue=layout_scale)
+                    if self.material_dict is not None:
+                        for layout_name in layout_mat_dict:
+                            if wall_idx in layout_mat_dict[layout_name][0]:
+                                print(wall_idx, '--->', layout_name)
+                                albedo_median_diffuse, rough_median_diffuse = layout_mat_dict[layout_name][1], layout_mat_dict[layout_name][2]
+                                addMaterial_diffuse(rec_root, 'wall_%d'%wall_idx, albedo_rough_list=[[albedo_median_diffuse, rough_median_diffuse]])
+                        rec_root = addShape(rec_root, 'wall_%d'%wall_idx, str(obj_path), materials=[[0, 'diffuseAlbedo']], scaleValue=layout_scale)
+                    else:
+                        rec_root = addShape(rec_root, 'wall_%d'%wall_idx, str(obj_path), None, scaleValue=layout_scale)
                 
             else:
                 # merge window cells and write one wall as patches
@@ -610,7 +640,14 @@ class Box(Scene3D):
                     print('Written wall to %s'%obj_path)
 
                     if rec_root is not None:
-                        rec_root = addShape(rec_root, 'window_patch_on%d_%d'%(wall_idx, patch_idx), str(obj_path), None, scaleValue=layout_scale)
+                        if self.material_dict is not None:
+                            for layout_name in layout_mat_dict:
+                                if wall_idx in layout_mat_dict[layout_name][0]:
+                                    albedo_median_diffuse, rough_median_diffuse = layout_mat_dict[layout_name][1], layout_mat_dict[layout_name][2]
+                                    addMaterial_diffuse(rec_root, 'window_patch_on%d_%d'%(wall_idx, patch_idx), albedo_rough_list=[[albedo_median_diffuse, rough_median_diffuse]])
+                            rec_root = addShape(rec_root, 'window_patch_on%d_%d'%(wall_idx, patch_idx), str(obj_path), materials=[[0, 'diffuseAlbedo']], scaleValue=layout_scale)
+                        else:
+                            rec_root = addShape(rec_root, 'window_patch_on%d_%d'%(wall_idx, patch_idx), str(obj_path), None, scaleValue=layout_scale)
 
             # convert to SG params for envmap
             # for valid_cell in valid_cell_list:

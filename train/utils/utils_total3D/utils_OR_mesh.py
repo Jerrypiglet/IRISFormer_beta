@@ -280,6 +280,7 @@ def minimum_bounding_rectangle(points):
 def writeMesh_rect(name, vertices):
     if vertices.shape==(4, 3):
         faces = np.array([[1, 2, 3], [1, 3, 4]])
+        # faces = np.array([[2, 1, 3], [3, 1, 4]])
     elif vertices.shape==(8, 3):
         # faces = np.array([[1, 3, 2], [1, 3, 4], [5, 7, 6], [5, 7, 8], \
         #                  [4, 7, 3], [4, 7, 8], [1, 6, 2], [1, 6, 5], \

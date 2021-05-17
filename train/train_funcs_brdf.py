@@ -52,6 +52,7 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
 
     if opt.cfg.DATA.load_semseg_gt:
         input_dict['semseg_label'] = data_batch['semseg_label'].cuda(non_blocking=True)
+        input_dict['semseg_label_ori'] = data_batch['semseg_label_ori'].cuda(non_blocking=True)
 
     if opt.cfg.DATA.load_matseg_gt:
         matAggreMap_cpu = data_batch['mat_aggre_map'].permute(0, 3, 1, 2) # [b, 1, h, w]

@@ -11,15 +11,15 @@ def transformToXml(root ):
     xmlString = '\n'.join(xmlString )
     return xmlString
 
-def addMaterial_diffuse(root, name, albedo_rough_normal_list, uvScaleValue = None, partId=0):
-    for mat in albedo_rough_normal_list:
+def addMaterial_diffuse(root, name, albedo_rough_list, uvScaleValue = None, partId=0):
+    for mat in albedo_rough_list:
         bsdf = et.SubElement(root, 'bsdf' )
         bsdf.set('type', 'microfacet')
         bsdf.set('id', name + '_' + str(partId) )
         # matId = matName.split('/')[-1]
         # matFile = osp.join(adobeRootAbs, matId, 'mat.txt')
 
-        albedo_list, rough_value, normal_list = mat[0], mat[1], mat[2]
+        albedo_list, rough_value = mat[0], mat[1]
 
         bsdf.set('type', 'microfacet')
         # Add uv scale

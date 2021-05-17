@@ -577,7 +577,7 @@ class openrooms(data.Dataset):
 
     def load_semseg(self, im_RGB_uint8, semseg_label_path):
         semseg_label = np.load(semseg_label_path).astype(np.uint8)
-        semseg_label = cv2.resize(semseg_label, (self.im_width, self.im_height), interpolation=cv2.INTER_NEAREST)
+        semseg_label_ori = cv2.resize(semseg_label, (self.im_width, self.im_height), interpolation=cv2.INTER_NEAREST)
         # Transform images
         im_semseg_transformed_trainval, semseg_label = self.transforms_semseg(im_RGB_uint8, semseg_label) # augmented
         # semseg_label[semseg_label==0] = 31
@@ -586,8 +586,7 @@ class openrooms(data.Dataset):
             semseg_label[torch.logical_not(wallseg_mask)] = 0
             semseg_label[wallseg_mask] = 1
 
-        # ic(semseg_label.long().shape)
-        return {'semseg_label': semseg_label.long(), 'im_semseg_transformed_trainval': im_semseg_transformed_trainval}
+        return {'semseg_label_ori': torch.from_numpy(semseg_label_ori), 'semseg_label': semseg_label.long(), 'im_semseg_transformed_trainval': im_semseg_transformed_trainval}
 
     def load_matseg(self, mask, im_RGB_uint8):
         # >>>> Rui: Read obj mask

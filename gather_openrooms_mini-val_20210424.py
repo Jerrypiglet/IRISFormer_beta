@@ -63,6 +63,7 @@ label_names = [
     ['imbaseColor_%s.png', 'DiffLight'], 
     # ['imenvDirect_%s.hdr', ''], 
     ['imcadmatobj_%s.dat', 'main'], 
+    ['imsemLabel_%s.npy', 'main']
     # ['immatPart_%s.dat', ''], 
     # ['imsgEnv_%s.h5', ''], 
 ]

@@ -774,7 +774,10 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                                             'normalPred': output_dict['normalPred'].detach().cpu().numpy()[sample_idx_batch], \
                                             'albedoGT': input_dict['albedoBatch'].detach().cpu().numpy()[sample_idx_batch], \
                                             'roughGT': input_dict['roughBatch'].detach().cpu().numpy()[sample_idx_batch], \
-                                            'T_LightNet2Total3D_rightmult': output_dict['emitter_est_result']['T_LightNet2Total3D_rightmult'].detach().cpu().numpy()[sample_idx_batch], 
+                                            'albedoPred': output_dict['albedoPred'].detach().cpu().numpy()[sample_idx_batch], \
+                                            'roughPred': output_dict['roughPred'].detach().cpu().numpy()[sample_idx_batch], \
+                                            'T_LightNet2Total3D_rightmult': output_dict['emitter_est_result']['T_LightNet2Total3D_rightmult'].detach().cpu().numpy()[sample_idx_batch], \
+                                            'semseg_label': input_dict['semseg_label_ori'].detach().cpu().numpy()[sample_idx_batch]
                                         })
                                         if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis:
                                             results_emitter_save_dict.update({'cell_axis_weights': output_dict['emitter_est_result']['cell_axis_weights'].detach().cpu().numpy()[sample_idx_batch]})
