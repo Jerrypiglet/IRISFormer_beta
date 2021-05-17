@@ -11,6 +11,62 @@ def transformToXml(root ):
     xmlString = '\n'.join(xmlString )
     return xmlString
 
+def addMaterial_diffuse(root, name, albedo_rough_normal_list, uvScaleValue = None, partId=0):
+    for mat in albedo_rough_normal_list:
+        bsdf = et.SubElement(root, 'bsdf' )
+        bsdf.set('type', 'microfacet')
+        bsdf.set('id', name + '_' + str(partId) )
+        # matId = matName.split('/')[-1]
+        # matFile = osp.join(adobeRootAbs, matId, 'mat.txt')
+
+        albedo_list, rough_value, normal_list = mat[0], mat[1], mat[2]
+
+        bsdf.set('type', 'microfacet')
+        # Add uv scale
+        if uvScaleValue is not None:
+            uvScale = et.SubElement(bsdf, 'float')
+            uvScale.set('name', 'uvScale')
+            uvScale.set('value', '%.3f' % uvScaleValue )
+
+        # Add new albedo
+        albedo = et.SubElement(bsdf, 'rgb' )
+        albedo.set('name', 'albedo' )
+        albedo.set('value', ' '.join([str(x) for x in albedo_list]) )
+
+        # Add albedo scale
+        albedoScale = et.SubElement(bsdf, 'rgb')
+        albedoScale.set('name', 'albedoScale')
+        # albedoScaleValue = np.random.random(3) * 0.6 + 0.7
+        albedoScaleValue = [1., 1., 1.]
+        albedoScale.set('value', '%.3f %.3f %.3f' %
+                (albedoScaleValue[0], albedoScaleValue[1], albedoScaleValue[2] ) )
+
+    #     # Add new normal
+    #     normal = et.SubElement(bsdf, 'texture' )
+    #     normal.set('name', 'normal')
+    #     normal.set('value', ' '.join([str(x) for x in normal_list]) )
+    #    # normal.set('type', 'bitmap')
+    #     # normalfile = et.SubElement(normal, 'string')
+    #     # normalfile.set('name', 'filename')
+    #     # normalfile.set('value', osp.join(matName, 'tiled', 'normal_tiled.png') )
+
+        # Add new roughness
+        roughness = et.SubElement(bsdf, 'float' )
+        roughness.set('name', 'roughness')
+        # roughness.set('type', 'bitmap')
+        roughness.set('value', str(rough_value))
+        # roughnessfile = et.SubElement(roughness, 'string')
+        # roughnessfile.set('name', 'filename')
+        # roughnessfile.set('value', osp.join(matName, 'tiled', 'rough_tiled.png') )
+
+        # Add roughness scale
+        roughScale = et.SubElement(bsdf, 'float')
+        roughScale.set('name', 'roughnessScale')
+        # roughScaleValue = np.random.random() * 1.0 + 0.5
+        roughScaleValue = 1.
+        roughScale.set('value', '%.3f' % roughScaleValue  )
+
+    return root
 
 def addShape(root, name, fileName, transforms = None, materials = None, scaleValue = None):
     shape = et.SubElement(root, 'shape')
@@ -76,7 +132,7 @@ def addShape(root, name, fileName, transforms = None, materials = None, scaleVal
             matName, partId = mat[1], mat[0]
             bsdf = et.SubElement(shape, 'ref' )
             bsdf.set('name', 'bsdf')
-            bsdf.set('id', name + '_' + partId )
+            bsdf.set('id', name + '_' + str(partId) )
     return root
 
 

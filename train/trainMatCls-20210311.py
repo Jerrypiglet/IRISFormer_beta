@@ -524,7 +524,12 @@ else:
                         'loss_emitter-cell_lamb'] 
 
 
+            for loss_key in loss_keys_backward:
+                if loss_key in opt.loss_weight_dict:
+                    loss_dict[loss_key] = loss_dict[loss_key] * opt.loss_weight_dict[loss_key]
+                    print('Multiply loss %s by weight %.3f'%(loss_key, opt.loss_weight_dict[loss_key]))
             loss = sum([loss_dict[loss_key] for loss_key in loss_keys_backward])
+
             if opt.is_master and tid % 20 == 0:
                 print('----loss_dict', loss_dict.keys())
                 print('----loss_keys_backward', loss_keys_backward)

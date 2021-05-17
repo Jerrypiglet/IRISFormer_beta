@@ -275,6 +275,10 @@ def set_up_envs(opt):
         opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = 'em'
         opt.cfg.DATA.data_read_list += ['mesh', 'de']
 
+    # extra loss weights
+    opt.loss_weight_dict = {
+        'loss_layout-ALL': opt.cfg.MODEL_LAYOUT_EMITTER.layout.loss.weight_all
+    }
 def check_if_in_list(list_to_check, list_allowed, module_name='Unknown Module'):
     if len(list_to_check) == 0:
         return

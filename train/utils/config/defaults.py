@@ -232,7 +232,7 @@ _C.MODEL_LAYOUT_EMITTER.layout.if_train_with_reindexed = False
 _C.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder = True
 # _C.MODEL_LAYOUT_EMITTER.layout.if_fully_differentiable = False # get rid of argmax in layout est -> bbox; not implememted yet
 _C.MODEL_LAYOUT_EMITTER.layout.if_estcls_in_loss = False
-_C.MODEL_LAYOUT_EMITTER.layout.if_argmax_in_results = True
+# _C.MODEL_LAYOUT_EMITTER.layout.if_argmax_in_results = True
 
 _C.MODEL_LAYOUT_EMITTER.mesh = CN()
 _C.MODEL_LAYOUT_EMITTER.mesh.tmn_subnetworks = 2

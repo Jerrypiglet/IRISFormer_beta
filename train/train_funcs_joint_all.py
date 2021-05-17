@@ -772,6 +772,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                                             'depthGT': input_dict['depthBatch'].detach().cpu().numpy()[sample_idx_batch], \
                                             'normalGT': input_dict['normalBatch'].detach().cpu().numpy()[sample_idx_batch], \
                                             'normalPred': output_dict['normalPred'].detach().cpu().numpy()[sample_idx_batch], \
+                                            'albedoGT': input_dict['albedoBatch'].detach().cpu().numpy()[sample_idx_batch], \
+                                            'roughGT': input_dict['roughBatch'].detach().cpu().numpy()[sample_idx_batch], \
                                             'T_LightNet2Total3D_rightmult': output_dict['emitter_est_result']['T_LightNet2Total3D_rightmult'].detach().cpu().numpy()[sample_idx_batch], 
                                         })
                                         if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis:

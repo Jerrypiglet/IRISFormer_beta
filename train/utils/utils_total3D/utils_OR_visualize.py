@@ -44,7 +44,7 @@ from vtk.util.numpy_support import vtk_to_numpy, numpy_to_vtk
 from utils.utils_total3D.utils_OR_mesh import loadMesh, writeMesh
 from utils.utils_total3D.utils_OR_vis_tools import get_bdb_form_from_corners, format_bboxes, format_layout, format_mesh
 from utils.utils_total3D.utils_OR_mesh import writeMesh_rect
-from utils.utils_total3D.utils_OR_write_shape_to_xml import transformToXml, addShape, addAreaLight
+from utils.utils_total3D.utils_OR_write_shape_to_xml import transformToXml, addShape, addAreaLight, addMaterial_diffuse
 from utils.utils_total3D.sunrgbd_utils import get_corners_of_bb3d_no_index
 from utils.utils_total3D.utils_OR_xml import get_XML_root
 
@@ -61,7 +61,7 @@ class Box(Scene3D):
                     grid_size=4, paths={}, pickle_id=-1, tid=0, \
                     gt_boxes_valid_mask_extra=None, pre_boxes_valid_mask_extra=None, \
                     if_use_vtk=False, if_off_screen_vtk=True, \
-                    if_index_faces_with_basis=True, summary_path='.'):
+                    if_index_faces_with_basis=True, summary_path='.', material_dict=None):
         super(Scene3D, self).__init__()
         self.opt = opt
         if self.opt is not None:
@@ -107,6 +107,8 @@ class Box(Scene3D):
 
         self.gt_boxes_valid_mask_extra = gt_boxes_valid_mask_extra
         self.pre_boxes_valid_mask_extra = pre_boxes_valid_mask_extra
+
+        self.material_dict = material_dict # global material GT/pred for albedo, roughness
 
         # --- after post-processing
         self.valid_bbox_idxes_dict = {'prediction': [], 'GT': []}
@@ -348,8 +350,9 @@ class Box(Scene3D):
 
         sg_params_list = self.convert_layout_windows_to_mesh(split_type=split_type, rec_root=rec_root)
         self.sg_envmap_info_dict[split_type]['sg_params_list'] = sg_params_list
-        im_envmap_gen = self.convert_SG_params_to_envmap(sg_params_list)
-        self.sg_envmap_info_dict[split_type]['im_envmap_gen'] = im_envmap_gen
+        if len(sg_params_list) != 0:
+            im_envmap_gen = self.convert_SG_params_to_envmap(sg_params_list)
+            self.sg_envmap_info_dict[split_type]['im_envmap_gen'] = im_envmap_gen
 
         self.convert_lamps_to_mesh(split_type=split_type, rec_root=rec_root)
         self.convert_objs_to_mesh(split_type=split_type, rec_root=rec_root)
@@ -384,9 +387,40 @@ class Box(Scene3D):
             print('Written objs to %s'%obj_path)
             # print(mesh_obj_dict['obj_path'],'--->', obj_path)
             self.scene_meshes_dict[current_type].append(obj_path)
-            
+
+            if self.material_dict is not None:
+                obj_mask = mesh_obj_dict['obj_mask']
+                # material_dict = self.material_dict[current_type]
+                material_dict = self.material_dict['GT']                
+                albedo, rough, normal = material_dict['albedo'], material_dict['rough'], material_dict['normal']
+                x1, y1, x2, y2 = obj_mask['msk_bdb_half'] # [x1, y1, x2, y2]
+                msk_half_bool = obj_mask['msk_half'].astype(np.bool)
+                
+                albedo_masked = albedo[y1:y2+1, x1:x2+1]
+                rough_masked = rough[y1:y2+1, x1:x2+1]
+                normal_masked = normal[y1:y2+1, x1:x2+1]
+                assert(msk_half_bool.shape==albedo_masked.shape[:2])
+                albedo_masked = albedo_masked[msk_half_bool]
+                rough_masked = rough_masked[msk_half_bool]
+                normal_masked = normal_masked[msk_half_bool]
+
+                albedo_median_diffuse = np.median(albedo_masked, axis=0).flatten().tolist()
+                rough_median_diffuse = np.median(rough_masked, axis=0).flatten().item()
+                normal_median_diffuse = np.median(normal_masked, axis=0).flatten()
+                normal_median_diffuse = normal_median_diffuse / (np.linalg.norm(normal_median_diffuse)+1e-6)
+                normal_median_diffuse = normal_median_diffuse.tolist()
+                # <rgb name="albedo" value="0.242 0.242 0.242"/>
+                # <rgb name="albedoScale" value="1.172 1.183 0.728"/>
+                # <float name="roughness" value="0.100"/>
+                # <float name="roughnessScale" value="1.286"/>
+
             if rec_root is not None:
-                rec_root = addShape(rec_root, 'obj_%d'%mesh_idx, str(obj_path), None, scaleValue=1.)
+                obj_id = 'obj_%d'%mesh_idx
+                if self.material_dict is not None:
+                    addMaterial_diffuse(rec_root, obj_id, albedo_rough_normal_list=[[albedo_median_diffuse, rough_median_diffuse, normal_median_diffuse]])
+                    rec_root = addShape(rec_root, obj_id, str(obj_path), materials=[[0, 'diffuseAlbedo']], scaleValue=1.)
+                else:
+                    rec_root = addShape(rec_root, obj_id, str(obj_path), None, scaleValue=1.)
 
 
     def convert_lamps_to_mesh(self, split_type='prediction', if_dump_to_mesh=True, if_transform_to_RAW=True, rec_root=None):
@@ -394,9 +428,10 @@ class Box(Scene3D):
         current_type = split_type
         
         if split_type=='prediction':
-            cell_info_grid = self.cell_info_grid_GT
-        else:
             cell_info_grid = self.cell_info_grid_PRED
+        else:
+            cell_info_grid = self.cell_info_grid_GT
+
 
         cells_vis_info_list_filtered = [x for x in cell_info_grid if x['obj_type'] == 'obj']
 
@@ -621,9 +656,6 @@ class Box(Scene3D):
         im_envmap_gen = np.stack([im_envmap_gen, im_envmap_gen]).sum(0)
         return im_envmap_gen
 
-
-
-
     def postprocess_objs(self, split_type='prediction', if_dump_objs_to_mesh=False, if_dump_scene_to_mesh=False, if_debug=False):
         assert split_type in ['prediction', 'GT', 'both']
         if split_type == 'prediction':
@@ -643,8 +675,8 @@ class Box(Scene3D):
                 print('[!!!] Skipped processing boxes for %s'%current_type, boxes is None, self.valid_bbox_idxes_dict[current_type])
                 continue
 
-            
             for bbox_idx, (coeffs, centroid, class_id, basis) in enumerate(zip(boxes['coeffs'], boxes['centroid'], boxes['class_id'], boxes['basis'])):
+                # assert len(self.gt_boxes['mask'])==len(boxes['coeffs'])
                 if_box_valid = self.gt_boxes['if_valid'][bbox_idx]
                 if_box_invalid_cat = class_id not in self.valid_class_ids
 
@@ -700,8 +732,8 @@ class Box(Scene3D):
                 self.valid_bbox_meshes_dict[current_type]['mesh_path_scene'] = str(scene_mesh_path)
 
             self.valid_bbox_meshes_dict[current_type]['mesh_objs'] = []
-            for v, f, obj_path in zip(vertices_list, faces_notAdd_list, obj_paths):
-                mesh_obj = {'v': v, 'f': f, 'obj_path': obj_path}
+            for v, f, obj_path, bbox_idx in zip(vertices_list, faces_notAdd_list, obj_paths, self.valid_bbox_idxes_dict[current_type]):
+                mesh_obj = {'v': v, 'f': f, 'obj_path': obj_path, 'obj_mask': self.gt_boxes['obj_masks'][bbox_idx]}
                 self.valid_bbox_meshes_dict[current_type]['mesh_objs'].append(mesh_obj)
                 # if if_dump_objs_to_mesh:
                 #     obj_mesh_path = Path(self.opt.summary_vis_path_task) / ('obj_mesh-%s-tid%d-%d.obj'%(current_type, self.tid,     self.sample_idx))

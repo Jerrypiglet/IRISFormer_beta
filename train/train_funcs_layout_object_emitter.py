@@ -120,8 +120,7 @@ def get_labels_dict_layout_emitter(labels_dict_input, data_batch, opt):
                 'gt_obj_path_alignedNew_original_list': gt_obj_path_alignedNew_original_list
             }
 
-
-        elif opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'ReconLoss':
+            # elif opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'ReconLoss':
             # for depth loss
             # depth_maps = [depth.float().to(device) for depth in data['depth']]
 
@@ -147,9 +146,9 @@ def get_labels_dict_layout_emitter(labels_dict_input, data_batch, opt):
             patch_for_mesh = patch[mask_status.nonzero()]
             cls_codes_for_mesh = cls_codes[mask_status.nonzero()]
 
-            labels_dict['mesh_labels'] = {'depth_maps':depth_maps, 
-                            'obj_masks':obj_masks, 'mask_status':mask_status, 'mask_flag':mask_flag, 'patch_for_mesh':patch_for_mesh,
-                            'cls_codes_for_mesh':cls_codes_for_mesh}
+            labels_dict['mesh_labels'].update({'depth_maps':depth_maps, 
+                'obj_masks':obj_masks, 'mask_status':mask_status, 'mask_flag':mask_flag, 'patch_for_mesh':patch_for_mesh,
+                'cls_codes_for_mesh':cls_codes_for_mesh})
 
     if if_emitter:
         emitter_labels = {}
@@ -212,12 +211,14 @@ def vis_layout_emitter(labels_dict, output_dict, data_batch, opt, time_meters=No
                                             pred_dict_lo['lo_centroid_result'],
                                             pred_dict_lo['lo_coeffs_result'], 
                                             if_return_full=True, 
-                                            if_differentiable=opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_argmax_in_results)
+                                            # if_differentiable=not opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_argmax_in_results)
+                                            if_differentiable=opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_differentiable_layout_input)
         # ic(basis_out.shape, coeffs_out.shape, centroid_out.shape) # [4, 3, 3], [4, 3], [4, 3]
         cam_R_out = get_rotation_matix_result(opt.bins_tensor,
                                     pred_dict_lo['pitch_cls_result'], pred_dict_lo['pitch_reg_result'],
                                     pred_dict_lo['roll_cls_result'], pred_dict_lo['roll_reg_result'], \
-                                    if_differentiable=opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_argmax_in_results)
+                                    # if_differentiable=not opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_argmax_in_results)
+                                    if_differentiable=opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_differentiable_layout_input)
 
     if if_est_object:
         pred_dict_ob = output_dict['object_est_result']
@@ -323,8 +324,14 @@ def vis_layout_emitter(labels_dict, output_dict, data_batch, opt, time_meters=No
                 gt_boxes['cat_name'] = gt_dict_ob['cat_name'][sample_idx_batch]
                 gt_boxes['if_valid'] = gt_dict_ob['boxes_valid_list'][sample_idx_batch]
                 assert len(gt_boxes['if_valid']) == len(gt_boxes['random_id'])== len(gt_boxes['cat_name'])
+                # print(len(gt_dict_ob['bdb3D']), data_batch['obj_split'])
+                # print(len(gt_dict_mesh['obj_masks']), len(gt_dict_mesh['obj_masks'][0]), gt_dict_mesh['obj_masks'][0][0].keys())
+                obj_masks = gt_dict_mesh['obj_masks'][sample_idx_batch]
+                assert len(gt_boxes['if_valid'])==len(obj_masks)
+                gt_boxes['obj_masks'] = obj_masks
         else:
             gt_boxes = None
+
 
         if if_est_object:
             nyu40class_ids = [int(evaluate_bdb['classid']) for evaluate_bdb in bdb3D_out_form_cpu]
@@ -543,7 +550,7 @@ def postprocess_layout(labels_dict, output_dict, loss_dict, opt, time_meters):
     layout_losses_dict, lo_bdb3D_result = PoseLoss(opt, pred_dict, gt_dict, opt.bins_tensor, cls_reg_ratio)
 
     loss_dict.update(layout_losses_dict)
-    loss_dict.update({'loss_layout-ALL': sum([layout_losses_dict[x] for x in layout_losses_dict]) * opt.cfg.MODEL_LAYOUT_EMITTER.layout.loss.weight_all})
+    loss_dict.update({'loss_layout-ALL': sum([layout_losses_dict[x] for x in layout_losses_dict])})
     # print('=======', [x for x in layout_losses_dict if 'cls' not in x])
     # loss_dict.update({'loss_layout-ALL': sum([layout_losses_dict[x] if 'cls' not in x else torch.zeros(1).cuda() for x in layout_losses_dict])})
 
