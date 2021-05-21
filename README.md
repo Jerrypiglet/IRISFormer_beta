@@ -1,9 +1,10 @@
 # Inverse Rendering for Complex Indoor Scenes: <br> Shape, Spatially-Varying Lighting and SVBRDF <br> From a Single Image <br> ([Project page](http://cseweb.ucsd.edu/~viscomp/projects/CVPR20InverseIndoor/))
 Zhengqin Li, Mohammad Shafiei, Ravi Ramamoorthi, Kalyan Sunkavalli, Manmohan Chandraker
 ## Rui
-> pip install -r requirements.txt
-
-> pip install notebook
+```
+pip install -r requirements.tx
+pip install notebook
+```
 
 Torch: 1.7.1
 
@@ -13,20 +14,41 @@ To resume a task, put FULL original task name in --task_name, and use 'resume' f
 --task_name 20210324-113325--semseg_WALL_psp50 --resume resume
 ```
 
+### before running everything
+
+```
+export PATH=/usr/local/cuda/bin:/usr/local/cuda/nsight-compute-2019.4.0/${PATH:+:${PATH}}
+```
 ### vtk
 
 https://docs.pyvista.org/extras/building_vtk.html
 
 dependencies:
-> sudo apt-get install libegl1-mesa-dev
-> sudo apt-get install libglu1-mesa-dev freeglut3-dev mesa-common-dev
-> apt-get install -y libz-dev
+```
+sudo apt-get install libegl1-mesa-dev
+sudo apt-get install libglu1-mesa-dev freeglut3-dev mesa-common-dev
+apt-get install -y libz-dev
+```
 
+```
+python test_offscreen.py
+```
 
-> python test_offscreen.py
 ### envs in docker image
-> conda install pytorch==1.7.0 torchvision==0.8.0 torchaudio==0.7.0 cudatoolkit=11.0 -c pytorch
+```
+conda install pytorch==1.7.0 torchvision==0.8.0 torchaudio==0.7.0 cudatoolkit=11.0 -c pytorch
+```
 
+### detectron
+``` bash
+# pip install -U torchvision==0.8.1
+pip install - cython Pillow==6.2.2
+pip install - 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI'
+pip install - google-colab
+# pip install -U opencv-python==4.2.0.34
+git clone https://github.com/facebookresearch/detectron2 third-parties_outside/detectron_elvis/outfileelvis/detectron2_repo
+pip install -e third-parties_outside/detectron_elvis/outfileelvis/detectron2_repo
+```
 
 ## Useful links:
 * Project page: http://cseweb.ucsd.edu/~visco…/projects/CVPR20InverseIndoor/

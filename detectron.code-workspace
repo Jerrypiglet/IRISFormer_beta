@@ -4,5 +4,25 @@
 			"path": "."
 		}
 	],
-	"settings": {}
+	
+	"settings": {
+		"python.analysis.extraPaths": [
+			"train"], 
+		"files.watcherExclude": {
+			"**/.git/objects/**": true,
+			"**/.git/subtree-cache/**": true,
+			"**/node_modules/*/**": true,
+			"**/pretrained/**": true,
+			"**/Summary_vis/**": true,
+			"**/logs/**": true,
+			"**/Checkpoint/**": true,
+			"**/VTK/**": true,
+			"**/third-parties_outside/adobe_svbrdf-master/**": true,
+			"**/third-parties_outside/photoshape/**": true,
+			"**/third-parties_outside/repo_zhengqinCVPR/**": true,
+			"**/third-parties_outside/detectron_elvis/outfileelvis/**": true,
+			"**/tmp/**": true,
+		  }
+		
+	}
 }
