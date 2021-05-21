@@ -131,3 +131,7 @@ zz-torch-job-gpu20210515-233342-7tsjv
 zz-torch-job-gpu20210516-231456-dvqrt
 zz-torch-job-gpu20210516-234759-ksl5z
 zz-torch-job-gpu20210516-234901-5st7c
+zz-torch-job-gpu20210517-231830-6hmdd
+zz-torch-job-gpu20210517-231924-bkgq2
+20210518-023156
+20210518-023525

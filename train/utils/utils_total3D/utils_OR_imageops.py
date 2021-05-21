@@ -6,18 +6,25 @@ from PIL import Image, ImageDraw, ImageFont
 import os.path as osp
 
 def loadHdr_simple(imName):
-    im_rec = cv2.imread(str(imName), -1 )
+    im_rec = cv2.imread(str(imName), -1)
+    # print(imName, im_rec.dtype, im_rec.shape)
     # print(imName, np.amax(im_rec))
-    im_rec = np.ascontiguousarray(im_rec[:, :, ::-1] )
+    im_rec = np.ascontiguousarray(im_rec[:, :, ::-1] ) # cv2 assume input in RGB, and cv2.imread outputs in BGR; which is why we need to manually flip the channels to output RGB
+    # im_rec = im_rec[:, :, ::-1]
     return im_rec
 
-def to_nonhdr(im, scale=None, extra_scale=1.):
-    seg = np.amin(im, 2)[:, :, np.newaxis] > 0.
-    im, scale = scaleHdr(im, seg, scale=scale)
+def to_nonhdr(im, if_rescale=None, extra_scale=1.):
+    assert if_rescale is None or if_rescale=='auto'
+    total_scale = 1.
     im = im * extra_scale
+    total_scale *= extra_scale
+    if if_rescale is not None:
+        seg = np.amin(im, 2)[:, :, np.newaxis] > 0.
+        im, scale = scaleHdr(im, seg, if_rescale=if_rescale)
+        total_scale *= scale
     im_not_hdr = np.clip((im)**(1.0/2.2), 0., 1.)
     im_uint8 = (255. * im_not_hdr).astype(np.uint8)
-    return im_uint8, scale
+    return im_uint8, total_scale
 
 def loadImage(imName, isGama = False):
     imName = str(imName)
@@ -58,8 +65,9 @@ def loadHdr(imName, if_resize=False, imWidth=None, imHeight=None, if_channel_fir
         im = np.transpose(im, [2, 0, 1])
     return im
 
-def scaleHdr(hdr, seg, scale=None):
-    if scale is None:
+def scaleHdr(hdr, seg, if_rescale='auto'):
+    assert if_rescale is not None
+    if if_rescale == 'auto':
         imHeight, imWidth = hdr.shape[:2]
         intensityArr = (hdr * seg).flatten()
         intensityArr.sort()

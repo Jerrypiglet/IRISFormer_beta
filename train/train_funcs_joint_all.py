@@ -767,18 +767,30 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                                             'emitter_outdirs_meshgrid_Total3D_outside': output_dict['emitter_est_result']['emitter_outdirs_meshgrid_Total3D_outside'].detach().cpu().numpy()[sample_idx_batch], \
                                             'normal_outside_Total3D': output_dict['emitter_est_result']['normal_outside_Total3D'].detach().cpu().numpy()[sample_idx_batch], \
                                             'depthPred': output_dict['emitter_est_result']['depthPred'].detach().cpu().numpy()[sample_idx_batch], \
-                                            'points_backproj': output_dict['emitter_est_result']['points_backproj'].detach().cpu().numpy()[sample_idx_batch], \
+                                            'points_backproj': output_dict['emitter_est_result']['points_backproj'].detach().cpu().numpy()[sample_idx_batch]}) \
                                             # 'points': output_dict['emitter_est_result']['points'].detach().cpu().numpy()[sample_idx_batch], \
-                                            'depthGT': input_dict['depthBatch'].detach().cpu().numpy()[sample_idx_batch], \
-                                            'normalGT': input_dict['normalBatch'].detach().cpu().numpy()[sample_idx_batch], \
-                                            'normalPred': output_dict['normalPred'].detach().cpu().numpy()[sample_idx_batch], \
-                                            'albedoGT': input_dict['albedoBatch'].detach().cpu().numpy()[sample_idx_batch], \
-                                            'roughGT': input_dict['roughBatch'].detach().cpu().numpy()[sample_idx_batch], \
-                                            'albedoPred': output_dict['albedoPred'].detach().cpu().numpy()[sample_idx_batch], \
-                                            'roughPred': output_dict['roughPred'].detach().cpu().numpy()[sample_idx_batch], \
-                                            'T_LightNet2Total3D_rightmult': output_dict['emitter_est_result']['T_LightNet2Total3D_rightmult'].detach().cpu().numpy()[sample_idx_batch], \
-                                            'semseg_label': input_dict['semseg_label_ori'].detach().cpu().numpy()[sample_idx_batch]
-                                        })
+                                        if opt.cfg.DEBUG.if_dump_anything:
+                                            results_emitter_save_dict.update({
+                                                'depthGT': input_dict['depthBatch'].detach().cpu().numpy()[sample_idx_batch], \
+                                                'normalGT': input_dict['normalBatch'].detach().cpu().numpy()[sample_idx_batch], \
+                                                'normalPred': output_dict['normalPred'].detach().cpu().numpy()[sample_idx_batch], \
+                                                'albedoGT': input_dict['albedoBatch'].detach().cpu().numpy()[sample_idx_batch], \
+                                                'roughGT': input_dict['roughBatch'].detach().cpu().numpy()[sample_idx_batch], \
+                                                'albedoPred': output_dict['albedoPred'].detach().cpu().numpy()[sample_idx_batch], \
+                                                'roughPred': output_dict['roughPred'].detach().cpu().numpy()[sample_idx_batch], \
+                                                'T_LightNet2Total3D_rightmult': output_dict['emitter_est_result']['T_LightNet2Total3D_rightmult'].detach().cpu().numpy()[sample_idx_batch], \
+                                                'semseg_label': input_dict['semseg_label_ori'].detach().cpu().numpy()[sample_idx_batch], \
+                                                'envmapsBatch': input_dict['envmapsBatch'].detach().cpu().numpy()[sample_idx_batch], \
+                                                'envmapsPredScaledImage': output_dict['envmapsPredScaledImage'].detach().cpu().numpy()[sample_idx_batch], \
+                                                'envmapsPredImage': output_dict['envmapsPredImage'].detach().cpu().numpy()[sample_idx_batch], \
+                                                # 'envmapsPredScaledImage_LightNetCoords': output_dict['emitter_input']['envmapsPredScaledImage_LightNetCoords'].detach().cpu().numpy()[sample_idx_batch], \
+                                                # 'envmapsPred_LightNetCoords': output_dict['emitter_input']['envmapsPred_LightNetCoords'].detach().cpu().numpy()[sample_idx_batch], \
+                                            })
+                                            if opt.cfg.MODEL_LIGHT.if_transform_to_LightNet_coords:
+                                                LightNet_misc = {}
+                                                for key in output_dict['emitter_misc']['LightNet_misc']:
+                                                    LightNet_misc[key] = output_dict['emitter_misc']['LightNet_misc'][key].detach().cpu().numpy()[sample_idx_batch]
+                                                results_emitter_save_dict['LightNet_misc'] = LightNet_misc
                                         if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis:
                                             results_emitter_save_dict.update({'cell_axis_weights': output_dict['emitter_est_result']['cell_axis_weights'].detach().cpu().numpy()[sample_idx_batch]})
 

@@ -511,12 +511,36 @@ class Model_Joint(nn.Module):
 
         input_dict_light_accu = {'normalPred_lightAccu':normalBatch, 'depthPred_lightAccu': depthBatch, 'envmapsPredImage_lightAccu': envmapsBatch, 'cam_K': cam_K_batch, 'cam_R': cam_R_batch, \
             'layout': layout_batch, 'basis': basis_batch, 'coeffs': coeffs_batch, 'centroid': centroid_batch, }
-        return_dict_layout_emitter = {'emitter_input': {}}
+        return_dict_layout_emitter = {'emitter_input': {}, 'emitter_misc': {}}
 
         # ---- accu lights
         return_dict_lightAccu = self.EMITTER_LIGHT_ACCU_NET(input_dict_light_accu)
         envmap_lightAccu_mean = return_dict_lightAccu['envmap_lightAccu_mean'].view(-1, 6, 8, 8, 3).permute(0, 1, 4, 2, 3)
 
+        if self.cfg.MODEL_LIGHT.if_transform_to_LightNet_coords:
+            camx, camy, normalPred = return_dict_lightAccu['camx'], return_dict_lightAccu['camy'], return_dict_lightAccu['normalPred'] # all: torch.Size([B, 3, 120, 160])
+            # print(camx.shape, camy.shape, normalPred.shape)
+            axisPred, lambPred, weightPred = return_dict_light['LightNet_preds']['axisPred'], return_dict_light['LightNet_preds']['lambPred'], return_dict_light['LightNet_preds']['weightPred']
+            segEnvBatch = return_dict_light['LightNet_preds']['segEnvBatch']
+            axisPred_LightNetCoords = axisPred[:, :, 0:1, :, :] * camx.unsqueeze(1) + axisPred[:, :, 1:2, :, :] * camy.unsqueeze(1) + axisPred[:, :, 2:3, :, :] * normalPred.unsqueeze(1) # [B, 12, 3, 120, 160]
+            assert axisPred.shape == axisPred_LightNetCoords.shape
+            envmapsPredImage, _, _, _ = self.non_learnable_layers['output2env'].output2env(axisPred_LightNetCoords, lambPred, weightPred )
+            envmapsPredScaledImage = models_brdf.LSregress(envmapsPredImage.detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
+                input_dict['envmapsBatch'] * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage )
+            return_dict_layout_emitter['emitter_misc']['envmapsPredScaledImage_LightNetCoords'] = envmapsPredScaledImage
+            return_dict_layout_emitter['emitter_misc']['envmapsPred_LightNetCoords'] = envmapsPredImage
+            return_dict_layout_emitter['emitter_misc']['LightNet_misc'] = {
+                'axisPred': axisPred, 
+                'lambPred': lambPred, 
+                'weightPred': weightPred, 
+                'camx': camx, 
+                'camy': camy, 
+                'normalPred': normalPred, 
+                'segEnvBatch': segEnvBatch, 
+                'axisPred_LightNetCoords': axisPred_LightNetCoords
+            }
+
+            
         grid_size = self.EMITTER_LIGHT_ACCU_NET.grid_size
         im_height, im_width = self.opt.cfg.DATA.im_height, self.opt.cfg.DATA.im_width
 
@@ -696,10 +720,10 @@ class Model_Joint(nn.Module):
             x1, x2, x3, x4, x5, x6 = self.LIGHT_Net['lightEncoder'](input_batch.detach(), input_dict['envmapsPreBatch'].detach() )
 
         # Prediction
-        axisPred = self.LIGHT_Net['axisDecoder'](x1, x2, x3, x4, x5, x6, input_dict['envmapsBatch'] )
-        lambPred = self.LIGHT_Net['lambDecoder'](x1, x2, x3, x4, x5, x6, input_dict['envmapsBatch'] )
-        weightPred = self.LIGHT_Net['weightDecoder'](x1, x2, x3, x4, x5, x6, input_dict['envmapsBatch'] )
-        bn, SGNum, _, envRow, envCol = axisPred.size()
+        axisPred_ori = self.LIGHT_Net['axisDecoder'](x1, x2, x3, x4, x5, x6, input_dict['envmapsBatch'] )
+        lambPred_ori = self.LIGHT_Net['lambDecoder'](x1, x2, x3, x4, x5, x6, input_dict['envmapsBatch'] )
+        weightPred_ori = self.LIGHT_Net['weightDecoder'](x1, x2, x3, x4, x5, x6, input_dict['envmapsBatch'] )
+        bn, SGNum, _, envRow, envCol = axisPred_ori.size()
         # envmapsPred = torch.cat([axisPred.view(bn, SGNum * 3, envRow, envCol ), lambPred, weightPred], dim=1)
 
         imBatchSmall = F.adaptive_avg_pool2d(input_dict['imBatch'], (self.cfg.MODEL_LIGHT.envRow, self.cfg.MODEL_LIGHT.envCol) )
@@ -711,7 +735,7 @@ class Model_Joint(nn.Module):
         return_dict = {}
 
         # Compute the recontructed error
-        envmapsPredImage, axisPred, lambPred, weightPred = self.non_learnable_layers['output2env'].output2env(axisPred, lambPred, weightPred )
+        envmapsPredImage, axisPred, lambPred, weightPred = self.non_learnable_layers['output2env'].output2env(axisPred_ori, lambPred_ori, weightPred_ori )
 
         pixelNum_recon = max( (torch.sum(segEnvBatch ).cpu().data).item(), 1e-5)
         envmapsPredScaledImage = models_brdf.LSregress(envmapsPredImage.detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
@@ -749,6 +773,7 @@ class Model_Joint(nn.Module):
         renderedImPred_sdr = torch.clamp(renderedImPred_hdr ** (1.0/2.2), 0, 1)
 
         return_dict.update({'renderedImPred': renderedImPred, 'renderedImPred_sdr': renderedImPred_sdr, 'pixelNum_render': pixelNum_render}) 
+        return_dict.update({'LightNet_preds': {'axisPred': axisPred_ori, 'lambPred': lambPred_ori, 'weightPred': weightPred_ori, 'segEnvBatch': segEnvBatch}})
 
         return return_dict
     

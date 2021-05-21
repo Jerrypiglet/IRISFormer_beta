@@ -596,7 +596,7 @@ else:
                             writer.add_image('TRAIN_matseg_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
                             writer.add_image('TRAIN_matseg_mat_aggre_map_trainval/%d'%sample_idx, vis_index_map(mat_aggre_map), tid, dataformats='HWC')
                         logger.info('Logged training mat seg')
-                if opt.cfg.DATA.load_semseg_gt:
+                if opt.cfg.DATA.load_semseg_gt and opt.cfg.MODEL_SEMSEG.enable:
                     for sample_idx, (im_single, semseg_label, semseg_pred) in enumerate(zip(data_batch['im_semseg_transformed_trainval'], data_batch['semseg_label'], output_dict['semseg_pred'].detach().cpu())):
                         im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
                         semseg_colors = np.loadtxt(os.path.join(opt.pwdpath, opt.cfg.PATH.semseg_colors_path)).astype('uint8')

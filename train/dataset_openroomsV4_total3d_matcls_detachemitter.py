@@ -931,6 +931,8 @@ class openrooms(data.Dataset):
                                 envScale_list.append(envScale)
                             # envScale = 1.
                             cell_info['emitter_info']['intensity'] = [x * envScale * hdr_scale for x in emitter_prop_total3d['intensity']] # [!!! IMPORTANT] scale the intensity with the lighting scale and the hdr scale
+                            # if cell_info['obj_type'] == 'window':
+                            #     print(cell_info['emitter_info']['intensity'])
 
                             cell_intensity[wall_idx, i, j] = np.array(cell_info['emitter_info']['intensity']).flatten()
                             cell_info['emitter_info']['intensity_scalelog'] = np.log(np.clip(np.linalg.norm(cell_intensity[wall_idx, i, j]) + 1., 1., np.inf)) # log of norm of intensity
@@ -1039,7 +1041,7 @@ class openrooms(data.Dataset):
                 if len(envMapPaths) > 0:
                     im_envmap_ori = loadHdr_simple(envmap_path)
                     im_envmap_ori = im_envmap_ori * env_scale * hdr_scale # [!!! IMPORTANT] scale the envmap with the lighting scale and the hdr scale
-                    im_envmap_ori_uint8, im_envmap_ori_scale = to_nonhdr(im_envmap_ori)
+                    im_envmap_ori_uint8, im_envmap_ori_scale = to_nonhdr(im_envmap_ori, scale='auto')
                 else:
                     im_envmap_ori = np.zeros((self.opt.cfg.MODEL_LIGHT.envmapHeight, self.opt.cfg.MODEL_LIGHT.envmapWidth, 3), dtype=np.float32)
                     im_envmap_ori_uint8 = np.zeros((self.opt.cfg.MODEL_LIGHT.envmapHeight, self.opt.cfg.MODEL_LIGHT.envmapWidth, 3), dtype=np.uint8)

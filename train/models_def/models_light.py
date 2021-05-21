@@ -181,6 +181,7 @@ class output2env():
                 self.ls.expand([bn, self.SGNum, 3, envRow, envCol, self.envHeight, self.envWidth] ), dim = 2).unsqueeze(2) - 1)
         envmaps = weight.expand([bn, self.SGNum, 3, envRow, envCol, self.envHeight, self.envWidth] ) * \
             torch.exp(mi).expand([bn, self.SGNum, 3, envRow, envCol, self.envHeight, self.envWidth] )
+        # print(envmaps.shape)
 
         envmaps = torch.sum(envmaps, dim=1)
 
@@ -189,7 +190,7 @@ class output2env():
     def output2env(self, axisOrig, lambOrig, weightOrig ):
         bn, _, envRow, envCol = weightOrig.size()
 
-        axis = axisOrig
+        axis = axisOrig # torch.Size([B, 12(SGNum), 3, 120, 160])
 
         weight = 0.999 * weightOrig
         weight = torch.tan(np.pi / 2 * weight )

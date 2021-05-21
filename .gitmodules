@@ -16,3 +16,6 @@
 [submodule "train/SimpleLayout"]
 	path = train/SimpleLayout
 	url = https://github.com/Jerrypiglet/SimpleLayout.git
+[submodule "third-parties_outside/VirtualObjectInsertion"]
+	path = third-parties_outside/VirtualObjectInsertion
+	url = https://github.com/lzqsd/VirtualObjectInsertion.git

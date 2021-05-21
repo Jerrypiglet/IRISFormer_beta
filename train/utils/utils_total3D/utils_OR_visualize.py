@@ -468,8 +468,10 @@ class Box(Scene3D):
             writeMesh_rect(str(obj_path), lamp_box)
             print('Written lamps to %s'%obj_path)
             
+            print('[Lamp params] for wall %d:'%wall_idx, intensity)
             if rec_root is not None:
                 rec_root = addAreaLight(rec_root, 'lamp_cell_on%d_%d'%(wall_idx, cell_idx), str(obj_path), rgbColor=intensity)
+
             
     def convert_layout_windows_to_mesh(self, split_type='prediction', if_dump_to_mesh=True, if_transform_to_RAW=True, layout_scale=1., rec_root=None):
         assert split_type in ['prediction', 'GT']
@@ -560,11 +562,13 @@ class Box(Scene3D):
                 if if_transform_to_RAW:
                     light_dir_abs = self.transform_R.T @ light_dir_abs.reshape(3, 1) # transform back to the RAW world
                     light_dir_abs = light_dir_abs.flatten()
+                # intensity = cell_info['emitter_info']['intensity'] / self.hdr_scale
                 intensity = cell_info['emitter_info']['intensity']
                 lamb = cell_info['emitter_info']['lamb']
                 if isinstance(lamb, np.ndarray):
                     lamb = lamb.squeeze().item()
 
+                # lamb = 70.
 
                 valid_cell_list.append({'basis_1_unit': basis_1_unit, 'basis_2_unit': basis_2_unit, 'light_ratio': cell_info['light_ratio'], 'center': np.mean(verts_array, axis=0), \
                                         'center_axis1': (verts_array[1]+verts_array[0])/2., 'center_axis2': (verts_array[3]+verts_array[0])/2., 'i': i+0.5, 'j': j+0.5, \
@@ -658,17 +662,16 @@ class Box(Scene3D):
                 light_dir_abs_median = np.median(light_dir_abs, axis=0)
                 intensity_median = np.median(intensity, axis=0)
                 lamb_median = np.median(lamb, axis=0)
+                print('[SG params] for wall %d:'%wall_idx, light_dir_abs_median, intensity_median, lamb_median)
 
                 sg_params_list.append({'wall_idx': wall_idx, 'intensity': intensity_median, 'lamb': lamb_median, 'light_dir_abs': light_dir_abs_median})
-
-                # intensity
-                # lamb
         return sg_params_list
 
     def convert_SG_params_to_envmap(self, sg_params_list):
         im_envmap_gen_list = []
         for sg_params in sg_params_list:
-            intensity_SG = sg_params['intensity'] / self.hdr_scale / self.env_scale
+            # intensity_SG = sg_params['intensity'] / self.hdr_scale / self.env_scale
+            intensity_SG = sg_params['intensity']
             lamb_SG = sg_params['lamb']
             light_dir_abs_RAW = sg_params['light_dir_abs']
 
@@ -989,6 +992,7 @@ class Box(Scene3D):
         # if if_vis_lightnet_cells:
         #     assert lightnet_array_GT.shape == (6, self.grid_size, self.grid_size, 3)
         if self.emitter2wall_assign_info_list_gt is not None and not hide_cells:
+
             # basis_indexes = [(1, 0, 2, 3), (4, 5, 7, 6), (0, 1, 4, 5), (1, 5, 2, 6), (3, 2, 7, 6), (4, 0, 7, 3)]
             # constant_axes = [1, 1, 2, 0, 2, 0]
             # self.faces_v_indexes = [(3, 2, 0), (7, 6, 4), (4, 5, 0), (6, 2, 5), (7, 6, 3), (7, 3, 4)]
@@ -1102,6 +1106,7 @@ class Box(Scene3D):
                         else:
                             ax_3d_PRED.add_collection3d(cell_vis['poly'])
 
+
                         if cell_vis['extra_info'] is not None:
                             extra_info = cell_vis['extra_info']
                             if extra_info and extra_info['obj_type'] == 'window':
@@ -1125,15 +1130,17 @@ class Box(Scene3D):
                                 light_dir_abs = light_dir_abs / (np.linalg.norm(light_dir_abs)+1e-6)
 
                                 cell_center = extra_info['cell_center'].flatten()
+
+
                                 if 'intensity_scalelog' in extra_info['emitter_info']:
-                                    intensity_scalelog = extra_info['emitter_info']['intensity_scalelog'] / 3. + 0.5 # add 0.5 for vis (otherwise could be too short)
+                                    intensity_scalelog = extra_info['emitter_info']['intensity_scalelog'] / 3. + 0.5 # add 1. for vis (otherwise could be too short)
                                 else:
                                     # print('2')
                                     # print(extra_info['emitter_info'].keys())
                                     intensity = extra_info['emitter_info']['intensity_scale255'] * np.array(extra_info['emitter_info']['intensity_scaled01']) * 255.
-                                    intensity_scalelog = np.log(np.clip(np.linalg.norm(intensity.flatten()) + 1., 1., np.inf)) / 3. + 0.5 # add 0.5 for vis (otherwise could be too short)
+                                    intensity_scalelog = np.log(np.clip(np.linalg.norm(intensity.flatten()) + 1., 1., np.inf)) / 3. + 0.5 # add 1. for vis (otherwise could be too short)
 
-                                cell_dir_length = intensity_scalelog + 2.
+                                cell_dir_length = intensity_scalelog
                                 light_end = cell_center + light_dir_abs * cell_dir_length
                                 # light_end = cell_center + normal_outside
                                 # print(cell_center, light_dir)

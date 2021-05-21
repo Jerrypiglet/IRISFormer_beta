@@ -710,6 +710,11 @@ def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters, e
                 if head_name == 'cell_intensity':
                     loss = torch.sum(loss * valid_mask.unsqueeze(-1)) / (torch.sum(valid_mask.unsqueeze(-1)) * 3. + 1e-5)
                     loss = loss * opt.cfg.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_intensity
+                    # print(emitter_fc_output.shape, emitter_property_gt.shape, valid_mask.unsqueeze(-1).shape)
+                    # print('-', emitter_fc_output[valid_mask==1])
+                    # print('----', emitter_property_gt[valid_mask==1])
+                    # print('=', torch.exp(emitter_fc_output[valid_mask==1])-1.)
+                    # print('===', torch.exp(emitter_property_gt[valid_mask==1])-1.)
                 elif head_name == 'cell_lamb': # lamps have no lambda
                     loss = torch.sum(loss * window_mask) / (torch.sum(window_mask) + 1e-5)
                     loss = loss * opt.cfg.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_lamb

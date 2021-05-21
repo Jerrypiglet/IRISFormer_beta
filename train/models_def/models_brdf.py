@@ -5,7 +5,7 @@ from torch.autograd import Variable
 import numpy as np
 
 # import pac
-import pac_simplified as pac
+# import pac_simplified as pac
 from models_def.model_matseg import logit_embedding_to_instance
 from icecream import ic
 
