@@ -1,21 +1,15 @@
-[submodule "pacnet"]
-	path = third-parties/pacnet
-	url = https://github.com/NVlabs/pacnet.git
-[submodule "third-parties/pacnet"]
-	path = third-parties/pacnet
-	url = https://github.com/NVlabs/pacnet.git
-[submodule "train/third-parties/pacnet"]
-	path = train/third-parties/pacnet
-	url = https://github.com/NVlabs/pacnet.git
-[submodule "train/third-parties/deformable-convolution-pytorch"]
-	path = train/third-parties/deformable-convolution-pytorch
+[submodule "train/third_parties_outside/deformable-convolution-pytorch"]
+	path = train/third_parties_outside/deformable-convolution-pytorch
 	url = https://github.com/1zb/deformable-convolution-pytorch.git
-[submodule "third-parties_outside/photoshape"]
-	path = third-parties_outside/photoshape
+[submodule "third_parties_outside/photoshape"]
+	path = third_parties_outside/photoshape
 	url = https://github.com/Jerrypiglet/photoshape.git
 [submodule "train/SimpleLayout"]
 	path = train/SimpleLayout
 	url = https://github.com/Jerrypiglet/SimpleLayout.git
-[submodule "third-parties_outside/VirtualObjectInsertion"]
-	path = third-parties_outside/VirtualObjectInsertion
+[submodule "third_parties_outside/VirtualObjectInsertion"]
+	path = third_parties_outside/VirtualObjectInsertion
 	url = https://github.com/lzqsd/VirtualObjectInsertion.git
+[submodule "third_parties_outside/SphericalGaussianOptimization"]
+	path = third_parties_outside/SphericalGaussianOptimization
+	url = https://github.com/lzqsd/SphericalGaussianOptimization.git

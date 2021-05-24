@@ -265,15 +265,21 @@ class renderingLayer():
 
         ldirections = self.ls.unsqueeze(0).unsqueeze(-1).unsqueeze(-1) # torch.Size([1, 128, 3, 1, 1])
 
+        # print(if_normal_only, self.up.shape, normalPred.shape)
         camyProj = torch.einsum('b,abcd->acd',(self.up, normalPred)).unsqueeze(1).expand_as(normalPred) * normalPred # project camera up to normalPred direction https://en.wikipedia.org/wiki/Vector_projection
-        camy = F.normalize(self.up.unsqueeze(0).unsqueeze(-1).unsqueeze(-1).expand_as(camyProj) - camyProj, dim=1)
-        camx = -F.normalize(torch.cross(camy, normalPred,dim=1), p=1, dim=1) # torch.Size([1, 3, 120, 160])
+        camy = F.normalize(self.up.unsqueeze(0).unsqueeze(-1).unsqueeze(-1).expand_as(camyProj) - camyProj, dim=1, p=2)
+        camx = -F.normalize(torch.cross(camy, normalPred,dim=1), p=2, dim=1) # torch.Size([1, 3, 120, 160])
 
+        # print(camx.shape, torch.linalg.norm(camx, dim=1))
+        # print(camy.shape, torch.linalg.norm(camy, dim=1))
         # ls (local coords), l (cam coords)
         # \sum [1, 128, 1, 1, 1] * [1, 1, 3, 120, 160] -> [1, 128, 3, 120, 160]
         # single vec: \sum [1, 1, 1, 1, 1] * [1, 1, 3, 1, 1] -> [1, 1, 3, 1, 1]
         
         # print(ldirections[:, :, 0:1, :, :].shape, camx.unsqueeze(1).shape) # torch.Size([1, 128, 1, 1, 1]) torch.Size([2, 1, 3, 120, 160])
+        
+        # [!!!] multiply the local SG self.ls grid vectors (think of as coefficients) with the LOCAL camera-dependent basis (think of as basis..)
+        # ... and then you arrive at a hemisphere in the camera cooords
         l = ldirections[:, :, 0:1, :, :] * camx.unsqueeze(1) \
                 + ldirections[:, :, 1:2, :, :] * camy.unsqueeze(1) \
                 + ldirections[:, :, 2:3, :, :] * normalPred.unsqueeze(1)    
@@ -309,7 +315,7 @@ class renderingLayer():
 
         ndv = torch.clamp(torch.sum(normalPred * self.v.expand_as(normalPred), dim = 1), 0, 1).unsqueeze(1).unsqueeze(2)
         ndh = torch.clamp(torch.sum(normalPred.unsqueeze(1) * h, dim = 2), 0, 1).unsqueeze(2)
-        ndl = torch.clamp(torch.sum(normalPred.unsqueeze(1) * l, dim = 2), 0, 1).unsqueeze(2) # cos in rendering function
+        ndl = torch.clamp(torch.sum(normalPred.unsqueeze(1) * l, dim = 2), 0, 1).unsqueeze(2) # [!!!] cos in rendering function; normalPred and l are both in camera coords
 
         frac = alpha2.unsqueeze(1).expand_as(frac0) * frac0
         nom0 = ndh * ndh * (alpha2.unsqueeze(1).expand_as(ndh) - 1) + 1

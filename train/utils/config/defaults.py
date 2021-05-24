@@ -168,7 +168,7 @@ _C.MODEL_LIGHT.load_pretrained_MODEL_LIGHT = False
 _C.MODEL_LIGHT.freeze_BRDF_Net = True
 _C.MODEL_LIGHT.pretrained_pth_name = 'check_cascadeLight0_sg12_offset1.0/%s0_9.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
 _C.MODEL_LIGHT.use_scale_aware_loss = False
-_C.MODEL_LIGHT.if_transform_to_LightNet_coords = False
+_C.MODEL_LIGHT.if_transform_to_LightNet_coords = False # if transform pred lighting to global LightNet coords
 
 # _C.MODEL_LIGHT.pretrained_pth_name = ''
 
@@ -259,6 +259,10 @@ _C.MODEL_LAYOUT_EMITTER.mesh_obj.valid_bbox_vis_ratio = 0.1
 
 _C.MODEL_LAYOUT_EMITTER.mesh_obj.if_pre_filter_invalid_frames = False # using e.g./home/ruizhu/Documents/Projects/semanticInverse/train/data/openrooms/list_ORmini-val/list/obj_list.pickle
 _C.MODEL_LAYOUT_EMITTER.mesh_obj.if_skip_invalid_frames = True # skip invalid frames in dataloader.__getitem()__
+
+# ===== detectron
+_C.MODEL_DETECTRON = CN()
+_C.MODEL_DETECTRON.enable = False
 
 # ===== material cls (Yu-Ying)
 _C.MODEL_MATCLS = CN()

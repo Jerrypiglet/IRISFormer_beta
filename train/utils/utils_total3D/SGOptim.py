@@ -41,7 +41,7 @@ class SGEnvOptimSky():
         self.isFixLightPos = isFixLightPos
 
         Az = ( (np.arange(envWidth) + 0.5) / envWidth - 0.5 ) * 2 * np.pi
-        El = ( (np.arange(envHeight) + 0.5) / envHeight ) * np.pi
+        El = ( (np.arange(envHeight) + 0.5) / envHeight ) * np.pi # [0, pi]
         Az, El = np.meshgrid(Az, El )
         Az = Az[:, :, np.newaxis ]
         El = El[:, :, np.newaxis ]
