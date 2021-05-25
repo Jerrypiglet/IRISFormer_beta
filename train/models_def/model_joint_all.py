@@ -205,9 +205,12 @@ class Model_Joint(nn.Module):
             if 'mesh' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
                 self.MESH_NET = models_mesh_reconstruction.DensTMNet(opt)
                 
-
         if self.cfg.MODEL_MATCLS.enable:
             self.MATCLS_NET = model_matcls.netCS(opt=opt, inChannels=4, base_model=resnet.resnet34, if_est_scale=False, if_est_sup = opt.cfg.MODEL_MATCLS.if_est_sup)
+
+        if self.cfg.MODEL_DETECTRON.enable:
+            from detectron2.modeling import build_model
+            self.DETECTRON = build_model(opt.cfg_detectron)
 
 
     def forward(self, input_dict):

@@ -263,6 +263,7 @@ _C.MODEL_LAYOUT_EMITTER.mesh_obj.if_skip_invalid_frames = True # skip invalid fr
 # ===== detectron
 _C.MODEL_DETECTRON = CN()
 _C.MODEL_DETECTRON.enable = False
+_C.MODEL_DETECTRON.pretrained = True
 
 # ===== material cls (Yu-Ying)
 _C.MODEL_MATCLS = CN()

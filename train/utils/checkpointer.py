@@ -11,7 +11,12 @@ from utils.maskrcnn_rui.utils.imports import import_file
 from utils.maskrcnn_rui.utils.model_zoo import cache_url
 
 from pathlib import Path, PurePath
+from iopath.common.file_io import HTTPURLHandler, PathManager
+# from detectron2.utils.file_io import PathManager
 
+import pickle
+from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Tuple
+import numpy as np
 
 class Checkpointer(object):
     def __init__(
@@ -39,6 +44,9 @@ class Checkpointer(object):
         self.logger = logger
         self.if_print = if_print
         self.if_reset_scheduler = if_reset_scheduler
+
+        self.path_manager = PathManager()
+        self.path_manager.register_handler(HTTPURLHandler())
 
     def save(self, name, **kwargs):
         if not self.save_dir:
@@ -81,6 +89,11 @@ class Checkpointer(object):
                     # override argument with existing checkpoint
                     f = self.get_checkpoint_file()
                     self.logger.info("Using existing 'latest checkpoint'...")
+        else:
+            if not os.path.isfile(f):
+                f = self.path_manager.get_local_path(f)
+                assert os.path.isfile(f), "Checkpoint {} not found!".format(f)
+
         if not f:
             # no checkpoint could be found
             self.logger.error("No checkpoint found. Initializing model from scratch")
@@ -176,8 +189,30 @@ class Checkpointer(object):
     def _load_file(self, f):
         return torch.load(f, map_location=torch.device("cpu"))
 
+    def _convert_ndarray_to_tensor(self, state_dict: Dict[str, Any]) -> None:
+        """
+        In-place convert all numpy arrays in the state_dict to torch tensor.
+        Args:
+            state_dict (dict): a state-dict to be loaded to the model.
+                Will be modified.
+        """
+        # model could be an OrderedDict with _metadata attribute
+        # (as returned by Pytorch's state_dict()). We should preserve these
+        # properties.
+        for k in list(state_dict.keys()):
+            v = state_dict[k]
+            if not isinstance(v, np.ndarray) and not isinstance(v, torch.Tensor):
+                raise ValueError(
+                    "Unsupported type found in checkpoint! {}: {}".format(k, type(v))
+                )
+            if not isinstance(v, torch.Tensor):
+                state_dict[k] = torch.from_numpy(v)
+
     def _load_model(self, checkpoint, logger=None, skip_kws=[], only_load_kws=[], replace_kws=[], replace_with_kws=[]):
-        current_keys, loaded_keys = load_state_dict(self.model, checkpoint.pop("model"), logger=logger, skip_kws=skip_kws, only_load_kws=only_load_kws, replace_kws=replace_kws, replace_with_kws=replace_with_kws)
+        checkpoint_state_dict = checkpoint.pop("model")
+        self._convert_ndarray_to_tensor(checkpoint_state_dict)
+
+        current_keys, loaded_keys = load_state_dict(self.model, checkpoint_state_dict, logger=logger, skip_kws=skip_kws, only_load_kws=only_load_kws, replace_kws=replace_kws, replace_with_kws=replace_with_kws)
         return current_keys, loaded_keys
 
 
@@ -217,8 +252,23 @@ class DetectronCheckpointer(Checkpointer):
             self.logger.info("url {} cached in {}".format(f, cached_f))
             f = cached_f
         # convert Caffe2 checkpoint from pkl
-        if f.endswith(".pkl"):
-            return load_c2_format(self.cfg, f)
+        # if f.endswith(".pkl"):
+            # return load_c2_format(self.cfg, f)
+        if f.endswith(".pkl"): # from Detectron2
+            with self.path_manager.open(f, "rb") as file:
+                data = pickle.load(file, encoding="latin1")
+            if "model" in data and "__author__" in data:
+                # file is in Detectron2 model zoo format
+                self.logger.info("Reading a file from '{}'".format(data["__author__"]))
+                return data
+            else:
+                # assume file is from Caffe2 / Detectron1 model zoo
+                if "blobs" in data:
+                    # Detection models have "blobs", but ImageNet models don't
+                    data = data["blobs"]
+                data = {k: v for k, v in data.items() if not k.endswith("_momentum")}
+                return {"model": data, "__author__": "Caffe2", "matching_heuristics": True}
+
         # load native detectron.pytorch checkpoint
         loaded = super(DetectronCheckpointer, self)._load_file(f)
         if "model" not in loaded:

@@ -25,6 +25,7 @@ from utils.utils_total3D.data_config import RECON_3D_CLS_OR_dict
 from scipy.spatial import cKDTree
 import copy
 # import math
+from detectron2.structures import BoxMode
 
 from utils.utils_total3D.utils_OR_vis_labels import RGB_to_01
 from utils.utils_total3D.utils_others import Relation_Config, OR4XCLASSES_dict, OR4XCLASSES_not_detect_mapping_ids_dict, OR4X_mapping_catInt_to_RGB
@@ -741,14 +742,50 @@ class openrooms(data.Dataset):
         assert boxes['patch'].shape[0] == len(boxes_valid_list)
 
         assert scale_wh==0.5, 'only full and half res masks are available'
-        assert len(boxes['mask'])==len(boxes_valid_list)
+        assert len(boxes['mask'])==len(boxes_valid_list)==len(boxes['size_cls'])
         mask_list_new = []
         for mask_idx, mask in enumerate(boxes['mask']):
             if mask is None:
                 mask_list_new.append(None)
                 boxes_valid_list[mask_idx] = False # [!!!!!] set objs without masks to False
                 continue
-            mask_list_new.append({'msk': mask['msk_half'], 'msk_bdb': mask['msk_bdb_half'], 'class_id': mask['class_id']})
+            mask_dict = {'msk': mask['msk_half'], 'msk_bdb': mask['msk_bdb_half'], 'class_id': mask['class_id']}
+
+            if self.opt.cfg.MODEL_DETECTRON.enable:
+                mask_half_fullimage = np.zeros((self.opt.cfg.DATA.im_height, self.opt.cfg.DATA.im_width), dtype=np.uint8)
+                x1, y1, x2, y2 = mask['msk_bdb_half']
+                mask_half_fullimage[y1:y2+1, x1:x2+1] = mask['msk_half']
+                mask_dict['mask_half_fullimage'] = mask_half_fullimage
+                
+                # turn binary mask into polygon (RLE format)
+                contours, hierarchy = cv2.findContours((mask_half_fullimage).astype(np.uint8), cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
+                segmentation = []
+                # in here, contours is a list of contour of small region, sometime it will have some extra contour of length 1 or 2
+                # thus we only keep those contour of more than 3 dots
+                for contour in contours:
+                    contour = contour.flatten().tolist()
+                    '''
+                    if len(contour)<6:
+                        im=self.process(im)
+                        cv2.imwrite("{}.png".format(ind),im )
+                        import pdb;pdb.set_trace()
+                    '''
+                    if len(contour) > 6:
+                        segmentation.append(contour)
+                # contour=measure.find_contours(mask, 0.5)
+                if(len(segmentation)==0):
+                    mask_list_new.append(None)
+                    boxes_valid_list[mask_idx] = False # [!!!!!] set objs without masks to False
+                    continue
+                mask_dict.update({
+                    "bbox_mode": BoxMode.XYXY_ABS,
+                    "segmentation": segmentation,
+                    "iscrowd":0, 
+                })
+
+            # print(mask['msk_half'].shape, mask['msk_half'].dtype, mask['msk_bdb_half'], boxes['bdb2D_full'][mask_idx])
+            mask_list_new.append(mask_dict)
+
         boxes['mask'] = mask_list_new
 
         objs_return_dict = {'boxes': boxes, 'boxes_valid_list': boxes_valid_list, 'cls_codes': cls_codes}

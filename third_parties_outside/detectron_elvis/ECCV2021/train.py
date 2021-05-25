@@ -165,7 +165,7 @@ if __name__ == '__main__':
     global outfiledir, cfg
     cfg = get_cfg()
 
-    outfiledir='/eccv20dataset/elvis/outfileelvis/'
+    outfiledir='/home/ruizhu/Documents/Projects/semanticInverse/third_parties_outside/detectron_elvis/outfileelvis/'
     args = parser.parse_args()
     print(args)
 

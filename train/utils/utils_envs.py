@@ -442,6 +442,11 @@ def set_up_checkpointing(opt, model, optimizer, scheduler, logger):
     )
     tid_start = 0
     epoch_start = 0
+
+    if opt.cfg.MODEL_DETECTRON.pretrained:
+        checkpointer.load(f=opt.cfg_detectron.MODEL.WEIGHTS, replace_kws=[], replace_with_kws=[], \
+            skip_kws=['box_predictor.bbox_pred', 'box_predictor.cls_score', 'mask_head.predictor'])
+
     if opt.resume != 'NoCkpt':
         if opt.resume == 'resume':
             opt.resume = opt.task_name
