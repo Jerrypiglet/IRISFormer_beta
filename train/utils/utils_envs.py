@@ -59,7 +59,12 @@ def set_up_envs(opt):
     opt.cfg.MODEL_BRDF.enable_list = [x for x in opt.cfg.MODEL_BRDF.enable_list.split('_') if x != '']
     opt.cfg.MODEL_BRDF.loss_list = [x for x in opt.cfg.MODEL_BRDF.loss_list.split('_') if x != '']
 
-    # ====== layout, emitters =====
+
+    # ====== detectron (objects & masks) =====
+    if opt.cfg.MODEL_DETECTRON.enable:
+        opt.cfg.DATA.data_read_list.append('ob')
+
+    # ====== layout, emitters, objs, meshes =====
     opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.split('_')
 
     if opt.cfg.MODEL_LAYOUT_EMITTER.enable:

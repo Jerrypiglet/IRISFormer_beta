@@ -23,7 +23,7 @@ from utils.utils_total3D.utils_OR_imageops import loadHdr_simple, to_nonhdr
 import math
 from utils.utils_total3D.data_config import RECON_3D_CLS_OR_dict
 from scipy.spatial import cKDTree
-
+import copy
 # import math
 
 from utils.utils_total3D.utils_OR_vis_labels import RGB_to_01
@@ -280,12 +280,13 @@ class openrooms(data.Dataset):
 
         hdr_image_path, semseg_label_path = self.data_list[index]
         meta_split, scene_name, frame_id = self.meta_split_scene_name_frame_id_list[index]
-        frame_info = {'meta_split': meta_split, 'scene_name': scene_name, 'frame_id': frame_id}
+        scene_total3d_path = Path(self.cfg.DATASET.layout_emitter_path) / meta_split / scene_name
+        frame_info = {'meta_split': meta_split, 'scene_name': scene_name, 'frame_id': frame_id, 'scene_total3d_path': scene_total3d_path}
         batch_dict = {'image_index': index, 'frame_info': frame_info}
 
-        if_load_mask = self.opt.cfg.DATA.load_brdf_gt and not self.opt.cfg.DATA.if_load_png_not_hdr
+        if_load_immask = self.opt.cfg.DATA.load_brdf_gt and not self.opt.cfg.DATA.if_load_png_not_hdr
 
-        if if_load_mask:
+        if if_load_immask:
             seg_path = hdr_image_path.replace('im_', 'immask_').replace('hdr', 'png').replace('DiffMat', '')
             # Read segmentation
             seg = 0.5 * (self.loadImage(seg_path ) + 1)[0:1, :, :]
@@ -350,7 +351,7 @@ class openrooms(data.Dataset):
         # ====== BRDF =====
         # image_path = batch_dict['image_path']
         if self.opt.cfg.DATA.load_brdf_gt:
-            batch_dict_brdf = self.load_brdf_lighting(hdr_image_path, if_load_mask, mask_path, mask, seg, hdr_scale)
+            batch_dict_brdf = self.load_brdf_lighting(hdr_image_path, if_load_immask, mask_path, mask, seg, hdr_scale)
             batch_dict.update(batch_dict_brdf)
 
         # ====== matseg =====
@@ -369,21 +370,31 @@ class openrooms(data.Dataset):
             mat_cls_dict = self.load_mat_cls(frame_info=(scene_matcls_Path, frame_id), if_gen_on_the_fly=False, if_validate=True)
             batch_dict.update(mat_cls_dict)
 
-        # ====== layout, obj, emitters =====
+        # ====== layout, obj (including masks), emitters =====
+        if self.opt.cfg.DATA.load_layout_emitter_gt or 'ob' in self.opt.cfg.DATA.data_read_list:
+            scene_dict = self.read_scene(frame_info=frame_info)
+
         if self.opt.cfg.DATA.load_layout_emitter_gt:
-            scene_total3d_Path = Path(self.cfg.DATASET.layout_emitter_path) / meta_split / scene_name
-            layout_emitter_dict = self.load_layout_emitter_gt_detach_emitter(im_trainval, frame_info=(scene_total3d_Path, frame_id), frame_info_dict=frame_info, hdr_scale=hdr_scale)
+            layout_emitter_dict = self.load_layout_emitter_gt_detach_emitter(scene_dict=scene_dict, frame_info=frame_info, hdr_scale=hdr_scale)
             batch_dict.update(layout_emitter_dict)
 
-            if 'ob' in self.opt.cfg.DATA.data_read_list or 'mesh' in self.opt.cfg.DATA.data_read_list:
-                if self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_skip_invalid_frames and self.if_for_training:
-                    if batch_dict['num_valid_boxes']==0:
-                        print(blue_text('[%s] Skipped sample %d because of 0 valid boxes... returning the next one...')%(self.split, index))
-                        return self.__getitem__((index+1)%len(self.data_list))
+        if 'ob' in self.opt.cfg.DATA.data_read_list or 'mesh' in self.opt.cfg.DATA.data_read_list:
+            objs_dict = self.load_objs(im_trainval, scene_dict['sequence']['boxes'])
+            batch_dict.update({'boxes_batch': objs_dict['boxes'], 'boxes_valid_list': objs_dict['boxes_valid_list'], \
+                'num_valid_boxes': sum(objs_dict['boxes_valid_list'])})
+
+            if 'mesh' in self.opt.cfg.DATA.data_read_list:
+                meshes_dict = self.load_meshes(objs_dict, scene_dict)
+                batch_dict.update(meshes_dict)
+
+            post_process_objs_status = self.post_process_objs_meshes(index, batch_dict, frame_info)
+            if not post_process_objs_status:
+                return self.__getitem__((index+1)%len(self.data_list))
+
 
         return batch_dict
 
-    def load_brdf_lighting(self, hdr_image_path, if_load_mask, mask_path, mask, seg, hdr_scale):
+    def load_brdf_lighting(self, hdr_image_path, if_load_immask, mask_path, mask, seg, hdr_scale):
         batch_dict_brdf = {}
         # Get paths for BRDF params
         if 'al' in self.cfg.DATA.data_read_list:
@@ -426,7 +437,7 @@ class openrooms(data.Dataset):
             diffusePre_path = hdr_image_path.replace('im_', 'imdiffuse_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
             specularPre_path = hdr_image_path.replace('im_', 'imspecular_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
 
-        if if_load_mask:
+        if if_load_immask:
             segArea = np.logical_and(seg > 0.49, seg < 0.51 ).astype(np.float32 )
             segEnv = (seg < 0.1).astype(np.float32 )
             segObj = (seg > 0.9) 
@@ -474,7 +485,7 @@ class openrooms(data.Dataset):
             specularPre = self.loadH5(specularPre_path )
             specularPre = specularPre / max(specularPre.max(), 1e-10)
 
-        if if_load_mask:
+        if if_load_immask:
             batch_dict_brdf.update({
                     'mask': torch.from_numpy(mask), 
                     'maskPath': mask_path, 
@@ -614,8 +625,195 @@ class openrooms(data.Dataset):
             'semantic': 1 - torch.FloatTensor(segmentation[num_mat_masks, :, :]).unsqueeze(0), # torch.Size([50, 240, 320]) torch.Size([1, 240, 320])
             'im_matseg_transformed_trainval': im_matseg_transformed_trainval
         }
+
+    def read_scene(self, frame_info):
+        scene_total3d_path, frame_id = frame_info['scene_total3d_path'], frame_info['frame_id']
+        pickle_path = str(scene_total3d_path / ('layout_obj_%d.pkl'%frame_id))
+        pickle_path_reindexed = pickle_path.replace('.pkl', '_reindexed.pkl')
+        with open(pickle_path, 'rb') as f:
+            sequence = pickle.load(f)
+        with open(pickle_path_reindexed, 'rb') as f:
+            sequence_reindexed = pickle.load(f)
+
+        camera = sequence['camera']
         
-    def load_layout_emitter_gt_detach_emitter(self, im_trainval, frame_info, frame_info_dict, hdr_scale, if_load_objs=False):
+        return_scene_dict = {'sequence': sequence, 'sequence_reindexed': sequence_reindexed, 'camera': camera, 'scene_pickle_path': pickle_path}
+
+        # read transformation matrices from RAW OR -> Total3D
+        transform_to_total3d_coords_dict_path = str(scene_total3d_path / ('transform_to_total3d_coords_dict_%d.pkl'%frame_id))
+        with open(transform_to_total3d_coords_dict_path, 'rb') as f:
+            transform_to_total3d_coords_dict = pickle.load(f)
+        transform_R_RAW2Total3D, transform_t_RAW2Total3D = transform_to_total3d_coords_dict['transform_R'], transform_to_total3d_coords_dict['transform_t']
+        return_scene_dict.update({'transform_R_RAW2Total3D': transform_R_RAW2Total3D.astype(np.float32), 'transform_t_RAW2Total3D': transform_t_RAW2Total3D.astype(np.float32)})
+
+        return return_scene_dict
+
+    def load_objs(self, im_trainval, boxes):
+        boxes['random_id'] = [x['random_id'] for x in boxes['bdb2D_full']]
+        boxes['cat_name'] = [self.OR_classes[x] for x in boxes['size_cls']]
+
+        n_objects = boxes['bdb2D_pos'].shape[0]
+        boxes_valid_list = list(boxes['if_valid'] if 'if_valid' in boxes else [True]*n_objects)
+
+        g_feature = [[((loc2[0] + loc2[2]) / 2. - (loc1[0] + loc1[2]) / 2.) / (loc1[2] - loc1[0]),
+                    ((loc2[1] + loc2[3]) / 2. - (loc1[1] + loc1[3]) / 2.) / (loc1[3] - loc1[1]),
+                    math.log((loc2[2] - loc2[0]) / (loc1[2] - loc1[0])),
+                    math.log((loc2[3] - loc2[1]) / (loc1[3] - loc1[1]))] \
+                    for id1, loc1 in enumerate(boxes['bdb2D_pos'])
+                    for id2, loc2 in enumerate(boxes['bdb2D_pos'])]
+
+        locs = [num for loc in g_feature for num in loc]
+
+        pe = torch.zeros(len(locs), d_model)
+        position = torch.from_numpy(np.array(locs)).unsqueeze(1).float()
+        div_term = torch.exp(torch.arange(0, d_model, 2).float() * -(math.log(10000.) / d_model))
+        pe[:, 0::2] = torch.sin(position * div_term)
+        pe[:, 1::2] = torch.cos(position * div_term)
+
+        boxes['g_feature'] = pe.view(n_objects * n_objects, rel_cfg.d_g)
+
+        # encode class
+        cls_codes = torch.zeros([len(boxes['size_cls']), len(self.OR_classes)]) # [n_boxes, n_clases]
+        
+        # if self.config['data']['dataset_super'] == 'OR': # OR: set cat_id==0 to invalid, (and [optionally] remap not-detect-cats to 0)
+        assert len(boxes['size_cls']) == len(boxes_valid_list)
+
+        # ----- set some objects to invalid
+        for idx in range(len(boxes['size_cls'])):
+            if boxes['size_cls'][idx] == 0:
+                boxes_valid_list[idx] = False # set cat_id==0 to invalid
+            if boxes['size_cls'][idx] in OR4XCLASSES_not_detect_mapping_ids_dict[self.OR]: # [optionally] remap not-detect-cats to 0
+                boxes_valid_list[idx] = False
+            if boxes['bdb2D_full'][idx]['vis_ratio'] < self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.valid_bbox_vis_ratio:
+                boxes_valid_list[idx] = False
+
+        cls_codes[range(len(boxes['size_cls'])), boxes['size_cls']] = 1
+        boxes['size_cls'] = cls_codes
+
+        # TODO: If the training error is consistently larger than the test error. We remove the crop and add more intermediate FC layers with no dropout.
+        # TODO: Or FC layers with more hidden neurons, which ensures more neurons pass through the dropout layer, or with larger learning rate, longer
+        # TODO: decay rate.
+        # data_transforms = data_transforms_crop if self.split == 'train' else data_transforms_nocrop
+        # data_transforms_nonormalize = data_transforms_crop_nonormalize if self.split=='train' else data_transforms_nocrop_nonormalize
+
+        scale_height = self.opt.cfg.DATA.im_height / self.opt.cfg.DATA.im_height_ori
+        scale_width = self.opt.cfg.DATA.im_width / self.opt.cfg.DATA.im_width_ori
+        assert scale_height == scale_width
+        scale_wh = scale_height
+
+        patch = []
+        bdb_crop_list = []
+        for box_idx, bdb in enumerate(boxes['bdb2D_pos']): # [x1, y1, x2, y2] in [640, 480]
+            # print(im_trainval.shape, bdb)
+
+            # x1, y1, x2, y2 = int(np.round(bdb[0]*scale_width)), int(np.round(bdb[1]*scale_height)), int(np.round(bdb[2]*scale_width)), int(np.round(bdb[3]*scale_height))
+            # img = im_trainval[y1:y2, x1:x2, :]
+
+            # img = im_trainval.crop((bdb[0], bdb[1], bdb[2], bdb[3]))
+            # img = data_transforms_nonormalize(img)
+            # img = data_transforms(img)
+            bdb_crop = [bdb[0]*scale_width, bdb[1]*scale_height, bdb[2]*scale_width, bdb[3]*scale_height]
+            
+            width_thres = 3
+            height_thres = 3
+            if bdb_crop[2]-bdb_crop[0] < width_thres or bdb_crop[3]-bdb_crop[1] < height_thres:
+                # deal with very small objects
+                img = torch.zeros((3, HEIGHT_PATCH, WIDTH_PATCH), dtype=torch.float32)
+                boxes_valid_list[box_idx] = False
+            else:
+                bdb2d_transform = get_bdb2d_transform(self.split, bdb_crop)
+                img = bdb2d_transform(im_trainval)
+                # if min(img.shape)==0:
+                #     print(img.shape, bdb_crop, bdb)
+
+            patch.append(img)
+            bdb_crop_list.append(bdb_crop)
+        
+        # 'bdb2D_from_3D': scale invariant
+        # 'delta_2D': scale invariant
+        boxes['bdb2D_pos'] = boxes['bdb2D_pos'] * scale_wh
+        # boxes['bdb2D_pos'] = np.asarray(bdb_crop_list) # [!!!] re-scale bbd2d; nothing needed for bdb3d (?)
+        for bdb2D_full in boxes['bdb2D_full']:
+            for key in ['x1', 'y1', 'x2', 'y2']:
+                bdb2D_full[key] = bdb2D_full[key] * scale_wh
+        boxes['patch'] = torch.stack(patch)
+
+        assert boxes['patch'].shape[0] == len(boxes_valid_list)
+
+        assert scale_wh==0.5, 'only full and half res masks are available'
+        assert len(boxes['mask'])==len(boxes_valid_list)
+        mask_list_new = []
+        for mask_idx, mask in enumerate(boxes['mask']):
+            if mask is None:
+                mask_list_new.append(None)
+                boxes_valid_list[mask_idx] = False # [!!!!!] set objs without masks to False
+                continue
+            mask_list_new.append({'msk': mask['msk_half'], 'msk_bdb': mask['msk_bdb_half'], 'class_id': mask['class_id']})
+        boxes['mask'] = mask_list_new
+
+        objs_return_dict = {'boxes': boxes, 'boxes_valid_list': boxes_valid_list, 'cls_codes': cls_codes}
+        return objs_return_dict
+
+    def load_meshes(self, objs_dict, scene_dict):
+        boxes, boxes_valid_list, cls_codes = objs_dict['boxes'], objs_dict['boxes_valid_list'], objs_dict['cls_codes']
+        scene_pickle_path = scene_dict['scene_pickle_path']
+
+        meshes_return_dict = {}
+        # ===== meshes
+        # if 'mesh' in self.opt.cfg.DATA.data_read_list:
+        if self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'SVRLoss':
+            gt_obj_paths_list = [x['obj_path'] for x in boxes['bdb2D_full']]
+            assert len(gt_obj_paths_list)==len(boxes_valid_list)
+
+            mesh_dict, boxes_valid_list = self.load_objs_MGNet_Dataset(gt_obj_paths_list, boxes_valid_list, scene_pickle_path=scene_pickle_path)
+            assert len(gt_obj_paths_list)==len(boxes_valid_list)
+
+            gt_points_list = mesh_dict['gt_3dpoints'] # list of N objs
+            gt_obj_path_alignedNew_normalized_list = mesh_dict['gt_obj_path_alignedNew_normalized']
+            gt_obj_path_alignedNew_original_list = mesh_dict['gt_obj_path_alignedNew_original']
+            densities_list = []
+            for gt_points_single, if_valid in zip(gt_points_list, boxes_valid_list):
+                if if_valid:
+                    tree = cKDTree(gt_points_single)
+                    dists, indices = tree.query(gt_points_single, k=self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh.neighbors)
+                    densities = np.array([max(dists[point_set, 1]) ** 2 for point_set in indices])
+                else:
+                    densities = np.zeros(10000, dtype=np.float32)
+                densities_list.append(densities)
+                # print(densities.shape, gt_points_single.shape) # [10000,], [10000, 3])
+
+            N_objs = cls_codes.shape[0]
+            mesh_points_N = np.stack(gt_points_list, axis=0)
+            densities_N = np.stack(densities_list, axis=0)
+            boxes.update({
+                'mesh_points': mesh_points_N, 
+                'densities': densities_N, 
+                })
+            meshes_return_dict.update({'gt_obj_path_alignedNew_normalized_list': gt_obj_path_alignedNew_normalized_list, 'gt_obj_path_alignedNew_original_list': gt_obj_path_alignedNew_original_list})
+
+        elif self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'ReconLoss':
+            pass
+
+        return meshes_return_dict
+
+    def post_process_objs_meshes(self, index, batch_dict, frame_info):
+        if (self.split=='train' or self.opt.if_overfit_val) and self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_clip_boxes_train:
+            # print('Clipping......')
+            batch_dict = self.clip_box_nums(batch_dict, keep_only_valid=self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_use_only_valid_objs, num_clip_to=self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.clip_boxes_train_to)
+
+        frame_key = '%s-%s-%d'%(frame_info['meta_split'], frame_info['scene_name'], frame_info['frame_id'])
+        if self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_pre_filter_invalid_frames:
+            assert len(batch_dict['boxes_valid_list']) >=1,'Pre-filtering enabled; BUT Insifficient valid objects at frame %s!'%frame_key
+
+        if self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_skip_invalid_frames and self.if_for_training:
+            if batch_dict['num_valid_boxes']==0:
+                print(blue_text('[%s] Skipped sample %d because of 0 valid boxes... returning the next one...')%(self.split, index))
+                # return self.__getitem__((index+1)%len(self.data_list))
+                return False
+        
+        return True
+
+    def load_layout_emitter_gt_detach_emitter(self, scene_dict, frame_info, hdr_scale):
         '''
         Required pickles: (/data/ruizhu/OR-V4full-OR45_total3D_train_test_data)
         - layout_obj_%d.pkl
@@ -648,193 +846,27 @@ class openrooms(data.Dataset):
             - dict_keys(['transform_R', 'transform_t'])
 
         '''
-        scene_total3d_path, frame_id = frame_info[0], frame_info[1]
-        pickle_path = str(scene_total3d_path / ('layout_obj_%d.pkl'%frame_info[1]))
-        pickle_path_reindexed = pickle_path.replace('.pkl', '_reindexed.pkl')
-        with open(pickle_path, 'rb') as f:
-            sequence = pickle.load(f)
-        with open(pickle_path_reindexed, 'rb') as f:
-            sequence_reindexed = pickle.load(f)
-
-        return_dict = {}
-
-        camera = sequence['camera']
 
         # if_print = pickle_path == '/data/ruizhu/OR-V4full-detachEmitter-OR45_total3D_train_test_data/main_xml1/scene0552_00/layout_obj_1.pkl'
         if_print = False
 
-        # read transformation matrices from RAW OR -> Total3D
-        transform_to_total3d_coords_dict_path = str(scene_total3d_path / ('transform_to_total3d_coords_dict_%d.pkl'%frame_id))
-        with open(transform_to_total3d_coords_dict_path, 'rb') as f:
-            transform_to_total3d_coords_dict = pickle.load(f)
-        transform_R_RAW2Total3D, transform_t_RAW2Total3D = transform_to_total3d_coords_dict['transform_R'], transform_to_total3d_coords_dict['transform_t']
-        return_dict.update({'transform_R_RAW2Total3D': transform_R_RAW2Total3D.astype(np.float32), 'transform_t_RAW2Total3D': transform_t_RAW2Total3D.astype(np.float32)})
+        return_dict = {}
 
-        # ===== objects
-        if 'ob' in self.opt.cfg.DATA.data_read_list:
-            boxes = sequence['boxes']
-            boxes['random_id'] = [x['random_id'] for x in boxes['bdb2D_full']]
-            boxes['cat_name'] = [self.OR_classes[x] for x in boxes['size_cls']]
-
-            n_objects = boxes['bdb2D_pos'].shape[0]
-            boxes_valid_list = list(boxes['if_valid'] if 'if_valid' in boxes else [True]*n_objects)
-
-            g_feature = [[((loc2[0] + loc2[2]) / 2. - (loc1[0] + loc1[2]) / 2.) / (loc1[2] - loc1[0]),
-                        ((loc2[1] + loc2[3]) / 2. - (loc1[1] + loc1[3]) / 2.) / (loc1[3] - loc1[1]),
-                        math.log((loc2[2] - loc2[0]) / (loc1[2] - loc1[0])),
-                        math.log((loc2[3] - loc2[1]) / (loc1[3] - loc1[1]))] \
-                        for id1, loc1 in enumerate(boxes['bdb2D_pos'])
-                        for id2, loc2 in enumerate(boxes['bdb2D_pos'])]
-
-            locs = [num for loc in g_feature for num in loc]
-
-            pe = torch.zeros(len(locs), d_model)
-            position = torch.from_numpy(np.array(locs)).unsqueeze(1).float()
-            div_term = torch.exp(torch.arange(0, d_model, 2).float() * -(math.log(10000.) / d_model))
-            pe[:, 0::2] = torch.sin(position * div_term)
-            pe[:, 1::2] = torch.cos(position * div_term)
-
-            boxes['g_feature'] = pe.view(n_objects * n_objects, rel_cfg.d_g)
-
-            # encode class
-            cls_codes = torch.zeros([len(boxes['size_cls']), len(self.OR_classes)]) # [n_boxes, n_clases]
-            
-            # if self.config['data']['dataset_super'] == 'OR': # OR: set cat_id==0 to invalid, (and [optionally] remap not-detect-cats to 0)
-            assert len(boxes['size_cls']) == len(boxes_valid_list)
-
-            # ----- set some objects to invalid
-            for idx in range(len(boxes['size_cls'])):
-                if boxes['size_cls'][idx] == 0:
-                    boxes_valid_list[idx] = False # set cat_id==0 to invalid
-                if boxes['size_cls'][idx] in OR4XCLASSES_not_detect_mapping_ids_dict[self.OR]: # [optionally] remap not-detect-cats to 0
-                    boxes_valid_list[idx] = False
-                if boxes['bdb2D_full'][idx]['vis_ratio'] < self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.valid_bbox_vis_ratio:
-                    boxes_valid_list[idx] = False
-
-            cls_codes[range(len(boxes['size_cls'])), boxes['size_cls']] = 1
-            boxes['size_cls'] = cls_codes
-
-            # TODO: If the training error is consistently larger than the test error. We remove the crop and add more intermediate FC layers with no dropout.
-            # TODO: Or FC layers with more hidden neurons, which ensures more neurons pass through the dropout layer, or with larger learning rate, longer
-            # TODO: decay rate.
-            # data_transforms = data_transforms_crop if self.split == 'train' else data_transforms_nocrop
-            # data_transforms_nonormalize = data_transforms_crop_nonormalize if self.split=='train' else data_transforms_nocrop_nonormalize
-
-            scale_height = self.opt.cfg.DATA.im_height / self.opt.cfg.DATA.im_height_ori
-            scale_width = self.opt.cfg.DATA.im_width / self.opt.cfg.DATA.im_width_ori
-            assert scale_height == scale_width
-            scale_wh = scale_height
-
-            patch = []
-            bdb_crop_list = []
-            for box_idx, bdb in enumerate(boxes['bdb2D_pos']): # [x1, y1, x2, y2] in [640, 480]
-                # print(im_trainval.shape, bdb)
-
-                # x1, y1, x2, y2 = int(np.round(bdb[0]*scale_width)), int(np.round(bdb[1]*scale_height)), int(np.round(bdb[2]*scale_width)), int(np.round(bdb[3]*scale_height))
-                # img = im_trainval[y1:y2, x1:x2, :]
-
-                # img = im_trainval.crop((bdb[0], bdb[1], bdb[2], bdb[3]))
-                # img = data_transforms_nonormalize(img)
-                # img = data_transforms(img)
-                bdb_crop = [bdb[0]*scale_width, bdb[1]*scale_height, bdb[2]*scale_width, bdb[3]*scale_height]
-                
-                width_thres = 3
-                height_thres = 3
-                if bdb_crop[2]-bdb_crop[0] < width_thres or bdb_crop[3]-bdb_crop[1] < height_thres:
-                    # deal with very small objects
-                    img = torch.zeros((3, HEIGHT_PATCH, WIDTH_PATCH), dtype=torch.float32)
-                    boxes_valid_list[box_idx] = False
-                else:
-                    bdb2d_transform = get_bdb2d_transform(self.split, bdb_crop)
-                    img = bdb2d_transform(im_trainval)
-                    # if min(img.shape)==0:
-                    #     print(img.shape, bdb_crop, bdb)
-
-                patch.append(img)
-                bdb_crop_list.append(bdb_crop)
-            
-            # 'bdb2D_from_3D': scale invariant
-            # 'delta_2D': scale invariant
-            boxes['bdb2D_pos'] = boxes['bdb2D_pos'] * scale_wh
-            # boxes['bdb2D_pos'] = np.asarray(bdb_crop_list) # [!!!] re-scale bbd2d; nothing needed for bdb3d (?)
-            for bdb2D_full in boxes['bdb2D_full']:
-                for key in ['x1', 'y1', 'x2', 'y2']:
-                    bdb2D_full[key] = bdb2D_full[key] * scale_wh
-            boxes['patch'] = torch.stack(patch)
-
-            assert boxes['patch'].shape[0] == len(boxes_valid_list)
-
-            assert scale_wh==0.5, 'only full and half res masks are available'
-            assert len(boxes['mask'])==len(boxes_valid_list)
-            mask_list_new = []
-            for mask_idx, mask in enumerate(boxes['mask']):
-                if mask is None:
-                    mask_list_new.append(None)
-                    boxes_valid_list[mask_idx] = False # [!!!!!] set objs without masks to False
-                    continue
-                mask_list_new.append({'msk': mask['msk_half'], 'msk_bdb': mask['msk_bdb_half'], 'class_id': mask['class_id']})
-            boxes['mask'] = mask_list_new
-
-
-        # ===== meshes
-        if 'mesh' in self.opt.cfg.DATA.data_read_list:
-            if self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'SVRLoss':
-                gt_obj_paths_list = [x['obj_path'] for x in boxes['bdb2D_full']]
-                assert len(gt_obj_paths_list)==len(boxes_valid_list)
-
-                mesh_dict, boxes_valid_list = self.load_MGNet_Dataset(gt_obj_paths_list, boxes_valid_list, scene_pickle_path=pickle_path)
-                assert len(gt_obj_paths_list)==len(boxes_valid_list)
-
-                gt_points_list = mesh_dict['gt_3dpoints'] # list of N objs
-                gt_obj_path_alignedNew_normalized_list = mesh_dict['gt_obj_path_alignedNew_normalized']
-                gt_obj_path_alignedNew_original_list = mesh_dict['gt_obj_path_alignedNew_original']
-                densities_list = []
-                for gt_points_single, if_valid in zip(gt_points_list, boxes_valid_list):
-                    if if_valid:
-                        tree = cKDTree(gt_points_single)
-                        dists, indices = tree.query(gt_points_single, k=self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh.neighbors)
-                        densities = np.array([max(dists[point_set, 1]) ** 2 for point_set in indices])
-                    else:
-                        densities = np.zeros(10000, dtype=np.float32)
-                    densities_list.append(densities)
-                    # print(densities.shape, gt_points_single.shape) # [10000,], [10000, 3])
-
-                N_objs = cls_codes.shape[0]
-                mesh_points_N = np.stack(gt_points_list, axis=0)
-                densities_N = np.stack(densities_list, axis=0)
-                boxes.update({
-                    'mesh_points': mesh_points_N, 
-                    'densities': densities_N, 
-                    })
-                return_dict.update({'gt_obj_path_alignedNew_normalized_list': gt_obj_path_alignedNew_normalized_list, 'gt_obj_path_alignedNew_original_list': gt_obj_path_alignedNew_original_list})
-
-            elif self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'ReconLoss':
-                pass
-
-        # boxes['if_valid'] = boxes_valid_list
-        # del boxes['if_valid']
-        if 'ob' in self.opt.cfg.DATA.data_read_list or 'mesh' in self.opt.cfg.DATA.data_read_list:
-            return_dict.update({'boxes_batch':boxes, 'boxes_valid_list': boxes_valid_list, 'num_valid_boxes': sum(boxes_valid_list)})
-
-            if (self.split=='train' or self.opt.if_overfit_val) and self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_clip_boxes_train:
-                # print('Clipping......')
-                return_dict = self.clip_box_nums(return_dict, keep_only_valid=self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_use_only_valid_objs, num_clip_to=self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.clip_boxes_train_to)
-        
-            frame_key = '%s-%s-%d'%(frame_info_dict['meta_split'], frame_info_dict['scene_name'], frame_info_dict['frame_id'])
-            if self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_pre_filter_invalid_frames:
-                assert len(return_dict['boxes_valid_list']) >=1,'Pre-filtering enabled; BUT Insifficient valid objects at frame %s!'%frame_key
+        scene_total3d_path, frame_id = frame_info['scene_total3d_path'], frame_info['frame_id']
+        scene_pickle_path = scene_dict['scene_pickle_path']
 
         # === layout
         if 'lo' in self.opt.cfg.DATA.data_read_list:
-            layout = sequence['layout']
-            layout_reindexed = sequence_reindexed['layout']
-            
+            layout = scene_dict['sequence']['layout']
+            layout_reindexed = scene_dict['sequence_reindexed']['layout']
+
+            camera = copy.deepcopy(scene_dict['camera'])
             cam_K_ratio_W = camera['K'][0][2] / (self.im_width/2.)
             cam_K_ratio_H = camera['K'][1][2] / (self.im_height/2.)
             assert cam_K_ratio_W == cam_K_ratio_H
             camera['K_scaled'] = np.vstack([camera['K'][:2, :] / cam_K_ratio_W, camera['K'][2:3, :]])
 
-            return_dict.update({'layout_emitter_pickle_path': pickle_path, 'camera':camera, 'layout_':layout, 'layout_reindexed':layout_reindexed}) # 'layout_':layout, should not be used!
+            return_dict.update({'layout_emitter_pickle_path': scene_pickle_path, 'camera':camera, 'layout_':layout, 'layout_reindexed':layout_reindexed}) # 'layout_':layout, should not be used!
 
         # === emitters
         if 'em' in self.opt.cfg.DATA.data_read_list:
@@ -849,8 +881,6 @@ class openrooms(data.Dataset):
             emitters_prop_dict_representation_dict_path = scene_total3d_path / ('emitters_prop_dict_%s_%d.pkl'%(self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.representation_type, frame_id))
             with open(emitters_prop_dict_representation_dict_path, 'rb') as f:
                 emitters_prop_dict_representation_dict = pickle.load(f)
-
-
 
             if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type == 'wall_prob':
                 wall_grid_prob = sequence_emitter2wall_assign_info_dict['wall_grid_prob']
@@ -1051,7 +1081,7 @@ class openrooms(data.Dataset):
 
         return return_dict
 
-    def load_MGNet_Dataset(self, gt_obj_paths_list, boxes_valid_list, scene_pickle_path=''):
+    def load_objs_MGNet_Dataset(self, gt_obj_paths_list, boxes_valid_list, scene_pickle_path=''):
         mesh_dict = {'gt_3dpoints': [], 'gt_obj_path_alignedNew_normalized': [], 'gt_obj_path_alignedNew_original': []}
         boxes_valid_list_new = []
         # assert len(gt_obj_paths_list) == len(boxes_valid_list)

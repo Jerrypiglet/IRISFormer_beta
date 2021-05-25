@@ -9,6 +9,7 @@ from pathlib import Path
 import statistics
 import torch
 import logging
+import argparse
 
 def basic_logger(name='basic_logger'):
     logger = logging.getLogger(name)
@@ -93,7 +94,7 @@ def str2bool(v):
     elif v.lower() in ('False', 'no', 'false', 'f', 'n', '0'):
         return False
     else:
-        raise argparse.ArgumentTypeError('Boolean value expected.')
+        raise argparse.ArgumentTypeError('Boolean value expectedl; got: %s'%v)
 
 
 def get_datetime():

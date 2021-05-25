@@ -472,7 +472,34 @@ class Box(Scene3D):
             if rec_root is not None:
                 rec_root = addAreaLight(rec_root, 'lamp_cell_on%d_%d'%(wall_idx, cell_idx), str(obj_path), rgbColor=intensity)
 
-            
+
+    def get_cell_centers(self, split_type='prediction', if_transform_to_RAW=True):
+        assert split_type in ['prediction', 'GT']
+        current_type = split_type
+        verts_array_list = []
+
+        for wall_idx in range(6):
+            layout_info_dict = self.layout_info_dict[current_type][str(wall_idx)]
+            origin_0 = layout_info_dict['origin_0']
+            basis_1 = layout_info_dict['basis_1']
+            basis_2 = layout_info_dict['basis_2']
+
+            for i in range(self.grid_size):
+                for j in range(self.grid_size):
+                    x_ij = basis_1 * i + basis_2 * j + origin_0
+                    x_i1j = basis_1 * (i+1) + basis_2 * j + origin_0
+                    x_i1j1 = basis_1 * (i+1) + basis_2 * (j+1) + origin_0
+                    x_ij1 = basis_1 * i + basis_2 * (j+1) + origin_0
+                    verts = [[list(x_ij), list(x_i1j), list(x_i1j1), list(x_ij1)]]
+                    verts_array = np.array(verts).squeeze() # [4, 3]
+                    if if_transform_to_RAW:
+                        verts_array = self.transform_R.T @ (verts_array.T - self.transform_t) # transform back to the RAW world
+                        verts_array = verts_array.T
+
+                    verts_array_list.append(verts_array)
+
+        return np.stack(verts_array_list)
+
     def convert_layout_windows_to_mesh(self, split_type='prediction', if_dump_to_mesh=True, if_transform_to_RAW=True, layout_scale=1., rec_root=None):
         assert split_type in ['prediction', 'GT']
         current_type = split_type
