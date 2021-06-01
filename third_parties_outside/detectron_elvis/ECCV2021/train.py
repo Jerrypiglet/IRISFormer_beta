@@ -130,7 +130,7 @@ def inference(dictt, test_dict):
                 v = v.draw_instance_predictions(outputs["instances"].to("cpu"))
                 cv2.imwrite(osp.join(viz,filesubpath,'viz.png'),v.get_image()[:, :, ::-1])
                 for index, mask in enumerate(mask_pre_list):
-                    cv2.imwrite(osp.join(pred,filesubpath,'mask{}.png'.format(index)), mask)
+                    cv2.imwrite(osp.join(pred,filesubpath,'mask{}.png'.format(index)), ist.)
 
 
 
@@ -223,6 +223,7 @@ if __name__ == '__main__':
     cfg.OUTPUT_DIR=outfiledir+'model_path/'
     # False to include all empty image
     cfg.DATALOADER.FILTER_EMPTY_ANNOTATIONS=False
+    cfg.SOLVER.AMP.ENABLED=False
     if(args.detect_4):
         cfg.OUTPUT_DIR=outfiledir+'model_path_4class/'
     if args.train:

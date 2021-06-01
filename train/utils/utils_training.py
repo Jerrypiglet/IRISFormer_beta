@@ -127,7 +127,7 @@ def reduce_loss_dict(loss_dict, mark='', if_print=False, logger=None):
     loss_dict, after reduction.
     """
     world_size = get_world_size() # NUM of GPUs
-    if world_size < 2:
+    if world_size < 2 or len(loss_dict.keys())==0:
         logger.debug('[train_utils] world_size==%d; not reduced!'%world_size)
         return loss_dict
     with torch.no_grad():

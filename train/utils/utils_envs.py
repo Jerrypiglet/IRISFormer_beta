@@ -63,6 +63,7 @@ def set_up_envs(opt):
     # ====== detectron (objects & masks) =====
     if opt.cfg.MODEL_DETECTRON.enable:
         opt.cfg.DATA.data_read_list.append('ob')
+        opt.cfg.DATA.load_detectron_gt = True
 
     # ====== layout, emitters, objs, meshes =====
     opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.split('_')

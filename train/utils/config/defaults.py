@@ -56,6 +56,7 @@ _C.DEBUG.if_dump_shadow_renderer = False
 
 _C.DATASET = CN()
 _C.DATASET.mini = False # load mini OR from SSD to enable faster dataloading for debugging purposes etc.
+_C.DATASET.first = -1 # laod first # of the entire dataset: train/val
 _C.DATASET.dataset_name = 'openrooms'
 _C.DATASET.dataset_path = ''
 _C.DATASET.dataset_path_local = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms'
@@ -123,6 +124,7 @@ _C.DATA.data_read_list = ''
 _C.DATA.data_read_list_allowed = ['al', 'no', 'de', 'ro', \
     'lo', 'em', 'ob', 'mesh']
 _C.DATA.load_matcls_gt = False
+_C.DATA.load_detectron_gt = False
 
 # ===== BRDF
 _C.MODEL_BRDF = CN()
@@ -264,6 +266,8 @@ _C.MODEL_LAYOUT_EMITTER.mesh_obj.if_skip_invalid_frames = True # skip invalid fr
 _C.MODEL_DETECTRON = CN()
 _C.MODEL_DETECTRON.enable = False
 _C.MODEL_DETECTRON.pretrained = True
+_C.MODEL_DETECTRON.thresh = 0.75
+_C.MODEL_DETECTRON.nms_thresh = 0.6
 
 # ===== material cls (Yu-Ying)
 _C.MODEL_MATCLS = CN()

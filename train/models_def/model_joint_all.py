@@ -334,6 +334,11 @@ class Model_Joint(nn.Module):
             return_dict_matcls = self.forward_matcls(input_dict)
             return_dict.update(return_dict_matcls)
 
+        if self.cfg.MODEL_DETECTRON.enable:
+            detectron_dict_list = input_dict['detectron_dict_list']
+            detectron_output_list_of_dicts = self.DETECTRON(detectron_dict_list)
+            return_dict.update({'detectron_output_list_of_dicts': detectron_output_list_of_dicts})
+
         return return_dict
 
     def forward_matseg(self, input_dict):

@@ -467,9 +467,11 @@ def vis_layout_emitter(labels_dict, output_dict, data_batch, opt, time_meters=No
             cell_info_grid_PRED = None
 
         save_prefix = ''
-
-        transform_R = data_batch['transform_R_RAW2Total3D'][sample_idx_batch].cpu().numpy().reshape(3, 3)
-        transform_t = data_batch['transform_t_RAW2Total3D'][sample_idx_batch].cpu().numpy().reshape(3, 1)
+        
+        if opt.cfg.DATA.load_layout_emitter_gt:
+            transform_R = data_batch['transform_R_RAW2Total3D'][sample_idx_batch].cpu().numpy().reshape(3, 3)
+            transform_t = data_batch['transform_t_RAW2Total3D'][sample_idx_batch].cpu().numpy().reshape(3, 1)
+            
         if if_load_emitter:
             hdr_scale = data_batch['hdr_scale'][sample_idx_batch].cpu().numpy().item()
             env_scale = data_batch['env_scale'][sample_idx_batch].cpu().numpy().item()

@@ -274,6 +274,7 @@ class BatchLoader(Dataset):
             print('having '+str(len(self.dict))+' image in total')
         else:
             self.dict=torch.load(self.outdir+self.save_name)
+            
     def __getitem__(self, k):
         return self.dict[k]
 

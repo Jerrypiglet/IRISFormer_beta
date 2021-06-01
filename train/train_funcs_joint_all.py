@@ -25,6 +25,7 @@ from train_funcs_brdf import get_labels_dict_brdf, postprocess_brdf
 from train_funcs_light import get_labels_dict_light, postprocess_light
 from train_funcs_layout_object_emitter import get_labels_dict_layout_emitter, postprocess_layout_object_emitter
 from train_funcs_matcls import get_labels_dict_matcls, postprocess_matcls
+from train_funcs_detectron import postprocess_detectron, gather_lists
 from utils.comm import synchronize
 
 from utils.utils_metrics import compute_errors_depth_nyu
@@ -38,6 +39,14 @@ import matplotlib.pyplot as plt
 
 from train_funcs_layout_object_emitter import vis_layout_emitter
 
+from detectron2.evaluation import COCOEvaluator, inference_on_dataset
+from detectron2.data import build_detection_test_loader,DatasetCatalog, MetadataCatalog
+
+from contextlib import ExitStack, contextmanager
+from utils.utils_dettectron import py_cpu_nms
+from detectron2.utils.visualizer import Visualizer, ColorMode
+
+
 def get_time_meters_joint():
     time_meters = {}
     time_meters['ts'] = 0.
@@ -49,6 +58,7 @@ def get_time_meters_joint():
     time_meters['loss_matseg'] = AverageMeter()
     time_meters['loss_semseg'] = AverageMeter()
     time_meters['loss_matcls'] = AverageMeter()
+    time_meters['loss_detectron'] = AverageMeter()
     time_meters['backward'] = AverageMeter()    
     return time_meters
 
@@ -133,6 +143,12 @@ def get_labels_dict_joint(data_batch, opt):
         labels_dict_matcls = {}
     labels_dict.update(labels_dict_matcls)
 
+    if opt.cfg.DATA.load_detectron_gt:
+        labels_dict_detectron = {'detectron_dict_list': data_batch['detectron_sample_dict']}
+    else:
+        labels_dict_detectron = {}
+    labels_dict.update(labels_dict_detectron)
+
     # labels_dict = {**labels_dict_matseg, **labels_dict_brdf}
     return labels_dict
 
@@ -176,18 +192,34 @@ def forward_joint(is_train, labels_dict, model, opt, time_meters, if_vis=False, 
         output_dict, loss_dict = postprocess_matcls(labels_dict, output_dict, loss_dict, opt, time_meters, if_vis=if_vis)
         time_meters['loss_matcls'].update(time.time() - time_meters['ts'])
         time_meters['ts'] = time.time()
+        synchronize()
 
-    # ic(output_dict.keys(), output_dict['results_emitter'].keys())
+    if opt.cfg.MODEL_DETECTRON.enable:
+        output_dict, loss_dict = postprocess_detectron(labels_dict, output_dict, loss_dict, opt, time_meters, if_vis=if_vis, is_train=is_train)
+        time_meters['loss_detectron'].update(time.time() - time_meters['ts'])
+        time_meters['ts'] = time.time()
+        synchronize()
+
 
     return output_dict, loss_dict
 
-def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
-    writer, logger, opt, tid = params_mis['writer'], params_mis['logger'], params_mis['opt'], params_mis['tid']
+def val_epoch_joint(brdf_loader_val, model, params_mis):
+    writer, logger, opt, tid, bin_mean_shift = params_mis['writer'], params_mis['logger'], params_mis['opt'], params_mis['tid'], params_mis['bin_mean_shift']
+    if_register_detectron_only = params_mis['if_register_detectron_only']
     ENABLE_SEMSEG = opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable
     ENABLE_MATSEG = opt.cfg.MODEL_MATSEG.enable
     ENABLE_BRDF = opt.cfg.MODEL_BRDF.enable
     ENABLE_LIGHT = opt.cfg.MODEL_LIGHT.enable
     ENABLE_MATCLS = opt.cfg.MODEL_MATCLS.enable
+    if if_register_detectron_only:
+        ENABLE_SEMSEG = False
+        ENABLE_MATSEG = False
+        ENABLE_BRDF = False
+        ENABLE_LIGHT = False
+        ENABLE_MATCLS = False
+
+    ENABLE_DETECTRON = opt.cfg.MODEL_DETECTRON.enable
+
 
     logger.info(red('===Evaluating for %d batches'%len(brdf_loader_val)))
 
@@ -297,6 +329,14 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             loss_keys += [
             'loss_matcls-supcls',]
 
+    if opt.cfg.MODEL_DETECTRON.enable:
+        loss_keys += [
+            'loss_detectron-ALL',
+            'loss_detectron-cls', 
+            'loss_detectron-box_reg', 
+            'loss_detectron-mask', 
+            'loss_detectron-rpn_cls', 
+            'loss_detectron-rpn_loc', ]
         
     loss_meters = {loss_key: AverageMeter() for loss_key in loss_keys}
     time_meters = get_time_meters_joint()
@@ -309,8 +349,12 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     if ENABLE_MATCLS:
         matcls_meters = get_matcls_meters(opt)
 
-
     with torch.no_grad():
+        if ENABLE_DETECTRON:
+            detectron_evaluator = COCOEvaluator(None, ("bbox", "segm"), opt.distributed, output_dir=str(opt.summary_vis_path_task), logger=logger)
+            detectron_evaluator.reset()
+            coco_dictt_labels = []
+
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
             ts_iter_start = time.time()
 
@@ -328,8 +372,9 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
             # loss = loss_dict['loss_all']
             
             # ======= update loss
-            for loss_key in loss_dict_reduced:
-                loss_meters[loss_key].update(loss_dict_reduced[loss_key].item())
+            if len(loss_dict_reduced.keys()) != 0:
+                for loss_key in loss_dict_reduced:
+                    loss_meters[loss_key].update(loss_dict_reduced[loss_key].item())
 
             # ======= Metering
             if ENABLE_LIGHT:
@@ -406,15 +451,70 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     matcls_meters['pred_labels_sup_list'].update(output.cpu().flatten())
                     matcls_meters['gt_labels_sup_list'].update(target.cpu().flatten())
 
+            if ENABLE_DETECTRON:
+                detectron_dict_list, output_detectron = input_dict['detectron_dict_list'], output_dict['output_detectron']
+                # if opt.distributed:
+                #     detectron_dict_list = gather_lists(detectron_dict_list, opt.num_gpus)
+                #     output_detectron = gather_lists(output_detectron, opt.num_gpus)
+                detectron_evaluator.process(detectron_dict_list, output_detectron)
+                coco_dictt_labels += input_dict['detectron_dict_list']
+                # print('----', opt.rank, [x['image_id'] for x in input_dict['detectron_dict_list']])
+
+
             synchronize()
 
     # ======= Metering
+
+    if ENABLE_DETECTRON:
+        if opt.distributed:
+            coco_dictt_labels = gather_lists(coco_dictt_labels, opt.num_gpus)
+        #     # print(len(coco_dictt_labels), '<<<<<<<<<<', opt.rank)
+        #     coco_dictt_labels_allgather = [None for _ in range(opt.num_gpus)]
+        #     dist.all_gather_object(coco_dictt_labels_allgather, coco_dictt_labels)
+        #     # print(len(coco_dictt_labels_allgather), len(coco_dictt_labels_allgather[0]), '<<<<<<<<<<-------', opt.rank)
+        #     coco_dictt_labels = [item for sublist in coco_dictt_labels_allgather for item in sublist]
+        pickle_path = Path(opt.summary_vis_path_task) / ('OR_detectron_%s.pth'%params_mis['detectron_dataset_name'])
+        if opt.is_master:
+            # --- dump processed labels for the entire val set for use in detectron_evaluator.evaluate()
+            if not pickle_path.exists():
+                torch.save(coco_dictt_labels, str(pickle_path))
+                logger.info(green('[Detectron] Dumped detectron pickle: %s'%str(pickle_path)))
+        synchronize()
+
+        coco_dictt_labels = torch.load(str(pickle_path))
+        # brdf_dataset_val.run(OR_detectron_path)
+        # val_dict = brdf_dataset_val.dict
+        detectron_dataset_name = "OR_detectron_" + params_mis['detectron_dataset_name']
+        if detectron_dataset_name not in DatasetCatalog.list():
+            DatasetCatalog.register(detectron_dataset_name, lambda d=params_mis['detectron_dataset_name']:coco_dictt_labels)
+            assert len(opt.OR_classes)==opt.cfg_detectron.MODEL.ROI_HEADS.NUM_CLASSES
+            MetadataCatalog.get(detectron_dataset_name).set(thing_classes=opt.OR_classes)
+            logger.info(green('[Detectron] Registered dataCatalog: %s'%detectron_dataset_name))
+
+        # --- eval with the dumped labels
+        # opt.OR_detectron_metadata_val = MetadataCatalog.get("OR_detectron_val")
+        if if_register_detectron_only:
+            return
+        detectron_evaluator.init_dataset(detectron_dataset_name)
+        detectron_results = detectron_evaluator.evaluate()
+        if detectron_results != {}:
+            for task_idx, task_name in enumerate(['bbox', 'segm']):
+                dict_items = list(detectron_results.items())[task_idx]
+                assert dict_items[0]==task_name
+                for metric in ['AP', 'AP50', 'AP75', 'APs', 'APm', 'APl']:
+                    if opt.is_master:
+                        writer.add_scalar('VAL/DETECTRON-%s-%s_val'%(task_name, metric), dict_items[1][metric], tid)
+        # writer.add_scalar('VAL/DETECTRON-mAcc_val', mAcc, tid)
+        # writer.add_scalar('VAL/DETECTRON-allAcc_val', allAcc, tid)
+        synchronize()
+
         
     if opt.is_master:
         for loss_key in loss_dict_reduced:
             writer.add_scalar('loss_val/%s'%loss_key, loss_meters[loss_key].avg, tid)
             logger.info('Logged val loss for %s'%loss_key)
 
+                
         if ENABLE_SEMSEG:
             iou_class = semseg_meters['intersection_meter'].sum / (semseg_meters['union_meter'].sum + 1e-10)
             accuracy_class = semseg_meters['intersection_meter'].sum / (semseg_meters['target_meter'].sum + 1e-10)
@@ -478,12 +578,13 @@ def val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                 writer.add_scalar('VAL/BRDF-normal_median_val', brdf_meters['normal_median_error_meter'].get_median(), tid)
                 logger.info('Val result - normal: mean: %.4f, median: %.4f'%(brdf_meters['normal_mean_error_meter'].avg, brdf_meters['normal_median_error_meter'].get_median()))
 
-        logger.info(red('Evaluation timings: ' + time_meters_to_string(time_meters)))
+    synchronize()
+    logger.info(red('Evaluation timings: ' + time_meters_to_string(time_meters)))
 
 
-def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
+def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
 
-    writer, logger, opt, tid, batch_size = params_mis['writer'], params_mis['logger'], params_mis['opt'], params_mis['tid'], params_mis['batch_size_val_vis']
+    writer, logger, opt, tid, batch_size, bin_mean_shift = params_mis['writer'], params_mis['logger'], params_mis['opt'], params_mis['tid'], params_mis['batch_size_val_vis'], params_mis['bin_mean_shift']
     logger.info(red('=== [vis_val_epoch_joint] Visualizing for %d batches on rank %d'%(len(brdf_loader_val), opt.rank)))
 
     model.eval()
@@ -526,7 +627,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
     # ===== Gather vis of N batches
     with torch.no_grad():
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
-            # ic(batch_id)
             # for i, x in enumerate(data_batch['image_path']):
             #     ic(i, x)
             if batch_size*batch_id >= opt.cfg.TEST.vis_max_samples:
@@ -555,7 +655,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
             for sample_idx_batch, (im_single, im_path) in enumerate(zip(data_batch['im_SDR_RGB'], data_batch['image_path'])):
                 sample_idx = sample_idx_batch+batch_size*batch_id
-                print('Visualizing %d image...'%sample_idx, batch_id, sample_idx_batch)
+                print('[Image] Visualizing %d sample...'%sample_idx, batch_id, sample_idx_batch)
                 if sample_idx >= opt.cfg.TEST.vis_max_samples:
                     break
 
@@ -573,7 +673,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
 
                     writer.add_text('VAL_image_name/%d'%(sample_idx), im_path, tid)
                     assert sample_idx == data_batch['image_index'][sample_idx_batch]
-                    # ic(sample_idx, data_batch['image_index'][sample_idx_batch], batch_id, batch_size, im_path)
                     # print(sample_idx, im_path)
 
                 if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool or opt.cfg.MODEL_MATSEG.if_albedo_safenet) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
@@ -607,6 +706,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     # print(gray_GT.shape, color_GT.shape) # (241, 321) (241, 321, 3)
                     if opt.is_master:
                         writer.add_image('VAL_semseg_GT/%d'%(sample_idx), color_GT, tid, dataformats='HWC')
+
             if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable:
                 for sample_idx_batch in range(semseg_pred.shape[0]):
                     sample_idx = sample_idx_batch+batch_size*batch_id
@@ -626,6 +726,50 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                         if opt.if_save_pickles:
                             with open(str(pickle_save_path),"wb") as f:
                                 pickle.dump(save_dict, f)
+
+            # ======= Vis Detectron2
+            if opt.cfg.MODEL_DETECTRON.enable:
+                detectron_dataset_name = "OR_detectron_" + params_mis['detectron_dataset_name']
+                if detectron_dataset_name not in DatasetCatalog.list():
+                    with torch.no_grad():
+                        params_mis['if_register_detectron_only'] = True
+                        val_epoch_joint(brdf_loader_val, model, params_mis)
+                        params_mis['if_register_detectron_only'] = False
+                for sample_idx_batch, detectron_output_dict in enumerate(output_dict['output_detectron']):
+                    sample_idx = sample_idx_batch+batch_size*batch_id
+                    if opt.is_master:
+                        print('[detectron] Visualizing %d sample ...'%sample_idx, batch_id, sample_idx_batch)
+                    output_dict = detectron_output_dict['instances']._fields
+                    # put all the predction of the current image into a list, them apply NMS
+                    scores=output_dict['scores'].cpu().numpy()
+                    mask_pre_list=(output_dict['pred_masks'].cpu().numpy()*255).astype('uint8')[scores > opt.cfg.MODEL_DETECTRON.thresh]
+                    scores=scores[scores > opt.cfg.MODEL_DETECTRON.thresh]
+                    # os.makedirs(osp.join(pred,filesubpath), exist_ok=True)
+                    # os.makedirs(osp.join(viz,filesubpath), exist_ok=True)
+
+                    ## visualize the prediction mask
+                    if(mask_pre_list.shape[0]==0):
+                        mask=np.zeros((opt.cfg.DATA.im_height, opt.cfg.DATA.im_width))
+                    else:
+                        mask_pre_list=mask_pre_list[py_cpu_nms(mask_pre_list, scores, opt.cfg.MODEL_DETECTRON.nms_thresh)]
+                        for mask_idx, mask in enumerate(mask_pre_list):
+                            # cv2.imwrite(osp.join(pred, filesubpath,'mask{}.png'.format(index)), mask)
+                            if opt.is_master:
+                                writer.add_image('VAL_DETECTRON_mask_PRED_%d/%d'%(sample_idx, mask_idx), mask, tid, dataformats='HW')
+                        # mask_list=map1[d["file_name"]]
+
+                    im_single = (data_batch['im_SDR_RGB'][sample_idx_batch].detach().cpu().numpy().astype(np.float32) * 255.).astype(np.uint8)
+                    v = Visualizer(im_single, metadata=MetadataCatalog.get("OR_detectron_val"), scale=1)
+                    v_pred = v.draw_instance_predictions(detectron_output_dict["instances"].to("cpu"))
+                    # cv2.imwrite(osp.join(viz, filesubpath,'viz.png'),v.get_image()[:, :, ::-1])
+                    if opt.is_master:
+                        writer.add_image('VAL_DETECTRON_vis_PRED/%d'%(sample_idx), v_pred.get_image(), tid, dataformats='HWC')
+                    
+                    v = Visualizer(im_single, metadata=MetadataCatalog.get("OR_detectron_val"), scale=1)
+                    v_gt = v.draw_dataset_dict(input_dict['detectron_dict_list'][sample_idx_batch])
+                    if opt.is_master:
+                        writer.add_image('VAL_DETECTRON_vis_GT/%d'%(sample_idx), v_gt.get_image(), tid, dataformats='HWC')
+
 
             # ======= Vis layout-emitter
             if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
@@ -728,7 +872,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                                 
                                 lightAccu_color_array_GT = emitter_info_dict['envmap_lightAccu_mean_vis_GT'].transpose(0, 2, 3, 1) # -> [6, 8, 8, 3]
                                 hdr_scale = data_batch['hdr_scale'][sample_idx_batch].item()
-                                # ic(sample_idx, hdr_scale)
                                 # lightAccu_color_array_GT = np.clip(lightAccu_color_array_GT * hdr_scale, 0., 1.)
                                 lightAccu_color_array_GT = np.clip(lightAccu_color_array_GT, 0., 1.)
                                 scene_box.draw_all_cells(ax_3d[1], scene_box.gt_layout, current_type='GT', lightnet_array_GT=lightAccu_color_array_GT, alpha=1.)
@@ -1083,10 +1226,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     writer.add_image('VAL_brdf-rough_GT/%d'%sample_idx, rough_gt_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                 if 'de' in opt.cfg.MODEL_BRDF.enable_list:
                     depth_normalized, depth_min_and_scale = vis_disp_colormap(depth_gt_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True)
-                    # ic('--> GT', np.amax(depth_gt_batch_vis_sdr_numpy[sample_idx].squeeze()), np.amin(depth_gt_batch_vis_sdr_numpy[sample_idx].squeeze()), np.median(depth_gt_batch_vis_sdr_numpy[sample_idx].squeeze()))
                     depth_min_and_scale_list.append(depth_min_and_scale)
                     writer.add_image('VAL_brdf-depth_GT/%d'%sample_idx, depth_normalized, tid, dataformats='HWC')
-                    # ic('----gt', depth_min_and_scale, np.amax(depth_normalized), np.amin(depth_normalized), np.median(depth_normalized))
 
 
 
@@ -1155,8 +1296,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     writer.add_image('VAL_brdf-rough_PRED/%d'%sample_idx, rough_pred_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                 if 'de' in opt.cfg.MODEL_BRDF.enable_list:
                     depth_normalized, _ = vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True, min_scale=depth_min_and_scale_list[sample_idx])
-                    # ic('--> EST', np.amax(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze()), np.amin(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze()), np.median(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze()))
-                    # ic(np.amax(depth_normalized), np.amin(depth_normalized), np.median(depth_normalized))
                     writer.add_image('VAL_brdf-depth_syncScale_PRED/%d'%sample_idx, depth_normalized, tid, dataformats='HWC')
                     writer.add_image('VAL_brdf-depth_PRED/%d'%sample_idx, vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True)[0], tid, dataformats='HWC')
                     pickle_save_path = Path(opt.summary_vis_path_task) / ('results_depth_%d.pickle'%sample_idx)
@@ -1164,7 +1303,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, bin_mean_shift, params_mis):
                     if opt.if_save_pickles:
                         with open(str(pickle_save_path),"wb") as f:
                             pickle.dump(save_dict, f)
-                            # ic(str(pickle_save_path))
 
 
     logger.info(red('Evaluation VIS timings: ' + time_meters_to_string(time_meters)))

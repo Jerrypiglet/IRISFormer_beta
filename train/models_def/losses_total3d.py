@@ -11,7 +11,7 @@ from utils.utils_misc import yellow
 
 # print(yellow('Importing Chamfer distance from '+os.environ['EXTERNAL_PATH']))
 # if os.environ['EXTERNAL_PATH'] == 'local':
-if os.environ['IF_MESH'] == 'True':
+if 'IF_MESH' in os.environ and os.environ['IF_MESH'] == 'True':
     from external.pyTorchChamferDistance.chamfer_distance import ChamferDistance
     dist_chamfer = ChamferDistance()
 # else:

@@ -26,9 +26,12 @@ from scipy.spatial import cKDTree
 import copy
 # import math
 from detectron2.structures import BoxMode
+from detectron2.data.dataset_mapper import DatasetMapper
 
 from utils.utils_total3D.utils_OR_vis_labels import RGB_to_01
 from utils.utils_total3D.utils_others import Relation_Config, OR4XCLASSES_dict, OR4XCLASSES_not_detect_mapping_ids_dict, OR4X_mapping_catInt_to_RGB
+from detectron2.data import build_detection_test_loader,DatasetCatalog, MetadataCatalog
+
 # OR = 'OR45'
 # classes = OR4XCLASSES_dict[OR]
 
@@ -88,7 +91,7 @@ def get_bdb2d_transform(split, crop_bdb): # crop_bdb: [x1, x2, y1, y2] in float
         data_transforms_nocrop_nonormalize = transform.Compose(data_transforms_nocrop_nonormalize)
         return data_transforms_nocrop_nonormalize
 
-def make_dataset(split='train', data_root=None, data_list=None, logger=None):
+def make_dataset(opt, split='train', data_root=None, data_list=None, logger=None):
     assert split in ['train', 'val', 'test']
     if not os.path.isfile(data_list):
         raise (RuntimeError("Image list file do not exist: " + data_list + "\n"))
@@ -127,12 +130,15 @@ def make_dataset(split='train', data_root=None, data_list=None, logger=None):
         meta_split_scene_name_frame_id_list.append((line_split[2].split('/')[0], line_split[0], int(line_split[1])))
     logger.info("Checking image&label pair {} list done!".format(split))
     # print(image_label_list[:5])
-    return image_label_list, meta_split_scene_name_frame_id_list
+    if opt.cfg.DATASET.first != -1:
+        return image_label_list[:opt.cfg.DATASET.first], meta_split_scene_name_frame_id_list[:opt.cfg.DATASET.first]
+    else:
+        return image_label_list, meta_split_scene_name_frame_id_list
 
 
 class openrooms(data.Dataset):
     def __init__(self, opt, data_list=None, logger=basic_logger(), transforms_fixed=None, transforms_semseg=None, transforms_matseg=None, transforms_resize=None, 
-            split='train', if_for_training=True, load_first = -1, rseed = 1, 
+            split='train', task=None, if_for_training=True, load_first = -1, rseed = 1, 
             cascadeLevel = 0,
             # is_light = False, is_all_light = False,
             envHeight = 8, envWidth = 16, envRow = 120, envCol = 160, 
@@ -148,12 +154,13 @@ class openrooms(data.Dataset):
         self.dataset_name = self.cfg.DATASET.dataset_name
         self.split = split
         assert self.split in ['train', 'val', 'test']
+        self.task = self.split if task is None else task
         self.if_for_training = if_for_training
         self.data_root = self.opt.cfg.DATASET.dataset_path
         split_to_list = {'train': 'train.txt', 'val': 'val.txt', 'test': 'test.txt'}
         data_list = os.path.join(self.cfg.PATH.root, self.cfg.DATASET.dataset_list)
         data_list = os.path.join(data_list, split_to_list[split])
-        self.data_list, self.meta_split_scene_name_frame_id_list = make_dataset(split, self.data_root, data_list, logger=self.logger)
+        self.data_list, self.meta_split_scene_name_frame_id_list = make_dataset(opt, split, self.data_root, data_list, logger=self.logger)
         assert len(self.data_list) == len(self.meta_split_scene_name_frame_id_list)
         if load_first != -1:
             self.data_list = self.data_list[:load_first] # [('/data/ruizhu/openrooms_mini-val/mainDiffLight_xml1/scene0509_00/im_1.hdr', '/data/ruizhu/openrooms_mini-val/main_xml1/scene0509_00/imsemLabel_1.npy'), ...
@@ -178,7 +185,6 @@ class openrooms(data.Dataset):
 
         self.OR = opt.cfg.MODEL_LAYOUT_EMITTER.data.OR
         self.valid_class_ids = RECON_3D_CLS_OR_dict[self.OR]
-
 
         self.cascadeLevel = cascadeLevel
         # self.is_all_light = self.opt.cfg.MODEL_BRDF.is_all_light
@@ -206,12 +212,20 @@ class openrooms(data.Dataset):
                 self.semseg_colors = np.array([[0, 0, 0], [0, 80, 100]], dtype=np.uint8)
                 self.semseg_names = ['unlabeled', 'wall_43']
             assert len(self.semseg_colors) == len(self.semseg_names)
-            
+
+        self.OR = self.cfg.MODEL_LAYOUT_EMITTER.data.OR
+        self.OR_classes = OR4XCLASSES_dict[self.OR]
+        assert self.OR_classes[1:]==opt.OR_classes
+
+
+        # ====== detectron =====
+        if self.opt.cfg.DATA.load_detectron_gt:
+            self.detectron_mapper = DatasetMapper(opt.cfg_detectron, self.if_for_training)
+        self.running = False
+
         # ====== layout, emitters =====
         if self.opt.cfg.DATA.load_layout_emitter_gt:
-            self.OR = self.cfg.MODEL_LAYOUT_EMITTER.data.OR
             self.grid_size = self.cfg.MODEL_LAYOUT_EMITTER.emitter.grid_size
-            self.OR_classes = OR4XCLASSES_dict[self.OR]
             # self.PNG_data_root = Path('/newfoundland2/ruizhu/siggraphasia20dataset/layout_labels_V4-ORfull/') if not opt.if_cluster else self.data_root
             # self.layout_emitter_im_width, self.layout_emitter_im_height = WIDTH_PATCH, HEIGHT_PATCH
             with open(Path(self.cfg.PATH.total3D_colors_path) / OR4X_mapping_catInt_to_RGB['light'], 'rb') as f:
@@ -276,13 +290,38 @@ class openrooms(data.Dataset):
                 
     def __len__(self):
         return len(self.data_list)
-        
+
+    def run_(self, OR_detectron_path):
+        assert False, 'Obsolete; should never be run because we would like to generate the dict during eval ad hoc instead of pre-processing so that we can dynamically change data filtering rules in dataloader'
+        pickle_path = OR_detectron_path
+        if pickle_path.exists():
+            self.dict=torch.load(str(pickle_path))
+            print(red('Loaded dict for Detectron from %s'%str(pickle_path)))
+            return
+
+        print(red('Gathering dict for Detectron to save at %s'%str(pickle_path)))
+        self.running = True
+        self.dict = []
+        for index in tqdm(range(len(self.data_list))):
+            detectron_label_sample = self.__getitem__(index)
+            if detectron_label_sample is not None:
+                detectron_sample_dict = detectron_label_sample['detectron_sample_dict']
+                self.dict.append(detectron_sample_dict)
+
+        torch.save(self.dict, str(pickle_path))
+        print(red('having '+str(len(self.dict))+' image in total'))
+        self.running = False
+
     def __getitem__(self, index):
 
         hdr_image_path, semseg_label_path = self.data_list[index]
         meta_split, scene_name, frame_id = self.meta_split_scene_name_frame_id_list[index]
         scene_total3d_path = Path(self.cfg.DATASET.layout_emitter_path) / meta_split / scene_name
-        frame_info = {'meta_split': meta_split, 'scene_name': scene_name, 'frame_id': frame_id, 'scene_total3d_path': scene_total3d_path}
+        meta_split, scene_name, frame_id = self.meta_split_scene_name_frame_id_list[index]
+        png_image_path = Path(self.opt.cfg.DATASET.png_path) / meta_split / scene_name / ('im_%d.png'%frame_id)
+
+        frame_info = {'index': index, 'meta_split': meta_split, 'scene_name': scene_name, 'frame_id': frame_id, 'frame_key': '%s-%s-%d'%(meta_split, scene_name, frame_id), \
+            'scene_total3d_path': scene_total3d_path, 'png_image_path': png_image_path}
         batch_dict = {'image_index': index, 'frame_info': frame_info}
 
         if_load_immask = self.opt.cfg.DATA.load_brdf_gt and not self.opt.cfg.DATA.if_load_png_not_hdr
@@ -304,8 +343,6 @@ class openrooms(data.Dataset):
 
         if self.opt.cfg.DATA.if_load_png_not_hdr:
             # Read PNG image
-            meta_split, scene_name, frame_id = self.meta_split_scene_name_frame_id_list[index]
-            png_image_path = Path(self.opt.cfg.DATASET.png_path) / meta_split / scene_name / ('im_%d.png'%frame_id)
             image = Image.open(str(png_image_path))
             im_RGB_uint8 = np.array(image)
             im_RGB_uint8 = cv2.resize(im_RGB_uint8, (self.im_width, self.im_height), interpolation = cv2.INTER_AREA )
@@ -380,9 +417,16 @@ class openrooms(data.Dataset):
             batch_dict.update(layout_emitter_dict)
 
         if 'ob' in self.opt.cfg.DATA.data_read_list or 'mesh' in self.opt.cfg.DATA.data_read_list:
-            objs_dict = self.load_objs(im_trainval, scene_dict['sequence']['boxes'])
+            objs_dict = self.load_objs(im_trainval, scene_dict['sequence']['boxes'], frame_info=frame_info)
             batch_dict.update({'boxes_batch': objs_dict['boxes'], 'boxes_valid_list': objs_dict['boxes_valid_list'], \
                 'num_valid_boxes': sum(objs_dict['boxes_valid_list'])})
+            if self.opt.cfg.DATA.load_detectron_gt:
+                detectron_sample_dict = objs_dict['detectron_sample_dict']
+                # print('---', detectron_sample_dict.keys()) # dict_keys(['file_name', 'image_id', 'frame_key', 'height', 'width', 'annotations'])
+                if not self.running:
+                    detectron_sample_dict = self.detectron_mapper(detectron_sample_dict)
+                # print('------', not self.running, detectron_sample_dict.keys()) # dict_keys(['file_name', 'image_id', 'frame_key', 'height', 'width', 'image', 'instances'])
+                batch_dict.update({'detectron_sample_dict': detectron_sample_dict})
 
             if 'mesh' in self.opt.cfg.DATA.data_read_list:
                 meshes_dict = self.load_meshes(objs_dict, scene_dict)
@@ -649,7 +693,7 @@ class openrooms(data.Dataset):
 
         return return_scene_dict
 
-    def load_objs(self, im_trainval, boxes):
+    def load_objs(self, im_trainval, boxes, frame_info):
         boxes['random_id'] = [x['random_id'] for x in boxes['bdb2D_full']]
         boxes['cat_name'] = [self.OR_classes[x] for x in boxes['size_cls']]
 
@@ -689,6 +733,7 @@ class openrooms(data.Dataset):
                 boxes_valid_list[idx] = False
 
         cls_codes[range(len(boxes['size_cls'])), boxes['size_cls']] = 1
+        boxes['class_id'] = copy.deepcopy(boxes['size_cls'])
         boxes['size_cls'] = cls_codes
 
         # TODO: If the training error is consistently larger than the test error. We remove the crop and add more intermediate FC layers with no dropout.
@@ -744,6 +789,24 @@ class openrooms(data.Dataset):
         assert scale_wh==0.5, 'only full and half res masks are available'
         assert len(boxes['mask'])==len(boxes_valid_list)==len(boxes['size_cls'])
         mask_list_new = []
+
+        if self.opt.cfg.DATA.load_detectron_gt:
+            detectron_png_path = str(frame_info['png_image_path']).replace('.png', '_240x320.png')
+            if Path(detectron_png_path).exists()==False:
+                im = cv2.imread(str(frame_info['png_image_path']))
+                im = cv2.resize(im, (320, 240), interpolation = cv2.INTER_AREA )
+                cv2.imwrite(detectron_png_path, im)
+                # print(detectron_png_path)
+
+            detectron_sample_dict = {
+                'file_name': detectron_png_path, 
+                'image_id': frame_info['index'], 
+                'frame_key': frame_info['frame_key'], 
+                'height': self.opt.cfg.DATA.im_height, 
+                'width': self.opt.cfg.DATA.im_width, 
+                'annotations': []}
+            assert detectron_sample_dict['height']==240 and detectron_sample_dict['width']==320
+
         for mask_idx, mask in enumerate(boxes['mask']):
             if mask is None:
                 mask_list_new.append(None)
@@ -751,8 +814,9 @@ class openrooms(data.Dataset):
                 continue
             mask_dict = {'msk': mask['msk_half'], 'msk_bdb': mask['msk_bdb_half'], 'class_id': mask['class_id']}
 
-            if self.opt.cfg.MODEL_DETECTRON.enable:
+            if self.opt.cfg.DATA.load_detectron_gt:
                 mask_half_fullimage = np.zeros((self.opt.cfg.DATA.im_height, self.opt.cfg.DATA.im_width), dtype=np.uint8)
+                # mask_half_fullimage = np.zeros((480, 640), dtype=np.uint8)
                 x1, y1, x2, y2 = mask['msk_bdb_half']
                 mask_half_fullimage[y1:y2+1, x1:x2+1] = mask['msk_half']
                 mask_dict['mask_half_fullimage'] = mask_half_fullimage
@@ -766,7 +830,7 @@ class openrooms(data.Dataset):
                     contour = contour.flatten().tolist()
                     '''
                     if len(contour)<6:
-                        im=self.process(im)
+                        im=self.process(im) oppo 
                         cv2.imwrite("{}.png".format(ind),im )
                         import pdb;pdb.set_trace()
                     '''
@@ -776,19 +840,25 @@ class openrooms(data.Dataset):
                 if(len(segmentation)==0):
                     mask_list_new.append(None)
                     boxes_valid_list[mask_idx] = False # [!!!!!] set objs without masks to False
+                    print(yellow('skipped object because len(segmentation)==0'))
                     continue
-                mask_dict.update({
-                    "bbox_mode": BoxMode.XYXY_ABS,
-                    "segmentation": segmentation,
-                    "iscrowd":0, 
-                })
+
+                detectron_obj_dict = {
+                    'bbox': [x1,y1,x2,y2],
+                    'bbox_mode': BoxMode.XYXY_ABS,
+                    'segmentation': segmentation,
+                    'iscrowd':0, 
+                    'category_id': boxes['class_id'][mask_idx]-1 # [-1 for unlabelled]
+                }
+                detectron_sample_dict['annotations'].append(detectron_obj_dict)
+                
 
             # print(mask['msk_half'].shape, mask['msk_half'].dtype, mask['msk_bdb_half'], boxes['bdb2D_full'][mask_idx])
             mask_list_new.append(mask_dict)
 
         boxes['mask'] = mask_list_new
 
-        objs_return_dict = {'boxes': boxes, 'boxes_valid_list': boxes_valid_list, 'cls_codes': cls_codes}
+        objs_return_dict = {'boxes': boxes, 'boxes_valid_list': boxes_valid_list, 'cls_codes': cls_codes, 'detectron_sample_dict': detectron_sample_dict}
         return objs_return_dict
 
     def load_meshes(self, objs_dict, scene_dict):
@@ -838,7 +908,7 @@ class openrooms(data.Dataset):
             # print('Clipping......')
             batch_dict = self.clip_box_nums(batch_dict, keep_only_valid=self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_use_only_valid_objs, num_clip_to=self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.clip_boxes_train_to)
 
-        frame_key = '%s-%s-%d'%(frame_info['meta_split'], frame_info['scene_name'], frame_info['frame_id'])
+        frame_key = frame_info['frame_key']
         if self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_pre_filter_invalid_frames:
             assert len(batch_dict['boxes_valid_list']) >=1,'Pre-filtering enabled; BUT Insifficient valid objects at frame %s!'%frame_key
 
@@ -1398,7 +1468,9 @@ def collate_fn_OR(batch):
                     except RuntimeError:
                         print(subkey, [x.shape for x in list_of_tensor])
                 collated_batch[key][subkey] = tensor_batch
-        elif key in ['frame_info', 'boxes_valid_list', 'emitter2wall_assign_info_list', 'emitters_obj_list', 'gt_layout_RAW', 'cell_info_grid', 'image_index', 'gt_obj_path_alignedNew_normalized_list', 'gt_obj_path_alignedNew_original_list']:
+        elif key in ['frame_info', 'boxes_valid_list', 'emitter2wall_assign_info_list', 'emitters_obj_list', 'gt_layout_RAW', 'cell_info_grid', 'image_index', \
+                'gt_obj_path_alignedNew_normalized_list', 'gt_obj_path_alignedNew_original_list', \
+                'detectron_sample_dict', 'detectron_sample_dict']:
             collated_batch[key] = [elem[key] for elem in batch]
         else:
             try:
