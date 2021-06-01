@@ -905,7 +905,7 @@ class openrooms(data.Dataset):
 
     def post_process_objs_meshes(self, index, batch_dict, frame_info):
         if (self.split=='train' or self.opt.if_overfit_val) and self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_clip_boxes_train:
-            # print('Clipping......')
+            # print('Clipping objs and meshes to %d......'%self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.clip_boxes_train_to)
             batch_dict = self.clip_box_nums(batch_dict, keep_only_valid=self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_use_only_valid_objs, num_clip_to=self.opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.clip_boxes_train_to)
 
         frame_key = frame_info['frame_key']

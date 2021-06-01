@@ -453,11 +453,11 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
 
             if ENABLE_DETECTRON:
                 detectron_dict_list, output_detectron = input_dict['detectron_dict_list'], output_dict['output_detectron']
-                # if opt.distributed:
-                #     detectron_dict_list = gather_lists(detectron_dict_list, opt.num_gpus)
+                if opt.distributed:
+                    detectron_dict_list_gathered = gather_lists(detectron_dict_list, opt.num_gpus)
                 #     output_detectron = gather_lists(output_detectron, opt.num_gpus)
                 detectron_evaluator.process(detectron_dict_list, output_detectron)
-                coco_dictt_labels += input_dict['detectron_dict_list']
+                coco_dictt_labels += detectron_dict_list_gathered
                 # print('----', opt.rank, [x['image_id'] for x in input_dict['detectron_dict_list']])
 
 
@@ -466,8 +466,8 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
     # ======= Metering
 
     if ENABLE_DETECTRON:
-        if opt.distributed:
-            coco_dictt_labels = gather_lists(coco_dictt_labels, opt.num_gpus)
+        # if opt.distributed:
+        #     coco_dictt_labels = gather_lists(coco_dictt_labels, opt.num_gpus)
         #     # print(len(coco_dictt_labels), '<<<<<<<<<<', opt.rank)
         #     coco_dictt_labels_allgather = [None for _ in range(opt.num_gpus)]
         #     dist.all_gather_object(coco_dictt_labels_allgather, coco_dictt_labels)
