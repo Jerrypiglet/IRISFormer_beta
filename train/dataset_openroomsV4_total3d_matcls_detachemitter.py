@@ -128,7 +128,39 @@ def make_dataset(opt, split='train', data_root=None, data_list=None, logger=None
         item = (image_name, label_name)
         image_label_list.append(item)
         meta_split_scene_name_frame_id_list.append((line_split[2].split('/')[0], line_split[0], int(line_split[1])))
-    logger.info("Checking image&label pair {} list done!".format(split))
+
+    if opt.cfg.DATASET.dataset_list_sequence:
+        dataset_list_sequence_idx = opt.cfg.DATASET.dataset_list_sequence_idx
+        assert dataset_list_sequence_idx >=0
+        meta_split_keep = meta_split_scene_name_frame_id_list[dataset_list_sequence_idx][0]
+        scene_name_keep = meta_split_scene_name_frame_id_list[dataset_list_sequence_idx][1]
+        frame_id_keep = meta_split_scene_name_frame_id_list[dataset_list_sequence_idx][2]
+        image_name_keep = image_label_list[dataset_list_sequence_idx][0]
+        label_name_keep = image_label_list[dataset_list_sequence_idx][1]
+        # scene_name_keep = '/'.join([meta_split_keep, scene_name_keep])
+        # image_name_keep_single_frame = image_label_list[dataset_list_sequence_idx]
+        scene_path_keep = Path(data_root) / meta_split_keep / scene_name_keep
+        image_paths_sequence = [x for x in list(scene_path_keep.iterdir()) if 'im_' in str(x)]
+        assert len(image_paths_sequence)!=0
+        frame_ids_sequence = sorted([int(x.stem.replace('im_', '')) for x in image_paths_sequence])
+        
+        image_label_list = []
+        meta_split_scene_name_frame_id_list = []
+        for x in frame_ids_sequence:
+            image_name_new = image_name_keep.replace('im_%d'%frame_id_keep, 'im_%d'%x)
+            label_name_new = label_name_keep.replace('imsemLabel_%d'%frame_id_keep, 'imsemLabel_%d'%x)
+            image_label_list.append((image_name_new, label_name_new))
+            meta_split_scene_name_frame_id_list.append((meta_split_keep, scene_name_keep, frame_id_keep))
+
+        # logger.info(red("Keeping only frames of scene_name [%s]"%scene_name_keep))
+        # idxes_keep = [x for x in range(len(image_label_list)) if scene_name_keep in image_label_list[x][0]]
+        # frame_ids_list = [meta_split_scene_name_frame_id_list[x][-1] for x in idxes_keep]
+        # idxes_keep_sorted = [idxes_keep[x] for x in sorted(range(len(frame_ids_list)), key=lambda k: frame_ids_list[k])]
+        # image_label_list = [image_label_list[x] for x in idxes_keep_sorted]
+        # print(image_label_list)
+        # meta_split_scene_name_frame_id_list = [meta_split_scene_name_frame_id_list[x] for x in idxes_keep_sorted]
+
+    logger.info("==> Checking image&label pair [%s] list done! %d frames."%(split, len(image_label_list)))
     # print(image_label_list[:5])
     if opt.cfg.DATASET.first != -1:
         return image_label_list[:opt.cfg.DATASET.first], meta_split_scene_name_frame_id_list[:opt.cfg.DATASET.first]
@@ -215,11 +247,11 @@ class openrooms(data.Dataset):
 
         self.OR = self.cfg.MODEL_LAYOUT_EMITTER.data.OR
         self.OR_classes = OR4XCLASSES_dict[self.OR]
-        assert self.OR_classes[1:]==opt.OR_classes
 
 
         # ====== detectron =====
         if self.opt.cfg.DATA.load_detectron_gt:
+            assert self.OR_classes[1:]==opt.OR_classes
             self.detectron_mapper = DatasetMapper(opt.cfg_detectron, self.if_for_training)
         self.running = False
 
@@ -324,7 +356,7 @@ class openrooms(data.Dataset):
             'scene_total3d_path': scene_total3d_path, 'png_image_path': png_image_path}
         batch_dict = {'image_index': index, 'frame_info': frame_info}
 
-        if_load_immask = self.opt.cfg.DATA.load_brdf_gt and not self.opt.cfg.DATA.if_load_png_not_hdr
+        if_load_immask = self.opt.cfg.DATA.load_brdf_gt and not self.opt.cfg.DATA.if_load_png_not_hdr and (not self.opt.cfg.DATASET.if_no_gt)
 
         if if_load_immask:
             seg_path = hdr_image_path.replace('im_', 'immask_').replace('hdr', 'png').replace('DiffMat', '')
@@ -335,7 +367,7 @@ class openrooms(data.Dataset):
             # mask_path = semantics_path.replace('im_', 'immatPart_').replace('hdr', 'dat')
             mask = self.loadBinary(mask_path, channels = 3, dtype=np.int32, if_resize=True).squeeze() # [h, w, 3]
         else:
-            seg = None
+            seg = np.ones((1, self.im_height, self.im_width), dtype=np.float32)
             mask_path = None
             mask = None
 
@@ -388,35 +420,35 @@ class openrooms(data.Dataset):
 
         # ====== BRDF =====
         # image_path = batch_dict['image_path']
-        if self.opt.cfg.DATA.load_brdf_gt:
+        if self.opt.cfg.DATA.load_brdf_gt and (not self.opt.cfg.DATASET.if_no_gt):
             batch_dict_brdf = self.load_brdf_lighting(hdr_image_path, if_load_immask, mask_path, mask, seg, hdr_scale)
             batch_dict.update(batch_dict_brdf)
 
         # ====== matseg =====
-        if self.opt.cfg.DATA.load_matseg_gt:
+        if self.opt.cfg.DATA.load_matseg_gt and (not self.opt.cfg.DATASET.if_no_gt):
             mat_seg_dict = self.load_matseg(mask, im_RGB_uint8)
             batch_dict.update(mat_seg_dict)
 
         # ====== semseg =====
-        if self.opt.cfg.DATA.load_semseg_gt:
+        if self.opt.cfg.DATA.load_semseg_gt and (not self.opt.cfg.DATASET.if_no_gt):
             sem_seg_dict = self.load_semseg(im_RGB_uint8, semseg_label_path)
             batch_dict.update(sem_seg_dict)
 
         # ====== matseg =====
-        if self.opt.cfg.DATA.load_matcls_gt:
+        if self.opt.cfg.DATA.load_matcls_gt and (not self.opt.cfg.DATASET.if_no_gt):
             scene_matcls_Path = Path(self.cfg.DATASET.matpart_path) / meta_split / scene_name
             mat_cls_dict = self.load_mat_cls(frame_info=(scene_matcls_Path, frame_id), if_gen_on_the_fly=False, if_validate=True)
             batch_dict.update(mat_cls_dict)
 
         # ====== layout, obj (including masks), emitters =====
-        if self.opt.cfg.DATA.load_layout_emitter_gt or 'ob' in self.opt.cfg.DATA.data_read_list:
+        if self.opt.cfg.DATA.load_layout_emitter_gt or 'ob' in self.opt.cfg.DATA.data_read_list and (not self.opt.cfg.DATASET.if_no_gt):
             scene_dict = self.read_scene(frame_info=frame_info)
 
-        if self.opt.cfg.DATA.load_layout_emitter_gt:
+        if self.opt.cfg.DATA.load_layout_emitter_gt and (not self.opt.cfg.DATASET.if_no_gt):
             layout_emitter_dict = self.load_layout_emitter_gt_detach_emitter(scene_dict=scene_dict, frame_info=frame_info, hdr_scale=hdr_scale)
             batch_dict.update(layout_emitter_dict)
 
-        if 'ob' in self.opt.cfg.DATA.data_read_list or 'mesh' in self.opt.cfg.DATA.data_read_list:
+        if 'ob' in self.opt.cfg.DATA.data_read_list or 'mesh' in self.opt.cfg.DATA.data_read_list and (not self.opt.cfg.DATASET.if_no_gt):
             objs_dict = self.load_objs(im_trainval, scene_dict['sequence']['boxes'], frame_info=frame_info)
             batch_dict.update({'boxes_batch': objs_dict['boxes'], 'boxes_valid_list': objs_dict['boxes_valid_list'], \
                 'num_valid_boxes': sum(objs_dict['boxes_valid_list'])})
@@ -424,7 +456,10 @@ class openrooms(data.Dataset):
                 detectron_sample_dict = objs_dict['detectron_sample_dict']
                 # print('---', detectron_sample_dict.keys()) # dict_keys(['file_name', 'image_id', 'frame_key', 'height', 'width', 'annotations'])
                 if not self.running:
-                    detectron_sample_dict = self.detectron_mapper(detectron_sample_dict)
+                    try:
+                        detectron_sample_dict = self.detectron_mapper(detectron_sample_dict)
+                    except SyntaxError:
+                        print('Issue with png file %s'%detectron_sample_dict['file_name'])
                 # print('------', not self.running, detectron_sample_dict.keys()) # dict_keys(['file_name', 'image_id', 'frame_key', 'height', 'width', 'image', 'instances'])
                 batch_dict.update({'detectron_sample_dict': detectron_sample_dict})
 
@@ -1286,8 +1321,11 @@ class openrooms(data.Dataset):
 
     def loadHdr(self, imName):
         if not(osp.isfile(imName ) ):
-            print(imName )
-            assert(False )
+            if osp.isfile(imName.replace('.hdr', '.rgbe')):
+                imName = imName.replace('.hdr', '.rgbe')
+            else:
+                print(imName )
+                assert(False )
         im = cv2.imread(imName, -1)
         # print(imName, im.shape, im.dtype)
 

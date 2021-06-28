@@ -37,3 +37,7 @@ VTK
 *.mtl
 *.rgbe
 *-copy.py
+BRDFOriginDataset
+EnvDataset
+layoutMesh
+uv_mapped

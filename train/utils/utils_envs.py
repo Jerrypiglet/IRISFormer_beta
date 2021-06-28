@@ -38,6 +38,9 @@ def set_up_envs(opt):
         if not opt.if_cluster:
             opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_mini
         opt.cfg.DATASET.dataset_list = opt.cfg.DATASET.dataset_list_mini
+    if opt.cfg.DATASET.tmp:
+        opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_tmp
+        opt.cfg.DATASET.dataset_list = opt.cfg.DATASET.dataset_list_tmp
     opt.cfg.DATASET.dataset_list = os.path.join(opt.cfg.PATH.root, opt.cfg.DATASET.dataset_list)
 
 
@@ -444,7 +447,7 @@ def set_up_checkpointing(opt, model, optimizer, scheduler, logger):
     tid_start = 0
     epoch_start = 0
 
-    if opt.cfg.MODEL_DETECTRON.pretrained:
+    if opt.cfg.MODEL_DETECTRON.enable and opt.cfg.MODEL_DETECTRON.pretrained:
         checkpointer.load(f=opt.cfg_detectron.MODEL.WEIGHTS, replace_kws=[], replace_with_kws=[], \
             skip_kws=['box_predictor.bbox_pred', 'box_predictor.cls_score', 'mask_head.predictor'])
 

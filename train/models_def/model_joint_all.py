@@ -441,10 +441,11 @@ class Model_Joint(nn.Module):
             if 'al' in self.cfg.MODEL_BRDF.enable_list:
                 albedo_output = self.BRDF_Net['albedoDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)
                 albedoPred = 0.5 * (albedo_output['x_out'] + 1)
-                input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
-                if not self.cfg.MODEL_BRDF.use_scale_aware_albedo:
-                    albedoPred = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
-                            input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
+                if (not self.opt.cfg.DATASET.if_no_gt):
+                    input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
+                    if not self.cfg.MODEL_BRDF.use_scale_aware_albedo:
+                        albedoPred = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
+                                input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
                 albedoPred = torch.clamp(albedoPred, 0, 1)
                 return_dict.update({'albedoPred': albedoPred})
             if 'no' in self.cfg.MODEL_BRDF.enable_list:
@@ -454,7 +455,7 @@ class Model_Joint(nn.Module):
                 roughPred = self.BRDF_Net['roughDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)['x_out']
                 return_dict.update({'roughPred': roughPred})
             if 'de' in self.cfg.MODEL_BRDF.enable_list:
-                if not self.cfg.MODEL_BRDF.use_scale_aware_depth:
+                if not self.cfg.MODEL_BRDF.use_scale_aware_depth and (not self.opt.cfg.DATASET.if_no_gt):
                     depthPred = 0.5 * (self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)['x_out'] + 1) # [-1, 1] -> [0, 2] -> [0, 1]
                     depthPred = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
                             input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)

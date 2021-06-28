@@ -51,11 +51,13 @@ _C.PATH.OR4X_mapping_catStr_to_RGB = ['data/openrooms/total3D_colors/OR4X_mappin
 _C.DEBUG = CN()
 _C.DEBUG.if_dump_anything = False
 _C.DEBUG.if_dump_shadow_renderer = False
+_C.DEBUG.if_dump_perframe_BRDF = False
 
 # ===== dataset
 
 _C.DATASET = CN()
 _C.DATASET.mini = False # load mini OR from SSD to enable faster dataloading for debugging purposes etc.
+_C.DATASET.tmp = False # load tmp OR list from DATASET.dataset_list_tmp
 _C.DATASET.first = -1 # laod first # of the entire dataset: train/val
 _C.DATASET.dataset_name = 'openrooms'
 _C.DATASET.dataset_path = ''
@@ -102,9 +104,14 @@ _C.DATASET.dataset_list = ''
 # _C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini/list'
 _C.DATASET.dataset_path_mini = '/data/ruizhu/openrooms_mini-val'
 _C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini-val/list'
+_C.DATASET.dataset_path_tmp = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms_sequence_val'
+_C.DATASET.dataset_list_tmp = 'data/openrooms/list_OR_tmp/list'
+_C.DATASET.dataset_list_sequence = False # convert #idx of the val list into sequential inputs
+_C.DATASET.dataset_list_sequence_idx = -1
 
 _C.DATASET.num_workers = 8
 _C.DATASET.if_val_dist = True
+_C.DATASET.if_no_gt = False
 
 # ===== data loading configs
 
