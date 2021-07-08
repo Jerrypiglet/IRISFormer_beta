@@ -35,6 +35,10 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
             if 'de' in opt.cfg.DATA.data_read_list:
                 depth_cpu = data_batch['depth']
                 input_dict['depthBatch'] = depth_cpu.cuda(non_blocking=True)
+                if 'depth_next' in data_batch:
+                    depth_cpu_next = data_batch['depth_next']
+                    input_dict['depthBatch_next'] = depth_cpu_next.cuda(non_blocking=True)
+
 
             if if_load_mask:
                 mask_cpu = data_batch['mask'].permute(0, 3, 1, 2) # [b, 3, h, w]

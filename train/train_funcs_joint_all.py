@@ -101,6 +101,9 @@ def get_labels_dict_joint(data_batch, opt):
 
     # prepare input_dict from data_batch (from dataloader)
     labels_dict = {'im_trainval_RGB': data_batch['im_trainval_RGB'].cuda(non_blocking=True), 'im_SDR_RGB': data_batch['im_SDR_RGB'].cuda(non_blocking=True)}
+    if 'im_SDR_RGB_next' in data_batch:
+        labels_dict['im_SDR_RGB_next'] = data_batch['im_SDR_RGB_next'].cuda(non_blocking=True)
+
     if opt.cfg.DATA.load_matseg_gt:
         labels_dict_matseg = get_labels_dict_matseg(data_batch, opt)
     else:

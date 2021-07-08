@@ -21,6 +21,8 @@ import models_def.models_mesh_reconstruction as models_mesh_reconstruction
 import models_def.models_layout_emitter_lightAccu as models_layout_emitter_lightAccu
 import models_def.models_layout_emitter_lightAccuScatter as models_layout_emitter_lightAccuScatter
 import models_def.model_matcls as model_matcls
+import models_def.model_nvidia.AppGMM as AppGMM
+
 from SimpleLayout.SimpleSceneTorchBatch import SimpleSceneTorchBatch
 from utils.utils_total3D.utils_OR_layout import get_layout_bdb_sunrgbd
 from utils.utils_total3D.utils_OR_cam import get_rotation_matix_result
@@ -63,6 +65,10 @@ class Model_Joint(nn.Module):
             if self.opt.cfg.MODEL_SEMSEG.load_pretrained_pth:
                 self.load_pretrained_semseg()
 
+        if self.cfg.MODEL_GMM.enable:
+            self.MODEL_GMM = AppGMM.AppGMM(self.opt,)
+            self.MODEL_GMM.set_optical_flow_model(self.opt)
+            
         if self.cfg.MODEL_BRDF.enable:
             in_channels = 3
             if self.opt.cfg.MODEL_MATSEG.use_as_input:
@@ -216,6 +222,7 @@ class Model_Joint(nn.Module):
     def forward(self, input_dict):
         return_dict = {}
         input_dict_guide = None
+
         if self.cfg.MODEL_MATSEG.enable:
             return_dict_matseg = self.forward_matseg(input_dict) # {'prob': prob, 'embedding': embedding, 'feats_mat_seg_dict': feats_mat_seg_dict}
             input_dict_guide_matseg = return_dict_matseg['feats_matseg_dict']
@@ -240,6 +247,16 @@ class Model_Joint(nn.Module):
         return_dict.update(return_dict_semseg)
 
         assert not(self.cfg.MODEL_MATSEG.if_guide and self.cfg.MODEL_SEMSEG.if_guide), 'cannot guide from MATSEG and SEMSEG at the same time!'
+
+        if self.cfg.MODEL_GMM.enable:
+            input_dict_GMM = input_dict
+            print(input_dict_GMM.keys(), input_dict['depthBatch_next'].shape)
+            input_dict_GMM['imgs_ref'] = input_dict['im_SDR_RGB'].permute(0, 3, 1, 2)
+            input_dict_GMM['imgs_src'] = input_dict['im_SDR_RGB_next'].permute(0, 3, 1, 2)
+            input_dict_GMM['dmaps_ref'] = input_dict['depthBatch']
+            input_dict_GMM['dmaps_src'] = input_dict['depthBatch_next']
+            batch_idx = 0
+            self.MODEL_GMM.training_step(input_dict_GMM, batch_idx)
 
         if self.cfg.MODEL_BRDF.enable:
             if self.cfg.MODEL_BRDF.if_freeze:

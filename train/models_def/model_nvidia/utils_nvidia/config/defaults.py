@@ -23,35 +23,12 @@ _C.DTYPE = "float32"
 
 _C.PATH = CN()
 _C.PATH.root = ''
-_C.PATH.root_local = '/home/ruizhu/Documents/Projects/semanticInverse/train'
+_C.PATH.root_local = '/home/ruizhu/Documents/Projects/nvidia/vidapp/code'
 _C.PATH.root_cluster = '.'
-_C.PATH.semseg_colors_path = 'data/openrooms/openrooms_colors.txt'
-_C.PATH.semseg_names_path = 'data/openrooms/openrooms_names.txt'
-_C.PATH.total3D_colors_path = 'data/openrooms/total3D_colors'
-
-_C.PATH.total3D_lists_path = 'data/openrooms/list_OR_V4full'
-_C.PATH.total3D_lists_path_if_zhengqinCVPR = False
-_C.PATH.total3D_lists_path_zhengqinCVPR = 'data/openrooms/list_OR_V4full_zhengqinCVPR'
-
-_C.PATH.matcls_matIdG1_path = 'data/openrooms/matIdGlobal1.txt'
-_C.PATH.matcls_matIdG2_path = 'data/openrooms/matIdGlobal2.txt'
-_C.PATH.dcn_path = ''
-_C.PATH.dcn_cluster = '/viscompfs/users/ruizhu/lib/Deformable-Convolution-V2-PyTorch'
-_C.PATH.dcn_local = '/home/ruizhu/Documents/Projects/semanticInverse/third-parties_outside/Deformable-Convolution-V2-PyTorch'
-_C.PATH.torch_home_path = ''
-_C.PATH.torch_home_local = '/home/ruizhu/Documents/Projects/semanticInverse/'
-_C.PATH.torch_home_cluster = '/viscompfs/users/ruizhu/'
-# _C.DATA.semseg_colors_path = 'data/openrooms/openrooms_colors.txt'
-# _C.DATA.semseg_names_path = 'data/openrooms/openrooms_names.txt'
-_C.PATH.OR4X_mapping_catInt_to_RGB = ['data/openrooms/total3D_colors/OR4X_mapping_catInt_to_RGB_light.pkl', 'data/openrooms/total3D_colors/OR4X_mapping_catInt_to_RGB_dark.pkl']
-_C.PATH.OR4X_mapping_catStr_to_RGB = ['data/openrooms/total3D_colors/OR4X_mapping_catStr_to_RGB_light.pkl', 'data/openrooms/total3D_colors/OR4X_mapping_catStr_to_RGB_dark.pkl']
 
 # ===== debug
 
 _C.DEBUG = CN()
-_C.DEBUG.if_dump_anything = False
-_C.DEBUG.if_dump_shadow_renderer = False
-_C.DEBUG.if_dump_perframe_BRDF = False
 
 # ===== dataset
 
@@ -59,51 +36,20 @@ _C.DATASET = CN()
 _C.DATASET.mini = False # load mini OR from SSD to enable faster dataloading for debugging purposes etc.
 _C.DATASET.tmp = False # load tmp OR list from DATASET.dataset_list_tmp
 _C.DATASET.first = -1 # laod first # of the entire dataset: train/val
-_C.DATASET.dataset_name = 'openrooms'
-_C.DATASET.dataset_path = ''
-_C.DATASET.dataset_path_local = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms'
-_C.DATASET.dataset_path_cluster = '/siggraphasia20dataset/code/Routine/DatasetCreation/'
-_C.DATASET.dataset_path_test = ''
-_C.DATASET.dataset_path_test_local = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms_test'
-_C.DATASET.dataset_path_test_cluster = '/eccv20dataset/DatasetNew_test'
-_C.DATASET.png_path = ''
-_C.DATASET.png_path_local = '/data/ruizhu/OR-pngs'
-_C.DATASET.png_path_cluster = '/siggraphasia20dataset/pngs'
+_C.DATASET.OR = CN()
+_C.DATASET.OR.dataset_path = ''
+_C.DATASET.OR.dataset_path_local = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms'
+_C.DATASET.OR.dataset_path_cluster = '/siggraphasia20dataset/code/Routine/DatasetCreation/'
+_C.DATASET.OR.dataset_path_test = ''
+_C.DATASET.OR.dataset_path_test_local = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms_test'
+_C.DATASET.OR.dataset_path_test_cluster = '/eccv20dataset/DatasetNew_test'
+_C.DATASET.OR.png_path = ''
+_C.DATASET.OR.png_path_local = '/data/ruizhu/OR-pngs'
+_C.DATASET.OR.png_path_cluster = '/siggraphasia20dataset/pngs'
 
-_C.DATASET.layout_emitter_path = ''
-# _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-OR45_total3D_train_test_data'
-# _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitter-OR45_total3D_train_test_data'
-# _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitterRERE-OR45_total3D_train_test_data'
-
-# _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-withMesh20210507-val500-OR45_total3D_train_test_data'
-# _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-withMesh20210507-val-OR45_total3D_train_test_data'
-# _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-withMesh20210507-OR45_total3D_train_test_data'
-_C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-withMesh20210510-assign2NotReindex-OR45_total3D_train_test_data'
-
-# _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-OR45_total3D_train_test_data'
-# _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitter-OR45_total3D_train_test_data'
-# _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitterRERE-OR45_total3D_train_test_data'
-# _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitterRERERE20210502-OR45_total3D_train_test_data'
-# _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-withMesh20210507-OR45_total3D_train_test_data'
-_C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-withMesh20210510-assign2NotReindex-OR45_total3D_train_test_data_3'
-
-_C.DATASET.envmap_path = ''
-_C.DATASET.envmap_path_local = '/home/ruizhu/Documents/data/EnvDataset/'
-_C.DATASET.envmap_path_cluster = '/siggraphasia20dataset/EnvDataset/'
-
-_C.DATASET.matpart_path = ''
-_C.DATASET.matpart_path_local = '/data/ruizhu/OR-matpart'
-_C.DATASET.matpart_path_cluster = '/siggraphasia20dataset/code/Routine/DatasetCreation/'
-_C.DATASET.matori_path = ''
-_C.DATASET.matori_path_local = '/newfoundland2/ruizhu/siggraphasia20dataset/BRDFOriginDataset/'
-_C.DATASET.matori_path_cluster = '/siggraphasia20dataset/BRDFOriginDataset/'
-
-# _C.DATASET.dataset_list = 'data/openrooms/list_OR_V4full/list'
 _C.DATASET.dataset_list = ''
-_C.DATASET.dataset_path_mini = '/data/ruizhu/openrooms_mini'
-_C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini/list'
-# _C.DATASET.dataset_path_mini = '/data/ruizhu/openrooms_mini-val'
-# _C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini-val/list'
+_C.DATASET.dataset_path_mini = '/data/ruizhu/openrooms_mini-val'
+_C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini-val/list'
 _C.DATASET.dataset_path_tmp = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms_sequence_val_notSkipFrames'
 _C.DATASET.dataset_list_tmp = 'data/openrooms/list_OR_tmp/list'
 _C.DATASET.dataset_list_sequence = False # convert #idx of the val list into sequential inputs
@@ -117,8 +63,6 @@ _C.DATASET.if_no_gt = False
 
 _C.DATA = CN()
 _C.DATA.if_load_png_not_hdr = False # load png as input image instead of hdr image
-_C.DATA.if_also_load_next_frame = False # load next frame (only png supported) in addition to current frame
-
 _C.DATA.if_augment_train = False
 _C.DATA.im_height = 240
 _C.DATA.im_width = 320
@@ -134,18 +78,6 @@ _C.DATA.data_read_list_allowed = ['al', 'no', 'de', 'ro', \
     'lo', 'em', 'ob', 'mesh']
 _C.DATA.load_matcls_gt = False
 _C.DATA.load_detectron_gt = False
-_C.DATA.load_cam_pose = False
-
-# ===== GMM
-_C.MODEL_GMM = CN()
-_C.MODEL_GMM.enable = False
-_C.MODEL_GMM.learning_rate = 1e-5
-_C.MODEL_GMM.ssn_grid_spixel = False
-_C.MODEL_GMM.src_idx = 1
-_C.MODEL_GMM.grad_clip = 0.
-_C.MODEL_GMM.RAFT = CN()
-_C.MODEL_GMM.RAFT.small = False
-_C.MODEL_GMM.RAFT.OF_model_path = '/home/ruizhu/Documents/Projects/nvidia/vidapp/third-party/raft/models/raft-things.pth'
 
 # ===== BRDF
 _C.MODEL_BRDF = CN()

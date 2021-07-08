@@ -47,7 +47,7 @@ pip install 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonA
 pip install google-colab
 # pip install -U opencv-python==4.2.0.34
 git clone https://github.com/facebookresearch/detectron2 third-parties_outside/detectron_elvis/outfileelvis/detectron2_repo
-pip install -e third-parties_outside/detectron_elvis/outfileelvis/detectron2_repo
+pip install -e third_parties_outside/detectron_elvis/outfileelvis/detectron2_repo/
 ```
 
 ## 2. Useful links:

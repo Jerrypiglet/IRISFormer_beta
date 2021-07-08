@@ -41,3 +41,11 @@ BRDFOriginDataset
 EnvDataset
 layoutMesh
 uv_mapped
+train/models_def/model_nvidia/ssn_3d/dist/*
+train/models_def/model_nvidia/ssn_3d/pdist3dgmm.egg-info/*
+train/models_def/model_nvidia/ssn_3d/build/*
+train/models_def/model_nvidia/ssn/dist/*
+train/models_def/model_nvidia/ssn/pdist.egg-info/
+train/models_def/model_nvidia/ssn/build/*
+notebooks/render_OR_sequence_scannetPoses-Copy1.ipynb
+notebooks/render_OR_sequence_scannetPoses-Copy2.ipynb

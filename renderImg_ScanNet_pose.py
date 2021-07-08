@@ -42,7 +42,7 @@ for n in range(len(scenes)):
 
     outDir = osp.join(opt.outRoot, opt.xmlFile + '_' + opt.xmlRoot.split('/')[-1], sceneId )
     if not osp.isdir(outDir ):
-        continue
+        # continue
         os.system('mkdir -p %s' % outDir )
 
     xmlFile = osp.join(scene, '%s.xml' % opt.xmlFile )
@@ -74,9 +74,9 @@ for n in range(len(scenes)):
 
     if not isFindAreaLight:
         print('Warning: no area light found, may need more samples.' )
-        cmd += ' --maxIteration 1'
+        cmd += ' --maxIteration 4'
     else:
-        cmd += ' --maxIteration 1'
+        cmd += ' --maxIteration 4'
 
     print(cmd)
     os.system(cmd )

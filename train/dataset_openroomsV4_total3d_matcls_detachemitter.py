@@ -379,7 +379,6 @@ class openrooms(data.Dataset):
             im_RGB_uint8 = np.array(image)
             im_RGB_uint8 = cv2.resize(im_RGB_uint8, (self.im_width, self.im_height), interpolation = cv2.INTER_AREA )
 
-
             image_transformed_fixed = self.transforms_fixed(im_RGB_uint8)
             im_trainval_RGB = self.transforms_resize(im_RGB_uint8) # not necessarily \in [0., 1.] [!!!!]
             # print(type(im_trainval_RGB), torch.max(im_trainval_RGB), torch.min(im_trainval_RGB), torch.mean(im_trainval_RGB))
@@ -388,14 +387,24 @@ class openrooms(data.Dataset):
 
             batch_dict.update({'image_path': str(png_image_path)})
 
+            if self.opt.cfg.DATA.if_also_load_next_frame:
+                png_image_next_path = Path(self.opt.cfg.DATASET.png_path) / meta_split / scene_name / ('im_%d.png'%(frame_id+1))
+                if not png_image_next_path.exists():
+                    return self.__getitem__((index+1)%len(self.data_list))
+                image_next = Image.open(str(png_image_next_path))
+                im_RGB_uint8_next = np.array(image_next)
+                im_RGB_uint8_next = cv2.resize(im_RGB_uint8_next, (self.im_width, self.im_height), interpolation = cv2.INTER_AREA )
+                im_SDR_RGB_next = im_RGB_uint8_next.astype(np.float32) / 255.
+                batch_dict.update({'im_SDR_RGB_next': im_SDR_RGB_next})
+
         else:
             # Read HDR image
             im_ori = self.loadHdr(hdr_image_path)
-            # Random scale the image
+            # Random scale the image for training/val (indicated with self.split in self.scaleHdr())
             im_trainval, hdr_scale = self.scaleHdr(im_ori, seg, forced_fixed_scale=False, if_print=True) # forced_fixed_scale=False for scale augmentation
             im_trainval_RGB = np.clip(im_trainval**(1.0/2.2), 0., 1.)
 
-            # == no random scaling:
+            # == no random scaling for inference
             im_SDR_fixedscale, _ = self.scaleHdr(im_ori, seg, forced_fixed_scale=True)
             im_SDR_RGB = np.clip(im_SDR_fixedscale**(1.0/2.2), 0., 1.)
             im_RGB_uint8 = (255. * im_SDR_RGB).transpose(1, 2, 0).astype(np.uint8)
@@ -418,10 +427,16 @@ class openrooms(data.Dataset):
         # hdr: ------ torch.Size([3, 240, 320]) (3, 240, 320) (3, 240, 320) (3, 240, 320) (240, 320, 3)
         batch_dict.update({'hdr_scale': hdr_scale, 'image_transformed_fixed': image_transformed_fixed, 'im_trainval': torch.from_numpy(im_trainval), 'im_trainval_RGB': im_trainval_RGB, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
 
+        if self.opt.cfg.DATA.load_cam_pose:
+            # opposite of def computeCameraEx() /home/ruizhu/Documents/Projects/Total3DUnderstanding/utils_OR/DatasetCreation/sampleCameraPoseFromScanNet.py
+            cam_txt_path = Path(self.opt.cfg.DATASET.dataset_path) / 
+
+            
+
         # ====== BRDF =====
         # image_path = batch_dict['image_path']
         if self.opt.cfg.DATA.load_brdf_gt and (not self.opt.cfg.DATASET.if_no_gt):
-            batch_dict_brdf = self.load_brdf_lighting(hdr_image_path, if_load_immask, mask_path, mask, seg, hdr_scale)
+            batch_dict_brdf = self.load_brdf_lighting(hdr_image_path, if_load_immask, mask_path, mask, seg, hdr_scale, frame_info)
             batch_dict.update(batch_dict_brdf)
 
         # ====== matseg =====
@@ -443,6 +458,7 @@ class openrooms(data.Dataset):
         # ====== layout, obj (including masks), emitters =====
         if self.opt.cfg.DATA.load_layout_emitter_gt or 'ob' in self.opt.cfg.DATA.data_read_list and (not self.opt.cfg.DATASET.if_no_gt):
             scene_dict = self.read_scene(frame_info=frame_info)
+            print(scene_dict['camera'])
 
         if self.opt.cfg.DATA.load_layout_emitter_gt and (not self.opt.cfg.DATASET.if_no_gt):
             layout_emitter_dict = self.load_layout_emitter_gt_detach_emitter(scene_dict=scene_dict, frame_info=frame_info, hdr_scale=hdr_scale)
@@ -474,7 +490,7 @@ class openrooms(data.Dataset):
 
         return batch_dict
 
-    def load_brdf_lighting(self, hdr_image_path, if_load_immask, mask_path, mask, seg, hdr_scale):
+    def load_brdf_lighting(self, hdr_image_path, if_load_immask, mask_path, mask, seg, hdr_scale, frame_info):
         batch_dict_brdf = {}
         # Get paths for BRDF params
         if 'al' in self.cfg.DATA.data_read_list:
@@ -502,6 +518,12 @@ class openrooms(data.Dataset):
             # Read depth
             depth = self.loadBinary(depth_path)
             batch_dict_brdf.update({'depth': torch.from_numpy(depth),})
+            if self.opt.cfg.DATA.if_also_load_next_frame:
+                frame_id = frame_info['frame_id']
+                depth_path_next = depth_path.replace('%d.dat'%frame_id, '%d.dat'%(frame_id+1))
+                depth_next = self.loadBinary(depth_path_next)
+                batch_dict_brdf.update({'depth_next': torch.from_numpy(depth_next),})
+
 
         if self.cascadeLevel == 0:
             env_path = hdr_image_path.replace('im_', 'imenv_')

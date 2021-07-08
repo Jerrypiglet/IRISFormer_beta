@@ -58,6 +58,12 @@ def set_up_envs(opt):
     # ===== data =====
     opt.cfg.DATA.data_read_list = [x for x in list(set(opt.cfg.DATA.data_read_list.split('_'))) if x != '']
 
+    # ====== GMM =====
+    if opt.cfg.MODEL_GMM.enable:
+        opt.cfg.DATA.if_load_png_not_hdr = True
+        opt.cfg.DATA.if_also_load_next_frame = True
+        opt.cfg.DATA.load_cam_pose = True
+
     # ====== BRDF =====
     opt.cfg.MODEL_BRDF.enable_list = [x for x in opt.cfg.MODEL_BRDF.enable_list.split('_') if x != '']
     opt.cfg.MODEL_BRDF.loss_list = [x for x in opt.cfg.MODEL_BRDF.loss_list.split('_') if x != '']
