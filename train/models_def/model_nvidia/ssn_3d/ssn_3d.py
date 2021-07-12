@@ -10,12 +10,12 @@ import torch
 import os, glob
 
 from .pair_wise_dist_gmm import PairwiseDistFunction
-from models_def.model_nvidia.utils_nvidia.misc import outer_prod
+from models_def.model_nvidia.utils_nvidia.misc import outer_prod, outer_prod_batch
 
 import torch.cuda.amp as amp
 
 # for debugging
-from matplotlib.pyplot import * 
+# from matplotlib.pyplot import * 
 import time
 import torch.nn.functional as F
 
@@ -45,14 +45,18 @@ def affinity_rel2abs(affinity_matrix, abs_indices, num_spixels, hard_labels=None
      OUTPUTS
         B J N
     '''
+    # print(affinity_matrix.shape, abs_indices.shape) # torch.Size([1, 9, 98304]) torch.Size([3, 884736])
 
     reshaped_affinity_matrix = affinity_matrix.reshape(-1) 
     mask = (abs_indices[1] >= 0)*(abs_indices[1] < num_spixels)
+    # print(abs_indices.shape, mask.shape) # torch.Size([3, 884736]) torch.Size([884736])
 
     # abs_indices: 3x(9HW), 
     # affinity_matrix: Bx9x(HW) B=1, 
     # reshaped_affinity_matrix: (9BHW), B=1
+    # print(mask.shape, abs_indices.shape, reshaped_affinity_matrix.shape)
     sparse_abs_affinity = torch.sparse_coo_tensor(abs_indices[:, mask], reshaped_affinity_matrix[mask])
+    # print(abs_indices[:, mask].shape, reshaped_affinity_matrix[mask].shape, sparse_abs_affinity.shape) # torch.Size([3, 843786]) torch.Size([843786]) torch.Size([1, 315, 98304])
     abs_affinity = sparse_abs_affinity.to_dense().contiguous()  #BxJx(HW), B=1
 
     return abs_affinity 
@@ -249,11 +253,13 @@ def get_init_params(images, Z_outer, num_spixels_width, num_spixels_height):
 
     T0 = abs_affinity.sum(1).unsqueeze(1) #Jx1
     T1 = torch.matmul(abs_affinity, images.squeeze().permute(1,2,0).reshape(-1,3)) # Jx3
+    # print(abs_affinity.shape, T0.shape, images.shape, T1.shape, Z_outer.shape) # torch.Size([12, 315, 76800]) torch.Size([12, 315, 1]) torch.Size([12, 3, 240, 320])
     T2 = torch.matmul(abs_affinity, Z_outer) #Jx9
     mix = T0/ (height*width) #Jx1
     mu = T1/ T0 #Jx3
     #Get outer mu
     outer_mu = outer_prod(mu, mu).reshape(-1, 9)
+    # print(outer_mu.shape, T2.shape, T0.shape) # torch.Size([315, 9]) torch.Size([315, 9]) torch.Size([315, 1])
     #Get sigma
     sigma = T2/T0 - outer_mu #Jx9
 
@@ -290,7 +296,9 @@ def ssn3d_iter(
     # get initial parameters for GMMs (mu, sigma, pi)
     permuted_pixel_features = pixel_features.reshape(*pixel_features.shape[:2], -1).permute(0, 2, 1).contiguous() #Bx N_pix x C
     pts_outer = outer_prod(permuted_pixel_features.squeeze(), permuted_pixel_features.squeeze()).reshape(-1, 9)
-    spixel_mu, spixel_cov, mix, init_label_map, abs_indices = get_init_params(pixel_features, pts_outer, num_spixels_width, num_spixels_height)
+    # print(permuted_pixel_features.shape, pts_outer.shape)
+    spixel_mu, spixel_cov, mix, init_label_map, abs_indices = get_init_params(pixel_features, pts_outer, num_spixels_width, num_spixels_height) # torch.Size([315, 3]) torch.Size([315, 9]) torch.Size([315, 1]) torch.Size([1, 98304]) torch.Size([3, 884736])
+    # print(spixel_mu.shape, spixel_cov.shape, mix.shape, init_label_map.shape, abs_indices.shape)
 
     # get sigma_invcov, cmix
     det_spixel_cov = spixel_cov.reshape(-1, 3, 3).det().unsqueeze(1) #Jx1 #TODO: will the explicit computation for det be faster than .det()? 

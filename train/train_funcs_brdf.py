@@ -41,9 +41,9 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
 
 
             if if_load_mask:
-                mask_cpu = data_batch['mask'].permute(0, 3, 1, 2) # [b, 3, h, w]
-                input_dict['maskBatch'] = mask_cpu.cuda(non_blocking=True)
-
+                if 'mask' in data_batch:
+                    mask_cpu = data_batch['mask'].permute(0, 3, 1, 2) # [b, 3, h, w]
+                    input_dict['maskBatch'] = mask_cpu.cuda(non_blocking=True)
 
                 segArea_cpu = data_batch['segArea']
                 segEnv_cpu = data_batch['segEnv']

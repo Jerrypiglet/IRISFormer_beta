@@ -104,8 +104,13 @@ _C.DATASET.dataset_path_mini = '/data/ruizhu/openrooms_mini'
 _C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini/list'
 # _C.DATASET.dataset_path_mini = '/data/ruizhu/openrooms_mini-val'
 # _C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini-val/list'
-_C.DATASET.dataset_path_tmp = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms_sequence_val_notSkipFrames'
-_C.DATASET.dataset_list_tmp = 'data/openrooms/list_OR_tmp/list'
+_C.DATASET.dataset_path_tmp = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms_sequence_val_skip20Frames_withDepth'
+# _C.DATASET.dataset_list_tmp = 'data/openrooms/list_OR_scanNetPose_hasNext/list'
+# _C.DATASET.dataset_path_tmp = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms_sequence_val'
+# _C.DATASET.dataset_list_tmp = 'data/openrooms/list_OR_tmp_/list'
+_C.DATASET.dataset_list_tmp = 'data/openrooms/list_OR_scanNetPose_hasNext/list'
+_C.DATASET.dataset_if_save_space = True # e.g. only same one depth for main_xml, diffMat, diffLight
+
 _C.DATASET.dataset_list_sequence = False # convert #idx of the val list into sequential inputs
 _C.DATASET.dataset_list_sequence_idx = -1
 

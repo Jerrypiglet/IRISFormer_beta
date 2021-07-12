@@ -167,6 +167,7 @@ class openrooms(data.Dataset):
                 tfv_transform.ToTensor()])
             self.T_to_tensor = tfv_transform.ToTensor()
 
+
     def __len__(self):
         return len(self.data_list)
 
@@ -200,8 +201,10 @@ class openrooms(data.Dataset):
 
         assert self.opt.cfg.DATA.if_load_png_not_hdr
         if png_image_path.exists():
-            png_image_path.unlink()
-        self.convert_write_png(hdr_image_path, seg, png_image_path)
+            # png_image_path.unlink()
+            pass
+        else:
+            self.convert_write_png(hdr_image_path, seg, png_image_path)
 
         # Read PNG image
         image = Image.open(str(png_image_path))
@@ -275,7 +278,7 @@ class openrooms(data.Dataset):
 
         img = read_img(img_path , no_process = True)[0]
         img_raw = self.T_to_tensor( img )
-        print('--', img.size, img_raw.shape, img_path)
+        # print('--', img.size, img_raw.shape, img_path) # -- (320, 240) torch.Size([3, 240, 320]) /data/ruizhu/OR-pngs/main_xml1/scene0610_01/im_12.png
 
         img = img.resize([self.im_width, self.im_height], PIL.Image.NEAREST) 
         img_small = img.resize( [self.im_width//4, self.im_height//4], PIL.Image.NEAREST )
@@ -283,11 +286,21 @@ class openrooms(data.Dataset):
 
         img = proc_normalize(img)
         img_small = proc_normalize( img_small )
-        # print('-->', img.shape, img_raw.shape, img_small.shape)
+        # print('-->', img.shape, img_raw.shape, img_small.shape) # --> torch.Size([3, 240, 320]) torch.Size([3, 240, 320]) torch.Size([3, 60, 80])
 
         batch_dict.update({'img_GMM': img.unsqueeze_(0), 
             'img_raw_GMM': img_raw.unsqueeze_(0),
             'img_small_GMM': img_small.unsqueeze_(0)})
+
+        scene_dict = self.read_scene(frame_info=frame_info)
+        cam_K = scene_dict['camera']['K'] # [[577.8708   0.     320.    ], [  0.     577.8708 240.    ], [  0.       0.       1.    ]]
+        cam_K_ratio_W = cam_K[0][2] / (self.im_width/2.)
+        cam_K_ratio_H = cam_K[1][2] / (self.im_height/2.)
+        assert cam_K_ratio_W == cam_K_ratio_H
+        cam_K_scaled = np.vstack([cam_K[:2, :] / cam_K_ratio_W, cam_K[2:3, :]])
+        batch_dict.update({'cam_K_scaled_GMM': cam_K_scaled})
+        # print(cam_K_scaled)
+
 
     def load_brdf_lighting(self, hdr_image_path, if_load_immask, mask_path, mask, seg, hdr_scale, frame_info):
         batch_dict_brdf = {}
@@ -415,6 +428,29 @@ class openrooms(data.Dataset):
             batch_dict_brdf['specularPre'] = specularPre
 
         return batch_dict_brdf
+
+    def read_scene(self, frame_info):
+        scene_total3d_path, frame_id = frame_info['scene_total3d_path'], frame_info['frame_id']
+        pickle_path = str(scene_total3d_path / ('layout_obj_%d.pkl'%frame_id))
+        pickle_path_reindexed = pickle_path.replace('.pkl', '_reindexed.pkl')
+        with open(pickle_path, 'rb') as f:
+            sequence = pickle.load(f)
+        with open(pickle_path_reindexed, 'rb') as f:
+            sequence_reindexed = pickle.load(f)
+
+        camera = sequence['camera']
+        
+        return_scene_dict = {'sequence': sequence, 'sequence_reindexed': sequence_reindexed, 'camera': camera, 'scene_pickle_path': pickle_path}
+
+        # read transformation matrices from RAW OR -> Total3D
+        transform_to_total3d_coords_dict_path = str(scene_total3d_path / ('transform_to_total3d_coords_dict_%d.pkl'%frame_id))
+        with open(transform_to_total3d_coords_dict_path, 'rb') as f:
+            transform_to_total3d_coords_dict = pickle.load(f)
+        transform_R_RAW2Total3D, transform_t_RAW2Total3D = transform_to_total3d_coords_dict['transform_R'], transform_to_total3d_coords_dict['transform_t']
+        return_scene_dict.update({'transform_R_RAW2Total3D': transform_R_RAW2Total3D.astype(np.float32), 'transform_t_RAW2Total3D': transform_t_RAW2Total3D.astype(np.float32)})
+
+        return return_scene_dict
+
 
     def loadImage(self, imName, isGama = False):
         if not(osp.isfile(imName ) ):

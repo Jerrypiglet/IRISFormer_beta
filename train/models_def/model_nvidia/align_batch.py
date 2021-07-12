@@ -82,7 +82,7 @@ def dmaps_to_pcd(dmaps, Cam_intrin, inverse_depth =False, return_nonzero = False
             pcds.append(pcd.transpose(0,1))
             npts.append(pcd.shape[1]) 
 
-    pcds = torch.cat(pcds, dim=0)
+    pcds = torch.stack(pcds, dim=0)
 
     if not return_nonzero:
         return pcds, npts
@@ -226,9 +226,8 @@ def depth2gmm(dmap_, Cam_Intrinscis_list,
     num_spixels = spixel_dim[0]*spixel_dim[1] 
 
     feat_pcd_ref, npts_ref, = dmaps_to_pcd(dmap, Cam_Intrinscis_list[0], inverse_depth=False, return_nonzero=False)
-
-    feat_pcd_ref_map = feat_pcd_ref.T.reshape(-1, *dmap.shape[-2:]).unsqueeze(0) # [b, 3, H, W]
-    # print(feat_pcd_ref.shape, dmap.shape, feat_pcd_ref_map.shape)
+    feat_pcd_ref_map = feat_pcd_ref.transpose(-1, -2).reshape(-1, 3, dmap.shape[-2], dmap.shape[-1])
+    # print(feat_pcd_ref.shape, dmap.shape, feat_pcd_ref_map.shape) # torch.Size([12, 76800, 3]) torch.Size([12, 1, 240, 320]) torch.Size([12, 3, 240, 320])
     feat_ssn_in_ref  = feat_pcd_ref_map
 
     abs_affinity_ref, rel, _, _, _, abs_spixel_ind = \

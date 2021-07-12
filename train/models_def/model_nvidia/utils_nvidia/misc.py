@@ -92,6 +92,19 @@ def outer_prod(A, B):
     AB_outer = torch.einsum('bi,bj->bij', (A,B) )
     return AB_outer
 
+def outer_prod_batch(A, B):
+    '''
+    get the outerproduct between the vectors stored in A and B
+    A - b x batch x dim
+    B - b x batch x dim
+
+    output: AB_outer: batch x dim x dim 
+    AB_outer[ibatch] is the outer product of A[ibatch, :] and B[ibatch, :]
+    '''
+    assert A.shape[:2] == B.shape[:2], 'operants should have the same batch size!'
+    AB_outer = torch.einsum('...bi,...bj->...bij', (A,B) )
+    return AB_outer
+
 def msavefig(tensor, fname, vmin=None, vmax=None, scale=False, cmap=None, text=None):
     tensor_ = tensor.detach().squeeze().cpu()
     assert tensor_.shape[0]>2

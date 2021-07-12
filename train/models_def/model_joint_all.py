@@ -21,7 +21,10 @@ import models_def.models_mesh_reconstruction as models_mesh_reconstruction
 import models_def.models_layout_emitter_lightAccu as models_layout_emitter_lightAccu
 import models_def.models_layout_emitter_lightAccuScatter as models_layout_emitter_lightAccuScatter
 import models_def.model_matcls as model_matcls
-import models_def.model_nvidia.AppGMM as AppGMM
+# import models_def.model_nvidia.AppGMM as AppGMM
+import models_def.model_nvidia.AppGMM_singleFrame as AppGMM
+
+from utils.utils_scannet import convert_IntM_from_OR, CamIntrinsic_to_cuda
 
 from SimpleLayout.SimpleSceneTorchBatch import SimpleSceneTorchBatch
 from utils.utils_total3D.utils_OR_layout import get_layout_bdb_sunrgbd
@@ -67,7 +70,12 @@ class Model_Joint(nn.Module):
 
         if self.cfg.MODEL_GMM.enable:
             self.MODEL_GMM = AppGMM.AppGMM(self.opt,)
-            self.MODEL_GMM.set_optical_flow_model(self.opt)
+            # self.MODEL_GMM.set_optical_flow_model(self.opt)
+            cam_K_320x240 = np.array([[288.9354, 0., 160.], [0., 288.9354, 120.], [0., 0.,1.]]) # for 240x320 OR ONLY
+            cam_intrinsic = convert_IntM_from_OR(cam_K_320x240)
+            CamIntrinsic_to_cuda(cam_intrinsic, device='cuda') 
+            self.MODEL_GMM.set_camintrinsic(cam_intrinsic)
+
             
         if self.cfg.MODEL_BRDF.enable:
             in_channels = 3
@@ -250,12 +258,12 @@ class Model_Joint(nn.Module):
 
         if self.cfg.MODEL_GMM.enable:
             input_dict_GMM = input_dict
-            print(input_dict_GMM.keys(), input_dict['depthBatch_next'].shape)
+            # print(input_dict_GMM.keys(), input_dict['depthBatch_next'].shape)
             input_dict_GMM['imgs_ref'] = input_dict['im_SDR_RGB'].permute(0, 3, 1, 2)
-            input_dict_GMM['imgs_src'] = input_dict['im_SDR_RGB_next'].permute(0, 3, 1, 2)
+            # input_dict_GMM['imgs_src'] = input_dict['im_SDR_RGB_next'].permute(0, 3, 1, 2)
             input_dict_GMM['dmaps_ref'] = input_dict['depthBatch']
-            input_dict_GMM['dmaps_src'] = input_dict['depthBatch_next']
-            batch_idx = 0
+            # input_dict_GMM['dmaps_src'] = input_dict['depthBatch_next']
+            batch_idx = input_dict['batch_idx'][0]
             self.MODEL_GMM.training_step(input_dict_GMM, batch_idx)
 
         if self.cfg.MODEL_BRDF.enable:

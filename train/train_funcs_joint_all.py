@@ -100,7 +100,7 @@ def get_matcls_meters(opt):
 def get_labels_dict_joint(data_batch, opt):
 
     # prepare input_dict from data_batch (from dataloader)
-    labels_dict = {'im_trainval_RGB': data_batch['im_trainval_RGB'].cuda(non_blocking=True), 'im_SDR_RGB': data_batch['im_SDR_RGB'].cuda(non_blocking=True)}
+    labels_dict = {'im_trainval_RGB': data_batch['im_trainval_RGB'].cuda(non_blocking=True), 'im_SDR_RGB': data_batch['im_SDR_RGB'].cuda(non_blocking=True), 'batch_idx': data_batch['image_index']}
     if 'im_SDR_RGB_next' in data_batch:
         labels_dict['im_SDR_RGB_next'] = data_batch['im_SDR_RGB_next'].cuda(non_blocking=True)
 
@@ -1307,22 +1307,28 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     writer.add_image('VAL_brdf-albedo_PRED/%d'%sample_idx, albedo_pred_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                     if opt.cfg.DEBUG.if_dump_perframe_BRDF:
                         Image.fromarray((albedo_pred_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8)).save('{0}/{1}_albedoPred_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
+                        Image.fromarray((albedo_gt_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8)).save('{0}/{1}_albedoGt_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
                 if 'no' in opt.cfg.MODEL_BRDF.enable_list:
                     writer.add_image('VAL_brdf-normal_PRED/%d'%sample_idx, normal_pred_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                     if opt.cfg.DEBUG.if_dump_perframe_BRDF:
                         Image.fromarray((normal_pred_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8)).save('{0}/{1}_normalPred_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
+                        Image.fromarray((normal_gt_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8)).save('{0}/{1}_normalGt_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
                 if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
                     writer.add_image('VAL_brdf-rough_PRED/%d'%sample_idx, rough_pred_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                     if opt.cfg.DEBUG.if_dump_perframe_BRDF:
                         Image.fromarray((rough_pred_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8).squeeze()).save('{0}/{1}_roughPred_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
+                        Image.fromarray((rough_gt_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8).squeeze()).save('{0}/{1}_roughGt_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
                 if 'de' in opt.cfg.MODEL_BRDF.enable_list:
-                    depth_normalized, _ = vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True, min_scale=depth_min_and_scale_list[sample_idx] if (not opt.cfg.DATASET.if_no_gt) else None)
-                    writer.add_image('VAL_brdf-depth_syncScale_PRED/%d'%sample_idx, depth_normalized, tid, dataformats='HWC')
-                    depth_not_normalized = vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True)[0]
-                    writer.add_image('VAL_brdf-depth_PRED/%d'%sample_idx, depth_not_normalized, tid, dataformats='HWC')
+                    depth_normalized_pred, _ = vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True, min_scale=depth_min_and_scale_list[sample_idx] if (not opt.cfg.DATASET.if_no_gt) else None)
+                    writer.add_image('VAL_brdf-depth_syncScale_PRED/%d'%sample_idx, depth_normalized_pred, tid, dataformats='HWC')
+                    depth_not_normalized_pred = vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True)[0]
+                    writer.add_image('VAL_brdf-depth_PRED/%d'%sample_idx, depth_not_normalized_pred, tid, dataformats='HWC')
                     if opt.cfg.DEBUG.if_dump_perframe_BRDF:
-                        Image.fromarray((depth_normalized).astype(np.uint8)).save('{0}/{1}_depthPred_syncScale_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
-                        Image.fromarray((depth_not_normalized).astype(np.uint8)).save('{0}/{1}_depthPred_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
+                        Image.fromarray((depth_normalized_pred).astype(np.uint8)).save('{0}/{1}_depthPred_syncScale_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
+                        Image.fromarray((depth_not_normalized_pred).astype(np.uint8)).save('{0}/{1}_depthPred_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
+                        depth_normalized_gt, _ = vis_disp_colormap(depth_gt_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True)
+                        Image.fromarray((depth_normalized_gt).astype(np.uint8)).save('{0}/{1}_depthGt_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
+
                     pickle_save_path = Path(opt.summary_vis_path_task) / ('results_depth_%d.pickle'%sample_idx)
                     save_dict = {'depthPreds_vis': depthPreds_vis[sample_idx].detach().cpu().squeeze().numpy()}
                     if opt.if_save_pickles:

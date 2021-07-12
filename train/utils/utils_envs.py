@@ -18,6 +18,7 @@ def set_up_envs(opt):
     if opt.if_cluster:
         opt.cfg.TRAINING.MAX_CKPT_KEEP = -1
         opt.if_save_pickles = True
+
     opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_cluster if opt.if_cluster else opt.cfg.DATASET.dataset_path_local
     opt.cfg.DATASET.layout_emitter_path = opt.cfg.DATASET.layout_emitter_path_cluster if opt.if_cluster else opt.cfg.DATASET.layout_emitter_path_local
     opt.cfg.DATASET.png_path = opt.cfg.DATASET.png_path_cluster if opt.if_cluster else opt.cfg.DATASET.png_path_local
@@ -61,7 +62,7 @@ def set_up_envs(opt):
     # ====== GMM =====
     if opt.cfg.MODEL_GMM.enable:
         opt.cfg.DATA.if_load_png_not_hdr = True
-        opt.cfg.DATA.if_also_load_next_frame = True
+        # opt.cfg.DATA.if_also_load_next_frame = True
         opt.cfg.DATA.load_cam_pose = True
 
     # ====== BRDF =====

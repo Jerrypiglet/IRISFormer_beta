@@ -44,6 +44,8 @@ class AppGMM(torch.nn.Module):
 
         self.set_optical_flow_model(args)
 
+        self.opt = args
+
     def configure_optimizers(self):
         '''
 		configure the optimizers here
@@ -77,7 +79,7 @@ class AppGMM(torch.nn.Module):
         # imgs_src = batch['imgs_src'][:, self.src_idx * 3:(self.src_idx+1)*3, ...].cuda()
         # imgs_src = batch['imgs_src'].cuda()
         dmaps_ref_gt = batch['dmaps_ref'].cuda()
-        last_frame_traj = batch['last_frame_traj']
+        # last_frame_traj = batch['last_frame_traj']
 
         J = self.spixel_nums[0] * self.spixel_nums[1]
         H, W = imgs_ref.shape[-2], imgs_ref.shape[-1]
@@ -87,9 +89,9 @@ class AppGMM(torch.nn.Module):
         dmap_resample = None
 
         # invalid frame in ScanNet (all zero depth map or invalid pose)
-        if self.training and ((dmaps_ref_gt.max() == 0 and dmaps_ref_gt.min() == 0) or T_pred_gt.isnan().sum() > 0):
-            self.status_pred_in = None
-            return None
+        # if self.training and ((dmaps_ref_gt.max() == 0 and dmaps_ref_gt.min() == 0) or T_pred_gt.isnan().sum() > 0):
+        #     self.status_pred_in = None
+        #     return None
 
         #inpainting dmap_gt
         # dmaps_ref_gt = m_misc.inpaint_depth(dmaps_ref_gt)
@@ -104,111 +106,8 @@ class AppGMM(torch.nn.Module):
                 H, W, self.spixel_nums)  # 9xHxW
             self.init_inbound_mask.requires_grad = False
 
-        if self.status_pred_in is not None:
-            #== Get relative camera pose from prev to ref ==#
-            imgs_prev = self.status_pred_in['imgs_ref']
-            dmap_prev = self.status_pred_in['dmap_update']
-            mix_prev, mu_prev, cov_prev, gamma_previous_log, abs_spixel_ind_prev = \
-                self.status_pred_in['mix_update'], self.status_pred_in['mu_update'], \
-                self.status_pred_in['cov_update'], self.status_pred_in['gamma_update'], \
-                self.status_pred_in['abs_spixel_ind']
-
-            OF_iter = 10 #optical flow maximal iteration for RAFT
-
-            gmm_param_cur, gamma_cur, abs_spixel_ind_cur_warp, in_bound_mask_warp, flow_ref2prev = \
-                align.get_src_gmm(
-                    img_ref=imgs_ref,
-                    abs_affinity_src=gamma_previous_log,
-                    img_src=imgs_src,
-                    dmap_ref=dmap_ref_meas,
-                    model_optical_flow=self.model_optical_flow,
-                    Cam_Intrinscis_list=[self.cam_intrinsic],
-                    abs_spixel_ind_src=abs_spixel_ind_prev.unsqueeze(0),
-                    in_bound_map=self.init_inbound_mask.unsqueeze(0),
-                    num_spixels_width=self.spixel_nums[0],
-                    num_spixels_height=self.spixel_nums[1],
-                    OF_iter=OF_iter,
-                )
-
-            in_bound_mask_warp = in_bound_mask_warp.T.contiguous().reshape(9, H, W)  # 9xHxW
-            _, flow_prev2ref, _, _, _ = self.model_optical_flow(
-                2 * imgs_src - 1,
-                2 * imgs_ref - 1,
-                iters=OF_iter,
-                test_mode=True)
-            flow_prev2ref = flow_prev2ref.detach()
-
-            #get the flow mask by forard-backward warping of optical flow check#
-            # useful in dealing with occlusions etc.#
-            diff_norm_ref = align.check_optical_flows(
-                flow_ref2prev, flow_prev2ref).squeeze()
-            diff_norm_prev = align.check_optical_flows(
-                flow_prev2ref, flow_ref2prev).squeeze()
-            flow_mask = diff_norm_ref < 5.  
-            flow_mask_src2prev = diff_norm_prev < 5. 
-
-
-            '''get global pose'''
-            global_pose = T_pred_gt_inv.unsqueeze(0)  # 1x1x4x4
-            global_pose_inv = T_pred_gt.unsqueeze(0)
-
-            # 1xJx4x4, gmm T_j from prev to ref
-            Ts_align_flow = global_pose.repeat([1, J, 1, 1])
-            Ts_align_flow_inv = global_pose_inv.repeat(
-                [1, J, 1, 1])  # gmm T_j from ref to prev
-
-            '''Resample'''
-            # Resample depth given transformed GMMs#
-            abs_spixel_ind_cur_warp = abs_spixel_ind_cur_warp.T.contiguous().reshape(9, H, W)  # 9xHxW
-            cluster_t_valid = gamma_cur.sum(0).squeeze() > 10
-
-            mix_pred_Ts, mu_pred_Ts, cov_pred_Ts = align.transformGMM_Rt(
-                mix_prev.squeeze()[cluster_t_valid],
-                mu_prev.squeeze()[cluster_t_valid],
-                cov_prev.squeeze()[cluster_t_valid],
-                R=Ts_align_flow[0, cluster_t_valid, :3, :3],
-                t=Ts_align_flow[0, cluster_t_valid, :3, 3])
-            mix_resample, mu_resample, cov_resample = mix_pred_Ts, mu_pred_Ts, cov_pred_Ts
-
-            dmap_resample, sigma_resample = \
-                self.gmm2depth(
-                    mix_resample,
-                    mu_resample,
-                    cov_resample,
-                    cluster_t_valid,
-                    abs_spixel_ind_cur_warp,
-                    in_bound_mask_warp,
-                    gamma_cur, )
-
-            if dmap_resample is None: # error happes during resampling..
-                self.status_pred_in = None
-
-                # NOTE: set the break point here when resampling encounters an error, useful for debugging training, since 
-                # during training the depth map and pose are not accurate, that will lead strange values for the depth sampler
-                # uncomment this line if you want to have robust training where we will ignore the loss and gradient when resampling is not working
-                # for some frames
-                import ipdb; ipdb.set_trace() 
-
-                return None
-
-            #threshold the resampled dmap to be larger than zero#
-            dmap_resample[dmap_resample < 0.] = 0.
-
-
         # for demo purpose, we will do the fusion of resampled value and noisy measured values
         dmap_update = dmaps_ref_gt
-
-        #for demo purpose: we will compare the resapmled depth with the GT depth
-        if dmap_resample is not None:
-            diff_depth = dmaps_ref_gt.squeeze() - dmap_resample.squeeze()
-            # save the depth maps here for demonstration purpose #
-            import os
-            fldr='../res/ssn-resample-demo'
-            os.makedirs(fldr, exist_ok=True)
-            m_misc.msavefig(dmap_resample.squeeze(), f'{fldr}/depth_resampled_{batch_idx:04d}.png', vmin=0, vmax=5)
-            m_misc.msavefig(dmaps_ref_gt.squeeze(), f'{fldr}/depth_gt_{batch_idx:04d}.png', vmin=0, vmax=5)
-            m_misc.msavefig(diff_depth.squeeze().abs(), f'{fldr}/depth_diff_{batch_idx:04d}.png', vmin=0, vmax=1)
-            print(f'save res to {fldr}/depth_diff_{batch_idx:04d}.png..')
 
         #dmap_update to 3DGMM
         reg1 = 1e-3  
@@ -228,31 +127,44 @@ class AppGMM(torch.nn.Module):
                 bound_abs_spixel_ind=True,
                 use_indx_init=ssn_grid_spixel)
 
+        cluster_t_valid = torch.zeros(self.J).bool().cuda()
+        in_bound_mask_warp = torch.zeros([9, H, W]).bool().cuda()
+        cluster_t_valid[:] = True
+        in_bound_mask_warp[:] = True
 
-        if last_frame_traj:
-            self.status_pred_in = None  # prepare for the next trajectory
-            self.depth_max_threshold = None
-        else:
-            self.status_pred_in = {
-                'imgs_ref':       imgs_ref.detach(),
-                'mix_update':     mix_update.detach(),
-                'mu_update':      mu_update.detach(),
-                'cov_update':     cov_update.detach(),
-                'gamma_update':   gamma_update.detach(),
-                'dmap_update':    dmap_update.detach(),
-                'abs_spixel_ind': abs_spixel_ind_update.detach(),
-            }
+        dmap_update_resample, sigma_update_resample = \
+            self.gmm2depth(
+                mix_update.squeeze(),
+                mu_update.squeeze(),
+                cov_update.squeeze(),
+                cluster_t_valid,
+                abs_spixel_ind_update,
+                torch.ones_like(in_bound_mask_warp),
+                gamma_update.reshape(-1, H*W).T, )
+
+        diff_depth = dmaps_ref_gt.squeeze() - dmap_update_resample.squeeze()
+        # save the depth maps here for demonstration purpose #
+        # import os
+        # fldr='../res/ssn-resample-demo'
+        # os.makedirs(fldr, exist_ok=True)
+        fldr = self.opt.summary_vis_path_task
+        m_misc.msavefig(dmap_update_resample.squeeze(), f'{fldr}/depth_resampled_{batch_idx:04d}.png', vmin=0, vmax=5)
+        m_misc.msavefig(dmaps_ref_gt.squeeze(), f'{fldr}/depth_gt_{batch_idx:04d}.png', vmin=0, vmax=5)
+        m_misc.msavefig(diff_depth.squeeze().abs(), f'{fldr}/depth_diff_{batch_idx:04d}.png', vmin=0, vmax=1)
+        print(f'save res to {fldr}/depth_diff_{batch_idx:04d}.png..')
+
+
 
         if not return_dict:
             return dmap_update
         else: # return a dict
-            if flow_mask is not None:
-                flow_mask = flow_mask.unsqueeze(0).unsqueeze(0)
+            # if flow_mask is not None:
+            #     flow_mask = flow_mask.unsqueeze(0).unsqueeze(0)
             res = dict({
                 'gmm_params_update': [mix_update, mu_update, cov_update],
-                'flow_mask': flow_mask,
-                'flow_ref2prev': flow_ref2prev,
-                'flow_prev2ref': flow_prev2ref,
+                # 'flow_mask': flow_mask,
+                # 'flow_ref2prev': flow_ref2prev,
+                # 'flow_prev2ref': flow_prev2ref,
             })
 
             #'diff_flow_norm_loss': diff_flow_norm_loss,
@@ -269,13 +181,13 @@ class AppGMM(torch.nn.Module):
             return None  # invalid iteration
 
         imgs_ref = batch['imgs_ref'].cuda()
-        imgs_src = batch['imgs_src'][:, self.src_idx *
-                                     3:(self.src_idx+1)*3, ...].cuda()
+        # imgs_src = batch['imgs_src'][:, self.src_idx *
+        #                              3:(self.src_idx+1)*3, ...].cuda()
         dmaps_ref = batch['dmaps_ref'].cuda()
 
-        dmaps_src = batch['dmaps_src'][:, self.src_idx, ...].unsqueeze(1).cuda()
-        flow_mask = res['flow_mask']
-        flow_ref2prev = res['flow_ref2prev']
+        # dmaps_src = batch['dmaps_src'][:, self.src_idx, ...].unsqueeze(1).cuda()
+        # flow_mask = res['flow_mask']
+        # flow_ref2prev = res['flow_ref2prev']
 
         ##Get the loss here..
         loss=0.
@@ -368,6 +280,7 @@ class AppGMM(torch.nn.Module):
         idx_valid = cov_resample.det() > 0.
 
         cluster_t_valid_0 = cluster_t_valid.clone()
+        print(idx_valid.shape, cluster_t_valid_0.shape)
         cluster_t_valid_0[torch.nonzero(cluster_t_valid_0, as_tuple=False).squeeze()[
             torch.logical_not(idx_valid)]] = False
         #bound abs_spixel_ind
