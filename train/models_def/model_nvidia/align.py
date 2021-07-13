@@ -260,7 +260,7 @@ def depth2gmm(dmap_, Cam_Intrinscis_list,
         if return_pcd:
             return mix, mu, sigma, abs_affinity_ref, feat_pcd_ref, abs_spixel_ind
         elif return_rel_affinity:
-            return mix, mu, sigma, abs_affinity_ref, rel, abs_spixel_ind
+            return mix, mu, sigma, abs_affinity_ref, rel, abs_spixel_ind # [this one is being used]
         else:
             return mix, mu, sigma, abs_affinity_ref, abs_spixel_ind
 

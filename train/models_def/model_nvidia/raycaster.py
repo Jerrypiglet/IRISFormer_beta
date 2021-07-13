@@ -67,7 +67,8 @@ def ray_from_gmm(
     stddev_1d_ = torch.sqrt(var_1d_)
 
     # var_1d = torch.gather(var_1d_, dim=-1, index=indx_abs2rel) # NxJ -> Nx9
-    mu_1d = torch.gather(mu_1d_, dim=-1, index=indx_abs2rel)
+    mu_1d = torch.gather(mu_1d_, dim=-1, index=indx_abs2rel) # [76800, 315], [76800, 9]; HW rays, 315 or 9 Gaussians
+    # print(mu_1d_.shape, mu_1d.shape)
     stddev_1d = torch.gather(stddev_1d_, dim=-1, index=indx_abs2rel)
 
     if gamma_rel is None:
@@ -83,6 +84,7 @@ def ray_from_gmm(
 
     gamma_rel_map=gamma_rel.T.contiguous().reshape(9, H, W)
     if reduce_method == 'direct_weight_sum':
+        # print(mu_map.shape, gamma_rel_map.shape) # [9, 240, 320], [9, 240, 320]
         mu_weight_sum = (mu_map*gamma_rel_map).sum(dim=0) / ( gamma_rel_map.sum(dim=0) +1e-8 )
         sigma_weight_sum = (stddev_map*gamma_rel_map).sum(dim=0) / ( gamma_rel_map.sum(dim=0) +1e-8 )
 

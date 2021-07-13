@@ -454,7 +454,7 @@ class decoder0(nn.Module):
                 dx6_pooled_mean[batch_id][:, instance_mat] = torch.mean(dx6_single_mat_selected, 1, keepdim=True)
         return dx6_pooled_mean
 
-    def forward(self, im, x1, x2, x3, x4, x5, x6, input_extra_dict=None):
+    def forward(self, im, x1, x2, x3, x4, x5, x6, input_extra_dict=None, if_appearance_recon=False):
         if self.if_albedo_pooling:
             if self.opt.cfg.MODEL_MATSEG.albedo_pooling_from == 'gt':
                 instance = input_extra_dict['matseg-instance']
@@ -476,26 +476,36 @@ class decoder0(nn.Module):
         dx1 = F.relu(self.dgn1(self.dconv1(x6 ) ) )
 
         xin1 = torch.cat([dx1, x5], dim = 1)
+        if if_appearance_recon:
+            xin1 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], xin1, scale_feat_map=32)
         dx2 = F.relu(self.dgn2(self.dconv2(F.interpolate(xin1, scale_factor=2, mode='bilinear') ) ), True)
 
         if dx2.size(3) != x4.size(3) or dx2.size(2) != x4.size(2):
             dx2 = F.interpolate(dx2, [x4.size(2), x4.size(3)], mode='bilinear')
         xin2 = torch.cat([dx2, x4], dim=1 )
+        if if_appearance_recon:
+            xin2 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], xin2, scale_feat_map=16)
         dx3 = F.relu(self.dgn3(self.dconv3(F.interpolate(xin2, scale_factor=2, mode='bilinear') ) ), True)
 
         if dx3.size(3) != x3.size(3) or dx3.size(2) != x3.size(2):
             dx3 = F.interpolate(dx3, [x3.size(2), x3.size(3)], mode='bilinear')
         xin3 = torch.cat([dx3, x3], dim=1)
+        if if_appearance_recon:
+            xin3 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], xin3, scale_feat_map=8)
         dx4 = F.relu(self.dgn4(self.dconv4(F.interpolate(xin3, scale_factor=2, mode='bilinear') ) ), True)
 
         if dx4.size(3) != x2.size(3) or dx4.size(2) != x2.size(2):
             dx4 = F.interpolate(dx4, [x2.size(2), x2.size(3)], mode='bilinear')
         xin4 = torch.cat([dx4, x2], dim=1 )
+        if if_appearance_recon:
+            xin4 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], xin4, scale_feat_map=4)
         dx5 = F.relu(self.dgn5(self.dconv5(F.interpolate(xin4, scale_factor=2, mode='bilinear') ) ), True)
 
         if dx5.size(3) != x1.size(3) or dx5.size(2) != x1.size(2):
             dx5 = F.interpolate(dx5, [x1.size(2), x1.size(3)], mode='bilinear')
         xin5 = torch.cat([dx5, x1], dim=1 )
+        if if_appearance_recon:
+            xin5 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], xin5, scale_feat_map=2)
         dx6 = F.relu(self.dgn6(self.dconv6(F.interpolate(xin5, scale_factor=2, mode='bilinear') ) ), True)
 
         im_trainval_RGB_mask_pooled_mean = None
@@ -532,7 +542,6 @@ class decoder0(nn.Module):
                     im_trainval_RGB_mask_pooled_mean_list.append(im_trainval_RGB_mask_pooled_mean)
                 im_trainval_RGB_mask_pooled_mean = torch.stack(im_trainval_RGB_mask_pooled_mean_list, dim=0).mean(dim=0)
 
-                print(im_trainval_RGB_mask_pooled_mean.shape, '======')
 
             if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_pool_keep_input            :
                 dx6 = torch.cat([dx6, dx6_pool_mean], 1)
@@ -546,6 +555,9 @@ class decoder0(nn.Module):
             # ic(dx6.shape)
             dx6 = self.ppm(dx6)
             # ic(dx6.shape)
+
+        if if_appearance_recon:
+            dx6 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], dx6, scale_feat_map=1)
 
         x_orig = self.dconvFinal(self.dpadFinal(dx6 ) )
         # ic(x_orig.shape)

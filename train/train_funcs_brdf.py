@@ -18,28 +18,27 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
     if_load_mask = opt.cfg.DATA.load_brdf_gt and not opt.cfg.DATA.if_load_png_not_hdr
     
     if opt.cfg.DATA.load_brdf_gt:
-        if (not opt.cfg.DATASET.if_no_gt):
-            # Load data from cpu to gpu
-            if 'al' in opt.cfg.DATA.data_read_list:
-                albedo_cpu = data_batch['albedo']
-                input_dict['albedoBatch'] = albedo_cpu.cuda(non_blocking=True)
+        # Load data from cpu to gpu
+        if 'al' in opt.cfg.DATA.data_read_list:
+            albedo_cpu = data_batch['albedo']
+            input_dict['albedoBatch'] = albedo_cpu.cuda(non_blocking=True)
 
-            if 'no' in opt.cfg.DATA.data_read_list:
-                normal_cpu = data_batch['normal']
-                input_dict['normalBatch'] = normal_cpu.cuda(non_blocking=True)
+        if 'no' in opt.cfg.DATA.data_read_list:
+            normal_cpu = data_batch['normal']
+            input_dict['normalBatch'] = normal_cpu.cuda(non_blocking=True)
 
-            if 'ro' in opt.cfg.DATA.data_read_list:
-                rough_cpu = data_batch['rough']
-                input_dict['roughBatch'] = rough_cpu.cuda(non_blocking=True)
+        if 'ro' in opt.cfg.DATA.data_read_list:
+            rough_cpu = data_batch['rough']
+            input_dict['roughBatch'] = rough_cpu.cuda(non_blocking=True)
 
-            if 'de' in opt.cfg.DATA.data_read_list:
-                depth_cpu = data_batch['depth']
-                input_dict['depthBatch'] = depth_cpu.cuda(non_blocking=True)
-                if 'depth_next' in data_batch:
-                    depth_cpu_next = data_batch['depth_next']
-                    input_dict['depthBatch_next'] = depth_cpu_next.cuda(non_blocking=True)
+        if 'de' in opt.cfg.DATA.data_read_list:
+            depth_cpu = data_batch['depth']
+            input_dict['depthBatch'] = depth_cpu.cuda(non_blocking=True)
+            if 'depth_next' in data_batch:
+                depth_cpu_next = data_batch['depth_next']
+                input_dict['depthBatch_next'] = depth_cpu_next.cuda(non_blocking=True)
 
-
+        if (not opt.cfg.DATASET.if_no_gt_semantics):
             if if_load_mask:
                 if 'mask' in data_batch:
                     mask_cpu = data_batch['mask'].permute(0, 3, 1, 2) # [b, 3, h, w]
@@ -145,7 +144,7 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
             albedoPreds = []
             albedoPred = output_dict['albedoPred']
             albedoPreds.append(albedoPred ) 
-            if (not opt.cfg.DATASET.if_no_gt):
+            if (not opt.cfg.DATASET.if_no_gt_semantics):
                 loss_dict['loss_brdf-albedo'] = []
                 assert len(albedoPreds) == 1
                 for n in range(0, len(albedoPreds) ):
@@ -160,7 +159,7 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
             normalPreds = []
             normalPred = output_dict['normalPred']
             normalPreds.append(normalPred )
-            if (not opt.cfg.DATASET.if_no_gt):
+            if (not opt.cfg.DATASET.if_no_gt_semantics):
                 loss_dict['loss_brdf-normal'] = []
                 for n in range(0, len(normalPreds) ):
                     loss_dict['loss_brdf-normal'].append( torch.sum( (normalPreds[n] - input_dict['normalBatch'])
@@ -174,7 +173,7 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
             roughPreds = []
             roughPred = output_dict['roughPred']
             roughPreds.append(roughPred )
-            if (not opt.cfg.DATASET.if_no_gt):
+            if (not opt.cfg.DATASET.if_no_gt_semantics):
                 loss_dict['loss_brdf-rough'] = []
                 for n in range(0, len(roughPreds) ):
                     loss_dict['loss_brdf-rough'].append( torch.sum( (roughPreds[n] - input_dict['roughBatch'])
@@ -189,7 +188,7 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
             depthPreds = []
             depthPred = output_dict['depthPred']
             depthPreds.append(depthPred )
-            if (not opt.cfg.DATASET.if_no_gt):
+            if (not opt.cfg.DATASET.if_no_gt_semantics):
                 loss_dict['loss_brdf-depth'] = []
                 for n in range(0, len(depthPreds ) ):
                     loss_dict['loss_brdf-depth'].append( torch.sum( (torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) )

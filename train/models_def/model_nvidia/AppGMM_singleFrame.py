@@ -7,7 +7,7 @@ author: Chao Liu <chaoliu@nvidia.com>
 
 import torch
 from torch.functional import Tensor
-import torch.nn.functional as funct
+import torch.nn.functional as F
 from tensorboardX import SummaryWriter
 
 import models_def.model_nvidia.utils_nvidia.models as model_utils
@@ -34,7 +34,8 @@ class AppGMM(torch.nn.Module):
         self.ssn_grid_spixel= args.cfg.MODEL_GMM.ssn_grid_spixel
         self.src_idx= args.cfg.MODEL_GMM.src_idx
 
-        self.spixel_nums =  (21, 15)  #w, h
+        # self.spixel_nums =  (21, 15)  #w, h
+        self.spixel_nums =  (32, 24)  #w, h
         self.J = self.spixel_nums[0]*self.spixel_nums[1] 
 
         self.total_step=0
@@ -86,7 +87,7 @@ class AppGMM(torch.nn.Module):
         # T_pred_gt = batch['src_cam_poses'][0, 1].cuda().unsqueeze(0)  # assuming t_win=2
         # T_pred_gt_inv = T_pred_gt.inverse()
         # flow_mask, flow_prev2ref, flow_ref2prev=None, None, None
-        dmap_resample = None
+        # dmap_resample = None
 
         # invalid frame in ScanNet (all zero depth map or invalid pose)
         # if self.training and ((dmaps_ref_gt.max() == 0 and dmaps_ref_gt.min() == 0) or T_pred_gt.isnan().sum() > 0):
@@ -112,46 +113,55 @@ class AppGMM(torch.nn.Module):
         #dmap_update to 3DGMM
         reg1 = 1e-3  
         weights = (dmaps_ref_gt > 0).to(dmap_ref_meas).reshape( 1, -1) 
-        mix_update, mu_update, cov_update, gamma_update, gamma_rel_update, abs_spixel_ind_update = \
-            align.depth2gmm(
-                dmap_update,
-                [self.cam_intrinsic],
-                ssn_iter=10,
-                spixel_dim=self.spixel_nums,
-                reg1=reg1,
-                reg2=0,
-                normalize=False,
-                Weights=weights,
-                return_pcd=False,
-                return_rel_affinity=True,
-                bound_abs_spixel_ind=True,
-                use_indx_init=ssn_grid_spixel)
 
-        cluster_t_valid = torch.zeros(self.J).bool().cuda()
-        in_bound_mask_warp = torch.zeros([9, H, W]).bool().cuda()
-        cluster_t_valid[:] = True
-        in_bound_mask_warp[:] = True
+        # print(dmap_update.shape)
+        batch_size = dmap_update.shape[0]
+        gamma_update_list = []
+        for sample_idx in range(batch_size):
+            mix_update, mu_update, cov_update, gamma_update, gamma_rel_update, abs_spixel_ind_update = \
+                align.depth2gmm(
+                    dmap_update[sample_idx:sample_idx+1],
+                    [self.cam_intrinsic],
+                    ssn_iter=10,
+                    spixel_dim=self.spixel_nums,
+                    reg1=reg1,
+                    reg2=0,
+                    normalize=False,
+                    Weights=weights,
+                    return_pcd=False,
+                    return_rel_affinity=True,
+                    bound_abs_spixel_ind=True,
+                    use_indx_init=ssn_grid_spixel)
 
-        dmap_update_resample, sigma_update_resample = \
-            self.gmm2depth(
-                mix_update.squeeze(),
-                mu_update.squeeze(),
-                cov_update.squeeze(),
-                cluster_t_valid,
-                abs_spixel_ind_update,
-                torch.ones_like(in_bound_mask_warp),
-                gamma_update.reshape(-1, H*W).T, )
+            gamma_update_list.append(gamma_update)
 
-        diff_depth = dmaps_ref_gt.squeeze() - dmap_update_resample.squeeze()
-        # save the depth maps here for demonstration purpose #
-        # import os
-        # fldr='../res/ssn-resample-demo'
-        # os.makedirs(fldr, exist_ok=True)
-        fldr = self.opt.summary_vis_path_task
-        m_misc.msavefig(dmap_update_resample.squeeze(), f'{fldr}/depth_resampled_{batch_idx:04d}.png', vmin=0, vmax=5)
-        m_misc.msavefig(dmaps_ref_gt.squeeze(), f'{fldr}/depth_gt_{batch_idx:04d}.png', vmin=0, vmax=5)
-        m_misc.msavefig(diff_depth.squeeze().abs(), f'{fldr}/depth_diff_{batch_idx:04d}.png', vmin=0, vmax=1)
-        print(f'save res to {fldr}/depth_diff_{batch_idx:04d}.png..')
+            # print(gamma_update.shape, gamma_rel_update.shape, abs_spixel_ind_update.shape) # [1, 315, 240, 320], [1, 9, 76800], [9, 240, 320]
+            # print(abs_spixel_ind_update[:, 0, 0])
+            # print(gamma_update[0, :, 0, 0])
+
+            cluster_t_valid = torch.zeros(self.J).bool().cuda()
+            in_bound_mask_warp = torch.zeros([9, H, W]).bool().cuda()
+            cluster_t_valid[:] = True
+            in_bound_mask_warp[:] = True
+
+            # dmap_update_resample, sigma_update_resample = \
+            #     self.gmm2depth(
+            #         mix_update.squeeze(),
+            #         mu_update.squeeze(),
+            #         cov_update.squeeze(),
+            #         cluster_t_valid,
+            #         abs_spixel_ind_update,
+            #         torch.ones_like(in_bound_mask_warp),
+            #         gamma_update.reshape(-1, H*W).T, )
+
+            # save the depth maps here for demonstration purpose #
+
+            # diff_depth = dmaps_ref_gt.squeeze() - dmap_update_resample.squeeze()
+            # fldr = self.opt.summary_vis_path_task
+            # m_misc.msavefig(dmap_update_resample.squeeze(), f'{fldr}/depth_resampled_{batch_idx:04d}.png', vmin=0, vmax=5)
+            # m_misc.msavefig(dmaps_ref_gt.squeeze(), f'{fldr}/depth_gt_{batch_idx:04d}.png', vmin=0, vmax=5)
+            # m_misc.msavefig(diff_depth.squeeze().abs(), f'{fldr}/depth_diff_{batch_idx:04d}.png', vmin=0, vmax=1)
+            # print(f'save res to {fldr}/depth_diff_{batch_idx:04d}.png..')
 
 
 
@@ -161,7 +171,8 @@ class AppGMM(torch.nn.Module):
             # if flow_mask is not None:
             #     flow_mask = flow_mask.unsqueeze(0).unsqueeze(0)
             res = dict({
-                'gmm_params_update': [mix_update, mu_update, cov_update],
+                # 'gmm_params_update': [mix_update, mu_update, cov_update],
+                'gamma_update': torch.cat(gamma_update_list, 0), 
                 # 'flow_mask': flow_mask,
                 # 'flow_ref2prev': flow_ref2prev,
                 # 'flow_prev2ref': flow_prev2ref,
@@ -193,7 +204,9 @@ class AppGMM(torch.nn.Module):
         loss=0.
         ##
 
-        return loss
+        output_dict = {'output_GMM': res}
+
+        return loss, output_dict
 
     def set_to_test(self):
         self.eval()
@@ -252,6 +265,36 @@ class AppGMM(torch.nn.Module):
         #log scalar
         self.logger.add_scalar(name, scalar, self.total_step)
 
+    def appearance_recon(self, gamma, feat_map, scale_feat_map=1):
+        '''
+        gamma: Q, BxJxHxW
+        feat_map: BxDxHxW, where N*scale_feat_map=HW
+        scale_feat_map
+        '''
+        if scale_feat_map != 1:
+            # print(gamma.shape, feat_map.shape, scale_feat_map)
+            gamma_resized = F.interpolate(gamma, scale_factor=1./float(scale_feat_map))
+            gamma = gamma_resized
+            # print(gamma_resized.shape, feat_map.shape)
+            
+        assert gamma.shape[-2::]==feat_map.shape[-2::]
+
+        batch_size, J = gamma.shape[0], gamma.shape[1]
+        batch_size_, D, H, W = feat_map.shape
+        N = H * W
+        assert batch_size_==batch_size
+
+        Q_M_Jnormalized = gamma / (gamma.sum(-1, keepdims=True).sum(-2, keepdims=True)+1e-6) # [B, J, 240, 320]
+        feat_map_flattened = feat_map.permute(0, 2, 3, 1).view(batch_size, -1, D)
+        feat_map_J = Q_M_Jnormalized.view(batch_size, J, -1) @ feat_map_flattened # [b, J, D], the code book
+        feat_map_J = feat_map_J.permute(0, 2, 1) # [b, D, J], the code book
+        # print(feat_map_J.shape, gamma.view(batch_size, J, N).shape)
+        im_single_hat = feat_map_J @ gamma.view(batch_size, J, N) # (b, D, N)
+        im_single_hat = im_single_hat.view(batch_size, D, H, W)
+
+        return im_single_hat
+
+
     def gmm2depth(self, mix_resample,
                   mu_resample, cov_resample,
                   cluster_t_valid,
@@ -280,7 +323,6 @@ class AppGMM(torch.nn.Module):
         idx_valid = cov_resample.det() > 0.
 
         cluster_t_valid_0 = cluster_t_valid.clone()
-        print(idx_valid.shape, cluster_t_valid_0.shape)
         cluster_t_valid_0[torch.nonzero(cluster_t_valid_0, as_tuple=False).squeeze()[
             torch.logical_not(idx_valid)]] = False
         #bound abs_spixel_ind

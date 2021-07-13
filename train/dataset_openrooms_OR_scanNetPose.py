@@ -183,7 +183,7 @@ class openrooms(data.Dataset):
             'scene_total3d_path': scene_total3d_path, 'png_image_path': png_image_path}
         batch_dict = {'image_index': index, 'frame_info': frame_info}
 
-        if_load_immask = self.opt.cfg.DATA.load_brdf_gt and not self.opt.cfg.DATA.if_load_png_not_hdr and (not self.opt.cfg.DATASET.if_no_gt)
+        if_load_immask = self.opt.cfg.DATA.load_brdf_gt and not self.opt.cfg.DATA.if_load_png_not_hdr and (not self.opt.cfg.DATASET.if_no_gt_semantics)
 
         if if_load_immask:
             seg_path = hdr_image_path.replace('im_', 'immask_').replace('hdr', 'png').replace('DiffMat', '')
@@ -245,7 +245,8 @@ class openrooms(data.Dataset):
 
         # ====== BRDF =====
         # image_path = batch_dict['image_path']
-        if self.opt.cfg.DATA.load_brdf_gt and (not self.opt.cfg.DATASET.if_no_gt):
+        # if self.opt.cfg.DATA.load_brdf_gt and (not self.opt.cfg.DATASET.if_no_gt_semantics):
+        if self.opt.cfg.DATA.load_brdf_gt:
             batch_dict_brdf = self.load_brdf_lighting(hdr_image_path, if_load_immask, mask_path, mask, seg, hdr_scale, frame_info)
             batch_dict.update(batch_dict_brdf)
 

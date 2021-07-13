@@ -105,10 +105,9 @@ _C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini/list'
 # _C.DATASET.dataset_path_mini = '/data/ruizhu/openrooms_mini-val'
 # _C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini-val/list'
 _C.DATASET.dataset_path_tmp = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms_sequence_val_skip20Frames_withDepth'
-# _C.DATASET.dataset_list_tmp = 'data/openrooms/list_OR_scanNetPose_hasNext/list'
-# _C.DATASET.dataset_path_tmp = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms_sequence_val'
-# _C.DATASET.dataset_list_tmp = 'data/openrooms/list_OR_tmp_/list'
 _C.DATASET.dataset_list_tmp = 'data/openrooms/list_OR_scanNetPose_hasNext/list'
+# _C.DATASET.dataset_path_tmp = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms_sequence_val_notSkipFrames_withDepth_tmp'
+# _C.DATASET.dataset_list_tmp = 'data/openrooms/list_OR_tmp_/list'
 _C.DATASET.dataset_if_save_space = True # e.g. only same one depth for main_xml, diffMat, diffLight
 
 _C.DATASET.dataset_list_sequence = False # convert #idx of the val list into sequential inputs
@@ -116,7 +115,7 @@ _C.DATASET.dataset_list_sequence_idx = -1
 
 _C.DATASET.num_workers = 8
 _C.DATASET.if_val_dist = True
-_C.DATASET.if_no_gt = False
+_C.DATASET.if_no_gt_semantics = False
 
 # ===== data loading configs
 
@@ -144,6 +143,9 @@ _C.DATA.load_cam_pose = False
 # ===== GMM
 _C.MODEL_GMM = CN()
 _C.MODEL_GMM.enable = False
+_C.MODEL_GMM.appearance_recon = CN() # single frame only
+_C.MODEL_GMM.appearance_recon.enable = True
+_C.MODEL_GMM.appearance_recon.sanity_check = True 
 _C.MODEL_GMM.learning_rate = 1e-5
 _C.MODEL_GMM.ssn_grid_spixel = False
 _C.MODEL_GMM.src_idx = 1

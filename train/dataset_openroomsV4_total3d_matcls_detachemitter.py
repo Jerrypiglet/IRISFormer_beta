@@ -356,7 +356,7 @@ class openrooms(data.Dataset):
             'scene_total3d_path': scene_total3d_path, 'png_image_path': png_image_path}
         batch_dict = {'image_index': index, 'frame_info': frame_info}
 
-        if_load_immask = self.opt.cfg.DATA.load_brdf_gt and not self.opt.cfg.DATA.if_load_png_not_hdr and (not self.opt.cfg.DATASET.if_no_gt)
+        if_load_immask = self.opt.cfg.DATA.load_brdf_gt and not self.opt.cfg.DATA.if_load_png_not_hdr and (not self.opt.cfg.DATASET.if_no_gt_semantics)
         if_has_imcadmatobj = True
 
         if if_load_immask:
@@ -429,35 +429,35 @@ class openrooms(data.Dataset):
 
         # ====== BRDF =====
         # image_path = batch_dict['image_path']
-        if self.opt.cfg.DATA.load_brdf_gt and (not self.opt.cfg.DATASET.if_no_gt):
+        if self.opt.cfg.DATA.load_brdf_gt and (not self.opt.cfg.DATASET.if_no_gt_semantics):
             batch_dict_brdf = self.load_brdf_lighting(hdr_image_path, if_load_immask, if_has_imcadmatobj, mask_path, mask, seg, hdr_scale)
             batch_dict.update(batch_dict_brdf)
 
         # ====== matseg =====
-        if self.opt.cfg.DATA.load_matseg_gt and (not self.opt.cfg.DATASET.if_no_gt):
+        if self.opt.cfg.DATA.load_matseg_gt and (not self.opt.cfg.DATASET.if_no_gt_semantics):
             mat_seg_dict = self.load_matseg(mask, im_RGB_uint8)
             batch_dict.update(mat_seg_dict)
 
         # ====== semseg =====
-        if self.opt.cfg.DATA.load_semseg_gt and (not self.opt.cfg.DATASET.if_no_gt):
+        if self.opt.cfg.DATA.load_semseg_gt and (not self.opt.cfg.DATASET.if_no_gt_semantics):
             sem_seg_dict = self.load_semseg(im_RGB_uint8, semseg_label_path)
             batch_dict.update(sem_seg_dict)
 
         # ====== matseg =====
-        if self.opt.cfg.DATA.load_matcls_gt and (not self.opt.cfg.DATASET.if_no_gt):
+        if self.opt.cfg.DATA.load_matcls_gt and (not self.opt.cfg.DATASET.if_no_gt_semantics):
             scene_matcls_Path = Path(self.cfg.DATASET.matpart_path) / meta_split / scene_name
             mat_cls_dict = self.load_mat_cls(frame_info=(scene_matcls_Path, frame_id), if_gen_on_the_fly=False, if_validate=True)
             batch_dict.update(mat_cls_dict)
 
         # ====== layout, obj (including masks), emitters =====
-        if self.opt.cfg.DATA.load_layout_emitter_gt or 'ob' in self.opt.cfg.DATA.data_read_list and (not self.opt.cfg.DATASET.if_no_gt):
+        if self.opt.cfg.DATA.load_layout_emitter_gt or 'ob' in self.opt.cfg.DATA.data_read_list and (not self.opt.cfg.DATASET.if_no_gt_semantics):
             scene_dict = self.read_scene(frame_info=frame_info)
 
-        if self.opt.cfg.DATA.load_layout_emitter_gt and (not self.opt.cfg.DATASET.if_no_gt):
+        if self.opt.cfg.DATA.load_layout_emitter_gt and (not self.opt.cfg.DATASET.if_no_gt_semantics):
             layout_emitter_dict = self.load_layout_emitter_gt_detach_emitter(scene_dict=scene_dict, frame_info=frame_info, hdr_scale=hdr_scale)
             batch_dict.update(layout_emitter_dict)
 
-        if 'ob' in self.opt.cfg.DATA.data_read_list or 'mesh' in self.opt.cfg.DATA.data_read_list and (not self.opt.cfg.DATASET.if_no_gt):
+        if 'ob' in self.opt.cfg.DATA.data_read_list or 'mesh' in self.opt.cfg.DATA.data_read_list and (not self.opt.cfg.DATASET.if_no_gt_semantics):
             objs_dict = self.load_objs(im_trainval, scene_dict['sequence']['boxes'], frame_info=frame_info)
             batch_dict.update({'boxes_batch': objs_dict['boxes'], 'boxes_valid_list': objs_dict['boxes_valid_list'], \
                 'num_valid_boxes': sum(objs_dict['boxes_valid_list'])})
