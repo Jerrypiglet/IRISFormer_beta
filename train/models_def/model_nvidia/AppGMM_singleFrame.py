@@ -35,7 +35,9 @@ class AppGMM(torch.nn.Module):
         self.src_idx= args.cfg.MODEL_GMM.src_idx
 
         # self.spixel_nums =  (21, 15)  #w, h
-        self.spixel_nums =  (32, 24)  #w, h
+        # self.spixel_nums =  (32, 24)  #w, h
+        # self.spixel_nums =  (16, 12)  #w, h
+        self.spixel_nums =  (8, 6)  #w, h
         self.J = self.spixel_nums[0]*self.spixel_nums[1] 
 
         self.total_step=0
@@ -43,7 +45,7 @@ class AppGMM(torch.nn.Module):
         self.status_pred_in = None
         self.init_inbound_mask = None
 
-        self.set_optical_flow_model(args)
+        # self.set_optical_flow_model(args)
 
         self.opt = args
 
@@ -97,30 +99,32 @@ class AppGMM(torch.nn.Module):
         #inpainting dmap_gt
         # dmaps_ref_gt = m_misc.inpaint_depth(dmaps_ref_gt)
 
-        #for demo, use gt depth, and gt poses
-        dmap_ref_meas = dmaps_ref_gt
-        # T_pred_gt_rescale = T_pred_gt
-        # T_pred_gt_rescale_inv = T_pred_gt_rescale.inverse()
-
-        if self.init_inbound_mask is None:
-            self.init_inbound_mask = m_misc.get_init_inbound_masks(
-                H, W, self.spixel_nums)  # 9xHxW
-            self.init_inbound_mask.requires_grad = False
-
-        # for demo purpose, we will do the fusion of resampled value and noisy measured values
-        dmap_update = dmaps_ref_gt
-
-        #dmap_update to 3DGMM
-        reg1 = 1e-3  
-        weights = (dmaps_ref_gt > 0).to(dmap_ref_meas).reshape( 1, -1) 
+        batch_size = imgs_ref.shape[0]
+        gamma_update_list = []
 
         # print(dmap_update.shape)
-        batch_size = dmap_update.shape[0]
-        gamma_update_list = []
         for sample_idx in range(batch_size):
+            #for demo, use gt depth, and gt poses
+            dmaps_ref_gt_single = dmaps_ref_gt[sample_idx:sample_idx+1]
+            dmap_ref_meas = dmaps_ref_gt_single
+            # T_pred_gt_rescale = T_pred_gt
+            # T_pred_gt_rescale_inv = T_pred_gt_rescale.inverse()
+
+            if self.init_inbound_mask is None:
+                self.init_inbound_mask = m_misc.get_init_inbound_masks(
+                    H, W, self.spixel_nums)  # 9xHxW
+                self.init_inbound_mask.requires_grad = False
+
+            # for demo purpose, we will do the fusion of resampled value and noisy measured values
+            dmap_update = dmaps_ref_gt_single
+
+            #dmap_update to 3DGMM
+            reg1 = 1e-3  
+            weights = (dmaps_ref_gt_single > 0).to(dmap_ref_meas).reshape( 1, -1) 
+
             mix_update, mu_update, cov_update, gamma_update, gamma_rel_update, abs_spixel_ind_update = \
                 align.depth2gmm(
-                    dmap_update[sample_idx:sample_idx+1],
+                    dmap_update,
                     [self.cam_intrinsic],
                     ssn_iter=10,
                     spixel_dim=self.spixel_nums,
@@ -162,6 +166,8 @@ class AppGMM(torch.nn.Module):
             # m_misc.msavefig(dmaps_ref_gt.squeeze(), f'{fldr}/depth_gt_{batch_idx:04d}.png', vmin=0, vmax=5)
             # m_misc.msavefig(diff_depth.squeeze().abs(), f'{fldr}/depth_diff_{batch_idx:04d}.png', vmin=0, vmax=1)
             # print(f'save res to {fldr}/depth_diff_{batch_idx:04d}.png..')
+
+            torch.cuda.empty_cache()
 
 
 
@@ -274,6 +280,9 @@ class AppGMM(torch.nn.Module):
         if scale_feat_map != 1:
             # print(gamma.shape, feat_map.shape, scale_feat_map)
             gamma_resized = F.interpolate(gamma, scale_factor=1./float(scale_feat_map))
+            gamma_resized = gamma_resized / (torch.sum(gamma_resized, 1, keepdims=True)+1e-6)
+            # print('---', torch.sum(gamma_resized, 1), torch.sum(gamma, 1))
+            # print('--->', gamma_resized.shape, gamma.shape)
             gamma = gamma_resized
             # print(gamma_resized.shape, feat_map.shape)
             

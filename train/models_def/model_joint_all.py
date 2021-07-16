@@ -11,9 +11,10 @@ from torchvision.models import resnet
 from models_def.model_matseg import logit_embedding_to_instance
 
 import models_def.models_brdf as models_brdf # basic model
-import models_def.models_brdf_pac_pool as models_brdf_pac_pool
-import models_def.models_brdf_pac_conv as models_brdf_pac_conv
-import models_def.models_brdf_safenet as models_brdf_safenet
+import models_def.models_brdf_GMM_feat_transform as models_brdf_GMM_feat_transform
+# import models_def.models_brdf_pac_pool as models_brdf_pac_pool
+# import models_def.models_brdf_pac_conv as models_brdf_pac_conv
+# import models_def.models_brdf_safenet as models_brdf_safenet
 import models_def.models_light as models_light 
 import models_def.models_layout_emitter as models_layout_emitter
 import models_def.models_object_detection as models_object_detection
@@ -69,13 +70,13 @@ class Model_Joint(nn.Module):
                 self.load_pretrained_semseg()
 
         if self.cfg.MODEL_GMM.enable:
-            self.MODEL_GMM = AppGMM.AppGMM(self.opt,)
-            # self.MODEL_GMM.set_optical_flow_model(self.opt)
-            cam_K_320x240 = np.array([[288.9354, 0., 160.], [0., 288.9354, 120.], [0., 0.,1.]]) # for 240x320 OR ONLY
-            cam_intrinsic = convert_IntM_from_OR(cam_K_320x240)
-            CamIntrinsic_to_cuda(cam_intrinsic, device='cuda') 
-            self.MODEL_GMM.set_camintrinsic(cam_intrinsic)
-
+            if self.cfg.MODEL_GMM.appearance_recon.enable:
+                self.MODEL_GMM = AppGMM.AppGMM(self.opt,)
+                # self.MODEL_GMM.set_optical_flow_model(self.opt)
+                cam_K_320x240 = np.array([[288.9354, 0., 160.], [0., 288.9354, 120.], [0., 0.,1.]]) # for 240x320 OR ONLY
+                cam_intrinsic = convert_IntM_from_OR(cam_K_320x240)
+                CamIntrinsic_to_cuda(cam_intrinsic, device='cuda') 
+                self.MODEL_GMM.set_camintrinsic(cam_intrinsic)
             
         if self.cfg.MODEL_BRDF.enable:
             in_channels = 3
@@ -86,6 +87,7 @@ class Model_Joint(nn.Module):
             if self.opt.cfg.MODEL_MATSEG.use_pred_as_input:
                 in_channels += 1
 
+            self.encoder_to_use = models_brdf.encoder0
             self.decoder_to_use = models_brdf.decoder0
 
             self.if_semseg_matseg_guidance = self.opt.cfg.MODEL_MATSEG.if_guide or self.opt.cfg.MODEL_SEMSEG.if_guide
@@ -98,26 +100,34 @@ class Model_Joint(nn.Module):
                 self.decoder_to_use = models_brdf_pac_conv.decoder0_pacconv
             if self.opt.cfg.MODEL_MATSEG.if_albedo_safenet:
                 self.decoder_to_use = models_brdf_safenet.decoder0_safenet
+            if self.opt.cfg.MODEL_GMM.enable:
+                if self.opt.cfg.MODEL_GMM.appearance_recon.enable:
+                    self.decoder_to_use = models_brdf.decoder0
+                if self.opt.cfg.MODEL_GMM.feat_recon_adaptive.enable:
+                     self.encoder_to_use = models_brdf_GMM_feat_transform.encoder0
+                     self.decoder_to_use = models_brdf_GMM_feat_transform.decoder0
+                   
+
 
             self.BRDF_Net = nn.ModuleDict({
-                    'encoder': models_brdf.encoder0(opt, cascadeLevel = self.opt.cascadeLevel, in_channels = in_channels)
+                    'encoder': self.encoder_to_use(opt, cascadeLevel = self.opt.cascadeLevel, in_channels = in_channels)
                     })
             if self.cfg.MODEL_BRDF.enable_BRDF_decoders:
                 if 'al' in self.cfg.MODEL_BRDF.enable_list:
-                    self.BRDF_Net.update({'albedoDecoder': self.decoder_to_use(opt, mode=0)})
+                    self.BRDF_Net.update({'albedoDecoder': self.decoder_to_use(opt, mode=0, modality='al')})
                 if 'no' in self.cfg.MODEL_BRDF.enable_list:
-                    self.BRDF_Net.update({'normalDecoder': self.decoder_to_use(opt, mode=1)})
+                    self.BRDF_Net.update({'normalDecoder': self.decoder_to_use(opt, mode=1, modality='no')})
                 if 'ro' in self.cfg.MODEL_BRDF.enable_list:
-                    self.BRDF_Net.update({'roughDecoder': self.decoder_to_use(opt, mode=2)})
+                    self.BRDF_Net.update({'roughDecoder': self.decoder_to_use(opt, mode=2, modality='ro')})
                 if 'de' in self.cfg.MODEL_BRDF.enable_list:
                     if self.cfg.MODEL_BRDF.use_scale_aware_depth:
                         assert self.cfg.MODEL_BRDF.depth_activation in ['relu', 'sigmoid']
                         if self.cfg.MODEL_BRDF.depth_activation == 'relu':
-                            self.BRDF_Net.update({'depthDecoder': self.decoder_to_use(opt, mode=5)})
+                            self.BRDF_Net.update({'depthDecoder': self.decoder_to_use(opt, mode=5, modality='de')})
                         elif self.cfg.MODEL_BRDF.depth_activation == 'sigmoid':
-                            self.BRDF_Net.update({'depthDecoder': self.decoder_to_use(opt, mode=6)})
+                            self.BRDF_Net.update({'depthDecoder': self.decoder_to_use(opt, mode=6, modality='de')})
                     else:
-                        self.BRDF_Net.update({'depthDecoder': self.decoder_to_use(opt, mode=4)})
+                        self.BRDF_Net.update({'depthDecoder': self.decoder_to_use(opt, mode=4, modality='de')})
                     
             if self.cfg.MODEL_BRDF.enable_semseg_decoder:
                 self.BRDF_Net.update({'semsegDecoder': self.decoder_to_use(opt, mode=-1, out_channel=self.cfg.MODEL_SEMSEG.semseg_classes, if_PPM=self.cfg.MODEL_BRDF.semseg_PPM)})
@@ -258,28 +268,25 @@ class Model_Joint(nn.Module):
 
         if self.cfg.MODEL_GMM.enable:
             input_dict_GMM = input_dict
-            # print(input_dict_GMM.keys(), input_dict['depthBatch_next'].shape)
             input_dict_GMM['imgs_ref'] = input_dict['im_SDR_RGB'].permute(0, 3, 1, 2)
-            # input_dict_GMM['imgs_src'] = input_dict['im_SDR_RGB_next'].permute(0, 3, 1, 2)
-            input_dict_GMM['dmaps_ref'] = input_dict['depthBatch']
-            # input_dict_GMM['dmaps_src'] = input_dict['depthBatch_next']
             batch_idx = input_dict['batch_idx'][0]
-            # loss_GMM, return_dict_GMM = self.MODEL_GMM.training_step(input_dict_GMM, batch_idx)
-            return_dict_GMM = self.MODEL_GMM.forward(input_dict_GMM, batch_idx, return_dict=True)
-            # print(return_dict_GMM['gamma_update'].shape, input_dict_GMM['imgs_ref'].shape) # [b, J, H, W], [b, D, H, W]
-            # sanity check
-            if self.opt.cfg.MODEL_GMM.appearance_recon.sanity_check:
-                im_resampled_GMM = self.MODEL_GMM.appearance_recon(return_dict_GMM['gamma_update'], input_dict_GMM['imgs_ref'], scale_feat_map=1)
-            return_dict_GMM['im_resampled_GMM'] = im_resampled_GMM
-            return_dict_GMM = {'output_GMM': return_dict_GMM}
+            if self.cfg.MODEL_GMM.appearance_recon.enable:
+                input_dict_GMM['dmaps_ref'] = input_dict['depthBatch']
+                return_dict_GMM = self.MODEL_GMM.forward(input_dict_GMM, batch_idx, return_dict=True)
+    
+                # sanity check
+                if self.opt.cfg.MODEL_GMM.appearance_recon.sanity_check:
+                    im_resampled_GMM = self.MODEL_GMM.appearance_recon(return_dict_GMM['gamma_update'], input_dict_GMM['imgs_ref'], scale_feat_map=1)
+                    return_dict_GMM['im_resampled_GMM'] = im_resampled_GMM
+                return_dict_GMM = {'output_GMM': return_dict_GMM}
 
-            return_dict.update(return_dict_GMM)
+                return_dict.update(return_dict_GMM)
 
         if self.cfg.MODEL_BRDF.enable:
             if self.cfg.MODEL_BRDF.if_freeze:
                 self.BRDF_Net.eval()
             input_dict_extra = {'input_dict_guide': input_dict_guide}
-            if self.cfg.MODEL_GMM.appearance_recon:
+            if self.cfg.MODEL_GMM.enable and self.cfg.MODEL_GMM.appearance_recon.enable:
                 input_dict_extra.update({'gamma_GMM': return_dict['output_GMM']['gamma_update'], 'MODEL_GMM': self.MODEL_GMM})
             if (self.cfg.MODEL_MATSEG.if_albedo_pooling and self.cfg.MODEL_MATSEG.albedo_pooling_from == 'pred') \
                 or self.cfg.MODEL_MATSEG.use_pred_as_input \
@@ -451,16 +458,16 @@ class Model_Joint(nn.Module):
         #     # print('--', torch.max(input_dict['input_batch_brdf']), torch.min(input_dict['input_batch_brdf']), torch.median(input_dict['input_batch_brdf']))
         # else:
         #     input_tensor = input_dict['input_batch_brdf']
-        x1, x2, x3, x4, x5, x6 = self.BRDF_Net['encoder'](input_tensor)
+        x1, x2, x3, x4, x5, x6, extra_output_dict = self.BRDF_Net['encoder'](input_tensor)
 
-        return_dict = {'encoder_outputs': {'x1': x1, 'x2': x2, 'x3': x3, 'x4': x4, 'x5': x5, 'x6': x6}}
+        return_dict = {'encoder_outputs': {'x1': x1, 'x2': x2, 'x3': x3, 'x4': x4, 'x5': x5, 'x6': x6, 'brdf_extra_output_dict': extra_output_dict}}
         albedo_output = {}
 
         if self.cfg.MODEL_BRDF.enable_BRDF_decoders:
             input_extra_dict = {}
             if input_dict_guide is not None:
                 input_extra_dict.update({'input_dict_guide': input_dict_guide})
-            if self.cfg.MODEL_GMM.appearance_recon:
+            if self.cfg.MODEL_GMM.enable and self.cfg.MODEL_GMM.appearance_recon.enable:
                 input_extra_dict.update({'gamma_GMM': input_dict_extra['gamma_GMM'], 'MODEL_GMM': input_dict_extra['MODEL_GMM']})
             if self.cfg.MODEL_MATSEG.if_albedo_pooling:
                 input_extra_dict.update({'matseg-instance': input_dict['instance'], 'semseg-num_mat_masks_batch': input_dict['num_mat_masks_batch']})
@@ -477,7 +484,7 @@ class Model_Joint(nn.Module):
                 input_extra_dict.update({'matseg-embeddings': input_dict_extra['return_dict_matseg']['embedding']})
 
             if 'al' in self.cfg.MODEL_BRDF.enable_list:
-                albedo_output = self.BRDF_Net['albedoDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict, if_appearance_recon=True)
+                albedo_output = self.BRDF_Net['albedoDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)
                 albedoPred = 0.5 * (albedo_output['x_out'] + 1)
                 # if (not self.opt.cfg.DATASET.if_no_gt_semantics):
                 input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
@@ -485,22 +492,25 @@ class Model_Joint(nn.Module):
                     albedoPred = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
                             input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
                 albedoPred = torch.clamp(albedoPred, 0, 1)
-                return_dict.update({'albedoPred': albedoPred})
+                return_dict.update({'albedoPred': albedoPred, 'albedo_extra_output_dict': albedo_output['extra_output_dict']})
             if 'no' in self.cfg.MODEL_BRDF.enable_list:
-                normalPred = self.BRDF_Net['normalDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)['x_out']
-                return_dict.update({'normalPred': normalPred})
+                normal_output = self.BRDF_Net['normalDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)
+                normalPred = normal_output['x_out']
+                return_dict.update({'normalPred': normalPred, 'normal_extra_output_dict': normal_output['extra_output_dict']})
             if 'ro' in self.cfg.MODEL_BRDF.enable_list:
-                roughPred = self.BRDF_Net['roughDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict, if_appearance_recon=True)['x_out']
-                return_dict.update({'roughPred': roughPred})
+                rough_output = self.BRDF_Net['roughDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)
+                roughPred = rough_output['x_out']
+                return_dict.update({'roughPred': roughPred, 'rough_extra_output_dict': rough_output['extra_output_dict']})
             if 'de' in self.cfg.MODEL_BRDF.enable_list:
+                depth_output = self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)
                 if not self.cfg.MODEL_BRDF.use_scale_aware_depth:
-                    depthPred = 0.5 * (self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)['x_out'] + 1) # [-1, 1] -> [0, 2] -> [0, 1]
+                    depthPred = 0.5 * (depth_output['x_out'] + 1) # [-1, 1] -> [0, 2] -> [0, 1]
                     depthPred = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
                             input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
                 else:
-                    depthPred = self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)['x_out']
+                    depthPred = depth_output['x_out']
 
-                return_dict.update({'depthPred': depthPred})
+                return_dict.update({'depthPred': depthPred, 'depth_extra_output_dict': depth_output['extra_output_dict']})
 
 
             # print(x1.shape, x2.shape, x3.shape, x4.shape, x5.shape, x6.shape)

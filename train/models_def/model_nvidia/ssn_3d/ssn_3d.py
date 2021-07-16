@@ -302,6 +302,7 @@ def ssn3d_iter(
 
     # get sigma_invcov, cmix
     det_spixel_cov = spixel_cov.reshape(-1, 3, 3).det().unsqueeze(1) #Jx1 #TODO: will the explicit computation for det be faster than .det()? 
+    print()
     #heuristic to takle negative det_spixel_cov
     det_spixel_cov = det_spixel_cov.abs()
     cmix = torch.log(mix+1e-10) - 1.5*torch.log(torch.FloatTensor([2*math.pi]).to(mix)) - .5*torch.log(det_spixel_cov + 1e-10)  #TODO: set 1.5*log(..) as a constant

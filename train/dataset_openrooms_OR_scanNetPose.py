@@ -25,17 +25,20 @@ from utils.utils_total3D.data_config import RECON_3D_CLS_OR_dict
 from scipy.spatial import cKDTree
 import copy
 # import math
-from detectron2.structures import BoxMode
-from detectron2.data.dataset_mapper import DatasetMapper
+# from detectron2.structures import BoxMode
+# from detectron2.data.dataset_mapper import DatasetMapper
 
 from utils.utils_total3D.utils_OR_vis_labels import RGB_to_01
 from utils.utils_total3D.utils_others import Relation_Config, OR4XCLASSES_dict, OR4XCLASSES_not_detect_mapping_ids_dict, OR4X_mapping_catInt_to_RGB
-from detectron2.data import build_detection_test_loader,DatasetCatalog, MetadataCatalog
+# from detectron2.data import build_detection_test_loader,DatasetCatalog, MetadataCatalog
 
 from utils.utils_scannet import read_ExtM_from_txt, read_img
 import utils.utils_nvidia.mdataloader.m_preprocess as m_preprocess
 import PIL
 import torchvision.transforms as tfv_transform
+
+import warnings
+warnings.filterwarnings("ignore")
 
 rel_cfg = Relation_Config()
 d_model = int(rel_cfg.d_g/4)
@@ -177,13 +180,15 @@ class openrooms(data.Dataset):
         meta_split, scene_name, frame_id = self.meta_split_scene_name_frame_id_list[index]
         assert frame_id > 0
         scene_total3d_path = Path(self.cfg.DATASET.layout_emitter_path) / meta_split / scene_name
-        png_image_path = Path(self.opt.cfg.DATASET.png_path) / meta_split / scene_name / ('im_%d.png'%frame_id)
-
+        if self.opt.cfg.DATASET.tmp:
+            png_image_path = Path(hdr_image_path.replace('.hdr', '.png').replace('.rgbe', '.png'))
+        else:
+            png_image_path = Path(self.opt.cfg.DATASET.png_path) / meta_split / scene_name / ('im_%d.png'%frame_id)
         frame_info = {'index': index, 'meta_split': meta_split, 'scene_name': scene_name, 'frame_id': frame_id, 'frame_key': '%s-%s-%d'%(meta_split, scene_name, frame_id), \
             'scene_total3d_path': scene_total3d_path, 'png_image_path': png_image_path}
         batch_dict = {'image_index': index, 'frame_info': frame_info}
 
-        if_load_immask = self.opt.cfg.DATA.load_brdf_gt and not self.opt.cfg.DATA.if_load_png_not_hdr and (not self.opt.cfg.DATASET.if_no_gt_semantics)
+        if_load_immask = self.opt.cfg.DATA.load_brdf_gt and (not self.opt.cfg.DATASET.if_no_gt_semantics)
 
         if if_load_immask:
             seg_path = hdr_image_path.replace('im_', 'immask_').replace('hdr', 'png').replace('DiffMat', '')
@@ -202,9 +207,10 @@ class openrooms(data.Dataset):
         assert self.opt.cfg.DATA.if_load_png_not_hdr
         if png_image_path.exists():
             # png_image_path.unlink()
+            # self.convert_write_png(hdr_image_path, seg, str(png_image_path))
             pass
         else:
-            self.convert_write_png(hdr_image_path, seg, png_image_path)
+            self.convert_write_png(hdr_image_path, seg, str(png_image_path))
 
         # Read PNG image
         image = Image.open(str(png_image_path))
@@ -293,13 +299,13 @@ class openrooms(data.Dataset):
             'img_raw_GMM': img_raw.unsqueeze_(0),
             'img_small_GMM': img_small.unsqueeze_(0)})
 
-        scene_dict = self.read_scene(frame_info=frame_info)
-        cam_K = scene_dict['camera']['K'] # [[577.8708   0.     320.    ], [  0.     577.8708 240.    ], [  0.       0.       1.    ]]
-        cam_K_ratio_W = cam_K[0][2] / (self.im_width/2.)
-        cam_K_ratio_H = cam_K[1][2] / (self.im_height/2.)
-        assert cam_K_ratio_W == cam_K_ratio_H
-        cam_K_scaled = np.vstack([cam_K[:2, :] / cam_K_ratio_W, cam_K[2:3, :]])
-        batch_dict.update({'cam_K_scaled_GMM': cam_K_scaled})
+        # scene_dict = self.read_scene(frame_info=frame_info)
+        # cam_K = scene_dict['camera']['K'] # [[577.8708   0.     320.    ], [  0.     577.8708 240.    ], [  0.       0.       1.    ]]
+        # cam_K_ratio_W = cam_K[0][2] / (self.im_width/2.)
+        # cam_K_ratio_H = cam_K[1][2] / (self.im_height/2.)
+        # assert cam_K_ratio_W == cam_K_ratio_H
+        # cam_K_scaled = np.vstack([cam_K[:2, :] / cam_K_ratio_W, cam_K[2:3, :]])
+        # batch_dict.update({'cam_K_scaled_GMM': cam_K_scaled})
         # print(cam_K_scaled)
 
 
@@ -308,6 +314,8 @@ class openrooms(data.Dataset):
         # Get paths for BRDF params
         if 'al' in self.cfg.DATA.data_read_list:
             albedo_path = hdr_image_path.replace('im_', 'imbaseColor_').replace('rgbe', 'png').replace('hdr', 'png')
+            if self.opt.cfg.DATASET.dataset_if_save_space:
+                albedo_path = albedo_path.replace('DiffLight', '')
             # Read albedo
             albedo = self.loadImage(albedo_path, isGama = False)
             albedo = (0.5 * (albedo + 1) ) ** 2.2
@@ -315,6 +323,8 @@ class openrooms(data.Dataset):
 
         if 'no' in self.cfg.DATA.data_read_list:
             normal_path = hdr_image_path.replace('im_', 'imnormal_').replace('rgbe', 'png').replace('hdr', 'png')
+            if self.opt.cfg.DATASET.dataset_if_save_space:
+                normal_path = normal_path.replace('DiffLight', '').replace('DiffMat', '')
             # normalize the normal vector so that it will be unit length
             normal = self.loadImage(normal_path )
             normal = normal / np.sqrt(np.maximum(np.sum(normal * normal, axis=0), 1e-5) )[np.newaxis, :]
@@ -322,12 +332,16 @@ class openrooms(data.Dataset):
 
         if 'ro' in self.cfg.DATA.data_read_list:
             rough_path = hdr_image_path.replace('im_', 'imroughness_').replace('rgbe', 'png').replace('hdr', 'png')
+            if self.opt.cfg.DATASET.dataset_if_save_space:
+                rough_path = rough_path.replace('DiffLight', '')
             # Read roughness
             rough = self.loadImage(rough_path )[0:1, :, :]
             batch_dict_brdf.update({'rough': torch.from_numpy(rough),})
 
         if 'de' in self.cfg.DATA.data_read_list or 'de' in self.cfg.DATA.data_read_list:
             depth_path = hdr_image_path.replace('im_', 'imdepth_').replace('rgbe', 'dat').replace('hdr', 'dat')
+            if self.opt.cfg.DATASET.dataset_if_save_space:
+                depth_path = depth_path.replace('DiffLight', '').replace('DiffMat', '')
             # Read depth
             depth = self.loadBinary(depth_path)
             batch_dict_brdf.update({'depth': torch.from_numpy(depth),})
@@ -667,7 +681,7 @@ def collate_fn_OR(batch):
         else:
             try:
                 collated_batch[key] = default_collate([elem[key] for elem in batch])
-            except TypeError:
+            except:
                 print('[!!!!] Type error in collate_fn_OR: ', key)
 
     if 'boxes_batch' in batch[0]:

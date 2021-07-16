@@ -25,6 +25,7 @@ cluster_control/yamls/
 a.pkl
 tmp
 third-parties_outside/adobe_svbrdf-master/train_list_cs.txt
+third_parties_outside/apex
 tmp.py
 tmp.pickle
 notebooks/scene_mesh_debug*.obj
@@ -49,3 +50,4 @@ train/models_def/model_nvidia/ssn/pdist.egg-info/
 train/models_def/model_nvidia/ssn/build/*
 notebooks/render_OR_sequence_scannetPoses-Copy1.ipynb
 notebooks/render_OR_sequence_scannetPoses-Copy2.ipynb
+notebooks/render_OR_sequence_scannetPoses-Copy3.ipynb

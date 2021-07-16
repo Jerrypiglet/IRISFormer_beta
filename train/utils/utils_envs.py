@@ -42,6 +42,7 @@ def set_up_envs(opt):
     if opt.cfg.DATASET.tmp:
         opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_tmp
         opt.cfg.DATASET.dataset_list = opt.cfg.DATASET.dataset_list_tmp
+        opt.cf.DATASET.dataset_if_save_space = False
     opt.cfg.DATASET.dataset_list = os.path.join(opt.cfg.PATH.root, opt.cfg.DATASET.dataset_list)
 
 
@@ -63,7 +64,11 @@ def set_up_envs(opt):
     if opt.cfg.MODEL_GMM.enable:
         opt.cfg.DATA.if_load_png_not_hdr = True
         # opt.cfg.DATA.if_also_load_next_frame = True
-        opt.cfg.DATA.load_cam_pose = True
+        # opt.cfg.DATA.load_cam_pose = True
+        assert not(opt.cfg.MODEL_GMM.appearance_recon.enable and opt.cfg.MODEL_GMM.feat_recon_adaptive.enable)
+        assert opt.cfg.MODEL_GMM.appearance_recon.enable or opt.cfg.MODEL_GMM.feat_recon_adaptive.enable
+        opt.cfg.MODEL_GMM.appearance_recon.modalities = opt.cfg.MODEL_GMM.appearance_recon.modalities.split('_')
+        opt.cfg.MODEL_GMM.feat_recon_adaptive.layers_list = opt.cfg.MODEL_GMM.feat_recon_adaptive.layers_list.split('_')
 
     # ====== BRDF =====
     opt.cfg.MODEL_BRDF.enable_list = [x for x in opt.cfg.MODEL_BRDF.enable_list.split('_') if x != '']

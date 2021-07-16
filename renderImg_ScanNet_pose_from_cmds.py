@@ -30,8 +30,8 @@ for cmd_idx, cmd in enumerate(cmds):
     cmd = prefix + cmd
     # cmd = cmd.replace('cd /home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms_sequence_val_notSkipFrames && CUDA_VISIBLE_DEVICES=3 ', prefix)
     # cmd = cmd.replace('/home/ruizhu/Documents/Projects/semanticInverse/renderImg_ScanNet_pose.py', 'renderImg_ScanNet_pose.py')
-    print('----', cmd_idx, opt.gpu, cmd)
-    os.system(cmd)
+    # print('----', cmd_idx, opt.gpu, cmd)
+    # os.system(cmd)
 
     if if_render_other_modalities:
         for mode in [1, 2, 3, 4, 5, 6]: # L235 of /home/ruizhu/Documents/Projects/Total3DUnderstanding/OptixRenderer/src/optixRenderer/src/optixRenderer.cpp

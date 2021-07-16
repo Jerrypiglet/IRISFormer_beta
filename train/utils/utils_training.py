@@ -2,7 +2,7 @@ import shutil
 
 import torch
 torch_version = torch.__version__
-import apex
+# import apex
 import torch.distributed as dist
 import numpy as np
 import os, sys
@@ -255,7 +255,8 @@ def freeze_bn_in_module(module):
     mod = module
     if isinstance(module, torch.nn.modules.instancenorm._InstanceNorm):
         return module
-    if isinstance(module, torch.nn.modules.batchnorm._BatchNorm) or isinstance(module, apex.parallel.optimized_sync_batchnorm.SyncBatchNorm):
+    if isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
+        #  or isinstance(module, apex.parallel.optimized_sync_batchnorm.SyncBatchNorm):
         print(red('-- turning off BN in '), module)
         mod.eval()
 

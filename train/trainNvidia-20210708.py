@@ -50,6 +50,7 @@ parser.add_argument("--if_train", type=str2bool, nargs='?', const=True, default=
 parser.add_argument("--if_val", type=str2bool, nargs='?', const=True, default=True)
 parser.add_argument("--if_vis", type=str2bool, nargs='?', const=True, default=True)
 parser.add_argument("--if_overfit_val", type=str2bool, nargs='?', const=True, default=False)
+parser.add_argument("--if_overfit_train", type=str2bool, nargs='?', const=True, default=False)
 parser.add_argument('--epochIdFineTune', type=int, default = 0, help='the training of epoch of the loaded model')
 # The training weight
 parser.add_argument('--albedoWeight', type=float, default=1.5, help='the weight for the diffuse component')
@@ -146,44 +147,44 @@ if opt.is_master:
 # <<<<<<<<<<<<< A bunch of modularised set-ups
 
 # >>>>>>>>>>>>> DETECTRON setups
-import detectron2
-from detectron2.utils.logger import setup_logger
-from detectron2 import model_zoo
-from detectron2.structures import BoxMode
-from detectron2.engine import DefaultPredictor
-from detectron2.config import get_cfg
-from detectron2.utils.visualizer import Visualizer,ColorMode
-from detectron2.evaluation import COCOEvaluator, inference_on_dataset
-import os.path as osp
-from detectron2.engine import DefaultTrainer
+# import detectron2
+# from detectron2.utils.logger import setup_logger
+# from detectron2 import model_zoo
+# from detectron2.structures import BoxMode
+# from detectron2.engine import DefaultPredictor
+# from detectron2.config import get_cfg
+# from detectron2.utils.visualizer import Visualizer,ColorMode
+# from detectron2.evaluation import COCOEvaluator, inference_on_dataset
+# import os.path as osp
+# from detectron2.engine import DefaultTrainer
 from detectron2.utils.events import EventStorage
 
-cfg_detectron = get_cfg()
+# cfg_detectron = get_cfg()
 
-# detectron_configs = utils_config.load_cfg_from_cfg_file(os.path.join(pwdpath, opt.cfg.MODEL_detectron.config_file))
-cfg_detectron.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_X_101_32x8d_FPN_3x.yaml"))
-# cfg_detectron.DATASETS.TRAIN = ("light_train",)
-# cfg_detectron.DATASETS.TEST = ("light_test", )
-# cfg_detectron.DATALOADER.NUM_WORKERS = 2
-cfg_detectron.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-InstanceSegmentation/mask_rcnn_X_101_32x8d_FPN_3x.yaml")  # Let training initialize from model zoo
-cfg_detectron.SOLVER.IMS_PER_BATCH = 2
-# cfg_detectron.SOLVER.BASE_LR = 0.001
-# cfg_detectron.SOLVER.MAX_ITER = args.iter    
-cfg_detectron.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 512   
-# if(args.detect_4):
-cfg_detectron.MODEL.ROI_HEADS.NUM_CLASSES = 45 # OR45: 45 (-1 for unlabelled)
-# cfg_detectron.MODEL.TENSOR_MASK.MASK_LOSS_WEIGHT = 3
-# cfg_detectron.SOLVER.WEIGHT_DECAY: 0.0001
-cfg_detectron.MODEL.ROI_HEADS.NMS_THRESH_TEST: 0.7
-# cfg_detectron.SOLVER.MOMENTUM: 0.9
-cfg_detectron.SOLVER.LR_SCHEDULER_NAME="WarmupCosineLR"
-# cfg_detectron.OUTPUT_DIR=outfiledir+'model_path/'
-# False to include all empty image
-cfg_detectron.DATALOADER.FILTER_EMPTY_ANNOTATIONS=False
-cfg_detectron.INPUT.FORMAT = "RGB"
+# # detectron_configs = utils_config.load_cfg_from_cfg_file(os.path.join(pwdpath, opt.cfg.MODEL_detectron.config_file))
+# cfg_detectron.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_X_101_32x8d_FPN_3x.yaml"))
+# # cfg_detectron.DATASETS.TRAIN = ("light_train",)
+# # cfg_detectron.DATASETS.TEST = ("light_test", )
+# # cfg_detectron.DATALOADER.NUM_WORKERS = 2
+# cfg_detectron.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-InstanceSegmentation/mask_rcnn_X_101_32x8d_FPN_3x.yaml")  # Let training initialize from model zoo
+# cfg_detectron.SOLVER.IMS_PER_BATCH = 2
+# # cfg_detectron.SOLVER.BASE_LR = 0.001
+# # cfg_detectron.SOLVER.MAX_ITER = args.iter    
+# cfg_detectron.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 512   
+# # if(args.detect_4):
+# cfg_detectron.MODEL.ROI_HEADS.NUM_CLASSES = 45 # OR45: 45 (-1 for unlabelled)
+# # cfg_detectron.MODEL.TENSOR_MASK.MASK_LOSS_WEIGHT = 3
+# # cfg_detectron.SOLVER.WEIGHT_DECAY: 0.0001
+# cfg_detectron.MODEL.ROI_HEADS.NMS_THRESH_TEST: 0.7
+# # cfg_detectron.SOLVER.MOMENTUM: 0.9
+# cfg_detectron.SOLVER.LR_SCHEDULER_NAME="WarmupCosineLR"
+# # cfg_detectron.OUTPUT_DIR=outfiledir+'model_path/'
+# # False to include all empty image
+# cfg_detectron.DATALOADER.FILTER_EMPTY_ANNOTATIONS=False
+# cfg_detectron.INPUT.FORMAT = "RGB"
 
-cfg_detectron = utils_config.merge_cfg_from_list(cfg_detectron, opt.params)
-opt.cfg_detectron = cfg_detectron
+# cfg_detectron = utils_config.merge_cfg_from_list(cfg_detectron, opt.params)
+# opt.cfg_detectron = cfg_detectron
 
 # <<<<<<<<<<<<< DETECTRON setups
 
@@ -308,6 +309,27 @@ if opt.if_overfit_val and opt.if_train:
         # collate_fn=my_collate_seq_dataset if opt.if_padding else my_collate_seq_dataset_noPadding,
     )
 
+if opt.if_overfit_train and opt.if_val:
+    brdf_dataset_val = openrooms(opt, 
+        transforms_fixed = transforms_val_resize, 
+        transforms_semseg = transforms_val_semseg, 
+        transforms_matseg = transforms_val_matseg,
+        transforms_resize = transforms_val_resize, 
+        # cascadeLevel = opt.cascadeLevel, split = 'val', logger=logger)
+        # cascadeLevel = opt.cascadeLevel, split = 'val', load_first = 20 if opt.mini_val else -1, logger=logger)
+        cascadeLevel = opt.cascadeLevel, split = 'train', if_for_training=False, load_first = -1, logger=logger)
+    brdf_loader_val, _ = make_data_loader(
+        opt,
+        brdf_dataset_val,
+        is_train=False,
+        start_iter=0,
+        logger=logger,
+        # pin_memory = False, 
+        collate_fn=collate_fn_OR, 
+        # collate_fn=my_collate_seq_dataset if opt.if_padding else my_collate_seq_dataset_noPadding,
+        if_distributed_override=opt.cfg.DATASET.if_val_dist and opt.distributed # default: True; -> should use gather from all GPUs if need all batches
+    )
+
 if opt.if_vis:
     brdf_dataset_val_vis = openrooms(opt, 
         transforms_fixed = transforms_val_resize, 
@@ -328,6 +350,27 @@ if opt.if_vis:
         # collate_fn=my_collate_seq_dataset if opt.if_padding else my_collate_seq_dataset_noPadding,
         if_distributed_override=False
     )
+    if opt.if_overfit_train:
+        brdf_dataset_val_vis = openrooms(opt, 
+            transforms_fixed = transforms_val_resize, 
+            transforms_semseg = transforms_val_semseg, 
+            transforms_matseg = transforms_val_matseg,
+            transforms_resize = transforms_val_resize, 
+            cascadeLevel = opt.cascadeLevel, split = 'train', task='vis', if_for_training=False, load_first = opt.cfg.TEST.vis_max_samples, logger=logger)
+        brdf_loader_val_vis, batch_size_val_vis = make_data_loader(
+            opt,
+            brdf_dataset_val_vis,
+            is_train=False,
+            start_iter=0,
+            logger=logger,
+            workers=2,
+            batch_size_override=opt.batch_size_override_vis, 
+            # pin_memory = False, 
+            collate_fn=collate_fn_OR, 
+            # collate_fn=my_collate_seq_dataset if opt.if_padding else my_collate_seq_dataset_noPadding,
+            if_distributed_override=False
+        )
+
 
 # <<<<<<<<<<<<< DATASET
 
@@ -594,6 +637,7 @@ else:
                 if opt.is_master and tid % 20 == 0:
                     print('----loss_dict', loss_dict.keys())
                     print('----loss_keys_backward', loss_keys_backward)
+
                 loss.backward()
 
                 # clip_to = 1.

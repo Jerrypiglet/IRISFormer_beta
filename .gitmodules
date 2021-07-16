@@ -13,3 +13,6 @@
 [submodule "third_parties_outside/SphericalGaussianOptimization"]
 	path = third_parties_outside/SphericalGaussianOptimization
 	url = https://github.com/lzqsd/SphericalGaussianOptimization.git
+[submodule "third_parties_outside/ssn-pytorch"]
+	path = third_parties_outside/ssn-pytorch
+	url = https://github.com/perrying/ssn-pytorch.git

@@ -39,13 +39,14 @@ import matplotlib.pyplot as plt
 
 from train_funcs_layout_object_emitter import vis_layout_emitter
 
-from detectron2.evaluation import COCOEvaluator, inference_on_dataset
-from detectron2.data import build_detection_test_loader,DatasetCatalog, MetadataCatalog
+# from detectron2.evaluation import COCOEvaluator, inference_on_dataset
+# from detectron2.data import build_detection_test_loader,DatasetCatalog, MetadataCatalog
+from utils.utils_dettectron import py_cpu_nms
+# from detectron2.utils.visualizer import Visualizer, ColorMode
 
 from contextlib import ExitStack, contextmanager
-from utils.utils_dettectron import py_cpu_nms
-from detectron2.utils.visualizer import Visualizer, ColorMode
-
+from skimage.segmentation import mark_boundaries
+from skimage.transform import resize as scikit_resize
 
 def get_time_meters_joint():
     time_meters = {}
@@ -659,6 +660,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
             if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable:
                 semseg_pred = output_dict['semseg_pred'].cpu().numpy()
 
+            im_single_list = []
             for sample_idx_batch, (im_single, im_path) in enumerate(zip(data_batch['im_SDR_RGB'], data_batch['image_path'])):
                 sample_idx = sample_idx_batch+batch_size*batch_id
                 print('[Image] Visualizing %d sample...'%sample_idx, batch_id, sample_idx_batch)
@@ -666,6 +668,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     break
 
                 im_single = im_single.numpy().squeeze()
+                im_single_list.append(im_single)
                 # im_path = os.path.join('./tmp/', 'im_%d-%d_color.png'%(tid, im_index))
                 # color_path = os.path.join('./tmp/', 'im_%d-%d_semseg.png'%(tid, im_index))
                 # cv2.imwrite(im_path, im_single * 255.)
@@ -683,7 +686,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     writer.add_text('VAL_image_name/%d'%(sample_idx), im_path, tid)
                     assert sample_idx == data_batch['image_index'][sample_idx_batch]
                     # print(sample_idx, im_path)
-
+                            
                 if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool or opt.cfg.MODEL_MATSEG.if_albedo_safenet) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
                     if opt.is_master:
                         if output_dict['im_trainval_RGB_mask_pooled_mean'] is not None:
@@ -705,6 +708,48 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                                 if affinity is not None:
                                     np.save('tmp/demo_%s/affinity_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), affinity[0].detach().cpu().numpy())
                                     np.save('tmp/demo_%s/sample_ij_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), sample_ij)
+
+            # === BRDF feat_ssn superpixel segmentation
+            # print(output_dict['encoder_outputs']['brdf_extra_output_dict'].keys(), output_dict['albedo_extra_output_dict'].keys()) # dict_keys(['x1_affinity', 'x2_affinity', 'x3_affinity']) dict_keys(['dx3_affinity', 'dx4_affinity', 'dx5_affinity'])
+            if opt.cfg.MODEL_GMM.enable and opt.cfg.MODEL_GMM.feat_recon_adaptive.enable:
+                for encoder_key in ['x1', 'x2', 'x3']:
+                    if encoder_key in opt.cfg.MODEL_GMM.feat_recon_adaptive.layers_list:
+                        affinity_matrix = output_dict['encoder_outputs']['brdf_extra_output_dict']['%s_affinity'%encoder_key]
+                        affinity_matrix_label = torch.argmax(affinity_matrix, 1).detach().cpu().numpy()
+
+                        for sample_idx_batch, affinity_matrix_label_single in enumerate(affinity_matrix_label):
+                            sample_idx = sample_idx_batch+batch_size*batch_id
+                            if sample_idx >= opt.cfg.TEST.vis_max_samples:
+                                break
+
+                            im_single_resized = scikit_resize(im_single_list[sample_idx], (affinity_matrix_label_single.shape[0], affinity_matrix_label_single.shape[1]))
+
+                            if opt.is_master:
+                                im_single_ssn_result = mark_boundaries(im_single_resized, affinity_matrix_label_single)
+                                writer.add_image('VAL_GMM_encoder_SSN_%s/%d'%(encoder_key, sample_idx), im_single_ssn_result, tid, dataformats='HWC')
+
+                for mode in opt.cfg.MODEL_GMM.appearance_recon.modalities:
+                    modality = {'al': 'albedo', 'ro': 'rough'}[mode]
+                    if not '%s_extra_output_dict'%modality in output_dict:
+                        continue
+
+                    for decoder_key in ['dx3', 'dx4', 'dx5']:
+                        if decoder_key in opt.cfg.MODEL_GMM.feat_recon_adaptive.layers_list:
+                            affinity_matrix = output_dict['%s_extra_output_dict'%modality]['%s_affinity'%decoder_key]
+                            affinity_matrix_label = torch.argmax(affinity_matrix, 1).detach().cpu().numpy()
+
+                            for sample_idx_batch, affinity_matrix_label_single in enumerate(affinity_matrix_label):
+                                sample_idx = sample_idx_batch+batch_size*batch_id
+                                if sample_idx >= opt.cfg.TEST.vis_max_samples:
+                                    break
+
+                                im_single_resized = scikit_resize(im_single_list[sample_idx], (affinity_matrix_label_single.shape[0], affinity_matrix_label_single.shape[1]))
+
+                                if opt.is_master:
+                                    im_single_ssn_result = mark_boundaries(im_single_resized, affinity_matrix_label_single)
+                                    writer.add_image('VAL_GMM_decoder-%s_SSN_%s/%d'%(modality, decoder_key, sample_idx), im_single_ssn_result, tid, dataformats='HWC')
+
+
 
             # ======= Vis BRDFsemseg / semseg
             if opt.cfg.DATA.load_semseg_gt:
@@ -1156,18 +1201,19 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
         
             # ===== Vis GMM
             if opt.cfg.MODEL_GMM.enable:
-                Q_M_batch = output_dict['output_GMM']['gamma_update'].detach().cpu().numpy()
-                im_resampled_GMM_batch = output_dict['output_GMM']['im_resampled_GMM'].detach().cpu().numpy()
-                # print(Q_M_batch.shape) # [b, 315, 240, 320]
-                for sample_idx_batch, (im_single, im_path) in enumerate(zip(data_batch['im_SDR_RGB'], data_batch['image_path'])):
-                    sample_idx = sample_idx_batch+batch_size*batch_id
-                    # Q_M = Q_M_batch[sample_idx_batch]
-                    # output_GMM_Q_list.append(Q_M)
+                if opt.cfg.MODEL_GMM.appearance_recon.enable and opt.cfg.MODEL_GMM.appearance_recon.sanity_check:
+                    Q_M_batch = output_dict['output_GMM']['gamma_update'].detach().cpu().numpy()
+                    im_resampled_GMM_batch = output_dict['output_GMM']['im_resampled_GMM'].detach().cpu().numpy()
+                    # print(Q_M_batch.shape) # [b, 315, 240, 320]
+                    for sample_idx_batch, (im_single, im_path) in enumerate(zip(data_batch['im_SDR_RGB'], data_batch['image_path'])):
+                        sample_idx = sample_idx_batch+batch_size*batch_id
+                        # Q_M = Q_M_batch[sample_idx_batch]
+                        # output_GMM_Q_list.append(Q_M)
 
-                    im_resampled_GMM = im_resampled_GMM_batch[sample_idx_batch].transpose(1, 2, 0)
-                    im_resampled_GMM = np.clip(im_resampled_GMM*255., 0., 255.).astype(np.uint8)
-                    writer.add_image('VAL_GMM_im_hat/%d'%(sample_idx), im_resampled_GMM, tid, dataformats='HWC')
-                    # writer.add_image('VAL_GMM_im_gt/%d'%(sample_idx), im_single, tid, dataformats='HWC')
+                        im_resampled_GMM = im_resampled_GMM_batch[sample_idx_batch].transpose(1, 2, 0)
+                        im_resampled_GMM = np.clip(im_resampled_GMM*255., 0., 255.).astype(np.uint8)
+                        writer.add_image('VAL_GMM_im_hat/%d'%(sample_idx), im_resampled_GMM, tid, dataformats='HWC')
+                        # writer.add_image('VAL_GMM_im_gt/%d'%(sample_idx), im_single, tid, dataformats='HWC')
 
 
             synchronize()

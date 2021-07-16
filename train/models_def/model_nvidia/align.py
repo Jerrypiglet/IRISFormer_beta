@@ -7,6 +7,7 @@ author: Chao Liu <chaoliu@nvidia.com>
 import torch 
 import torch.nn.functional as F
 import models_def.model_nvidia.ssn_3d.ssn_3d as ssn_3d 
+import models_def.model_nvidia.ssn.ssn as ssn
 import numpy as np
 
 def uv_coord_delta_to_image(uv_coord_delta, img, uv_center, focal_length=None, mode='bilinear', padding_mode='zeros', debug = False):
@@ -264,7 +265,30 @@ def depth2gmm(dmap_, Cam_Intrinscis_list,
         else:
             return mix, mu, sigma, abs_affinity_ref, abs_spixel_ind
 
+def feat2gmm(feat_ref_map, ssn_iter=5):
+    '''from depth map to 3D GMMs
+    inputs 
+    dmap -  # [b, 3, H, W]
+    reg1, reg2 - [.01] ,[0]
+    Weights - weight vector for pts, Nx(HxW)
+    '''
 
+    spixel_dim = feat_ref_map.shape[2:4]
+    num_spixels_height, num_spixels_width = spixel_dim[1], spixel_dim[0] 
+    num_spixels = num_spixels_height * num_spixels_width
+
+    abs_affinity, dist_matrix, spixel_features = \
+        ssn.ssn_iter(
+                feat_ref_map, n_iter= ssn_iter, 
+                num_spixels_width=num_spixels_width, 
+                num_spixels_height=num_spixels_height)
+
+    spixel_features = spixel_features.view(feat_ref_map.shape[0], num_spixels, *feat_ref_map.shape[-2:]).contiguous()
+    # gamma_ref = abs_affinity, dist_matrix, spixel_features.permute(0, 2, 3, 1).view(-1, num_spixels).contiguous()
+
+    # mix, mu, sigma = _Mstep(gamma_ref, feat_pcd_ref, reg=reg1, weights = Weights.T if Weights is not None else None)
+
+    return abs_affinity, dist_matrix, spixel_features
 
 def transformGMM_Rt(mix, mu, cov, R, t, unsqueeze=False):
     '''

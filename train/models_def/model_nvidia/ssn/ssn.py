@@ -6,7 +6,7 @@ from .pair_wise_distance import PairwiseDistFunction
 # for debugging
 from matplotlib.pyplot import * 
 import time
-from mutils.misc import mimshow, msavefig 
+# from mutils.misc import mimshow, msavefig 
 import torch.nn.functional as F
 
 def calc_init_centroid(images, num_spixels_width, num_spixels_height):
@@ -118,6 +118,7 @@ def ssn_iter(pixel_features,  n_iter,  num_spixels_width, num_spixels_height):
         reshaped_affinity_matrix = affinity_matrix.reshape(-1) 
         mask = (abs_indices[1] >= 0) * (abs_indices[1] < num_spixels)
         sparse_abs_affinity = torch.sparse_coo_tensor(abs_indices[:, mask], reshaped_affinity_matrix[mask])
+        # print(sparse_abs_affinity.shape) # torch.Size([1, J, HW])
         abs_affinity = sparse_abs_affinity.to_dense().contiguous()
 
         # M-step: update the centroids
