@@ -633,6 +633,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
 
     # ===== Gather vis of N batches
     with torch.no_grad():
+        im_single_list = []
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
             # for i, x in enumerate(data_batch['image_path']):
             #     ic(i, x)
@@ -660,7 +661,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
             if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable:
                 semseg_pred = output_dict['semseg_pred'].cpu().numpy()
 
-            im_single_list = []
             for sample_idx_batch, (im_single, im_path) in enumerate(zip(data_batch['im_SDR_RGB'], data_batch['image_path'])):
                 sample_idx = sample_idx_batch+batch_size*batch_id
                 print('[Image] Visualizing %d sample...'%sample_idx, batch_id, sample_idx_batch)
@@ -721,7 +721,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                             sample_idx = sample_idx_batch+batch_size*batch_id
                             if sample_idx >= opt.cfg.TEST.vis_max_samples:
                                 break
-
+                            
                             im_single_resized = scikit_resize(im_single_list[sample_idx], (affinity_matrix_label_single.shape[0], affinity_matrix_label_single.shape[1]))
 
                             if opt.is_master:

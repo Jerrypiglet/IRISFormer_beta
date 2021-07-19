@@ -134,7 +134,8 @@ class encoder0(nn.Module):
             # print(x1.shape, x2.shape, x3.shape) # torch.Size([8, 64, 120, 160]) torch.Size([8, 128, 60, 80]) torch.Size([8, 256, 30, 40])
             self.ssn_x3 = SSNFeatsTransformAdaptive(self.opt, (3, 4))
             self.ssn_x2 = SSNFeatsTransformAdaptive(self.opt, (6, 8))
-            self.ssn_x1 = SSNFeatsTransformAdaptive(self.opt, (12, 16))
+            # self.ssn_x1 = SSNFeatsTransformAdaptive(self.opt, (12, 16))
+            self.ssn_x1 = SSNFeatsTransformAdaptive(self.opt, (6, 8))
 
 
     def forward(self, x):
@@ -221,7 +222,8 @@ class decoder0(nn.Module):
         if self.opt.cfg.MODEL_GMM.enable and self.opt.cfg.MODEL_GMM.feat_recon_adaptive.enable:
             self.ssn_dx3 = SSNFeatsTransformAdaptive(opt, (3, 4))
             self.ssn_dx4 = SSNFeatsTransformAdaptive(opt, (6, 8))
-            self.ssn_dx5 = SSNFeatsTransformAdaptive(opt, (12, 16))
+            # self.ssn_dx5 = SSNFeatsTransformAdaptive(opt, (12, 16))
+            self.ssn_dx5 = SSNFeatsTransformAdaptive(opt, (6, 8))
             # self.ssn_dx6 = SSNFeatsTransformAdaptive(opt, (12, 16))
 
         self.flag = True
