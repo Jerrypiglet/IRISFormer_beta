@@ -318,7 +318,7 @@ _C.MODEL_MATSEG.arch = 'resnet101'
 _C.MODEL_MATSEG.pretrained = True
 _C.MODEL_MATSEG.if_freeze = False
 _C.MODEL_MATSEG.fix_bn = False
-_C.MODEL_MATSEG.embed_dims = 2
+_C.MODEL_MATSEG.embed_dims = 4
 _C.MODEL_MATSEG.if_guide = False
 _C.MODEL_MATSEG.guide_channels = 32
 _C.MODEL_MATSEG.use_as_input = False
@@ -326,6 +326,7 @@ _C.MODEL_MATSEG.use_semseg_as_input = False
 _C.MODEL_MATSEG.load_pretrained_pth = False
 _C.MODEL_MATSEG.pretrained_pth = ''
 _C.MODEL_MATSEG.use_pred_as_input = False
+_C.MODEL_MATSEG.if_save_embedding = False
 
 _C.MODEL_MATSEG.albedo_pooling_debug = False
 

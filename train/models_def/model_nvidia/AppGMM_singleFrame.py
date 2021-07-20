@@ -24,24 +24,25 @@ class AppGMM(torch.nn.Module):
     '''
 
     def __init__(
-            self, args, ):
+            self, args, spixel_nums=(8, 6)):
         '''
         '''
         super().__init__()
-        self.learning_rate = args.cfg.MODEL_GMM.learning_rate
+        # self.learning_rate = args.cfg.MODEL_GMM.learning_rate
         self.model_optical_flow = None
         self.cam_intrinsic = None
-        self.ssn_grid_spixel= args.cfg.MODEL_GMM.ssn_grid_spixel
-        self.src_idx= args.cfg.MODEL_GMM.src_idx
+        # self.ssn_grid_spixel= args.cfg.MODEL_GMM.ssn_grid_spixel
+        # self.src_idx= args.cfg.MODEL_GMM.src_idx
+        self.ssn_grid_spixel = False
 
         # self.spixel_nums =  (21, 15)  #w, h
         # self.spixel_nums =  (32, 24)  #w, h
         # self.spixel_nums =  (16, 12)  #w, h
-        self.spixel_nums =  (8, 6)  #w, h
+        self.spixel_nums =  spixel_nums
         self.J = self.spixel_nums[0]*self.spixel_nums[1] 
 
         self.total_step=0
-        self.grad_clip = args.cfg.MODEL_GMM.grad_clip
+        # self.grad_clip = args.cfg.MODEL_GMM.grad_clip
         self.status_pred_in = None
         self.init_inbound_mask = None
 
@@ -64,7 +65,7 @@ class AppGMM(torch.nn.Module):
         '''
         pass
 
-    def forward(self, batch, batch_idx, return_dict=False, res_dir=None):
+    def forward(self, batch, batch_idx, return_dict=False, res_dir=None, if_recon_depth=False):
         '''
         INPUTS:
         batch: dict of 
@@ -147,16 +148,17 @@ class AppGMM(torch.nn.Module):
             in_bound_mask_warp = torch.zeros([9, H, W]).bool().cuda()
             cluster_t_valid[:] = True
             in_bound_mask_warp[:] = True
-
-            # dmap_update_resample, sigma_update_resample = \
-            #     self.gmm2depth(
-            #         mix_update.squeeze(),
-            #         mu_update.squeeze(),
-            #         cov_update.squeeze(),
-            #         cluster_t_valid,
-            #         abs_spixel_ind_update,
-            #         torch.ones_like(in_bound_mask_warp),
-            #         gamma_update.reshape(-1, H*W).T, )
+            
+            if if_recon_depth:
+                dmap_update_resample, sigma_update_resample = \
+                    self.gmm2depth(
+                        mix_update.squeeze(),
+                        mu_update.squeeze(),
+                        cov_update.squeeze(),
+                        cluster_t_valid,
+                        abs_spixel_ind_update,
+                        torch.ones_like(in_bound_mask_warp),
+                        gamma_update.reshape(-1, H*W).T, )
 
             # save the depth maps here for demonstration purpose #
 
@@ -177,12 +179,18 @@ class AppGMM(torch.nn.Module):
             # if flow_mask is not None:
             #     flow_mask = flow_mask.unsqueeze(0).unsqueeze(0)
             res = dict({
-                # 'gmm_params_update': [mix_update, mu_update, cov_update],
+                'gmm_params_update': [mix_update, mu_update, cov_update],
                 'gamma_update': torch.cat(gamma_update_list, 0), 
                 # 'flow_mask': flow_mask,
                 # 'flow_ref2prev': flow_ref2prev,
                 # 'flow_prev2ref': flow_prev2ref,
             })
+            if if_recon_depth:
+                res.update({
+                    'dmap_update_resample': dmap_update_resample, 
+                    'sigma_update_resample': sigma_update_resample
+                })
+
 
             #'diff_flow_norm_loss': diff_flow_norm_loss,
             return  res

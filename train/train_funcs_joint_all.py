@@ -1136,6 +1136,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                         writer.add_image('VAL_matseg-aggre_map_PRED/%d'%(sample_idx), matAggreMap_pred_single_vis, tid, dataformats='HWC')
                         if opt.cfg.MODEL_MATSEG.albedo_pooling_debug and not opt.if_cluster:
                             np.save('tmp/demo_%s/matseg_pred_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), matAggreMap_pred_single_vis)
+                        if opt.cfg.MODEL_MATSEG.if_save_embedding:
+                            npy_path = Path(opt.summary_vis_path_task) / ('matseg_pred_embedding_tid%d_idx%d.npy'%(tid, sample_idx))
+                            np.save(str(npy_path), embedding_single.detach().cpu().numpy())
 
                     logger.info('Vis batch for %.2f seconds.'%(time.time()-ts_start_vis))
 

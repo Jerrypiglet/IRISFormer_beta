@@ -189,6 +189,7 @@ class openrooms(data.Dataset):
         batch_dict = {'image_index': index, 'frame_info': frame_info}
 
         if_load_immask = self.opt.cfg.DATA.load_brdf_gt and (not self.opt.cfg.DATASET.if_no_gt_semantics)
+        if_load_immask = if_load_immask or self.opt.cfg.MODEL_MATSEG.enable
 
         if if_load_immask:
             seg_path = hdr_image_path.replace('im_', 'immask_').replace('hdr', 'png').replace('DiffMat', '')
@@ -204,13 +205,15 @@ class openrooms(data.Dataset):
 
         hdr_scale = 1.
 
-        assert self.opt.cfg.DATA.if_load_png_not_hdr
-        if png_image_path.exists():
-            # png_image_path.unlink()
-            # self.convert_write_png(hdr_image_path, seg, str(png_image_path))
-            pass
-        else:
-            self.convert_write_png(hdr_image_path, seg, str(png_image_path))
+        # assert self.opt.cfg.DATA.if_load_png_not_hdr
+        if self.opt.cfg.DATA.if_load_png_not_hdr:
+            if png_image_path.exists():
+                # png_image_path.unlink()
+                # self.convert_write_png(hdr_image_path, seg, str(png_image_path))
+                pass
+            else:
+                # self.convert_write_png(hdr_image_path, seg, str(png_image_path))
+                pass
 
         # Read PNG image
         image = Image.open(str(png_image_path))
@@ -258,6 +261,12 @@ class openrooms(data.Dataset):
 
         if self.opt.cfg.MODEL_GMM.enable:
             self.load_scannet_compatible(batch_dict, frame_info)
+
+        # ====== matseg =====
+        if self.opt.cfg.DATA.load_matseg_gt:
+            mat_seg_dict = self.load_matseg(mask, im_RGB_uint8)
+            batch_dict.update(mat_seg_dict)
+
 
         return batch_dict
 
@@ -466,6 +475,62 @@ class openrooms(data.Dataset):
 
         return return_scene_dict
 
+    def load_matseg(self, mask, im_RGB_uint8):
+        # >>>> Rui: Read obj mask
+        mat_aggre_map, num_mat_masks = self.get_map_aggre_map(mask) # 0 for invalid region
+        im_matseg_transformed_trainval, mat_aggre_map_transformed = self.transforms_matseg(im_RGB_uint8, mat_aggre_map.squeeze()) # augmented
+        mat_aggre_map = mat_aggre_map_transformed.numpy()[..., np.newaxis]
+
+        h, w, _ = mat_aggre_map.shape
+        gt_segmentation = mat_aggre_map
+        segmentation = np.zeros([50, h, w], dtype=np.uint8)
+        for i in range(num_mat_masks+1):
+            if i == 0:
+                # deal with backgroud
+                seg = gt_segmentation == 0
+                segmentation[num_mat_masks, :, :] = seg.reshape(h, w) # segmentation[num_mat_masks] for invalid mask
+            else:
+                seg = gt_segmentation == i
+                segmentation[i-1, :, :] = seg.reshape(h, w) # segmentation[0..num_mat_masks-1] for plane instances
+        return {
+            'mat_aggre_map': torch.from_numpy(mat_aggre_map),  # 0 for invalid region
+            # 'mat_aggre_map_reindex': torch.from_numpy(mat_aggre_map_reindex), # gt_seg
+            'num_mat_masks': num_mat_masks,  
+            'mat_notlight_mask': torch.from_numpy(mat_aggre_map!=0).float(),
+            'instance': torch.ByteTensor(segmentation), # torch.Size([50, 240, 320])
+            'semantic': 1 - torch.FloatTensor(segmentation[num_mat_masks, :, :]).unsqueeze(0), # torch.Size([50, 240, 320]) torch.Size([1, 240, 320])
+            'im_matseg_transformed_trainval': im_matseg_transformed_trainval
+        }
+    
+    def get_map_aggre_map(self, objMask):
+        cad_map = objMask[:, :, 0]
+        mat_idx_map = objMask[:, :, 1]        
+        obj_idx_map = objMask[:, :, 2] # 3rd channel: object INDEX map
+
+        mat_aggre_map = np.zeros_like(cad_map)
+        cad_ids = np.unique(cad_map)
+        num_mats = 1
+        for cad_id in cad_ids:
+            cad_mask = cad_map == cad_id
+            mat_index_map_cad = mat_idx_map[cad_mask]
+            mat_idxes = np.unique(mat_index_map_cad)
+
+            obj_idx_map_cad = obj_idx_map[cad_mask]
+            if_light = list(np.unique(obj_idx_map_cad))==[0]
+            if if_light:
+                mat_aggre_map[cad_mask] = 0
+                continue
+
+            # mat_aggre_map[cad_mask] = mat_idx_map[cad_mask] + num_mats
+            # num_mats = num_mats + max(mat_idxs)
+            cad_single_map = np.zeros_like(cad_map)
+            cad_single_map[cad_mask] = mat_idx_map[cad_mask]
+            for i, mat_idx in enumerate(mat_idxes):
+        #         mat_single_map = np.zeros_like(cad_map)
+                mat_aggre_map[cad_single_map==mat_idx] = num_mats
+                num_mats += 1
+
+        return mat_aggre_map, num_mats-1
 
     def loadImage(self, imName, isGama = False):
         if not(osp.isfile(imName ) ):

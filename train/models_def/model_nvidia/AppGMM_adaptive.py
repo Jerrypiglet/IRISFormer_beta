@@ -18,13 +18,14 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
     '''
 
     def __init__(
-            self, args, spixel_dims):
+            self, args, spixel_dims, n_iter=10):
         '''
         '''
         super().__init__()
-        self.learning_rate = args.cfg.MODEL_GMM.learning_rate
-        self.ssn_grid_spixel= args.cfg.MODEL_GMM.ssn_grid_spixel
-        self.src_idx= args.cfg.MODEL_GMM.src_idx
+        # self.learning_rate = args.cfg.MODEL_GMM.learning_rate
+        # self.ssn_grid_spixel= args.cfg.MODEL_GMM.ssn_grid_spixel
+        self.ssn_grid_spixel = False
+        # self.src_idx= args.cfg.MODEL_GMM.src_idx
 
         # self.spixel_nums =  (21, 15)  #w, h
         # self.spixel_nums =  (32, 24)  #w, h
@@ -33,16 +34,21 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
         self.spixel_nums = spixel_dims
         self.num_spixels_height, self.num_spixels_width = self.spixel_nums[0], self.spixel_nums[1]
         self.num_spixels = self.spixel_nums[0]*self.spixel_nums[1] 
+        
+        self.n_iter = n_iter
 
         self.total_step=0
 
         self.opt = args
 
-    def forward(self, feats_in):
+    def forward(self, feats_in, tensor_to_transform=None):
         '''
         INPUTS:
         feats_in -      nbatch x D x H x W
         '''
+
+        if tensor_to_transform is None:
+            tensor_to_transform = feats_in
 
         # If ture, the spixel index assignment for all pixels would be the inital grid initialization
         # ssn_grid_spixel = self.ssn_grid_spixel
@@ -54,45 +60,62 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
         assert self.spixel_nums[0] <= H
         assert self.spixel_nums[1] <= W
 
-        abs_affinity_list = []
-        feats_recon_list = []
 
-        for sample_idx in range(batch_size):
-            #for demo, use gt depth, and gt poses
-            feats_in_single = feats_in[sample_idx:sample_idx+1]
+        # for sample_idx in range(batch_size):
+        #     #for demo, use gt depth, and gt poses
+        #     feats_in_single = feats_in[sample_idx:sample_idx+1]
 
-            # abs_affinity, dist_matrix, spixel_features = align.feat2gmm(feats_in_single, ssn_iter=10)
-            # spixel_dim = feats_in_single.shape[2:4]
-            # num_spixels_height, num_spixels_width = spixel_dim[1], spixel_dim[0] 
-            # num_spixels_height, num_spixels_width = self.spixel_nums
-            # num_spixels = num_spixels_height * num_spixels_width
+        #     # abs_affinity, dist_matrix, spixel_features = align.feat2gmm(feats_in_single, ssn_iter=10)
+        #     # spixel_dim = feats_in_single.shape[2:4]
+        #     # num_spixels_height, num_spixels_width = spixel_dim[1], spixel_dim[0] 
+        #     # num_spixels_height, num_spixels_width = self.spixel_nums
+        #     # num_spixels = num_spixels_height * num_spixels_width
 
-            # print(feats_in_single.shape) # torch.Size([1, D, H, W])
+        #     # print(feats_in_single.shape) # torch.Size([1, D, H, W])
 
-            abs_affinity, dist_matrix, spixel_features = \
-                ssn.ssn_iter(
-                    feats_in_single, n_iter=10, 
-                    num_spixels_width=self.num_spixels_width, 
-                    num_spixels_height=self.num_spixels_height)
+        #     abs_affinity, dist_matrix, spixel_features = \
+        #         ssn.ssn_iter(
+        #             feats_in_single, n_iter=10, 
+        #             num_spixels_width=self.num_spixels_width, 
+        #             num_spixels_height=self.num_spixels_height)
 
 
-            # print(abs_affinity.shape, dist_matrix.shape, spixel_features.shape) # torch.Size([1, J, H, W]) torch.Size([1, 9, HW]) torch.Size([1, D, J]); h, w being the dimensions of spixels, j=h*w
+        #     # print(abs_affinity.shape, dist_matrix.shape, spixel_features.shape) # torch.Size([1, J, H, W]) torch.Size([1, 9, HW]) torch.Size([1, D, J]); h, w being the dimensions of spixels, j=h*w
             
-            abs_affinity = abs_affinity.view(1, J, H, W)
-            abs_affinity_list.append(abs_affinity)
+        #     abs_affinity = abs_affinity.view(1, J, H, W)
+        #     abs_affinity_list.append(abs_affinity)
             
-            # spixel_features = spixel_features.view(feats_in_single.shape[0], self.num_spixels, *feats_in_single.shape[-2:]).contiguous()
+        #     # spixel_features = spixel_features.view(feats_in_single.shape[0], self.num_spixels, *feats_in_single.shape[-2:]).contiguous()
 
-            feats_recon = self.recon_feats(abs_affinity, feats_in_single)
-            feats_recon_list.append(feats_recon)
+        #     feats_recon = self.recon_feats(abs_affinity, feats_in_single)
+        #     feats_recon_list.append(feats_recon)
 
 
-            torch.cuda.empty_cache()
+        #     torch.cuda.empty_cache()
+
+        # res = dict({
+        #     'abs_affinity': torch.cat(abs_affinity_list, 0), 
+        #     'feats_recon': torch.cat(feats_recon_list, 0)
+        # })
+
+        abs_affinity, dist_matrix, spixel_features = \
+            ssn.ssn_iter(
+                feats_in, n_iter=self.n_iter, 
+                num_spixels_width=self.num_spixels_width, 
+                num_spixels_height=self.num_spixels_height)
+
+
+        # print(abs_affinity.shape, dist_matrix.shape, spixel_features.shape) # torch.Size([1, J, H, W]) torch.Size([1, 9, HW]) torch.Size([1, D, J]); h, w being the dimensions of spixels, j=h*w
+        
+        abs_affinity = abs_affinity.view(batch_size, J, H, W)
+
+        feats_recon = self.recon_feats(abs_affinity, tensor_to_transform)
 
         res = dict({
-            'abs_affinity': torch.cat(abs_affinity_list, 0), 
-            'feats_recon': torch.cat(feats_recon_list, 0)
+            'abs_affinity': abs_affinity, 
+            'feats_recon': feats_recon
         })
+
 
         return  res
 

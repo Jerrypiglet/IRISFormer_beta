@@ -535,7 +535,7 @@ else:
                 loss = 0.
                 loss_keys_backward = []
                 loss_keys_print = []
-                if opt.cfg.MODEL_MATSEG.enable and (not opt.cfg.MODEL_MATSEG.freeze):
+                if opt.cfg.MODEL_MATSEG.enable and (not opt.cfg.MODEL_MATSEG.if_freeze):
                     #  and ((not opt.cfg.MODEL_MATSEG.freeze) or opt.cfg.MODEL_MATSEG.embed_dims <= 4):
                     loss_keys_backward.append('loss_matseg-ALL')
                     loss_keys_print.append('loss_matseg-ALL')
