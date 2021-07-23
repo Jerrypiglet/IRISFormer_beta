@@ -134,8 +134,8 @@ class encoder0(nn.Module):
             # print(x1.shape, x2.shape, x3.shape) # torch.Size([8, 64, 120, 160]) torch.Size([8, 128, 60, 80]) torch.Size([8, 256, 30, 40])
             self.ssn_x3 = SSNFeatsTransformAdaptive(self.opt, (3, 4))
             self.ssn_x2 = SSNFeatsTransformAdaptive(self.opt, (6, 8))
-            # self.ssn_x1 = SSNFeatsTransformAdaptive(self.opt, (12, 16))
-            self.ssn_x1 = SSNFeatsTransformAdaptive(self.opt, (6, 8))
+            self.ssn_x1 = SSNFeatsTransformAdaptive(self.opt, (12, 16))
+            # self.ssn_x1 = SSNFeatsTransformAdaptive(self.opt, (6, 8))
 
 
     def forward(self, x):

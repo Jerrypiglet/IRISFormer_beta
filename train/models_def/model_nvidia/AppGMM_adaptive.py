@@ -41,7 +41,7 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
 
         self.opt = args
 
-    def forward(self, feats_in, tensor_to_transform=None):
+    def forward(self, feats_in, tensor_to_transform=None, index_add=True):
         '''
         INPUTS:
         feats_in -      nbatch x D x H x W
@@ -102,7 +102,8 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
             ssn.ssn_iter(
                 feats_in, n_iter=self.n_iter, 
                 num_spixels_width=self.num_spixels_width, 
-                num_spixels_height=self.num_spixels_height)
+                num_spixels_height=self.num_spixels_height, 
+                index_add=index_add)
 
 
         # print(abs_affinity.shape, dist_matrix.shape, spixel_features.shape) # torch.Size([1, J, H, W]) torch.Size([1, 9, HW]) torch.Size([1, D, J]); h, w being the dimensions of spixels, j=h*w

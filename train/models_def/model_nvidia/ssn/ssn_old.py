@@ -1,8 +1,11 @@
+import math
 import torch
+
 from .pair_wise_distance import PairwiseDistFunction
 
 # for debugging
 from matplotlib.pyplot import * 
+import time
 # from mutils.misc import mimshow, msavefig 
 import torch.nn.functional as F
 
@@ -68,9 +71,7 @@ def get_hard_abs_labels(affinity_matrix, init_label_map, num_spixels_width):
     return label.long()
 
 
-def ssn_iter(pixel_features,  n_iter,
-             num_spixels_width, num_spixels_height, 
-             index_add=False):
+def ssn_iter(pixel_features,  n_iter,  num_spixels_width, num_spixels_height):
     """
     computing assignment iterations
     detailed process is in Algorithm 1, line 2 - 6
@@ -80,9 +81,6 @@ def ssn_iter(pixel_features,  n_iter,
             A Tensor of shape (B, C, H, W)
         n_iter: int
             A number of iterations
-        num_spixels_width, num_pixels_height: int
-            number of pixels in the width and height directions
-
     """
     height, width = pixel_features.shape[-2:]
     # num_spixels_width  = int(math.sqrt(num_spixels * width / height))
@@ -90,19 +88,14 @@ def ssn_iter(pixel_features,  n_iter,
     num_spixels = num_spixels_width * num_spixels_height
 
     spixel_features, init_label_map = calc_init_centroid(pixel_features, num_spixels_width, num_spixels_height)
-
-    if not index_add:
-        abs_indices = get_abs_indices(init_label_map, num_spixels_width) 
-        mask = (abs_indices[1] >= 0) * (abs_indices[1] < num_spixels)
-    else:
-        abs_indices = get_abs_indices(init_label_map[0].unsqueeze(0), num_spixels_width) 
+    abs_indices = get_abs_indices(init_label_map, num_spixels_width) 
 
     pixel_features = pixel_features.reshape(*pixel_features.shape[:2], -1)
     permuted_pixel_features = pixel_features.permute(0, 2, 1).contiguous()
 
-    # import time
-    # st = time.time()
-    for _ in range(n_iter):
+    import time
+    st = time.time()
+    for i_iter in range(n_iter):
         # E-step: calculate /gammas
     # def forward(self, pixel_features, spixel_features, init_spixel_indices, num_spixels_width, num_spixels_height):
         
@@ -118,77 +111,22 @@ def ssn_iter(pixel_features,  n_iter,
         # import ipdb; ipdb.set_trace()
         ###
 
-        dist_matrix = PairwiseDistFunction.apply(
-            pixel_features, 
-            spixel_features, 
-            init_label_map, 
-            num_spixels_width, num_spixels_height) 
+        dist_matrix = PairwiseDistFunction.apply(pixel_features, spixel_features, init_label_map, num_spixels_width, num_spixels_height) 
 
         affinity_matrix = (-dist_matrix).softmax(1)
+
         reshaped_affinity_matrix = affinity_matrix.reshape(-1) 
+        mask = (abs_indices[1] >= 0) * (abs_indices[1] < num_spixels)
+        sparse_abs_affinity = torch.sparse_coo_tensor(abs_indices[:, mask], reshaped_affinity_matrix[mask])
+        # print(sparse_abs_affinity.shape) # torch.Size([1, J, HW])
+        abs_affinity = sparse_abs_affinity.to_dense().contiguous()
 
         # M-step: update the centroids
+        spixel_features = torch.bmm(abs_affinity, permuted_pixel_features) / (abs_affinity.sum(2, keepdim=True) + 1e-16) 
+        spixel_features = spixel_features.permute(0, 2, 1).contiguous()
 
-        if not index_add:
-            #sparse to dense
-            sparse_abs_affinity = torch.sparse_coo_tensor(abs_indices[:, mask], reshaped_affinity_matrix[mask]) #Bx9xN
-            abs_affinity = sparse_abs_affinity.to_dense().contiguous() #BxJxN
-            spixel_features = torch.bmm(abs_affinity, permuted_pixel_features) / (abs_affinity.sum(2, keepdim=True) + 1e-16) #BxJxC
-            spixel_features = spixel_features.permute(0, 2, 1).contiguous()#BxCxJ
-
-        else:
-            #use the index_add function to collect the spixel features, so we don't have to use the sparse_to_dense function
-            spixel_features_w= (affinity_matrix).unsqueeze(-1) * permuted_pixel_features.unsqueeze(1) # Bx9xNxC
-            spixel_features_w = spixel_features_w.reshape(spixel_features_w.shape[0], -1, spixel_features_w.shape[-1]).contiguous()
-            index_abs2rel =  abs_indices[1, :].reshape(9, height, width).contiguous() #9xHxW
-            
-            out_bound_mask_ = torch.logical_or(index_abs2rel>=num_spixels, index_abs2rel<=0,)
-            index_abs2rel[out_bound_mask_]= \
-                    index_abs2rel[4].unsqueeze(0).expand(
-                            9, 
-                            index_abs2rel.shape[1], 
-                            index_abs2rel.shape[2])[out_bound_mask_]
-
-            spixel_features= torch.zeros( 
-                spixel_features_w.shape[0], 
-                num_spixels, 
-                spixel_features_w.shape[-1], 
-                device=spixel_features_w.device) #BxJxC
-
-            spixel_features.index_add_(dim=1, index=index_abs2rel.reshape(-1), source=spixel_features_w)
-            spixel_features = spixel_features.permute(0,2,1).contiguous() # BxCxJ
-
-            affinity_matrix_sum = torch.zeros( spixel_features_w.shape[0], num_spixels, device=spixel_features_w.device) #BxJ
-            affinity_matrix_sum.index_add_(dim=1, index=index_abs2rel.reshape(-1), source=affinity_matrix.reshape(spixel_features_w.shape[0], -1)) #BxJ
-            spixel_features= spixel_features / affinity_matrix_sum.unsqueeze(1) #BxCxJ
-            #TODO: get gamma matrix
-
-
-    # print(f'ssn_2d iteration took : {(time.time()-st)*1000:03f} ms for {n_iter:03d} iters') 
+    print(f'ssn_2d iteration took : {(time.time()-st)*1000:03f} ms for {n_iter:03d} iters') 
 
     # hard_labels = get_hard_abs_labels(affinity_matrix, init_label_map, num_spixels_width)
     # import ipdb; ipdb.set_trace()
-    if not index_add:
-        #abs_affinity: B x J x N
-        return abs_affinity, dist_matrix, spixel_features
-    else:
-        #abs_affinity:    B x J x N
-        #affinity_matrix: B x 9 x N
-        #index_abs2rel:   9 x H x W
-        abs_affinity = torch.zeros(spixel_features_w.shape[0], num_spixels, height*width, device=spixel_features_w.device) # BxJxN
-        abs_affinity = msparse2dense(abs_affinity, affinity_matrix, index_abs2rel)
-        return abs_affinity, dist_matrix, spixel_features
-
-def msparse2dense(
-    abs_affinity,    #BxJxN
-    affinity_matrix, #Bx9xN
-    index_abs2rel,   #9xHxW
-    ):
-
-    B, J, N = abs_affinity.shape[0], abs_affinity.shape[1], abs_affinity.shape[2]
-    abs_affinity = abs_affinity.permute(0,2,1).reshape(-1) # vec(abs_affinity), BNJ
-    offset= torch.arange(0,B*N, device=affinity_matrix.device).reshape(B*N, 1)*J
-    offseted_abs2rel = index_abs2rel.permute(1,2,0).reshape(-1,9).repeat([B,1]) +  offset #(BN x 9)
-    abs_affinity[offseted_abs2rel.reshape(-1)]= affinity_matrix.permute(0,2,1).reshape(-1) #BNJ vec
-    abs_affinity= abs_affinity.reshape(B,N,J).permute(0,2,1) #BxJxN
-    return abs_affinity
+    return abs_affinity, dist_matrix, spixel_features

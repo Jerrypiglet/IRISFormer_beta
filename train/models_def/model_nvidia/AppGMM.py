@@ -5,16 +5,15 @@ Licensed under the CC BY-NC-SA 4.0 license
 author: Chao Liu <chaoliu@nvidia.com>
 '''
 
+from numpy.lib import utils
 import torch
 from torch.functional import Tensor
 import torch.nn.functional as funct
 from tensorboardX import SummaryWriter
 
-import models_def.model_nvidia.utils_nvidia.models as model_utils
-import models_def.model_nvidia.utils_nvidia.misc as m_misc
-import models_def.model_nvidia.align as align
-import models_def.model_nvidia.raycaster as raycaster
-from models_def.model_nvidia.raft.raft import RAFT
+import utils.models as model_utils
+import utils.misc as m_misc
+import model.align as align, model.raycaster as raycaster
 
 from matplotlib.pyplot import *
 
@@ -28,17 +27,17 @@ class AppGMM(torch.nn.Module):
         '''
         '''
         super().__init__()
-        self.learning_rate = args.cfg.MODEL_GMM.learning_rate
+        self.learning_rate = args.learning_rate
         self.model_optical_flow = None
         self.cam_intrinsic = None
-        self.ssn_grid_spixel= args.cfg.MODEL_GMM.ssn_grid_spixel
-        self.src_idx= args.cfg.MODEL_GMM.src_idx
+        self.ssn_grid_spixel= args.ssn_grid_spixel
+        self.src_idx= args.src_idx
 
         self.spixel_nums =  (21, 15)  #w, h
         self.J = self.spixel_nums[0]*self.spixel_nums[1] 
 
         self.total_step=0
-        self.grad_clip = args.cfg.MODEL_GMM.grad_clip
+        self.grad_clip = args.grad_clip
         self.status_pred_in = None
         self.init_inbound_mask = None
 
@@ -47,6 +46,7 @@ class AppGMM(torch.nn.Module):
     def configure_optimizers(self):
         '''
 		configure the optimizers here
+
 		Example:
 
         optimizer = torch.optim.Adam(
@@ -74,8 +74,10 @@ class AppGMM(torch.nn.Module):
         ssn_grid_spixel = self.ssn_grid_spixel
 
         imgs_ref = batch['imgs_ref'].cuda()
-        # imgs_src = batch['imgs_src'][:, self.src_idx * 3:(self.src_idx+1)*3, ...].cuda()
-        imgs_src = batch['imgs_src'].cuda()
+        imgs_src = batch['imgs_src'][:, self.src_idx * 3:(self.src_idx+1)*3, ...].cuda()
+
+        imgs_src_all = [batch['imgs_src'][:, src_idx * 3:(src_idx+1)*3, ...].cuda() for src_idx in range(4)]
+
         dmaps_ref_gt = batch['dmaps_ref'].cuda()
         last_frame_traj = batch['last_frame_traj']
 
@@ -85,14 +87,73 @@ class AppGMM(torch.nn.Module):
         T_pred_gt_inv = T_pred_gt.inverse()
         flow_mask, flow_prev2ref, flow_ref2prev=None, None, None
         dmap_resample = None
+        dmaps_src_gt_raw = batch['dmaps_src'].cuda()
+
+        #inpainting dmap_gt
+        dmaps_ref_gt = m_misc.inpaint_depth(dmaps_ref_gt)
+        dmaps_src_gt = []
+        for i in range(dmaps_src_gt_raw.shape[1]):
+            dmaps_src_gt.append(m_misc.inpaint_depth(dmaps_src_gt_raw[0, i]).unsqueeze(0).unsqueeze(0))
+        dmaps_src_gt= torch.cat(dmaps_src_gt, dim=0)
+        
+
+        #--- SSN 2D DEMO ---#
+        #-----------#
+        import ssn.ssn as ssn2d
+
+        n_iter_ssn_2d = 10
+        import time
+        st=time.time()
+        abs_affinity, dist_matrix, spixel_features = ssn2d.ssn_iter(
+            dmaps_src_gt.repeat(8, 1,1,1), #32 channels raw img size depth map #imgs_ref , #imgs_ref + imgs_ref_add
+            n_iter=n_iter_ssn_2d, 
+            num_spixels_width=self.spixel_nums[0], 
+            num_spixels_height=self.spixel_nums[1],
+            index_add=False,
+        )
+        ed=time.time()
+        print(f'ssn_2d batched took {(ed-st)*1000:.4f} ms')
+
+        st=time.time()
+        abs_affinity_cmp, dist_matrix_cmp, spixel_features_cmp = ssn2d.ssn_iter(
+            dmaps_src_gt.repeat(8, 1,1,1), #imgs_ref , #imgs_ref + imgs_ref_add
+            n_iter=n_iter_ssn_2d, 
+            num_spixels_width=self.spixel_nums[0], 
+            num_spixels_height=self.spixel_nums[1],
+            index_add=True,
+        )
+        ed=time.time()
+        print(f'ssn_2d batched took {(ed-st)*1000:.4f} ms')
+
+        gamma_map = abs_affinity.reshape(abs_affinity.shape[0], abs_affinity.shape[1], H, W) # B J H W
+        gamma_map_cmp = abs_affinity_cmp.reshape(abs_affinity_cmp.shape[0], abs_affinity_cmp.shape[1], H, W) # B J H W
+
+        # boundary image from the previous version using sparse_coo_tensor
+        img_boundary0 = m_misc.mark_gamma_boundary(
+            img_rgb= imgs_src_all[0].squeeze().permute(1,2,0), 
+            gamma = gamma_map[0].permute(1,2,0)) 
+
+        # boundary image from the current version without using sparse_coo_tensor
+        img_boundary1 = m_misc.mark_gamma_boundary(
+            img_rgb= imgs_src_all[0].squeeze().permute(1,2,0), 
+            gamma = gamma_map_cmp[0].permute(1,2,0))
+
+        # import ipdb; ipdb.set_trace()
+        #-----------#
+        #-----------#
+
+
+
+
+
+        #--- SSN 3D DEMO ---#
+        #-----------#
 
         # invalid frame in ScanNet (all zero depth map or invalid pose)
         if self.training and ((dmaps_ref_gt.max() == 0 and dmaps_ref_gt.min() == 0) or T_pred_gt.isnan().sum() > 0):
             self.status_pred_in = None
             return None
 
-        #inpainting dmap_gt
-        dmaps_ref_gt = m_misc.inpaint_depth(dmaps_ref_gt)
 
         #for demo, use gt depth, and gt poses
         dmap_ref_meas = dmaps_ref_gt
@@ -147,6 +208,9 @@ class AppGMM(torch.nn.Module):
             flow_mask = diff_norm_ref < 5.  
             flow_mask_src2prev = diff_norm_prev < 5. 
 
+            # do the warping for sanity check#
+            img_prev_warp= align.warp_img_from_flow_v1(imgs_ref, flow_prev2ref)
+            img_ref_warp= align.warp_img_from_flow_v1(imgs_prev, flow_ref2prev)
 
             '''get global pose'''
             global_pose = T_pred_gt_inv.unsqueeze(0)  # 1x1x4x4
@@ -178,7 +242,8 @@ class AppGMM(torch.nn.Module):
                     cluster_t_valid,
                     abs_spixel_ind_cur_warp,
                     in_bound_mask_warp,
-                    gamma_cur, )
+                    gamma_cur, # NXJ
+                    )
 
             if dmap_resample is None: # error happes during resampling..
                 self.status_pred_in = None
@@ -227,6 +292,19 @@ class AppGMM(torch.nn.Module):
                 return_rel_affinity=True,
                 bound_abs_spixel_ind=True,
                 use_indx_init=ssn_grid_spixel)
+
+        #demo: gmm2depth
+        if batch_idx>=1: # not the first frame
+            cluster_t_valid[:]=True
+            dmap_update_resample, sigma_update_resample = \
+                self.gmm2depth(
+                    mix_update.squeeze(),
+                    mu_update.squeeze(),
+                    cov_update.squeeze(),
+                    cluster_t_valid,
+                    abs_spixel_ind_update,
+                    torch.ones_like(in_bound_mask_warp),
+                    gamma_update.reshape(-1, H*W).T, )
 
 
         if last_frame_traj:
@@ -305,9 +383,10 @@ class AppGMM(torch.nn.Module):
 
     def set_optical_flow_model(self, args,):
         # load the optical flow net
+        from raft.raft import RAFT
 
-        self.model_optical_flow = torch.nn.DataParallel(RAFT(args).cuda())
-        self.model_optical_flow.load_state_dict(torch.load(args.cfg.MODEL_GMM.RAFT.OF_model_path))
+        self.model_optical_flow = torch.nn.DataParallel(RAFT(args))
+        self.model_optical_flow.load_state_dict(torch.load(args.OF_model_path))
         self.model_optical_flow.eval()
 
     def set_logger(self, args,log_dir):
@@ -352,8 +431,13 @@ class AppGMM(torch.nn.Module):
         gmm to depth 
 
         INPUTS:
+        mix_resample - J elements vector
+        mu_resample - Jx3, each row is the mean of one cluster
+        cov_resample - Jx3x3, the covariance matrix of one cluster
         cluster_t_valid - J ele bool array, only J_valid<J are set to True
-        gamma_cur - N x J 
+        abs_spixel_ind_update -9xHxW, the local hashing map got from depth2gmm
+        gamma_cur - N x J  - the gamma matrix from depth2gmm, N=H*W
+        in_bound_mask_warp - 9xHxW, for single-frame, set to all one (ones(9,H,W))
 
         optional 
         gmm_cur_rel - Nx 9
@@ -368,8 +452,7 @@ class AppGMM(torch.nn.Module):
         idx_valid = cov_resample.det() > 0.
 
         cluster_t_valid_0 = cluster_t_valid.clone()
-        cluster_t_valid_0[torch.nonzero(cluster_t_valid_0, as_tuple=False).squeeze()[
-            torch.logical_not(idx_valid)]] = False
+        cluster_t_valid_0[torch.nonzero(cluster_t_valid_0, as_tuple=False).squeeze()[ torch.logical_not(idx_valid)]] = False
         #bound abs_spixel_ind
         out_bound_mask = torch.logical_or(torch.logical_or(
             abs_spixel_ind_cur_warp >= self.J, abs_spixel_ind_cur_warp < 0,), in_bound_mask_warp < .9)
