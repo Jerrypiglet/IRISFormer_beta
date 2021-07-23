@@ -125,13 +125,13 @@ class decoder0_pacconv(nn.Module):
             return x_out
 
 
-    def forward(self, im, x1, x2, x3, x4, x5, x6, input_extra_dict=None):
+    def forward(self, im, x1, x2, x3, x4, x5, x6, input_dict_extra=None):
 
         return_dict = {}
 
-        matseg_embeddings = input_extra_dict['matseg-embeddings']
-        # matseg_embeddings = matseg_embeddings * (2. * input_extra_dict['mat_notlight_mask_gpu_float'] - 1)
-        mat_notlight_mask_gpu_float = input_extra_dict['mat_notlight_mask_gpu_float']
+        matseg_embeddings = input_dict_extra['matseg-embeddings']
+        # matseg_embeddings = matseg_embeddings * (2. * input_dict_extra['mat_notlight_mask_gpu_float'] - 1)
+        mat_notlight_mask_gpu_float = input_dict_extra['mat_notlight_mask_gpu_float']
 
         im_trainval_RGB_mask_pooled_mean, kernel_list = None, None
         
@@ -152,7 +152,7 @@ class decoder0_pacconv(nn.Module):
             # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[15], strides=[15], paddings=[7], dilations=[1])
 
 
-            im_in = input_extra_dict['im_trainval_RGB']
+            im_in = input_dict_extra['im_trainval_RGB']
             # im_in = F.interpolate(im_in, [120, 160], mode='bilinear')
             # im_in = F.interpolate(im_in, [60, 80], mode='bilinear')
             # im_in = F.interpolate(im_in, [30, 40], mode='bilinear')

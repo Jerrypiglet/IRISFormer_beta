@@ -225,9 +225,9 @@ class decoder0_guide(nn.Module):
         else:
             return x
 
-    def forward(self, im, x1, x2, x3, x4, x5, x6, input_extra_dict={}):
-        if 'input_dict_guide' in input_extra_dict:
-            input_dict_guide = input_extra_dict['input_dict_guide']
+    def forward(self, im, x1, x2, x3, x4, x5, x6, input_dict_extra={}):
+        if 'input_dict_guide' in input_dict_extra:
+            input_dict_guide = input_dict_extra['input_dict_guide']
         else:
             input_dict_guide = None
 
@@ -460,18 +460,18 @@ class decoder0(nn.Module):
                 dx6_pooled_mean[batch_id][:, instance_mat] = torch.mean(dx6_single_mat_selected, 1, keepdim=True)
         return dx6_pooled_mean
 
-    def forward(self, im, x1, x2, x3, x4, x5, x6, input_extra_dict=None):
+    def forward(self, im, x1, x2, x3, x4, x5, x6, input_dict_extra=None):
 
         extra_output_dict = {}
 
         if self.if_albedo_pooling:
             if self.opt.cfg.MODEL_MATSEG.albedo_pooling_from == 'gt':
-                instance = input_extra_dict['matseg-instance']
-                num_mat_masks_batch = input_extra_dict['semseg-num_mat_masks_batch']
+                instance = input_dict_extra['matseg-instance']
+                num_mat_masks_batch = input_dict_extra['semseg-num_mat_masks_batch']
             else:
-                matseg_logits = input_extra_dict['matseg-logits']
-                matseg_embeddings = input_extra_dict['matseg-embeddings']
-                mat_notlight_mask_cpu = input_extra_dict['mat_notlight_mask_cpu']
+                matseg_logits = input_dict_extra['matseg-logits']
+                matseg_embeddings = input_dict_extra['matseg-embeddings']
+                mat_notlight_mask_cpu = input_dict_extra['mat_notlight_mask_cpu']
                 instance, num_mat_masks_batch, predict_segmentation = logit_embedding_to_instance(mat_notlight_mask_cpu, matseg_logits, matseg_embeddings, self.opt)
             # print(instance.shape, num_mat_masks_batch.shape) # torch.Size([16, 50, 240, 320]) torch.Size([16])
             # if self.flag:
@@ -480,50 +480,50 @@ class decoder0(nn.Module):
             #     self.flag = False
 
         if self.if_albedo_asso_pool_conv or self.if_albedo_pac_pool:
-            matseg_embeddings = input_extra_dict['matseg-embeddings']
+            matseg_embeddings = input_dict_extra['matseg-embeddings']
             
         dx1 = F.relu(self.dgn1(self.dconv1(x6 ) ) )
         if self.if_appearance_recon:
-            dx1 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], dx1, scale_feat_map=32)
+            dx1 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], dx1, scale_feat_map=32)
         xin1 = torch.cat([dx1, x5], dim = 1)
         # if self.if_appearance_recon:
-        #     xin1 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], xin1, scale_feat_map=32)
+        #     xin1 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], xin1, scale_feat_map=32)
         dx2 = F.relu(self.dgn2(self.dconv2(F.interpolate(xin1, scale_factor=2, mode='bilinear') ) ), True)
 
         if dx2.size(3) != x4.size(3) or dx2.size(2) != x4.size(2):
             dx2 = F.interpolate(dx2, [x4.size(2), x4.size(3)], mode='bilinear')
         if self.if_appearance_recon:
-            dx2 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], dx2, scale_feat_map=16)
+            dx2 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], dx2, scale_feat_map=16)
         xin2 = torch.cat([dx2, x4], dim=1 )
         # if self.if_appearance_recon:
-        #     xin2 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], xin2, scale_feat_map=16)
+        #     xin2 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], xin2, scale_feat_map=16)
         dx3 = F.relu(self.dgn3(self.dconv3(F.interpolate(xin2, scale_factor=2, mode='bilinear') ) ), True)
 
         if dx3.size(3) != x3.size(3) or dx3.size(2) != x3.size(2):
             dx3 = F.interpolate(dx3, [x3.size(2), x3.size(3)], mode='bilinear')
         if self.if_appearance_recon:
-            dx3 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], dx3, scale_feat_map=8)
+            dx3 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], dx3, scale_feat_map=8)
         xin3 = torch.cat([dx3, x3], dim=1)
         # if self.if_appearance_recon:
-        #     xin3 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], xin3, scale_feat_map=8)
+        #     xin3 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], xin3, scale_feat_map=8)
         dx4 = F.relu(self.dgn4(self.dconv4(F.interpolate(xin3, scale_factor=2, mode='bilinear') ) ), True)
 
         if dx4.size(3) != x2.size(3) or dx4.size(2) != x2.size(2):
             dx4 = F.interpolate(dx4, [x2.size(2), x2.size(3)], mode='bilinear')
         if self.if_appearance_recon:
-            dx4 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], dx4, scale_feat_map=4)
+            dx4 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], dx4, scale_feat_map=4)
         xin4 = torch.cat([dx4, x2], dim=1 )
         # if self.if_appearance_recon:
-        #     xin4 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], xin4, scale_feat_map=4)
+        #     xin4 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], xin4, scale_feat_map=4)
         dx5 = F.relu(self.dgn5(self.dconv5(F.interpolate(xin4, scale_factor=2, mode='bilinear') ) ), True)
 
         if dx5.size(3) != x1.size(3) or dx5.size(2) != x1.size(2):
             dx5 = F.interpolate(dx5, [x1.size(2), x1.size(3)], mode='bilinear')
         if self.if_appearance_recon:
-            dx5 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], dx5, scale_feat_map=2)
+            dx5 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], dx5, scale_feat_map=2)
         xin5 = torch.cat([dx5, x1], dim=1 )
         # if  :
-        #     xin5 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], xin5, scale_feat_map=2)
+        #     xin5 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], xin5, scale_feat_map=2)
         dx6 = F.relu(self.dgn6(self.dconv6(F.interpolate(xin5, scale_factor=2, mode='bilinear') ) ), True)
 
         im_trainval_RGB_mask_pooled_mean = None
@@ -532,7 +532,7 @@ class decoder0(nn.Module):
             dx6 = torch.cat([dx6, dx6 - dx6_pooled_mean], 1)
 
             if self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
-                im_trainval_RGB_mask_pooled_mean = self.mask_pooled_mean(input_extra_dict['im_trainval_RGB'], instance, num_mat_masks_batch)
+                im_trainval_RGB_mask_pooled_mean = self.mask_pooled_mean(input_dict_extra['im_trainval_RGB'], instance, num_mat_masks_batch)
 
         if self.if_albedo_asso_pool_conv:
             dx6_pool_1 = self.acco_pool_1(dx6, matseg_embeddings)
@@ -556,7 +556,7 @@ class decoder0(nn.Module):
             if self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
                 im_trainval_RGB_mask_pooled_mean_list = []
                 for acco_pool_mean in self.acco_pool_mean_list:
-                    im_trainval_RGB_mask_pooled_mean = acco_pool_mean(input_extra_dict['im_trainval_RGB'], matseg_embeddings * (2. * input_extra_dict['mat_notlight_mask_gpu_float'] - 1))
+                    im_trainval_RGB_mask_pooled_mean = acco_pool_mean(input_dict_extra['im_trainval_RGB'], matseg_embeddings * (2. * input_dict_extra['mat_notlight_mask_gpu_float'] - 1))
                     im_trainval_RGB_mask_pooled_mean_list.append(im_trainval_RGB_mask_pooled_mean)
                 im_trainval_RGB_mask_pooled_mean = torch.stack(im_trainval_RGB_mask_pooled_mean_list, dim=0).mean(dim=0)
 
@@ -575,7 +575,7 @@ class decoder0(nn.Module):
             # ic(dx6.shape)
 
         # if self.if_appearance_recon:
-        #     dx6 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], dx6, scale_feat_map=1)
+        #     dx6 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], dx6, scale_feat_map=1)
 
         x_orig = self.dconvFinal(self.dpadFinal(dx6 ) )
         # ic(x_orig.shape)

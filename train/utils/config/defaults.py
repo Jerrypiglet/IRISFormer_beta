@@ -148,9 +148,14 @@ _C.MODEL_GMM.appearance_recon = CN() # single frame only
 _C.MODEL_GMM.appearance_recon.enable = False
 _C.MODEL_GMM.appearance_recon.sanity_check = False
 _C.MODEL_GMM.appearance_recon.modalities = 'al'
-_C.MODEL_GMM.feat_recon_adaptive = CN() # single frame only
-_C.MODEL_GMM.feat_recon_adaptive.enable = False
-_C.MODEL_GMM.feat_recon_adaptive.layers_list = 'dx3_dx4_dx5' # 'dx3_dx4_dx5_x1_x2_x3'
+_C.MODEL_GMM.feat_recon = CN() # single frame only
+_C.MODEL_GMM.feat_recon.enable = False
+_C.MODEL_GMM.feat_recon.n_iter = 10
+_C.MODEL_GMM.feat_recon.layers_list = 'dx3_dx4_dx5' # 'dx3_dx4_dx5_x1_x2_x3'
+_C.MODEL_GMM.feat_recon.use_matseg = False
+_C.MODEL_GMM.feat_recon.matseg_H = 6
+_C.MODEL_GMM.feat_recon.matseg_W = 8
+
 _C.MODEL_GMM.learning_rate = 1e-5
 _C.MODEL_GMM.ssn_grid_spixel = False
 _C.MODEL_GMM.src_idx = 1

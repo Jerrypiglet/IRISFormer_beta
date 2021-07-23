@@ -41,110 +41,83 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
 
         self.opt = args
 
-    def forward(self, feats_in, tensor_to_transform=None, index_add=True):
+    def forward(self, tensor_to_transform, feats_in=None, affinity_in=None, scale_tensor_to_transform=1, index_add=True):
         '''
         INPUTS:
-        feats_in -      nbatch x D x H x W
+        tensor_to_transform -      nbatch x D1 x H x W
+        feats_in -      nbatch x D2 x H x W
+
+        OUTPUT:
+        abs_affinity -      nbatch x J x H x W
+        tensor_recon -      nbatch x D1 x H x W
         '''
 
-        if tensor_to_transform is None:
-            tensor_to_transform = feats_in
+        if feats_in is None:
+            feats_in = tensor_to_transform
 
         # If ture, the spixel index assignment for all pixels would be the inital grid initialization
         # ssn_grid_spixel = self.ssn_grid_spixel
 
         # feats_in = batch['feats_in']
 
-        J = self.spixel_nums[0] * self.spixel_nums[1]
         batch_size, D, H, W = feats_in.shape
         assert self.spixel_nums[0] <= H
         assert self.spixel_nums[1] <= W
+        J = self.spixel_nums[0] * self.spixel_nums[1]
 
-
-        # for sample_idx in range(batch_size):
-        #     #for demo, use gt depth, and gt poses
-        #     feats_in_single = feats_in[sample_idx:sample_idx+1]
-
-        #     # abs_affinity, dist_matrix, spixel_features = align.feat2gmm(feats_in_single, ssn_iter=10)
-        #     # spixel_dim = feats_in_single.shape[2:4]
-        #     # num_spixels_height, num_spixels_width = spixel_dim[1], spixel_dim[0] 
-        #     # num_spixels_height, num_spixels_width = self.spixel_nums
-        #     # num_spixels = num_spixels_height * num_spixels_width
-
-        #     # print(feats_in_single.shape) # torch.Size([1, D, H, W])
-
-        #     abs_affinity, dist_matrix, spixel_features = \
-        #         ssn.ssn_iter(
-        #             feats_in_single, n_iter=10, 
-        #             num_spixels_width=self.num_spixels_width, 
-        #             num_spixels_height=self.num_spixels_height)
-
-
-        #     # print(abs_affinity.shape, dist_matrix.shape, spixel_features.shape) # torch.Size([1, J, H, W]) torch.Size([1, 9, HW]) torch.Size([1, D, J]); h, w being the dimensions of spixels, j=h*w
-            
-        #     abs_affinity = abs_affinity.view(1, J, H, W)
-        #     abs_affinity_list.append(abs_affinity)
-            
-        #     # spixel_features = spixel_features.view(feats_in_single.shape[0], self.num_spixels, *feats_in_single.shape[-2:]).contiguous()
-
-        #     feats_recon = self.recon_feats(abs_affinity, feats_in_single)
-        #     feats_recon_list.append(feats_recon)
-
-
-        #     torch.cuda.empty_cache()
-
-        # res = dict({
-        #     'abs_affinity': torch.cat(abs_affinity_list, 0), 
-        #     'feats_recon': torch.cat(feats_recon_list, 0)
-        # })
-
-        abs_affinity, dist_matrix, spixel_features = \
-            ssn.ssn_iter(
-                feats_in, n_iter=self.n_iter, 
-                num_spixels_width=self.num_spixels_width, 
-                num_spixels_height=self.num_spixels_height, 
-                index_add=index_add)
+        if affinity_in is None:
+            abs_affinity, dist_matrix, spixel_features = \
+                ssn.ssn_iter(
+                    feats_in, n_iter=self.n_iter, 
+                    num_spixels_width=self.num_spixels_width, 
+                    num_spixels_height=self.num_spixels_height, 
+                    index_add=index_add)
+            abs_affinity = abs_affinity.view(batch_size, J, H, W)
+        else:
+            abs_affinity = affinity_in
+        assert abs_affinity.shape[1]==J
 
 
         # print(abs_affinity.shape, dist_matrix.shape, spixel_features.shape) # torch.Size([1, J, H, W]) torch.Size([1, 9, HW]) torch.Size([1, D, J]); h, w being the dimensions of spixels, j=h*w
         
-        abs_affinity = abs_affinity.view(batch_size, J, H, W)
 
-        feats_recon = self.recon_feats(abs_affinity, tensor_to_transform)
+        tensor_recon = self.recon_tensor(abs_affinity, tensor_to_transform, scale_tensor_to_transform=scale_tensor_to_transform)
 
         res = dict({
             'abs_affinity': abs_affinity, 
-            'feats_recon': feats_recon
+            'tensor_recon': tensor_recon
         })
 
 
         return  res
 
-    def recon_feats(self, gamma, feat_map, scale_feat_map=1):
+    def recon_tensor(self, gamma, tensor_to_transform, scale_tensor_to_transform=1):
         '''
         gamma: Q, BxJxHxW
-        feat_map: BxDxHxW, where N*scale_feat_map=HW
-        scale_feat_map
+        tensor_to_transform: BxDxHxW, where N*scale_tensor_to_transform=HW
+        scale_tensor_to_transform
         '''
-        if scale_feat_map != 1:
-            # print(gamma.shape, feat_map.shape, scale_feat_map)
-            gamma_resized = F.interpolate(gamma, scale_factor=1./float(scale_feat_map))
+        if scale_tensor_to_transform != 1:
+            # print(gamma.shape, tensor_to_transform.shape, scale_tensor_to_transform)
+            gamma_resized = F.interpolate(gamma, scale_factor=1./float(scale_tensor_to_transform))
             gamma_resized = gamma_resized / (torch.sum(gamma_resized, 1, keepdims=True)+1e-6)
             gamma = gamma_resized
-            
-        assert gamma.shape[-2::]==feat_map.shape[-2::]
+        
+        if gamma.shape[-2::]!=tensor_to_transform.shape[-2::]:
+            print('gamma.shape[-2::]!=tensor_to_transform.shape[-2::]!', gamma.shape, tensor_to_transform.shape)
+            assert False
 
         batch_size, J = gamma.shape[0], gamma.shape[1]
-        batch_size_, D, H, W = feat_map.shape
+        batch_size_, D, H, W = tensor_to_transform.shape
         N = H * W
         assert batch_size_==batch_size
-
+    
         Q_M_Jnormalized = gamma / (gamma.sum(-1, keepdims=True).sum(-2, keepdims=True)+1e-6) # [B, J, 240, 320]
-        feat_map_flattened = feat_map.permute(0, 2, 3, 1).view(batch_size, -1, D)
-        feat_map_J = Q_M_Jnormalized.view(batch_size, J, -1) @ feat_map_flattened # [b, J, D], the code book
-        feat_map_J = feat_map_J.permute(0, 2, 1) # [b, D, J], the code book
-        # print(feat_map_J.shape, gamma.view(batch_size, J, N).shape)
-        im_single_hat = feat_map_J @ gamma.view(batch_size, J, N) # (b, D, N)
+        tensor_to_transform_flattened = tensor_to_transform.permute(0, 2, 3, 1).view(batch_size, -1, D)
+        tensor_to_transform_J = Q_M_Jnormalized.view(batch_size, J, -1) @ tensor_to_transform_flattened # [b, J, D], the code book
+        tensor_to_transform_J = tensor_to_transform_J.permute(0, 2, 1) # [b, D, J], the code book
+        # print(tensor_to_transform_J.shape, gamma.view(batch_size, J, N).shape)
+        im_single_hat = tensor_to_transform_J @ gamma.view(batch_size, J, N) # (b, D, N)
         im_single_hat = im_single_hat.view(batch_size, D, H, W)
 
         return im_single_hat

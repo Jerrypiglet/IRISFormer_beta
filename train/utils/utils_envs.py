@@ -65,10 +65,15 @@ def set_up_envs(opt):
         opt.cfg.DATA.if_load_png_not_hdr = True
         # opt.cfg.DATA.if_also_load_next_frame = True
         # opt.cfg.DATA.load_cam_pose = True
-        assert not(opt.cfg.MODEL_GMM.appearance_recon.enable and opt.cfg.MODEL_GMM.feat_recon_adaptive.enable)
-        assert opt.cfg.MODEL_GMM.appearance_recon.enable or opt.cfg.MODEL_GMM.feat_recon_adaptive.enable
+        assert not(opt.cfg.MODEL_GMM.appearance_recon.enable and opt.cfg.MODEL_GMM.feat_recon.enable)
+        assert opt.cfg.MODEL_GMM.appearance_recon.enable or opt.cfg.MODEL_GMM.feat_recon.enable
+
         opt.cfg.MODEL_GMM.appearance_recon.modalities = opt.cfg.MODEL_GMM.appearance_recon.modalities.split('_')
-        opt.cfg.MODEL_GMM.feat_recon_adaptive.layers_list = opt.cfg.MODEL_GMM.feat_recon_adaptive.layers_list.split('_')
+        opt.cfg.MODEL_GMM.feat_recon.layers_list = opt.cfg.MODEL_GMM.feat_recon.layers_list.split('_')
+
+        if opt.cfg.MODEL_GMM.feat_recon.enable and opt.cfg.MODEL_GMM.feat_recon.use_matseg:
+            opt.cfg.MODEL_MATSEG.enable = True            
+
 
     # ====== BRDF =====
     opt.cfg.MODEL_BRDF.enable_list = [x for x in opt.cfg.MODEL_BRDF.enable_list.split('_') if x != '']

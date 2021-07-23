@@ -10,7 +10,7 @@ import torch
 import os, glob
 
 from .pair_wise_dist_gmm import PairwiseDistFunction
-from utils.misc import outer_prod
+from models_def.model_nvidia.utils.misc import outer_prod
 
 import torch.cuda.amp as amp
 

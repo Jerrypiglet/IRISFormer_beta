@@ -24,12 +24,14 @@ import models_def.models_layout_emitter_lightAccuScatter as models_layout_emitte
 import models_def.model_matcls as model_matcls
 # import models_def.model_nvidia.AppGMM as AppGMM
 import models_def.model_nvidia.AppGMM_singleFrame as AppGMM
+import models_def.model_nvidia.ssn.ssn as ssn
 
 from utils.utils_scannet import convert_IntM_from_OR, CamIntrinsic_to_cuda
 
 from SimpleLayout.SimpleSceneTorchBatch import SimpleSceneTorchBatch
 from utils.utils_total3D.utils_OR_layout import get_layout_bdb_sunrgbd
 from utils.utils_total3D.utils_OR_cam import get_rotation_matix_result
+
 
 from icecream import ic
 
@@ -103,7 +105,7 @@ class Model_Joint(nn.Module):
             if self.opt.cfg.MODEL_GMM.enable:
                 if self.opt.cfg.MODEL_GMM.appearance_recon.enable:
                     self.decoder_to_use = models_brdf.decoder0
-                if self.opt.cfg.MODEL_GMM.feat_recon_adaptive.enable:
+                if self.opt.cfg.MODEL_GMM.feat_recon.enable:
                      self.encoder_to_use = models_brdf_GMM_feat_transform.encoder0
                      self.decoder_to_use = models_brdf_GMM_feat_transform.decoder0
                    
@@ -287,11 +289,13 @@ class Model_Joint(nn.Module):
                 self.BRDF_Net.eval()
             input_dict_extra = {'input_dict_guide': input_dict_guide}
             if self.cfg.MODEL_GMM.enable and self.cfg.MODEL_GMM.appearance_recon.enable:
-                input_dict_extra.update({'gamma_GMM': return_dict['output_GMM']['gamma_update'], 'MODEL_GMM': self.MODEL_GMM})
+                input_dict_extra.update({'gamma_SSN3D': return_dict['output_GMM']['gamma_update'], 'MODEL_GMM': self.MODEL_GMM})
             if (self.cfg.MODEL_MATSEG.if_albedo_pooling and self.cfg.MODEL_MATSEG.albedo_pooling_from == 'pred') \
                 or self.cfg.MODEL_MATSEG.use_pred_as_input \
-                or self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool or self.cfg.MODEL_MATSEG.if_albedo_pac_conv or self.cfg.MODEL_MATSEG.if_albedo_safenet:
+                or self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool or self.cfg.MODEL_MATSEG.if_albedo_pac_conv or self.cfg.MODEL_MATSEG.if_albedo_safenet \
+                or (self.cfg.MODEL_GMM.feat_recon.enable and self.cfg.MODEL_GMM.feat_recon.use_matseg):
                 input_dict_extra.update({'return_dict_matseg': return_dict_matseg})
+
 
             return_dict_brdf = self.forward_brdf(input_dict, input_dict_extra=input_dict_extra)
         else:
@@ -453,38 +457,52 @@ class Model_Joint(nn.Module):
             input_list.append(predict_segmentation.float().unsqueeze(1) / float(self.opt.cfg.MODEL_SEMSEG.semseg_classes))
         
         input_tensor = torch.cat(input_list, 1)
+        if self.opt.cfg.MODEL_GMM.feat_recon.enable and self.opt.cfg.MODEL_GMM.feat_recon.use_matseg:
+            # input_dict_extra.update({'matseg_embedding': input_dict_extra['return_dict_matseg']['embedding']})
+            feats_in_ssn2d = input_dict_extra['return_dict_matseg']['embedding']
+            batch_size, D, H, W = feats_in_ssn2d.shape
+            J = self.opt.cfg.MODEL_GMM.feat_recon.matseg_W * self.opt.cfg.MODEL_GMM.feat_recon.matseg_H
+            abs_affinity, dist_matrix, spixel_features = \
+                ssn.ssn_iter(
+                    feats_in_ssn2d, n_iter=self.opt.cfg.MODEL_GMM.feat_recon.n_iter, 
+                    num_spixels_width=self.opt.cfg.MODEL_GMM.feat_recon.matseg_W, 
+                    num_spixels_height=self.opt.cfg.MODEL_GMM.feat_recon.matseg_H, 
+                    index_add=True) # faster with index_add == True
+            abs_affinity = abs_affinity.view(batch_size, J, H, W)
+            input_dict_extra.update({'matseg_affinity': abs_affinity})
+            
         #     # a = input_dict['semseg_label'].float().unsqueeze(1) / float(self.opt.cfg.MODEL_SEMSEG.semseg_classes)
         #     # print(torch.max(a), torch.min(a), torch.median(a))
         #     # print('--', torch.max(input_dict['input_batch_brdf']), torch.min(input_dict['input_batch_brdf']), torch.median(input_dict['input_batch_brdf']))
         # else:
         #     input_tensor = input_dict['input_batch_brdf']
-        x1, x2, x3, x4, x5, x6, extra_output_dict = self.BRDF_Net['encoder'](input_tensor)
+        x1, x2, x3, x4, x5, x6, extra_output_dict = self.BRDF_Net['encoder'](input_tensor, input_dict_extra=input_dict_extra)
 
         return_dict = {'encoder_outputs': {'x1': x1, 'x2': x2, 'x3': x3, 'x4': x4, 'x5': x5, 'x6': x6, 'brdf_extra_output_dict': extra_output_dict}}
         albedo_output = {}
 
         if self.cfg.MODEL_BRDF.enable_BRDF_decoders:
-            input_extra_dict = {}
+            # input_dict_extra = {}
             if input_dict_guide is not None:
-                input_extra_dict.update({'input_dict_guide': input_dict_guide})
+                input_dict_extra.update({'input_dict_guide': input_dict_guide})
             if self.cfg.MODEL_GMM.enable and self.cfg.MODEL_GMM.appearance_recon.enable:
-                input_extra_dict.update({'gamma_GMM': input_dict_extra['gamma_GMM'], 'MODEL_GMM': input_dict_extra['MODEL_GMM']})
+                input_dict_extra.update({'gamma_SSN3D': input_dict_extra['gamma_SSN3D'], 'MODEL_GMM': input_dict_extra['MODEL_GMM']})
             if self.cfg.MODEL_MATSEG.if_albedo_pooling:
-                input_extra_dict.update({'matseg-instance': input_dict['instance'], 'semseg-num_mat_masks_batch': input_dict['num_mat_masks_batch']})
-                input_extra_dict.update({'im_trainval_RGB': input_dict['im_trainval_RGB']})
+                input_dict_extra.update({'matseg-instance': input_dict['instance'], 'semseg-num_mat_masks_batch': input_dict['num_mat_masks_batch']})
+                input_dict_extra.update({'im_trainval_RGB': input_dict['im_trainval_RGB']})
                 if self.cfg.MODEL_MATSEG.albedo_pooling_from == 'pred':
                     assert input_dict_extra is not None
                     assert input_dict_extra['return_dict_matseg'] is not None
-                    input_extra_dict.update({'matseg-logits': input_dict_extra['return_dict_matseg']['logit'], 'matseg-embeddings': input_dict_extra['return_dict_matseg']['embedding'], \
+                    input_dict_extra.update({'matseg-logits': input_dict_extra['return_dict_matseg']['logit'], 'matseg-embeddings': input_dict_extra['return_dict_matseg']['embedding'], \
                         'mat_notlight_mask_cpu': input_dict['mat_notlight_mask_cpu']})
             if self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool or self.cfg.MODEL_MATSEG.if_albedo_pac_conv or self.cfg.MODEL_MATSEG.if_albedo_safenet:
                 assert input_dict_extra is not None
                 assert input_dict_extra['return_dict_matseg'] is not None
-                input_extra_dict.update({'im_trainval_RGB': input_dict['im_trainval_RGB'], 'mat_notlight_mask_gpu_float': input_dict['mat_notlight_mask_gpu_float']})
-                input_extra_dict.update({'matseg-embeddings': input_dict_extra['return_dict_matseg']['embedding']})
+                input_dict_extra.update({'im_trainval_RGB': input_dict['im_trainval_RGB'], 'mat_notlight_mask_gpu_float': input_dict['mat_notlight_mask_gpu_float']})
+                input_dict_extra.update({'matseg-embeddings': input_dict_extra['return_dict_matseg']['embedding']})
 
             if 'al' in self.cfg.MODEL_BRDF.enable_list:
-                albedo_output = self.BRDF_Net['albedoDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)
+                albedo_output = self.BRDF_Net['albedoDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_extra=input_dict_extra)
                 albedoPred = 0.5 * (albedo_output['x_out'] + 1)
                 # if (not self.opt.cfg.DATASET.if_no_gt_semantics):
                 input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
@@ -494,15 +512,15 @@ class Model_Joint(nn.Module):
                 albedoPred = torch.clamp(albedoPred, 0, 1)
                 return_dict.update({'albedoPred': albedoPred, 'albedo_extra_output_dict': albedo_output['extra_output_dict']})
             if 'no' in self.cfg.MODEL_BRDF.enable_list:
-                normal_output = self.BRDF_Net['normalDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)
+                normal_output = self.BRDF_Net['normalDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_extra=input_dict_extra)
                 normalPred = normal_output['x_out']
                 return_dict.update({'normalPred': normalPred, 'normal_extra_output_dict': normal_output['extra_output_dict']})
             if 'ro' in self.cfg.MODEL_BRDF.enable_list:
-                rough_output = self.BRDF_Net['roughDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)
+                rough_output = self.BRDF_Net['roughDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_extra=input_dict_extra)
                 roughPred = rough_output['x_out']
                 return_dict.update({'roughPred': roughPred, 'rough_extra_output_dict': rough_output['extra_output_dict']})
             if 'de' in self.cfg.MODEL_BRDF.enable_list:
-                depth_output = self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_extra_dict=input_extra_dict)
+                depth_output = self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_extra=input_dict_extra)
                 if not self.cfg.MODEL_BRDF.use_scale_aware_depth:
                     depthPred = 0.5 * (depth_output['x_out'] + 1) # [-1, 1] -> [0, 2] -> [0, 1]
                     depthPred = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),

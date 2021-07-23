@@ -711,9 +711,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
 
             # === BRDF feat_ssn superpixel segmentation
             # print(output_dict['encoder_outputs']['brdf_extra_output_dict'].keys(), output_dict['albedo_extra_output_dict'].keys()) # dict_keys(['x1_affinity', 'x2_affinity', 'x3_affinity']) dict_keys(['dx3_affinity', 'dx4_affinity', 'dx5_affinity'])
-            if opt.cfg.MODEL_GMM.enable and opt.cfg.MODEL_GMM.feat_recon_adaptive.enable:
+            if opt.cfg.MODEL_GMM.enable and opt.cfg.MODEL_GMM.feat_recon.enable:
                 for encoder_key in ['x1', 'x2', 'x3']:
-                    if encoder_key in opt.cfg.MODEL_GMM.feat_recon_adaptive.layers_list:
+                    if encoder_key in opt.cfg.MODEL_GMM.feat_recon.layers_list:
                         affinity_matrix = output_dict['encoder_outputs']['brdf_extra_output_dict']['%s_affinity'%encoder_key]
                         affinity_matrix_label = torch.argmax(affinity_matrix, 1).detach().cpu().numpy()
 
@@ -734,7 +734,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                         continue
 
                     for decoder_key in ['dx3', 'dx4', 'dx5']:
-                        if decoder_key in opt.cfg.MODEL_GMM.feat_recon_adaptive.layers_list:
+                        if decoder_key in opt.cfg.MODEL_GMM.feat_recon.layers_list:
                             affinity_matrix = output_dict['%s_extra_output_dict'%modality]['%s_affinity'%decoder_key]
                             affinity_matrix_label = torch.argmax(affinity_matrix, 1).detach().cpu().numpy()
 

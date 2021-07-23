@@ -1,5 +1,5 @@
 import torch
-
+torch.autograd.set_detect_anomaly(True)
 import numpy as np
 from torch.autograd import Variable
 import torch.optim as optim
@@ -82,7 +82,7 @@ parser.add_argument('--invalid_index', type=int, default = 0, help='index for in
 
 # Pre-training
 parser.add_argument('--resume', type=str, help='resume training; can be full path (e.g. tmp/checkpoint0.pth.tar) or taskname (e.g. tmp); [to continue the current task, use: resume]', default='NoCkpt')
-parser.add_argument('--resumes_extra', type=str, help='list of extra resumed checkpoints; strings concat by |', default='NoCkpt')
+parser.add_argument('--resumes_extra', type=str, help='list of extra resumed checkpoints; strings concat by #', default='NoCkpt')
 parser.add_argument('--reset_latest_ckpt', action='store_true', help='remove latest_checkpoint file')
 parser.add_argument('--reset_scheduler', action='store_true', help='')
 parser.add_argument('--reset_lr', action='store_true', help='')

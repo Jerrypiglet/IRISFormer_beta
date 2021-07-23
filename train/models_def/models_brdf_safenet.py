@@ -101,19 +101,19 @@ class decoder0_safenet(nn.Module):
         matseg_embeddings_use = matseg_embeddings_use * (2. * mat_notlight_mask_gpu_float_use - 1)
         return matseg_embeddings_use
 
-    def forward(self, im, x1, x2, x3, x4, x5, x6, input_extra_dict=None):
+    def forward(self, im, x1, x2, x3, x4, x5, x6, input_dict_extra=None):
 
         return_dict = {}
 
-        matseg_embeddings = input_extra_dict['matseg-embeddings']
-        # matseg_embeddings = matseg_embeddings * (2. * input_extra_dict['mat_notlight_mask_gpu_float'] - 1)
-        mat_notlight_mask_gpu_float = input_extra_dict['mat_notlight_mask_gpu_float']
+        matseg_embeddings = input_dict_extra['matseg-embeddings']
+        # matseg_embeddings = matseg_embeddings * (2. * input_dict_extra['mat_notlight_mask_gpu_float'] - 1)
+        mat_notlight_mask_gpu_float = input_dict_extra['mat_notlight_mask_gpu_float']
 
         im_in_transformed, kernel_list, A, sample_ij, embeddings = None, None, None, None, None
         
         # assert self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug == False
         if self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug and self.opt.if_vis_debug_pac:
-            im_in = input_extra_dict['im_trainval_RGB']
+            im_in = input_dict_extra['im_trainval_RGB']
             im_in = F.interpolate(im_in, [120, 160], mode='bilinear')
             # im_in = F.interpolate(im_in, [60, 80], mode='bilinear')
             # im_in = F.interpolate(im_in, [30, 40], mode='bilinear')

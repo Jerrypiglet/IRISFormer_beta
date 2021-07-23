@@ -8,93 +8,14 @@ from icecream import ic
 
 from models_def.model_nvidia.AppGMM_adaptive import SSNFeatsTransformAdaptive
 
-def LSregress(pred, gt, origin):
-    nb = pred.size(0)
-    origSize = pred.size()
-    pred = pred.reshape(nb, -1)
-    gt = gt.reshape(nb, -1)
-
-    coef = (torch.sum(pred * gt, dim = 1) / torch.clamp(torch.sum(pred * pred, dim=1), min=1e-5)).detach()
-    coef = torch.clamp(coef, 0.001, 1000)
-    for n in range(0, len(origSize) -1):
-        coef = coef.unsqueeze(-1)
-    pred = pred.view(origSize)
-
-    predNew = origin * coef.expand(origSize)
-
-    return predNew
-
-def LSregressDiffSpec(diff, spec, imOrig, diffOrig, specOrig):
-    nb, nc, nh, nw = diff.size()
-    
-    # Mask out too bright regions
-    mask = (imOrig < 0.9).float() 
-    diff = diff * mask 
-    spec = spec * mask 
-    im = imOrig * mask
-
-    diff = diff.view(nb, -1)
-    spec = spec.view(nb, -1)
-    im = im.view(nb, -1)
-
-    a11 = torch.sum(diff * diff, dim=1)
-    a22 = torch.sum(spec * spec, dim=1)
-    a12 = torch.sum(diff * spec, dim=1)
-
-    frac = a11 * a22 - a12 * a12
-    b1 = torch.sum(diff * im, dim = 1)
-    b2 = torch.sum(spec * im, dim = 1)
-
-    # Compute the coefficients based on linear regression
-    coef1 = b1 * a22  - b2 * a12
-    coef2 = -b1 * a12 + a11 * b2
-    coef1 = coef1 / torch.clamp(frac, min=1e-2)
-    coef2 = coef2 / torch.clamp(frac, min=1e-2)
-
-    # Compute the coefficients assuming diffuse albedo only
-    coef3 = torch.clamp(b1 / torch.clamp(a11, min=1e-5), 0.001, 1000)
-    coef4 = coef3.clone() * 0
-
-    frac = (frac / (nc * nh * nw)).detach()
-    fracInd = (frac > 1e-2).float()
-
-    coefDiffuse = fracInd * coef1 + (1 - fracInd) * coef3
-    coefSpecular = fracInd * coef2 + (1 - fracInd) * coef4
-
-    for n in range(0, 3):
-        coefDiffuse = coefDiffuse.unsqueeze(-1)
-        coefSpecular = coefSpecular.unsqueeze(-1)
-
-    coefDiffuse = torch.clamp(coefDiffuse, min=0, max=1000)
-    coefSpecular = torch.clamp(coefSpecular, min=0, max=1000)
-
-    diffScaled = coefDiffuse.expand_as(diffOrig) * diffOrig
-    specScaled = coefSpecular.expand_as(specOrig) * specOrig 
-
-    # Do the regression twice to avoid clamping
-    renderedImg = torch.clamp(diffScaled + specScaled, 0, 1)
-    renderedImg = renderedImg.view(nb, -1)
-    imOrig = imOrig.view(nb, -1)
-
-    coefIm = (torch.sum(renderedImg * imOrig, dim = 1) \
-            / torch.clamp(torch.sum(renderedImg * renderedImg, dim=1), min=1e-5)).detach()
-    coefIm = torch.clamp(coefIm, 0.001, 1000)
-    
-    coefIm = coefIm.view(nb, 1, 1, 1)
-
-    diffScaled = coefIm * diffScaled 
-    specScaled = coefIm * specScaled
-
-    return diffScaled, specScaled
-
-
 class encoder0(nn.Module):
     def __init__(self, opt, cascadeLevel = 0, isSeg = False, in_channels = 3, encoder_exclude=[]):
 
         super(encoder0, self).__init__()
         self.isSeg = isSeg
         self.opt = opt
-        self.if_feat_recon_adaptive = self.opt.cfg.MODEL_GMM.feat_recon_adaptive.enable
+        self.if_feat_recon = self.opt.cfg.MODEL_GMM.feat_recon.enable
+        self.if_feat_recon_use_matseg = self.opt.cfg.MODEL_GMM.feat_recon.use_matseg
 
         self.cascadeLevel = cascadeLevel
 
@@ -130,33 +51,48 @@ class encoder0(nn.Module):
             self.conv6 = nn.Conv2d(in_channels=512, out_channels=1024, kernel_size=3, stride=1, bias=True)
             self.gn6 = nn.GroupNorm(num_groups=64, num_channels=1024)
 
-        if self.opt.cfg.MODEL_GMM.enable and self.opt.cfg.MODEL_GMM.feat_recon_adaptive.enable:
+        if self.opt.cfg.MODEL_GMM.enable and self.opt.cfg.MODEL_GMM.feat_recon.enable:
             # print(x1.shape, x2.shape, x3.shape) # torch.Size([8, 64, 120, 160]) torch.Size([8, 128, 60, 80]) torch.Size([8, 256, 30, 40])
-            self.ssn_x3 = SSNFeatsTransformAdaptive(self.opt, (3, 4))
-            self.ssn_x2 = SSNFeatsTransformAdaptive(self.opt, (6, 8))
-            self.ssn_x1 = SSNFeatsTransformAdaptive(self.opt, (12, 16))
-            # self.ssn_x1 = SSNFeatsTransformAdaptive(self.opt, (6, 8))
+            if self.opt.cfg.MODEL_GMM.feat_recon.use_matseg:
+                spixel_H, spixel_W = opt.cfg.MODEL_GMM.feat_recon.matseg_H, opt.cfg.MODEL_GMM.feat_recon.matseg_W
+                self.ssn_x3 = SSNFeatsTransformAdaptive(opt, (spixel_H, spixel_W))
+                self.ssn_x2 = SSNFeatsTransformAdaptive(opt, (spixel_H, spixel_W))
+                self.ssn_x1 = SSNFeatsTransformAdaptive(opt, (spixel_H, spixel_W))
+            else:
+                self.ssn_x3 = SSNFeatsTransformAdaptive(self.opt, (3, 4))
+                self.ssn_x2 = SSNFeatsTransformAdaptive(self.opt, (6, 8))
+                self.ssn_x1 = SSNFeatsTransformAdaptive(self.opt, (12, 16))
+                # self.ssn_x1 = SSNFeatsTransformAdaptive(self.opt, (6, 8))
 
 
-    def forward(self, x):
+    def forward(self, x, input_dict_extra={}):
         extra_output_dict = {}
 
         x1 = F.relu(self.gn1(self.conv1(self.pad1(x))), True)
-        if self.if_feat_recon_adaptive and 'x1' in self.opt.cfg.MODEL_GMM.feat_recon_adaptive.layers_list:
-            x1_ssn = self.ssn_x1(x1)
-            x1 = x1_ssn['feats_recon']
+        if self.if_feat_recon and 'x1' in self.opt.cfg.MODEL_GMM.feat_recon.layers_list:
+            if self.if_feat_recon_use_matseg:
+                x1_ssn = self.ssn_x1(tensor_to_transform=x1, affinity_in=input_dict_extra['matseg_affinity'], scale_tensor_to_transform=2)
+            else:
+                x1_ssn = self.ssn_x1(tensor_to_transform=x1)
+            x1 = x1_ssn['tensor_recon']
             extra_output_dict['x1_affinity'] = x1_ssn['abs_affinity']
 
         x2 = F.relu(self.gn2(self.conv2(self.pad2(x1))), True)
-        if self.if_feat_recon_adaptive and 'x2' in self.opt.cfg.MODEL_GMM.feat_recon_adaptive.layers_list:
-            x2_ssn = self.ssn_x2(x2)
-            x2 = x2_ssn['feats_recon']
+        if self.if_feat_recon and 'x2' in self.opt.cfg.MODEL_GMM.feat_recon.layers_list:
+            if self.if_feat_recon_use_matseg:
+                x2_ssn = self.ssn_x2(tensor_to_transform=x2, affinity_in=input_dict_extra['matseg_affinity'], scale_tensor_to_transform=4)
+            else:
+                x2_ssn = self.ssn_x2(tensor_to_transform=x2)
+            x2 = x2_ssn['tensor_recon']
             extra_output_dict['x2_affinity'] = x2_ssn['abs_affinity']
 
         x3 = F.relu(self.gn3(self.conv3(self.pad3(x2))), True)
-        if self.if_feat_recon_adaptive and 'x3' in self.opt.cfg.MODEL_GMM.feat_recon_adaptive.layers_list:
-            x3_ssn = self.ssn_x3(x3)
-            x3 = x3_ssn['feats_recon']
+        if self.if_feat_recon and 'x3' in self.opt.cfg.MODEL_GMM.feat_recon.layers_list:
+            if self.if_feat_recon_use_matseg:
+                x3_ssn = self.ssn_x3(tensor_to_transform=x3, affinity_in=input_dict_extra['matseg_affinity'], scale_tensor_to_transform=8)
+            else:
+                x3_ssn = self.ssn_x3(tensor_to_transform=x3)
+            x3 = x3_ssn['tensor_recon']
             extra_output_dict['x3_affinity'] = x3_ssn['abs_affinity']
 
         x4 = F.relu(self.gn4(self.conv4(self.pad4(x3))), True)
@@ -183,7 +119,8 @@ class decoder0(nn.Module):
 
         self.if_PPM = if_PPM
 
-        self.if_feat_recon_adaptive = self.opt.cfg.MODEL_GMM.feat_recon_adaptive.enable
+        self.if_feat_recon = self.opt.cfg.MODEL_GMM.feat_recon.enable
+        self.if_feat_recon_use_matseg = self.opt.cfg.MODEL_GMM.feat_recon.use_matseg
 
         self.dconv1 = nn.Conv2d(in_channels=1024, out_channels=512, kernel_size=3, stride=1, padding = 1, bias=True)
         self.dgn1 = nn.GroupNorm(num_groups=32, num_channels=512 )
@@ -219,72 +156,87 @@ class decoder0(nn.Module):
 
         self.dconvFinal = nn.Conv2d(in_channels=dconv_final_in_channels, out_channels=out_channel, kernel_size = 3, stride=1, bias=True)
 
-        if self.opt.cfg.MODEL_GMM.enable and self.opt.cfg.MODEL_GMM.feat_recon_adaptive.enable:
-            self.ssn_dx3 = SSNFeatsTransformAdaptive(opt, (3, 4))
-            self.ssn_dx4 = SSNFeatsTransformAdaptive(opt, (6, 8))
-            # self.ssn_dx5 = SSNFeatsTransformAdaptive(opt, (12, 16))
-            self.ssn_dx5 = SSNFeatsTransformAdaptive(opt, (6, 8))
-            # self.ssn_dx6 = SSNFeatsTransformAdaptive(opt, (12, 16))
+        if self.opt.cfg.MODEL_GMM.enable and self.opt.cfg.MODEL_GMM.feat_recon.enable:
+            if self.opt.cfg.MODEL_GMM.feat_recon.use_matseg:
+                spixel_H, spixel_W = opt.cfg.MODEL_GMM.feat_recon.matseg_H, opt.cfg.MODEL_GMM.feat_recon.matseg_W
+                self.ssn_dx3 = SSNFeatsTransformAdaptive(opt, (spixel_H, spixel_W))
+                self.ssn_dx4 = SSNFeatsTransformAdaptive(opt, (spixel_H, spixel_W))
+                self.ssn_dx5 = SSNFeatsTransformAdaptive(opt, (spixel_H, spixel_W))
+            else:
+                self.ssn_dx3 = SSNFeatsTransformAdaptive(opt, (3, 4))
+                self.ssn_dx4 = SSNFeatsTransformAdaptive(opt, (6, 8))
+                # self.ssn_dx5 = SSNFeatsTransformAdaptive(opt, (12, 16))
+                self.ssn_dx5 = SSNFeatsTransformAdaptive(opt, (6, 8))
+                # self.ssn_dx6 = SSNFeatsTransformAdaptive(opt, (12, 16))
 
         self.flag = True
 
-    def forward(self, im, x1, x2, x3, x4, x5, x6, input_extra_dict=None):
+    def forward(self, im, x1, x2, x3, x4, x5, x6, input_dict_extra=None):
         extra_output_dict = {}
 
         dx1 = F.relu(self.dgn1(self.dconv1(x6 ) ) )
         # if if_appearance_recon:
-        #     dx1 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], dx1, scale_feat_map=32)
+        #     dx1 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_SSN3D'], dx1, scale_feat_map=32)
         xin1 = torch.cat([dx1, x5], dim = 1)
         # if if_appearance_recon:
-        #     xin1 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], xin1, scale_feat_map=32)
+        #     xin1 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_SSN3D'], xin1, scale_feat_map=32)
         dx2 = F.relu(self.dgn2(self.dconv2(F.interpolate(xin1, scale_factor=2, mode='bilinear') ) ), True)
 
         if dx2.size(3) != x4.size(3) or dx2.size(2) != x4.size(2):
             dx2 = F.interpolate(dx2, [x4.size(2), x4.size(3)], mode='bilinear')
         # if if_appearance_recon:
-        #     dx2 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], dx2, scale_feat_map=16)
+        #     dx2 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_SSN3D'], dx2, scale_feat_map=16)
         xin2 = torch.cat([dx2, x4], dim=1 )
         dx3 = F.relu(self.dgn3(self.dconv3(F.interpolate(xin2, scale_factor=2, mode='bilinear') ) ), True)
         if dx3.size(3) != x3.size(3) or dx3.size(2) != x3.size(2):
             dx3 = F.interpolate(dx3, [x3.size(2), x3.size(3)], mode='bilinear')
-        if self.if_feat_recon_adaptive and 'dx3' in self.opt.cfg.MODEL_GMM.feat_recon_adaptive.layers_list:
-            dx3_ssn = self.ssn_dx3(dx3)
-            dx3 = dx3_ssn['feats_recon']
+        if self.if_feat_recon and 'dx3' in self.opt.cfg.MODEL_GMM.feat_recon.layers_list:
+            if self.if_feat_recon_use_matseg:
+                dx3_ssn = self.ssn_dx3(tensor_to_transform=dx3, affinity_in=input_dict_extra['matseg_affinity'], scale_tensor_to_transform=8)
+            else:
+                dx3_ssn = self.ssn_dx3(tensor_to_transform=dx3)
+            dx3 = dx3_ssn['tensor_recon']
             extra_output_dict['dx3_affinity'] = dx3_ssn['abs_affinity']
 
         xin3 = torch.cat([dx3, x3], dim=1)
         # if if_appearance_recon:
-        #     xin3 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], xin3, scale_feat_map=8)
+        #     xin3 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_SSN3D'], xin3, scale_feat_map=8)
         dx4 = F.relu(self.dgn4(self.dconv4(F.interpolate(xin3, scale_factor=2, mode='bilinear') ) ), True)
         if dx4.size(3) != x2.size(3) or dx4.size(2) != x2.size(2):
             dx4 = F.interpolate(dx4, [x2.size(2), x2.size(3)], mode='bilinear')
-        if self.if_feat_recon_adaptive and 'dx4' in self.opt.cfg.MODEL_GMM.feat_recon_adaptive.layers_list:
-            dx4_ssn = self.ssn_dx4(dx4)
-            dx4 = dx4_ssn['feats_recon']
+        if self.if_feat_recon and 'dx4' in self.opt.cfg.MODEL_GMM.feat_recon.layers_list:
+            if self.if_feat_recon_use_matseg:
+                dx4_ssn = self.ssn_dx4(tensor_to_transform=dx4, affinity_in=input_dict_extra['matseg_affinity'], scale_tensor_to_transform=4)
+            else:
+                dx4_ssn = self.ssn_dx4(tensor_to_transform=dx4)
+            dx4 = dx4_ssn['tensor_recon']
             extra_output_dict['dx4_affinity'] = dx4_ssn['abs_affinity']
 
         xin4 = torch.cat([dx4, x2], dim=1 )
         # if if_appearance_recon:
-        #     xin4 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], xin4, scale_feat_map=4)
+        #     xin4 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_SSN3D'], xin4, scale_feat_map=4)
         dx5 = F.relu(self.dgn5(self.dconv5(F.interpolate(xin4, scale_factor=2, mode='bilinear') ) ), True)
         if dx5.size(3) != x1.size(3) or dx5.size(2) != x1.size(2):
             dx5 = F.interpolate(dx5, [x1.size(2), x1.size(3)], mode='bilinear')
-        if self.if_feat_recon_adaptive and 'dx5' in self.opt.cfg.MODEL_GMM.feat_recon_adaptive.layers_list:
-            dx5_ssn = self.ssn_dx5(dx5)
-            dx5 = dx5_ssn['feats_recon']
+        if self.if_feat_recon and 'dx5' in self.opt.cfg.MODEL_GMM.feat_recon.layers_list:
+            if self.if_feat_recon_use_matseg:
+                dx5_ssn = self.ssn_dx5(tensor_to_transform=dx5, affinity_in=input_dict_extra['matseg_affinity'], scale_tensor_to_transform=2)
+            else:
+                dx5_ssn = self.ssn_dx5(tensor_to_transform=dx5)
+            dx5 = dx5_ssn['tensor_recon']
             extra_output_dict['dx5_affinity'] = dx5_ssn['abs_affinity']
 
         xin5 = torch.cat([dx5, x1], dim=1 )
         # if  :
-        #     xin5 = input_extra_dict['MODEL_GMM'].appearance_recon(input_extra_dict['gamma_GMM'], xin5, scale_feat_map=2)
+        #     xin5 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_SSN3D'], xin5, scale_feat_map=2)
         dx6 = F.relu(self.dgn6(self.dconv6(F.interpolate(xin5, scale_factor=2, mode='bilinear') ) ), True)
 
         im_trainval_RGB_mask_pooled_mean = None
 
         if dx6.size(3) != im.size(3) or dx6.size(2) != im.size(2):
             dx6 = F.interpolate(dx6, [im.size(2), im.size(3)], mode='bilinear')
-        # if self.if_feat_recon_adaptive:
-            # dx6 = self.ssn_dx6(dx6)['feats_recon']
+        # if self.if_feat_recon:
+            # dx6 = self.ssn_dx6(dx6)['tensor_recon']
 
         # print(dx4.shape, dx5.shape, dx6.shape) # torch.Size([4, 128, 60, 80]) torch.Size([4, 64, 120, 160]) torch.Size([4, 64, 240, 320])
         if self.if_PPM:

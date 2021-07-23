@@ -70,7 +70,7 @@ def get_hard_abs_labels(affinity_matrix, init_label_map, num_spixels_width):
 
 def ssn_iter(pixel_features,  n_iter,
              num_spixels_width, num_spixels_height, 
-             index_add=False):
+             index_add=True):
     """
     computing assignment iterations
     detailed process is in Algorithm 1, line 2 - 6

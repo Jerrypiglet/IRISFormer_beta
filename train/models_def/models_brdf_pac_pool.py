@@ -165,13 +165,13 @@ class decoder0_pacpool(nn.Module):
             return x_out
 
 
-    def forward(self, im, x1, x2, x3, x4, x5, x6, input_extra_dict=None):
+    def forward(self, im, x1, x2, x3, x4, x5, x6, input_dict_extra=None):
 
         return_dict = {}
 
-        matseg_embeddings = input_extra_dict['matseg-embeddings']
-        # matseg_embeddings = matseg_embeddings * (2. * input_extra_dict['mat_notlight_mask_gpu_float'] - 1)
-        mat_notlight_mask_gpu_float = input_extra_dict['mat_notlight_mask_gpu_float']
+        matseg_embeddings = input_dict_extra['matseg-embeddings']
+        # matseg_embeddings = matseg_embeddings * (2. * input_dict_extra['mat_notlight_mask_gpu_float'] - 1)
+        mat_notlight_mask_gpu_float = input_dict_extra['mat_notlight_mask_gpu_float']
 
         im_trainval_RGB_mask_pooled_mean, kernel_list = None, None
 
@@ -179,7 +179,7 @@ class decoder0_pacpool(nn.Module):
         native_impl = True
 
         if self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug and self.opt.cfg.MODEL_MATSEG.if_albedo_pac_pool_debug_deform:
-            im_in = input_extra_dict['im_trainval_RGB']
+            im_in = input_dict_extra['im_trainval_RGB']
             offsets = self.conv_offset_op(im_in)
             # offsets = torch.zeros((B, kH*kW*2, H, W), device=im_in.device)
             # offsets = offsets + 50
@@ -204,7 +204,7 @@ class decoder0_pacpool(nn.Module):
 
             x_pac_pool, _ = self.build_pac_pool_list('demo_layer', kernel_sizes=[15], strides=[15], paddings=[0], dilations=[1])
 
-            im_in = input_extra_dict['im_trainval_RGB']
+            im_in = input_dict_extra['im_trainval_RGB']
             # im_in = F.interpolate(im_in, [120, 160], mode='bilinear')
             im_in = F.interpolate(im_in, [60, 80], mode='bilinear')
             # im_in = F.interpolate(im_in, [30, 40], mode='bilinear')
