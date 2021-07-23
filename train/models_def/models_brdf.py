@@ -149,7 +149,7 @@ class encoder0(nn.Module):
             self.conv6 = nn.Conv2d(in_channels=512, out_channels=1024, kernel_size=3, stride=1, bias=True)
             self.gn6 = nn.GroupNorm(num_groups=64, num_channels=1024)
 
-    def forward(self, x):
+    def forward(self, x, input_dict_extra=None):
         x1 = F.relu(self.gn1(self.conv1(self.pad1(x))), True)
         x2 = F.relu(self.gn2(self.conv2(self.pad2(x1))), True)
         x3 = F.relu(self.gn3(self.conv3(self.pad3(x2))), True)

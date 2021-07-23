@@ -20,7 +20,7 @@ spec:
       containers:
       - name: container
         # image: localhost:30081/jerrypiglet/deeplearningconda38v5
-          image: jerrypiglet/deeplearningconda38v620210509vtk
+        image: jerrypiglet/deeplearningconda38v620210509vtk
         args: ["sleep", "infinity"]
         resources:  
           requests:

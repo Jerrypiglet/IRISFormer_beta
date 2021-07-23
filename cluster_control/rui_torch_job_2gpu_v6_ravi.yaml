@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: zz-torch-job-gpu
+  name: zz-torch-job-gpu2
   # namespace: ucsd-haosulab
   namespace: "#NAMESPACE"
   labels:
@@ -11,9 +11,9 @@ spec:
   template:
     spec:
       containers:
-      - name: gpu-container-rui1
+      - name: gpu-container-rui3
         # image: pytorch/pytorch:1.2-cuda10.0-cudnn7-runtime  # docker image
-        image: jerrypiglet/deeplearningconda38v620210509vtk
+        image: docker.io/jerrypiglet/deeplearningconda38v620210723cuda102
         # image: docker.io/ak3636/deeplearning:latest
         imagePullPolicy: IfNotPresent
         command:

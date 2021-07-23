@@ -1,5 +1,5 @@
 import torch
-from .pair_wise_distance import PairwiseDistFunction
+from pair_wise_distance import PairwiseDistFunction
 
 
 # naive implementation for debug
@@ -64,7 +64,10 @@ def test(eps=1e-4):
 
     naive_o = naive_pair_wise_dist(pix, spix, idx, wid, hei)
     naive_o.sum().backward()
-
+    print(o)
+    print(naive_o)
     print("output diff between GPU and naive", torch.abs(o - naive_o).mean())
     print("pix grad diff between GPU and naive", torch.abs(cuda_p_grad - pix.grad).mean())
     print("spix grad diff between GPU and naive", torch.abs(cuda_sp_grad - spix.grad).mean())
+
+test()
