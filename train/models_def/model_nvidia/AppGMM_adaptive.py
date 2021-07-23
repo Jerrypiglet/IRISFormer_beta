@@ -111,13 +111,12 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
         batch_size_, D, H, W = tensor_to_transform.shape
         N = H * W
         assert batch_size_==batch_size
-    
-        Q_M_Jnormalized = gamma / (gamma.sum(-1, keepdims=True).sum(-2, keepdims=True)+1e-6) # [B, J, 240, 320]
+
+        Q_M_Jnormalized = gamma / (gamma.sum(-1, keepdims=True).sum(-2, keepdims=True)+1e-6) # [B, J, H, W]
         tensor_to_transform_flattened = tensor_to_transform.permute(0, 2, 3, 1).view(batch_size, -1, D)
-        tensor_to_transform_J = Q_M_Jnormalized.view(batch_size, J, -1) @ tensor_to_transform_flattened # [b, J, D], the code book
-        tensor_to_transform_J = tensor_to_transform_J.permute(0, 2, 1) # [b, D, J], the code book
-        # print(tensor_to_transform_J.shape, gamma.view(batch_size, J, N).shape)
-        im_single_hat = tensor_to_transform_J @ gamma.view(batch_size, J, N) # (b, D, N)
+        tensor_to_transform_J = Q_M_Jnormalized.view(batch_size, J, -1) @ tensor_to_transform_flattened # [B, J, D], the code book
+        tensor_to_transform_J = tensor_to_transform_J.permute(0, 2, 1) # [B, D, J], the code book
+        im_single_hat = tensor_to_transform_J @ gamma.view(batch_size, J, N) # (B, D, N) where N = H * W
         im_single_hat = im_single_hat.view(batch_size, D, H, W)
 
         return im_single_hat

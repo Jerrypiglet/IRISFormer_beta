@@ -1,7 +1,7 @@
 apiVersion: batch/v1
 kind: Job
 metadata:
-  name: zz-torch-job-gpu2
+  name: zz-torch-job-gpu
   # namespace: ucsd-haosulab
   namespace: "#NAMESPACE"
   labels:
