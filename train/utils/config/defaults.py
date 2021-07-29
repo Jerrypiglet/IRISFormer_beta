@@ -45,6 +45,9 @@ _C.PATH.torch_home_cluster = '/viscompfs/users/ruizhu/'
 # _C.DATA.semseg_names_path = 'data/openrooms/openrooms_names.txt'
 _C.PATH.OR4X_mapping_catInt_to_RGB = ['data/openrooms/total3D_colors/OR4X_mapping_catInt_to_RGB_light.pkl', 'data/openrooms/total3D_colors/OR4X_mapping_catInt_to_RGB_dark.pkl']
 _C.PATH.OR4X_mapping_catStr_to_RGB = ['data/openrooms/total3D_colors/OR4X_mapping_catStr_to_RGB_light.pkl', 'data/openrooms/total3D_colors/OR4X_mapping_catStr_to_RGB_dark.pkl']
+_C.PATH.pretrained_path = ''
+_C.PATH.pretrained_local = '/home/ruizhu/Documents/Projects/semanticInverse/pretrained'
+_C.PATH.pretrained_cluster = '/viscompfs/users/ruizhu/pretrained'
 
 # ===== debug
 
@@ -188,6 +191,13 @@ _C.MODEL_BRDF.encoder_exclude = '' # e.g. 'x4_x5
 _C.MODEL_BRDF.use_scale_aware_depth = False
 _C.MODEL_BRDF.depth_activation = 'sigmoid'
 _C.MODEL_BRDF.use_scale_aware_albedo = False
+
+_C.MODEL_BRDF.DPT_baseline = CN()
+_C.MODEL_BRDF.DPT_baseline.enable = False
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid_path = 'dpt_weights/dpt_hybrid-midas-501f0c75.pt'
+_C.MODEL_BRDF.DPT_baseline.if_freeze_backbone = False
+_C.MODEL_BRDF.DPT_baseline.if_skip_last_conv = True
+_C.MODEL_BRDF.DPT_baseline.if_only_restore_backbone = False
 
 # ===== per-pixel lighting
 _C.MODEL_LIGHT = CN()

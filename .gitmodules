@@ -16,3 +16,6 @@
 [submodule "third_parties_outside/ssn-pytorch"]
 	path = third_parties_outside/ssn-pytorch
 	url = https://github.com/perrying/ssn-pytorch.git
+[submodule "third_parties_outside/DPT"]
+	path = third_parties_outside/DPT
+	url = https://github.com/intel-isl/DPT.git

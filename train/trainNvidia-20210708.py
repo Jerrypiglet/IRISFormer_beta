@@ -92,7 +92,7 @@ parser.add_argument('--reset_tid', action='store_true', help='')
 # to get rid of
 parser.add_argument('--test_real', action='store_true', help='')
 
-
+parser.add_argument('--skip_keys', nargs='+', help='Skip those keys in the model', required=False)
 parser.add_argument('--replaced_keys', nargs='+', help='Replace those keys in the model', required=False)
 parser.add_argument('--replacedby', nargs='+', help='... with those keys from ckpt. Must be in the same length as ``replace_leys``', required=False)
 parser.add_argument("--if_save_pickles", type=str2bool, nargs='?', const=True, default=False)
