@@ -194,10 +194,15 @@ _C.MODEL_BRDF.use_scale_aware_albedo = False
 
 _C.MODEL_BRDF.DPT_baseline = CN()
 _C.MODEL_BRDF.DPT_baseline.enable = False
+_C.MODEL_BRDF.DPT_baseline.if_SGD = True
+_C.MODEL_BRDF.DPT_baseline.model = 'dpt_large'
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_path = 'dpt_weights/dpt_hybrid-midas-501f0c75.pt'
+_C.MODEL_BRDF.DPT_baseline.dpt_large_path = 'dpt_weights/dpt_large-midas-2f21e586.pt'
 _C.MODEL_BRDF.DPT_baseline.if_freeze_backbone = False
+_C.MODEL_BRDF.DPT_baseline.if_freeze_pretrained = False
 _C.MODEL_BRDF.DPT_baseline.if_skip_last_conv = True
 _C.MODEL_BRDF.DPT_baseline.if_only_restore_backbone = False
+
 
 # ===== per-pixel lighting
 _C.MODEL_LIGHT = CN()

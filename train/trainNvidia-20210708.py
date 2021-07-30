@@ -211,6 +211,10 @@ model.print_net()
 # set up optimizers
 # optimizer = get_optimizer(model.parameters(), cfg.SOLVER)
 optimizer = optim.Adam(model.parameters(), lr=cfg.SOLVER.lr, betas=(0.5, 0.999) )
+if opt.cfg.MODEL_BRDF.DPT_baseline.enable and opt.cfg.MODEL_BRDF.DPT_baseline.if_SGD:
+    optimizer = optim.SGD(model.parameters(), lr=cfg.SOLVER.lr, momentum=0.9)
+   
+
 if opt.distributed:
     model = DDP(model, device_ids=[opt.rank], output_device=opt.rank, find_unused_parameters=True)
 

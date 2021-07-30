@@ -17,7 +17,7 @@ class BaseModel(torch.nn.Module):
         if skip_keys!=[]:
             # print('===', len(parameters.keys()), skip_keys, [k for k, v in parameters.items()])
             parameters = {k:v for k, v in parameters.items() if not any([x in k for x in skip_keys])}
-            # print('==>', len(parameters.keys()))
+            print('==>', len(parameters.keys()))
             strict = False
 
         if keep_keys!=[]:

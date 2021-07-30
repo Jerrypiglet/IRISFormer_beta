@@ -103,30 +103,49 @@ class Model_Joint(nn.Module):
                 net_w = self.opt.cfg.DATA.im_width
                 net_h = self.opt.cfg.DATA.im_height
                 dpt_optimize = True
+
                 default_models = {
                     "midas_v21": "dpt_weights/midas_v21-f6b98070.pt",
-                    "dpt_large": "dpt_weights/dpt_large-midas-2f21e586.pt",
+                    "dpt_large": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_large_path,
                     "dpt_hybrid": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_path,
                     "dpt_hybrid_kitti": "dpt_weights/dpt_hybrid_kitti-cb926ef4.pt",
                     "dpt_hybrid_nyu": "dpt_weights/dpt_hybrid_nyu-2ce69ec7.pt",
                 }
-                default_model_path = str(Path(self.opt.cfg.PATH.pretrained_path) / default_models['dpt_hybrid'])
-                self.BRDF_Net = DPTAlbedoModel(
-                    path=default_model_path,
-                    backbone="vitb_rn50_384",
-                    non_negative=False,
-                    enable_attention_hooks=False,
-                    skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
-                    keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
-                )
-                if dpt_optimize:
-                    self.BRDF_Net = self.BRDF_Net.to(memory_format=torch.channels_last)
+                
+                model_type = self.opt.cfg.MODEL_BRDF.DPT_baseline.model
+                model_path = str(Path(self.opt.cfg.PATH.pretrained_path) / default_models[model_type]) if default_models[model_type]!='' else None
+
+                if model_type=='dpt_hybrid':
+                    self.BRDF_Net = DPTAlbedoModel(
+                        path=model_path,
+                        backbone="vitb_rn50_384",
+                        non_negative=False,
+                        enable_attention_hooks=False,
+                        skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
+                        keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
+                    )
+                elif model_type=='dpt_large':
+                    self.BRDF_Net = DPTAlbedoModel(
+                        path=model_path,
+                        backbone="vitl16_384",
+                        non_negative=False,
+                        enable_attention_hooks=False,
+                        skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
+                    )
+                else:
+                     assert False, 'Unsupported model_type!'
+
+                # if dpt_optimize:
+                #     self.BRDF_Net = self.BRDF_Net.to(memory_format=torch.channels_last)
                     # self.BRDF_Net = self.BRDF_Net.half()
 
                 if self.cfg.MODEL_BRDF.DPT_baseline.if_freeze_backbone:
                     self.turn_off_names(['BRDF_Net.pretrained.model.patch_embed.backbone'])
                     freeze_bn_in_module(self.BRDF_Net.pretrained.model.patch_embed.backbone)
 
+                if self.cfg.MODEL_BRDF.DPT_baseline.if_freeze_pretrained:
+                    self.turn_off_names(['BRDF_Net.pretrained'])
+                    freeze_bn_in_module(self.BRDF_Net.pretrained)
 
                 # dpt_normalization = dpt_NormalizeImage(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
                 # self.dpt_transform = Compose(
