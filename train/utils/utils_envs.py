@@ -12,6 +12,8 @@ from utils.utils_total3D.utils_OR_layout import to_dict_tensor
 from utils.utils_misc import only1true
 from icecream import ic
 import os
+from utils import transform
+
 
 def set_up_envs(opt):
     opt.cfg.PATH.root = opt.cfg.PATH.root_cluster if opt.if_cluster else opt.cfg.PATH.root_local
@@ -78,6 +80,19 @@ def set_up_envs(opt):
     # ====== BRDF =====
     opt.cfg.MODEL_BRDF.enable_list = [x for x in opt.cfg.MODEL_BRDF.enable_list.split('_') if x != '']
     opt.cfg.MODEL_BRDF.loss_list = [x for x in opt.cfg.MODEL_BRDF.loss_list.split('_') if x != '']
+
+    # ====== DPT =====
+    if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.DPT_baseline.enable:
+        opt.cfg.DATA.if_load_png_not_hdr = True
+        assert opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_large', 'dpt_base', 'dpt_hybrid']
+        
+        opt.cfg.DATA.if_pad_to_32x = True
+        im_width_pad_to = int(np.ceil(opt.cfg.DATA.im_width/32.)*32)
+        im_height_pad_to = int(np.ceil(opt.cfg.DATA.im_height/32.)*32)
+        im_pad_with = 0
+        opt.if_pad = True
+        opt.pad_op = transform.Pad([im_height_pad_to, im_width_pad_to], padding_with=im_pad_with)
+
 
 
     # ====== detectron (objects & masks) =====
@@ -479,7 +494,7 @@ def set_up_checkpointing(opt, model, optimizer, scheduler, logger):
             replace_kws += opt.replaced_keys
             replace_with_kws += opt.replacedby
         # if opt.task_split == 'train':
-        # if 'train_POD_matseg_DDP' in opt.resume:
+        # if 'train_POD_matseg_Dd' in opt.resume:
         #     replace_kws = ['hourglass_model.seq_L2.1', 'hourglass_model.seq_L2.3', 'hourglass_model.disp_res_pred_layer_L2']
         #     replace_with_kws = ['hourglass_model.seq.1', 'hourglass_model.seq.3', 'hourglass_model.disp_res_pred_layer']
         checkpoint_restored, _, _ = checkpointer.load(task_name=opt.resume, skip_keys=opt.skip_keys, replace_kws=replace_kws, replace_with_kws=replace_with_kws)

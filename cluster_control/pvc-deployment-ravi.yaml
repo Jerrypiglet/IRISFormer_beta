@@ -25,12 +25,12 @@ spec:
         resources:  
           requests:
             cpu: "100m"
-            memory: "100Mi"
-            nvidia.com/gpu: 1
+            memory: "2Gi"
+            # nvidia.com/gpu: 1
           limits:
             cpu: "16"
             memory: "16Gi"
-            nvidia.com/gpu: 1
+            # nvidia.com/gpu: 1
         volumeMounts:
         # - name: cephfs
         #   mountPath: /cephfs

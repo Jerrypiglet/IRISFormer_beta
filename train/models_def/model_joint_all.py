@@ -106,6 +106,7 @@ class Model_Joint(nn.Module):
 
                 default_models = {
                     "midas_v21": "dpt_weights/midas_v21-f6b98070.pt",
+                    "dpt_base": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_base_path,
                     "dpt_large": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_large_path,
                     "dpt_hybrid": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_path,
                     "dpt_hybrid_kitti": "dpt_weights/dpt_hybrid_kitti-cb926ef4.pt",
@@ -128,6 +129,14 @@ class Model_Joint(nn.Module):
                     self.BRDF_Net = DPTAlbedoModel(
                         path=model_path,
                         backbone="vitl16_384",
+                        non_negative=False,
+                        enable_attention_hooks=False,
+                        skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
+                    )
+                elif model_type=='dpt_base':
+                    self.BRDF_Net = DPTAlbedoModel(
+                        path=model_path,
+                        backbone="vitb16_384",
                         non_negative=False,
                         enable_attention_hooks=False,
                         skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
@@ -516,12 +525,14 @@ class Model_Joint(nn.Module):
     def forward_brdf_DPT_baseline(self, input_dict, input_dict_extra={}):
         return_dict = {}
         img_batch = input_dict['imBatch']
+        # print(img_batch.shape)
         # img_batch = input_dict['imBatch'].half()
         # img_input = dpt_transform({"image": img_batch})["image"]
         dpt_prediction = self.BRDF_Net.forward(img_batch)
         # print(dpt_prediction.shape, dpt_prediction.dtype, dpt_prediction)
         albedoPred = 0.5 * (dpt_prediction + 1)
         # if (not self.opt.cfg.DATASET.if_no_gt_semantics):
+        # print(input_dict['segBRDFBatch'].shape, input_dict['albedoBatch'].shape)
         input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
         if not self.cfg.MODEL_BRDF.use_scale_aware_albedo:
             # print(input_dict['segBRDFBatch'].shape, albedoPred.shape)
@@ -599,6 +610,7 @@ class Model_Joint(nn.Module):
                 input_dict_extra.update({'im_trainval_RGB': input_dict['im_trainval_RGB'], 'mat_notlight_mask_gpu_float': input_dict['mat_notlight_mask_gpu_float']})
                 input_dict_extra.update({'matseg-embeddings': input_dict_extra['return_dict_matseg']['embedding']})
 
+            # print(input_dict['segBRDFBatch'].shape, input_dict['segAllBatch'].shape)
             if 'al' in self.cfg.MODEL_BRDF.enable_list:
                 albedo_output = self.BRDF_Net['albedoDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_extra=input_dict_extra)
                 albedoPred = 0.5 * (albedo_output['x_out'] + 1)

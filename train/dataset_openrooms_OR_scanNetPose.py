@@ -191,6 +191,9 @@ class openrooms(data.Dataset):
         if_load_immask = self.opt.cfg.DATA.load_brdf_gt and (not self.opt.cfg.DATASET.if_no_gt_semantics)
         if_load_immask = if_load_immask or self.opt.cfg.MODEL_MATSEG.enable
 
+        if self.opt.cfg.DATA.if_pad_to_32x:
+            assert if_load_immask
+
         if if_load_immask:
             seg_path = hdr_image_path.replace('im_', 'immask_').replace('hdr', 'png').replace('DiffMat', '')
             # Read segmentation
@@ -202,6 +205,9 @@ class openrooms(data.Dataset):
             seg = np.ones((1, self.im_height, self.im_width), dtype=np.float32)
             mask_path = None
             mask = None
+        if self.opt.if_pad:
+            mask = self.opt.pad_op(mask, name='mask')
+            seg = self.opt.pad_op(seg, if_channel_first=True, name='seg')
 
         hdr_scale = 1.
 
@@ -222,9 +228,12 @@ class openrooms(data.Dataset):
 
         image_transformed_fixed = self.transforms_fixed(im_RGB_uint8)
         im_trainval_RGB = self.transforms_resize(im_RGB_uint8) # not necessarily \in [0., 1.] [!!!!]
-        # print(type(im_trainval_RGB), torch.max(im_trainval_RGB), torch.min(im_trainval_RGB), torch.mean(im_trainval_RGB))
+        # print(im_trainval_RGB.shape, type(im_trainval_RGB), torch.max(im_trainval_RGB), torch.min(im_trainval_RGB), torch.mean(im_trainval_RGB))
         im_SDR_RGB = im_RGB_uint8.astype(np.float32) / 255.
-        im_trainval = im_SDR_RGB # [240, 320, 3], np.ndarray
+        if self.opt.if_pad:
+            im_SDR_RGB = self.opt.pad_op(im_SDR_RGB, name='im_SDR_RGB')
+
+        im_trainval = im_trainval_RGB # [3, 240, 320], tensor, not in [0., 1.]
 
         batch_dict.update({'image_path': str(png_image_path)})
 
@@ -241,16 +250,17 @@ class openrooms(data.Dataset):
         
         # image_transformed_fixed: normalized, not augmented [only needed in semseg]
 
-        # im_trainval: normalized, augmented; HDR (same as im_trainval in png case) -> for input to network
+        # im_trainval: normalized, augmented; HDR (same as im_trainval_RGB in png case) -> for input to network
 
-        # im_trainval_RGB: normalized, augmented; LDR
+        # im_trainval_RGB: normalized, augmented; LDR (SRGB space)
         # im_SDR_RGB: normalized, NOT augmented; LDR
         # im_RGB_uint8: im_SDR_RGB -> 255
 
         # print('------', image_transformed_fixed.shape, im_trainval.shape, im_trainval_RGB.shape, im_SDR_RGB.shape, im_RGB_uint8.shape, )
         # png: ------ torch.Size([3, 240, 320]) (240, 320, 3) torch.Size([3, 240, 320]) (240, 320, 3) (240, 320, 3)
         # hdr: ------ torch.Size([3, 240, 320]) (3, 240, 320) (3, 240, 320) (3, 240, 320) (240, 320, 3)
-        batch_dict.update({'hdr_scale': hdr_scale, 'image_transformed_fixed': image_transformed_fixed, 'im_trainval': torch.from_numpy(im_trainval), 'im_trainval_RGB': im_trainval_RGB, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
+
+        batch_dict.update({'hdr_scale': hdr_scale, 'image_transformed_fixed': image_transformed_fixed, 'im_trainval': im_trainval, 'im_trainval_RGB': im_trainval_RGB, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
 
         # ====== BRDF =====
         # image_path = batch_dict['image_path']
@@ -328,6 +338,9 @@ class openrooms(data.Dataset):
             # Read albedo
             albedo = self.loadImage(albedo_path, isGama = False)
             albedo = (0.5 * (albedo + 1) ) ** 2.2
+            if self.opt.if_pad:
+                albedo = self.opt.pad_op(albedo, if_channel_first=True, name='albedo')
+
             batch_dict_brdf.update({'albedo': torch.from_numpy(albedo)})
 
         if 'no' in self.cfg.DATA.data_read_list:
@@ -337,6 +350,9 @@ class openrooms(data.Dataset):
             # normalize the normal vector so that it will be unit length
             normal = self.loadImage(normal_path )
             normal = normal / np.sqrt(np.maximum(np.sum(normal * normal, axis=0), 1e-5) )[np.newaxis, :]
+            if self.opt.if_pad:
+                normal = self.opt.pad_op(normal, if_channel_first=True, name='normal')
+
             batch_dict_brdf.update({'normal': torch.from_numpy(normal),})
 
         if 'ro' in self.cfg.DATA.data_read_list:
@@ -345,6 +361,9 @@ class openrooms(data.Dataset):
                 rough_path = rough_path.replace('DiffLight', '')
             # Read roughness
             rough = self.loadImage(rough_path )[0:1, :, :]
+            if self.opt.if_pad:
+                rough = self.opt.pad_op(rough, if_channel_first=True, name='rough')
+
             batch_dict_brdf.update({'rough': torch.from_numpy(rough),})
 
         if 'de' in self.cfg.DATA.data_read_list or 'de' in self.cfg.DATA.data_read_list:
@@ -353,11 +372,17 @@ class openrooms(data.Dataset):
                 depth_path = depth_path.replace('DiffLight', '').replace('DiffMat', '')
             # Read depth
             depth = self.loadBinary(depth_path)
+            if self.opt.if_pad:
+                depth = self.opt.pad_op(depth, if_channel_first=True, name='depth')
+
             batch_dict_brdf.update({'depth': torch.from_numpy(depth),})
             if self.opt.cfg.DATA.if_also_load_next_frame:
                 frame_id = frame_info['frame_id']
                 depth_path_next = depth_path.replace('%d.dat'%frame_id, '%d.dat'%(frame_id+1))
                 depth_next = self.loadBinary(depth_path_next)
+                if self.opt.if_pad:
+                    depth_next = self.opt.pad_op(depth_next, if_channel_first=True, name='depth_next')
+
                 batch_dict_brdf.update({'depth_next': torch.from_numpy(depth_next),})
 
 

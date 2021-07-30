@@ -612,6 +612,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
         depthBatch_list = []
         imBatch_list = []
         segAllBatch_list = []
+        segBRDFBatch_list = []
 
         diffusePreBatch_list = []
         specularPreBatch_list = []
@@ -1153,6 +1154,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
 
                 imBatch_list.append(input_dict['imBatch'])
                 segAllBatch_list.append(input_dict['segAllBatch'])
+                segBRDFBatch_list.append(input_dict['segBRDFBatch'])
 
                 if opt.cascadeLevel > 0:
                     diffusePreBatch_list.append(input_dict['pre_batch_dict_brdf']['diffusePreBatch'])
@@ -1250,6 +1252,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
 
         imBatch_vis = torch.cat(imBatch_list)
         segAllBatch_vis = torch.cat(segAllBatch_list)
+        segBRDFBatch_list_vis = torch.cat(segBRDFBatch_list)
+
 
         if opt.cascadeLevel > 0:
             diffusePreBatch_vis = torch.cat(diffusePreBatch_list)
@@ -1303,6 +1307,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
         depth_min_and_scale_list = []
         if not opt.test_real and opt.is_master:
             for sample_idx in range(im_batch_vis_sdr.shape[0]):
+                writer.add_image('VAL_brdf-segBRDF_GT/%d'%sample_idx, segBRDFBatch_list_vis[sample_idx].cpu().detach().numpy().squeeze(), tid, dataformats='HW')
                 if 'al' in opt.cfg.MODEL_BRDF.enable_list:
                     writer.add_image('VAL_brdf-albedo_GT/%d'%sample_idx, albedo_gt_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                 if 'no' in opt.cfg.MODEL_BRDF.enable_list:
@@ -1313,7 +1318,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     depth_normalized, depth_min_and_scale = vis_disp_colormap(depth_gt_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True)
                     depth_min_and_scale_list.append(depth_min_and_scale)
                     writer.add_image('VAL_brdf-depth_GT/%d'%sample_idx, depth_normalized, tid, dataformats='HWC')
-
 
 
         if opt.cascadeLevel > 0 and opt.is_master:

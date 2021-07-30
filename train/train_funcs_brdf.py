@@ -12,7 +12,8 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
     
     input_dict['im_paths'] = data_batch['image_path']
     # Load the image from cpu to gpu
-    im_cpu = (data_batch['im_trainval'].permute(0, 3, 1, 2) )
+    # im_cpu = (data_batch['im_trainval'].permute(0, 3, 1, 2) )
+    im_cpu = data_batch['im_trainval']
     input_dict['imBatch'] = im_cpu.cuda(non_blocking=True).contiguous()
 
     if_load_mask = opt.cfg.DATA.load_brdf_gt

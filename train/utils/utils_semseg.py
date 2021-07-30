@@ -70,6 +70,13 @@ def get_transform_resize(split, opt):
     std = [0.229, 0.224, 0.225]
     std = [item * value_scale for item in std]
 
+    # if_pad = False
+    # if opt.cfg.DATA.if_pad_to_32x:
+    #     im_width_pad_to = int(np.ceil(opt.cfg.DATA.im_width/32.)*32)
+    #     im_height_pad_to = int(np.ceil(opt.cfg.DATA.im_height/32.)*32
+    #     im_pad_with = 0
+    #     if_pad = True
+
     if split == 'train':
         transform_resize_list_train = [
             transform.Resize((opt.cfg.DATA.im_width, opt.cfg.DATA.im_height)), 
@@ -85,6 +92,8 @@ def get_transform_resize(split, opt):
 
             # ]
             assert False, 'Not implemented!'
+        if opt.if_pad:
+            transform_resize_list_train.insert(1, opt.pad_op)
         train_transform = transform.Compose(transform_resize_list_train)
         return train_transform
     else:
@@ -93,6 +102,8 @@ def get_transform_resize(split, opt):
             transform.ToTensor(),
             transform.Normalize(mean=mean, std=std)
             ]
+        if opt.if_pad:
+            transform_resize_list_val.insert(1, opt.pad_op)
         val_transform = transform.Compose(transform_resize_list_val)
     return val_transform
 

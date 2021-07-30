@@ -194,6 +194,69 @@ class Crop(object):
         else:
             return image
 
+class Pad(object):
+    def __init__(self, pad_to_hw, padding_with):
+        if isinstance(pad_to_hw, int):
+            self.pad_h = pad_to_hw
+            self.pad_w = pad_to_hw
+        elif isinstance(pad_to_hw, collections.Iterable) and len(pad_to_hw) == 2 \
+                and isinstance(pad_to_hw[0], int) and isinstance(pad_to_hw[1], int) \
+                and pad_to_hw[0] > 0 and pad_to_hw[1] > 0:
+            self.pad_h = pad_to_hw[0]
+            self.pad_w = pad_to_hw[1]
+        else:
+            print(pad_to_hw, isinstance(pad_to_hw, collections.Iterable), len(pad_to_hw))
+            raise (RuntimeError("pad to size error.\n"))
+        self.padding_with = padding_with
+        assert isinstance(self.padding_with, numbers.Number)
+
+    def __call__(self, image, label=None, if_channel_first=False, if_channel_2_input=False, name=''):
+        if image is None:
+            return image
+        # h, w = label.shape
+        # print(image.shape, name, len(image.shape))
+        if if_channel_2_input:
+            image = image[:, :, np.newaxis]
+        assert len(image.shape)==3
+
+        if if_channel_first:
+            image = image.transpose(1, 2, 0)
+            if label is not None:
+                label = label.transpose(1, 2, 0)
+
+        h, w, c = image.shape
+        assert c in [1, 3]
+        pad_h = max(self.pad_h - h, 0)
+        pad_w = max(self.pad_w - w, 0)
+        if pad_h > 0 or pad_w > 0:
+            if self.padding_with is None:
+                raise (RuntimeError("segtransform.Pad() need padding while padding argument is None\n"))
+            image = cv2.copyMakeBorder(image, 0, pad_h, 0, pad_w, cv2.BORDER_CONSTANT, value=self.padding_with)
+            if label is not None:    
+                label = cv2.copyMakeBorder(label, 0, pad_h, 0, pad_w, cv2.BORDER_CONSTANT, value=self.padding_with)
+
+        if if_channel_first:
+            if c == 1:
+                image = image[np.newaxis, :, :]
+            else:
+                image = image.transpose(2, 0, 1)
+            if label is not None:
+                if c == 1:
+                    label = label[:, :, np.newaxis]
+                else:
+                    label = label.transpose(2, 0, 1)
+
+        if if_channel_2_input:
+            image = image.squeeze(2)
+            if label is not None:
+                label = label.squeeze(2)
+
+        # print(image.shape)
+
+        if label is not None:
+            return image, label
+        else:
+            return image
 
 
 class CropBdb(object):
