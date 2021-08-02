@@ -250,3 +250,7 @@ zz-torch-job-gpu20210802-011238-dpjkg
 zz-torch-job-gpu20210802-011537-dd2np
 zz-torch-job-gpu20210802-011525-gmqxv
 20210802-010408
+20210802-011049
+zz-torch-job-gpu20210802-005417-phn2m
+zz-torch-job-gpu20210802-011816-v25k9
+zz-torch-job-gpu20210802-011755-pnsts

@@ -26,6 +26,7 @@ def _make_fusion_block(features, use_bn):
 class DPT(BaseModel):
     def __init__(
         self,
+        opt, 
         head,
         features=256,
         backbone="vitb_rn50_384",
@@ -54,6 +55,7 @@ class DPT(BaseModel):
             expand=False,
             exportable=False,
             hooks=hooks[backbone],
+            use_vit_only=opt.cfg.MODEL_BRDF.DPT_baseline.use_vit_only, 
             use_readout=readout,
             enable_attention_hooks=enable_attention_hooks,
         )
@@ -124,7 +126,7 @@ class DPTDepthModel(DPT):
 
 class DPTAlbedoModel(DPT):
     def __init__(
-        self, path=None, non_negative=False, scale=1.0, shift=0.0, skip_keys=[], keep_keys=[], **kwargs
+        self, opt, path=None, non_negative=False, scale=1.0, shift=0.0, skip_keys=[], keep_keys=[], **kwargs
     ):
         features = kwargs["features"] if "features" in kwargs else 256
 
@@ -141,7 +143,7 @@ class DPTAlbedoModel(DPT):
             nn.Identity(),
         )
 
-        super().__init__(head, **kwargs)
+        super().__init__(opt, head, **kwargs)
 
         if path is not None:
             self.load(path, skip_keys=skip_keys, keep_keys=keep_keys)

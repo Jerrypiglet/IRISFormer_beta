@@ -70,7 +70,7 @@ def QtC(codebook, gamma, im_height, im_width, Q_downsample_rate=1):
     return im_hat
 
 
-def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
+def forward_vit_SSN(pretrained, x, input_dict_extra={}):
     b, c, h, w = x.shape
 
     glob, ssn_return_dict = pretrained.model.forward_flex_SSN(x, pretrained.activations, input_dict_extra=input_dict_extra)
@@ -83,6 +83,7 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     # print(pretrained.activations["stem"].shape) # torch.Size([8, 64, 64, 80])
 
     # [layer_3 and layer_4 are from transformer layers]
+    # print(x.shape)
     # print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape) # torch.Size([8, 256, 64, 80]) torch.Size([8, 512, 32, 40]) torch.Size([8, 321, 768]) torch.Size([8, 321, 768])
 
     layer_1 = pretrained.act_postprocess1[0:2](layer_1)
@@ -107,18 +108,22 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     gamma = ssn_return_dict['Q'] # [b, J, N]
     # print(Q.shape)
 
+    assert pretrained.model.patch_size[0]==pretrained.model.patch_size[1]
+    Q_downsample_rate = pretrained.model.patch_size[0]
+
     if layer_1.ndim == 3:
         # layer_1 = unflatten(layer_1)
-        layer_1 = QtC(layer_1, gamma, h, w, Q_downsample_rate=4)
+        layer_1 = QtC(layer_1, gamma, h, w, Q_downsample_rate=Q_downsample_rate) # reassemble to [b, D, spixel_h, spixel_w]
     if layer_2.ndim == 3:
         # layer_2 = unflatten(layer_2)
-        layer_2 = QtC(layer_2, gamma, h, w, Q_downsample_rate=8)
+        layer_2 = QtC(layer_2, gamma, h, w, Q_downsample_rate=Q_downsample_rate) # reassemble to [b, D, spixel_h, spixel_w]
     if layer_3.ndim == 3:
         # layer_3 = unflatten(layer_3)
-        layer_3 = QtC(layer_3, gamma, h, w, Q_downsample_rate=16)
+        layer_3 = QtC(layer_3, gamma, h, w, Q_downsample_rate=Q_downsample_rate) # reassemble to [b, D, spixel_h, spixel_w]
     if layer_4.ndim == 3:
         # layer_4 = unflatten(layer_4)
-        layer_4 = QtC(layer_4, gamma, h, w, Q_downsample_rate=16)
+        layer_4 = QtC(layer_4, gamma, h, w, Q_downsample_rate=Q_downsample_rate) # reassemble to [b, D, spixel_h, spixel_w]
+        
 
     # print('-->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape) # --> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 16, 20])
 
@@ -126,7 +131,8 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     layer_2 = pretrained.act_postprocess2[3 : len(pretrained.act_postprocess2)](layer_2)
     layer_3 = pretrained.act_postprocess3[3 : len(pretrained.act_postprocess3)](layer_3)
     layer_4 = pretrained.act_postprocess4[3 : len(pretrained.act_postprocess4)](layer_4)
-
+    
+    # print(pretrained.act_postprocess3[3 : len(pretrained.act_postprocess3)])
     # print('---->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape) # --> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 8, 10])
 
 

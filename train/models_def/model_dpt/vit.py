@@ -111,11 +111,16 @@ def forward_vit(pretrained, x):
     layer_3 = pretrained.activations["3"]
     layer_4 = pretrained.activations["4"]
 
+    print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape) # torch.Size([4, 321, 768]) torch.Size([4, 321, 768]) torch.Size([4, 321, 768]) torch.Size([4, 321, 768])
+
+
     layer_1 = pretrained.act_postprocess1[0:2](layer_1)
     layer_2 = pretrained.act_postprocess2[0:2](layer_2)
     layer_3 = pretrained.act_postprocess3[0:2](layer_3)
     layer_4 = pretrained.act_postprocess4[0:2](layer_4)
 
+    # print('->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape) # -> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 320]) torch.Size([2, 768, 320])
+    
     unflatten = nn.Sequential(
         nn.Unflatten(
             2,
@@ -137,10 +142,18 @@ def forward_vit(pretrained, x):
     if layer_4.ndim == 3:
         layer_4 = unflatten(layer_4)
 
+    # print('-->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape) # --> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 16, 20])
+    # --> torch.Size([4, 256, 64, 80]) torch.Size([4, 512, 32, 40]) torch.Size([4, 768, 16, 20]) torch.Size([4, 768, 16, 20])
+
     layer_1 = pretrained.act_postprocess1[3 : len(pretrained.act_postprocess1)](layer_1)
     layer_2 = pretrained.act_postprocess2[3 : len(pretrained.act_postprocess2)](layer_2)
     layer_3 = pretrained.act_postprocess3[3 : len(pretrained.act_postprocess3)](layer_3)
     layer_4 = pretrained.act_postprocess4[3 : len(pretrained.act_postprocess4)](layer_4)
+
+    # print(pretrained.act_postprocess3[3 : len(pretrained.act_postprocess3)])
+    # print('---->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape) # --> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 8, 10])
+    # ----> torch.Size([4, 256, 64, 80]) torch.Size([4, 512, 32, 40]) torch.Size([4, 768, 16, 20]) torch.Size([4, 768, 8, 10])
+
 
     return layer_1, layer_2, layer_3, layer_4
 

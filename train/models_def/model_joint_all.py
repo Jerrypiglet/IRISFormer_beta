@@ -120,6 +120,7 @@ class Model_Joint(nn.Module):
 
                 if model_type=='dpt_hybrid':
                     self.BRDF_Net = DPTAlbedoModel(
+                        opt=opt, 
                         path=model_path,
                         backbone="vitb_rn50_384",
                         non_negative=False,
