@@ -145,7 +145,7 @@ def forward_vit(pretrained, x):
     return layer_1, layer_2, layer_3, layer_4
 
 
-def _resize_pos_embed(self, posemb, gs_h, gs_w):
+def _resize_pos_embed(self, posemb, gs_h, gs_w): # original at https://github.com/rwightman/pytorch-image-models/blob/72b227dcf57c0c62291673b96bdc06576bb90457/timm/models/vision_transformer.py#L481
     posemb_tok, posemb_grid = (
         posemb[:, : self.start_index],
         posemb[0, self.start_index :],

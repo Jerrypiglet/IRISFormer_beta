@@ -74,7 +74,7 @@ def set_up_envs(opt):
         opt.cfg.MODEL_GMM.feat_recon.layers_list = opt.cfg.MODEL_GMM.feat_recon.layers_list.split('_')
 
         if opt.cfg.MODEL_GMM.feat_recon.enable and opt.cfg.MODEL_GMM.feat_recon.use_matseg:
-            opt.cfg.MODEL_MATSEG.enable = True            
+            opt.cfg.MODEL_MATSEG.enable = True
 
 
     # ====== BRDF =====
@@ -84,7 +84,7 @@ def set_up_envs(opt):
     # ====== DPT =====
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.DPT_baseline.enable:
         opt.cfg.DATA.if_load_png_not_hdr = True
-        assert opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_large', 'dpt_base', 'dpt_hybrid']
+        assert opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_large', 'dpt_base', 'dpt_hybrid', 'dpt_hybrid_SSN']
         
         opt.cfg.DATA.if_pad_to_32x = True
         im_width_pad_to = int(np.ceil(opt.cfg.DATA.im_width/32.)*32)
@@ -93,7 +93,9 @@ def set_up_envs(opt):
         opt.if_pad = True
         opt.pad_op = transform.Pad([im_height_pad_to, im_width_pad_to], padding_with=im_pad_with)
 
-
+        if opt.cfg.MODEL_BRDF.DPT_baseline.model == 'dpt_hybrid_SSN':
+            opt.cfg.MODEL_MATSEG.enable = True
+            opt.cfg.MODEL_MATSEG.if_freeze = True
 
     # ====== detectron (objects & masks) =====
     if opt.cfg.MODEL_DETECTRON.enable:

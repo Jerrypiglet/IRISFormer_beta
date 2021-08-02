@@ -128,6 +128,9 @@ def get_transform_matseg(split, opt):
             transform.ToTensor(),
             transform.Normalize(mean=mean, std=std)
         ]
+        if opt.if_pad:
+            transform_semseg_list_train.insert(1, opt.pad_op)
+
         train_transform = transform.Compose(transform_semseg_list_train)
         return train_transform
     else:
@@ -136,6 +139,9 @@ def get_transform_matseg(split, opt):
             transform.ToTensor(),
             transform.Normalize(mean=mean, std=std)
             ]
+        if opt.if_pad:
+            transform_semseg_list_val.insert(1, opt.pad_op)
+
         val_transform = transform.Compose(transform_semseg_list_val)
     return val_transform
 

@@ -167,12 +167,12 @@ scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=50, cooldow
 # <<<< MODEL AND OPTIMIZER
 
 ENABLE_MATSEG = opt.cfg.MODEL_MATSEG.enable
-opt.bin_mean_shift_device = opt.device if opt.cfg.MODEL_MATSEG.embed_dims <= 4 else 'cpu'
+opt.bin_mean_shift_device = opt.device if opt.cfg.MODEL_MATSEG.matseg_embed_dims <= 4 else 'cpu'
 opt.batch_size_override_vis = -1 if (opt.bin_mean_shift_device == 'cpu' or not ENABLE_MATSEG) else 1
-if opt.cfg.MODEL_MATSEG.embed_dims == 2:
+if opt.cfg.MODEL_MATSEG.matseg_embed_dims == 2:
     bin_mean_shift = Bin_Mean_Shift(device=opt.device, invalid_index=opt.invalid_index)
 else:
-    bin_mean_shift = Bin_Mean_Shift_N(embedding_dims=opt.cfg.MODEL_MATSEG.embed_dims, \
+    bin_mean_shift = Bin_Mean_Shift_N(embedding_dims=opt.cfg.MODEL_MATSEG.matseg_embed_dims, \
         device=opt.bin_mean_shift_device, invalid_index=opt.invalid_index)
 
 # >>>> DATASET
@@ -332,7 +332,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         loss_keys_backward = []
         loss_keys_print = []
         if opt.cfg.MODEL_MATSEG.enable:
-            #  and ((not opt.cfg.MODEL_MATSEG.freeze) or opt.cfg.MODEL_MATSEG.embed_dims <= 2):
+            #  and ((not opt.cfg.MODEL_MATSEG.freeze) or opt.cfg.MODEL_MATSEG.matseg_embed_dims <= 2):
             loss_keys_backward.append('loss_matseg-ALL')
             loss_keys_print.append('loss_matseg-ALL')
             loss_keys_print.append('loss_matseg-pull')

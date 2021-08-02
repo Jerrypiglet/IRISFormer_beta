@@ -196,14 +196,25 @@ _C.MODEL_BRDF.use_scale_aware_albedo = False
 _C.MODEL_BRDF.DPT_baseline = CN()
 _C.MODEL_BRDF.DPT_baseline.enable = False
 _C.MODEL_BRDF.DPT_baseline.if_SGD = True
-_C.MODEL_BRDF.DPT_baseline.model = 'dpt_large'
+_C.MODEL_BRDF.DPT_baseline.model = 'dpt_hybrid'
+_C.MODEL_BRDF.DPT_baseline.use_vit_only = False
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_path = 'dpt_weights/dpt_hybrid-midas-501f0c75.pt'
-_C.MODEL_BRDF.DPT_baseline.dpt_base_path = ''
+# _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_path = 'NA'
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN_path = 'NA'
+_C.MODEL_BRDF.DPT_baseline.dpt_base_path = 'NA'
 _C.MODEL_BRDF.DPT_baseline.dpt_large_path = 'dpt_weights/dpt_large-midas-2f21e586.pt'
 _C.MODEL_BRDF.DPT_baseline.if_freeze_backbone = False
 _C.MODEL_BRDF.DPT_baseline.if_freeze_pretrained = False
 _C.MODEL_BRDF.DPT_baseline.if_skip_last_conv = True
 _C.MODEL_BRDF.DPT_baseline.if_only_restore_backbone = False
+
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid = CN()
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.use_pretrained_backbone = False
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN = CN()
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.backbone_dims = 1344 # resnet: stem + stage 0,1,2
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.patch_size = 16
+# _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.spixel_h = 12
+# _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.spixel_w = 16
 
 
 # ===== per-pixel lighting

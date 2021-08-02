@@ -67,18 +67,18 @@ class decoder0_safenet(nn.Module):
         N, C, H, W = xin_conv1.shape
         xin_conv1 = xin_conv1.permute(0, 2, 3, 1).view(N, H*W, C)
         embeddings = self.process_embedding(xin, matseg_embeddings, mat_notlight_mask_gpu_float)
-        assert embeddings.shape == (N, self.opt.cfg.MODEL_MATSEG.embed_dims, H, W)
+        assert embeddings.shape == (N, self.opt.cfg.MODEL_MATSEG.matseg_embed_dims, H, W)
         if self.opt.cfg.MODEL_MATSEG.if_albedo_safenet_normalize_embedding:
             embeddings = F.normalize(embeddings, p=2, dim=1)
 
-        embeddings_2 = embeddings.view(N, self.opt.cfg.MODEL_MATSEG.embed_dims, H*W)
+        embeddings_2 = embeddings.view(N, self.opt.cfg.MODEL_MATSEG.matseg_embed_dims, H*W)
 
         if self.opt.cfg.MODEL_MATSEG.if_albedo_safenet_use_pacnet_affinity:
             embed_expand = embeddings_2.unsqueeze(-1).expand(-1, -1, -1, H*W) # [N, D, H*W, H*W]
             # print(embed_expand.shape, embed_expand.transpose(2, 3).shape)
             A = torch.exp(-0.5 * (torch.norm(embed_expand - embed_expand.transpose(2, 3), dim=1)**2))
         else:
-            embeddings_1 = embeddings.permute(0, 2, 3, 1).view(N, H*W, self.opt.cfg.MODEL_MATSEG.embed_dims)
+            embeddings_1 = embeddings.permute(0, 2, 3, 1).view(N, H*W, self.opt.cfg.MODEL_MATSEG.matseg_embed_dims)
             A = torch.exp(torch.matmul(embeddings_1, embeddings_2))
 
         A = A / (A.sum(dim=2, keepdims=True)) # normalize row-wise
@@ -119,14 +119,14 @@ class decoder0_safenet(nn.Module):
             # im_in = F.interpolate(im_in, [30, 40], mode='bilinear')
             N, C, H, W = im_in.shape
             embeddings = self.process_embedding(im_in, matseg_embeddings, mat_notlight_mask_gpu_float)
-            assert embeddings.shape == (N, self.opt.cfg.MODEL_MATSEG.embed_dims, H, W)
+            assert embeddings.shape == (N, self.opt.cfg.MODEL_MATSEG.matseg_embed_dims, H, W)
             
             # embeddings = F.normalize(embeddings, p=2, dim=1)
 
-            embeddings_2 = embeddings.contiguous().view(N, self.opt.cfg.MODEL_MATSEG.embed_dims, -1)
+            embeddings_2 = embeddings.contiguous().view(N, self.opt.cfg.MODEL_MATSEG.matseg_embed_dims, -1)
 
             # SAFENET
-            embeddings_1 = embeddings.permute(0, 2, 3, 1).view(N, H*W, self.opt.cfg.MODEL_MATSEG.embed_dims)
+            embeddings_1 = embeddings.permute(0, 2, 3, 1).view(N, H*W, self.opt.cfg.MODEL_MATSEG.matseg_embed_dims)
             A = torch.exp(torch.matmul(embeddings_1, embeddings_2))
             # A = torch.sum(torch.exp(-0.5 * embeddings_1.unsqueeze(2).expand(-1, -1, H*W, -1) * embeddings_1.unsqueeze(1).expand(-1, H*W, -1, -1)), -1)
             print(A.shape, '====-------')

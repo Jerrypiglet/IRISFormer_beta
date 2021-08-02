@@ -90,5 +90,5 @@ spec:
                 values:
                 - 1080Ti
                 - 2080Ti
-                - TITANRTX
+                # - TITANRTX
   backoffLimit: 2

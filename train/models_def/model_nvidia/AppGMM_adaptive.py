@@ -41,7 +41,7 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
 
         self.opt = args
 
-    def forward(self, tensor_to_transform, feats_in=None, affinity_in=None, scale_tensor_to_transform=1, index_add=True):
+    def forward(self, tensor_to_transform, feats_in=None, affinity_in=None, scale_tensor_to_transform=1, index_add=True, if_return_codebook_only=False):
         '''
         INPUTS:
         tensor_to_transform -      nbatch x D1 x H x W
@@ -81,17 +81,19 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
         # print(abs_affinity.shape, dist_matrix.shape, spixel_features.shape) # torch.Size([1, J, H, W]) torch.Size([1, 9, HW]) torch.Size([1, D, J]); h, w being the dimensions of spixels, j=h*w
         
 
-        tensor_recon = self.recon_tensor(abs_affinity, tensor_to_transform, scale_tensor_to_transform=scale_tensor_to_transform)
+        recon_return_dict = self.recon_tensor(abs_affinity, tensor_to_transform, scale_tensor_to_transform=scale_tensor_to_transform, if_return_codebook_only=if_return_codebook_only)
 
         res = dict({
             'abs_affinity': abs_affinity, 
-            'tensor_recon': tensor_recon
+            'tensor_recon': recon_return_dict['I_hat'], 
+            'Q': recon_return_dict['Q'], 
+            'C': recon_return_dict['C']
         })
 
 
         return  res
 
-    def recon_tensor(self, gamma, tensor_to_transform, scale_tensor_to_transform=1):
+    def recon_tensor(self, gamma, tensor_to_transform, scale_tensor_to_transform=1, if_return_codebook_only=False):
         '''
         gamma: Q, BxJxHxW
         tensor_to_transform: BxDxHxW, where N*scale_tensor_to_transform=HW
@@ -116,7 +118,11 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
         tensor_to_transform_flattened = tensor_to_transform.permute(0, 2, 3, 1).view(batch_size, -1, D)
         tensor_to_transform_J = Q_M_Jnormalized.view(batch_size, J, -1) @ tensor_to_transform_flattened # [B, J, D], the code book
         tensor_to_transform_J = tensor_to_transform_J.permute(0, 2, 1) # [B, D, J], the code book
-        im_single_hat = tensor_to_transform_J @ gamma.view(batch_size, J, N) # (B, D, N) where N = H * W
-        im_single_hat = im_single_hat.view(batch_size, D, H, W)
 
-        return im_single_hat
+        if if_return_codebook_only:
+            im_single_hat = None
+        else:
+            im_single_hat = tensor_to_transform_J @ gamma.view(batch_size, J, N) # (B, D, N) where N = H * W
+            im_single_hat = im_single_hat.view(batch_size, D, H, W)
+
+        return {'C': tensor_to_transform_J, 'Q': gamma.view(batch_size, J, N), 'I_hat': im_single_hat}

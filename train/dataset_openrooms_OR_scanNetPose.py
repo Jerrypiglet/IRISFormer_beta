@@ -503,7 +503,13 @@ class openrooms(data.Dataset):
     def load_matseg(self, mask, im_RGB_uint8):
         # >>>> Rui: Read obj mask
         mat_aggre_map, num_mat_masks = self.get_map_aggre_map(mask) # 0 for invalid region
+        # if self.opt.if_pad:
+        #     mat_aggre_map = self.opt.pad_op(mat_aggre_map, name='mat_aggre_map', if_channel_2_input=True)
+        # if self.opt.if_pad:
+        #     im_RGB_uint8 = self.opt.pad_op(im_RGB_uint8, name='im_RGB_uint8')
+        # print(mat_aggre_map.shape, im_RGB_uint8.shape)
         im_matseg_transformed_trainval, mat_aggre_map_transformed = self.transforms_matseg(im_RGB_uint8, mat_aggre_map.squeeze()) # augmented
+        # print(im_matseg_transformed_trainval.shape, mat_aggre_map_transformed.shape)
         mat_aggre_map = mat_aggre_map_transformed.numpy()[..., np.newaxis]
 
         h, w, _ = mat_aggre_map.shape

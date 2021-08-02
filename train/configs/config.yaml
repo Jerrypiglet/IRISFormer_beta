@@ -25,7 +25,7 @@ MODEL_BRDF:
 MODEL_MATSEG:
   arch: resnet101
   pretrained: True
-  embed_dims: 2
+  embed_dims: 4
   fix_bn: False
   if_freeze: False
 

@@ -33,6 +33,7 @@ from utils.utils_total3D.utils_OR_layout import get_layout_bdb_sunrgbd
 from utils.utils_total3D.utils_OR_cam import get_rotation_matix_result
 
 from models_def.model_dpt.models import DPTAlbedoModel
+from models_def.model_dpt.models_SSN import DPTAlbedoModel_SSN
 from models_def.model_dpt.transforms import Resize as dpt_Resize
 from models_def.model_dpt.transforms import NormalizeImage as dpt_NormalizeImage
 from models_def.model_dpt.transforms import PrepareForNet as dpt_PrepareForNet
@@ -109,17 +110,29 @@ class Model_Joint(nn.Module):
                     "dpt_base": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_base_path,
                     "dpt_large": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_large_path,
                     "dpt_hybrid": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_path,
+                    "dpt_hybrid_SSN": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN_path,
                     "dpt_hybrid_kitti": "dpt_weights/dpt_hybrid_kitti-cb926ef4.pt",
                     "dpt_hybrid_nyu": "dpt_weights/dpt_hybrid_nyu-2ce69ec7.pt",
                 }
                 
                 model_type = self.opt.cfg.MODEL_BRDF.DPT_baseline.model
-                model_path = str(Path(self.opt.cfg.PATH.pretrained_path) / default_models[model_type]) if default_models[model_type]!='' else None
+                model_path = str(Path(self.opt.cfg.PATH.pretrained_path) / default_models[model_type]) if default_models[model_type]!='NA' else None
 
                 if model_type=='dpt_hybrid':
                     self.BRDF_Net = DPTAlbedoModel(
                         path=model_path,
                         backbone="vitb_rn50_384",
+                        non_negative=False,
+                        enable_attention_hooks=False,
+                        skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
+                        keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
+                    )
+                elif model_type=='dpt_hybrid_SSN':
+                    self.BRDF_Net = DPTAlbedoModel_SSN(
+                        opt=opt, 
+                        path=model_path,
+                        # backbone="vitb_rn50_384",
+                        backbone="vitb_unet_384",
                         non_negative=False,
                         enable_attention_hooks=False,
                         skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
@@ -142,14 +155,15 @@ class Model_Joint(nn.Module):
                         skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
                     )
                 else:
-                     assert False, 'Unsupported model_type!'
+                    print(model_type=='dpt_hybrid')
+                    assert False, 'Unsupported model_type: %s!'%model_type
 
                 # if dpt_optimize:
                 #     self.BRDF_Net = self.BRDF_Net.to(memory_format=torch.channels_last)
                     # self.BRDF_Net = self.BRDF_Net.half()
 
                 if self.cfg.MODEL_BRDF.DPT_baseline.if_freeze_backbone:
-                    self.turn_off_names(['BRDF_Net.pretrained.model.patch_embed.backbone'])
+                    self.turn_off_names(['BRDF_Net.pretrained.model.patch_embed.backbone']) # patchembed backbone in DPT_hybrid (resnet)
                     freeze_bn_in_module(self.BRDF_Net.pretrained.model.patch_embed.backbone)
 
                 if self.cfg.MODEL_BRDF.DPT_baseline.if_freeze_pretrained:
@@ -373,16 +387,18 @@ class Model_Joint(nn.Module):
             input_dict_extra = {'input_dict_guide': input_dict_guide}
             if self.cfg.MODEL_GMM.enable and self.cfg.MODEL_GMM.appearance_recon.enable:
                 input_dict_extra.update({'gamma_SSN3D': return_dict['output_GMM']['gamma_update'], 'MODEL_GMM': self.MODEL_GMM})
+
+            if (self.cfg.MODEL_MATSEG.if_albedo_pooling and self.cfg.MODEL_MATSEG.albedo_pooling_from == 'pred') \
+                or self.cfg.MODEL_MATSEG.use_pred_as_input \
+                or self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool or self.cfg.MODEL_MATSEG.if_albedo_pac_conv or self.cfg.MODEL_MATSEG.if_albedo_safenet \
+                or (self.cfg.MODEL_GMM.feat_recon.enable and self.cfg.MODEL_GMM.feat_recon.use_matseg) \
+                or (self.opt.cfg.MODEL_BRDF.DPT_baseline.enable and self.opt.cfg.MODEL_BRDF.DPT_baseline.model=='dpt_hybrid_SSN'):
+
+                input_dict_extra.update({'return_dict_matseg': return_dict_matseg})
+
             if self.cfg.MODEL_BRDF.DPT_baseline.enable:
                 return_dict_brdf = self.forward_brdf_DPT_baseline(input_dict, input_dict_extra=input_dict_extra)
             else:
-                if (self.cfg.MODEL_MATSEG.if_albedo_pooling and self.cfg.MODEL_MATSEG.albedo_pooling_from == 'pred') \
-                    or self.cfg.MODEL_MATSEG.use_pred_as_input \
-                    or self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool or self.cfg.MODEL_MATSEG.if_albedo_pac_conv or self.cfg.MODEL_MATSEG.if_albedo_safenet \
-                    or (self.cfg.MODEL_GMM.feat_recon.enable and self.cfg.MODEL_GMM.feat_recon.use_matseg):
-                    input_dict_extra.update({'return_dict_matseg': return_dict_matseg})
-
-
                 return_dict_brdf = self.forward_brdf(input_dict, input_dict_extra=input_dict_extra)
         else:
             return_dict_brdf = {}
@@ -528,7 +544,7 @@ class Model_Joint(nn.Module):
         # print(img_batch.shape)
         # img_batch = input_dict['imBatch'].half()
         # img_input = dpt_transform({"image": img_batch})["image"]
-        dpt_prediction = self.BRDF_Net.forward(img_batch)
+        dpt_prediction = self.BRDF_Net.forward(img_batch, input_dict_extra=input_dict_extra)
         # print(dpt_prediction.shape, dpt_prediction.dtype, dpt_prediction)
         albedoPred = 0.5 * (dpt_prediction + 1)
         # if (not self.opt.cfg.DATASET.if_no_gt_semantics):

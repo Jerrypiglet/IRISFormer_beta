@@ -167,16 +167,16 @@ scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=50, cooldow
 # <<<< MODEL AND OPTIMIZER
 
 ENABLE_MATSEG = opt.cfg.MODEL_MATSEG.enable
-opt.bin_mean_shift_device = opt.device if opt.cfg.MODEL_MATSEG.embed_dims <= 4 else 'cpu'
+opt.bin_mean_shift_device = opt.device if opt.cfg.MODEL_MATSEG.matseg_embed_dims <= 4 else 'cpu'
 opt.batch_size_override_vis = -1
 if ENABLE_MATSEG:
-    if opt.cfg.MODEL_MATSEG.embed_dims > 2:
+    if opt.cfg.MODEL_MATSEG.matseg_embed_dims > 2:
         opt.batch_size_override_vis = 1      
 # opt.batch_size_override_vis = -1 if (opt.bin_mean_shift_device == 'cpu' or not ENABLE_MATSEG) else 1
-if opt.cfg.MODEL_MATSEG.embed_dims == 2:
+if opt.cfg.MODEL_MATSEG.matseg_embed_dims == 2:
     bin_mean_shift = Bin_Mean_Shift(device=opt.device, invalid_index=opt.invalid_index)
 else:
-    bin_mean_shift = Bin_Mean_Shift_N(embedding_dims=opt.cfg.MODEL_MATSEG.embed_dims, \
+    bin_mean_shift = Bin_Mean_Shift_N(embedding_dims=opt.cfg.MODEL_MATSEG.matseg_embed_dims, \
         device=opt.bin_mean_shift_device, invalid_index=opt.invalid_index, if_freeze=opt.cfg.MODEL_MATSEG.if_freeze)
 opt.bin_mean_shift = bin_mean_shift
 

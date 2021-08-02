@@ -7,10 +7,17 @@ from .blocks import (
     FeatureFusionBlock,
     FeatureFusionBlock_custom,
     Interpolate,
-    _make_encoder,
-    forward_vit,
+    # _make_encoder,
+    # forward_vit,
 )
 
+from .blocks_SSN import (
+    # FeatureFusionBlock,
+    # FeatureFusionBlock_custom,
+    # Interpolate,
+    _make_encoder_SSN,
+    forward_vit_SSN,
+)
 
 def _make_fusion_block(features, use_bn):
     return FeatureFusionBlock_custom(
@@ -23,9 +30,10 @@ def _make_fusion_block(features, use_bn):
     )
 
 
-class DPT(BaseModel):
+class DPT_SSN(BaseModel):
     def __init__(
         self,
+        opt, 
         head,
         features=256,
         backbone="vitb_rn50_384",
@@ -35,25 +43,33 @@ class DPT(BaseModel):
         enable_attention_hooks=False,
     ):
 
-        super(DPT, self).__init__()
+        super(DPT_SSN, self).__init__()
+
+        self.opt = opt
+
+        # assert backbone in ['vitb_rn50_384', 'vitb_unet_384'], 'Backbone %s unsupported in DPT_SSN!'%backbone
+        assert backbone in ['vitb_unet_384'], 'Backbone %s unsupported in DPT_SSN!'%backbone
 
         self.channels_last = channels_last
 
         hooks = {
             "vitb_rn50_384": [0, 1, 8, 11],
+            "vitb_unet_384": [0, 1, 8, 11],
             "vitb16_384": [2, 5, 8, 11],
             "vitl16_384": [5, 11, 17, 23],
         }
 
         # Instantiate backbone and reassemble blocks
-        self.pretrained, self.scratch = _make_encoder(
+        self.pretrained, self.scratch = _make_encoder_SSN(
+            opt, 
             backbone,
             features,
-            False,  # Set to true of you want to train from scratch, uses ImageNet weights
+            use_pretrained=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.use_pretrained_backbone,  # Set to true of you want to train from scratch, uses ImageNet weights
             groups=1,
             expand=False,
             exportable=False,
             hooks=hooks[backbone],
+            use_vit_only=opt.cfg.MODEL_BRDF.DPT_baseline.use_vit_only, 
             use_readout=readout,
             enable_attention_hooks=enable_attention_hooks,
         )
@@ -65,11 +81,11 @@ class DPT(BaseModel):
 
         self.scratch.output_conv = head
 
-    def forward(self, x):
+    def forward(self, x, input_dict_extra={}):
         if self.channels_last == True:
             x.contiguous(memory_format=torch.channels_last)
 
-        layer_1, layer_2, layer_3, layer_4 = forward_vit(self.pretrained, x)
+        layer_1, layer_2, layer_3, layer_4 = forward_vit_SSN(self.opt, self.pretrained, x, input_dict_extra=input_dict_extra)
 
         layer_1_rn = self.scratch.layer1_rn(layer_1)
         layer_2_rn = self.scratch.layer2_rn(layer_2)
@@ -85,46 +101,9 @@ class DPT(BaseModel):
 
         return out
 
-
-class DPTDepthModel(DPT):
+class DPTAlbedoModel_SSN(DPT_SSN):
     def __init__(
-        self, path=None, non_negative=True, scale=1.0, shift=0.0, invert=False, **kwargs
-    ):
-        features = kwargs["features"] if "features" in kwargs else 256
-
-        self.scale = scale
-        self.shift = shift
-        self.invert = invert
-
-        head = nn.Sequential(
-            nn.Conv2d(features, features // 2, kernel_size=3, stride=1, padding=1),
-            Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
-            nn.Conv2d(features // 2, 32, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(True),
-            nn.Conv2d(32, 1, kernel_size=1, stride=1, padding=0),
-            nn.ReLU(True) if non_negative else nn.Identity(),
-            nn.Identity(),
-        )
-
-        super().__init__(head, **kwargs)
-
-        if path is not None:
-            self.load(path)
-
-    def forward(self, x):
-        inv_depth = super().forward(x).squeeze(dim=1)
-
-        if self.invert:
-            depth = self.scale * inv_depth + self.shift
-            depth[depth < 1e-8] = 1e-8
-            depth = 1.0 / depth
-            return depth
-        else:
-            return inv_depth
-
-class DPTAlbedoModel(DPT):
-    def __init__(
-        self, path=None, non_negative=False, scale=1.0, shift=0.0, skip_keys=[], keep_keys=[], **kwargs
+        self, opt, path=None, non_negative=False, scale=1.0, shift=0.0, skip_keys=[], keep_keys=[], **kwargs
     ):
         features = kwargs["features"] if "features" in kwargs else 256
 
@@ -141,42 +120,13 @@ class DPTAlbedoModel(DPT):
             nn.Identity(),
         )
 
-        super().__init__(head, **kwargs)
+        super().__init__(opt, head, **kwargs)
 
         if path is not None:
             self.load(path, skip_keys=skip_keys, keep_keys=keep_keys)
 
     def forward(self, x, input_dict_extra={}):
-        x_out = super().forward(x)
+        x_out = super().forward(x, input_dict_extra=input_dict_extra)
         x_out = torch.clamp(1.01 * torch.tanh(x_out ), -1, 1)
 
         return x_out
-
-class DPTSegmentationModel(DPT):
-    def __init__(self, num_classes, path=None, **kwargs):
-
-        features = kwargs["features"] if "features" in kwargs else 256
-
-        kwargs["use_bn"] = True
-
-        head = nn.Sequential(
-            nn.Conv2d(features, features, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(features),
-            nn.ReLU(True),
-            nn.Dropout(0.1, False),
-            nn.Conv2d(features, num_classes, kernel_size=1),
-            Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
-        )
-
-        super().__init__(head, **kwargs)
-
-        self.auxlayer = nn.Sequential(
-            nn.Conv2d(features, features, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(features),
-            nn.ReLU(True),
-            nn.Dropout(0.1, False),
-            nn.Conv2d(features, num_classes, kernel_size=1),
-        )
-
-        if path is not None:
-            self.load(path)
