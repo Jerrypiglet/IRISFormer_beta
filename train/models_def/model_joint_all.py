@@ -141,6 +141,7 @@ class Model_Joint(nn.Module):
                     )
                 elif model_type=='dpt_large':
                     self.BRDF_Net = DPTAlbedoModel(
+                        opt=opt, 
                         path=model_path,
                         backbone="vitl16_384",
                         non_negative=False,
@@ -149,6 +150,7 @@ class Model_Joint(nn.Module):
                     )
                 elif model_type=='dpt_base':
                     self.BRDF_Net = DPTAlbedoModel(
+                        opt=opt, 
                         path=model_path,
                         backbone="vitb16_384",
                         non_negative=False,

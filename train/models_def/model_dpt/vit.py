@@ -111,7 +111,7 @@ def forward_vit(pretrained, x):
     layer_3 = pretrained.activations["3"]
     layer_4 = pretrained.activations["4"]
 
-    print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape) # torch.Size([4, 321, 768]) torch.Size([4, 321, 768]) torch.Size([4, 321, 768]) torch.Size([4, 321, 768])
+    # print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape) # torch.Size([4, 321, 768]) torch.Size([4, 321, 768]) torch.Size([4, 321, 768]) torch.Size([4, 321, 768])
 
 
     layer_1 = pretrained.act_postprocess1[0:2](layer_1)
