@@ -109,7 +109,8 @@ def forward_vit_SSN(pretrained, x, input_dict_extra={}):
     # print(Q.shape)
 
     assert pretrained.model.patch_size[0]==pretrained.model.patch_size[1]
-    Q_downsample_rate = pretrained.model.patch_size[0]
+    # Q_downsample_rate = pretrained.model.patch_size[0]
+    Q_downsample_rate = 16
 
     if layer_1.ndim == 3:
         # layer_1 = unflatten(layer_1)
@@ -136,24 +137,24 @@ def forward_vit_SSN(pretrained, x, input_dict_extra={}):
     # print('---->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape) # --> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 8, 10])
 
 
-    return layer_1, layer_2, layer_3, layer_4
+    return layer_1, layer_2, layer_3, layer_4, ssn_return_dict
 
 
-def _resize_pos_embed_SSN_unet(self, posemb, gs_h, gs_w): # original at https://github.com/rwightman/pytorch-image-models/blob/72b227dcf57c0c62291673b96bdc06576bb90457/timm/models/vision_transformer.py#L481
-    posemb_tok, posemb_grid = (
-        posemb[:, : self.start_index],
-        posemb[0, self.start_index :],
-    )
+# def _resize_pos_embed_SSN_unet(self, posemb, gs_h, gs_w): # original at https://github.com/rwightman/pytorch-image-models/blob/72b227dcf57c0c62291673b96bdc06576bb90457/timm/models/vision_transformer.py#L481
+#     posemb_tok, posemb_grid = (
+#         posemb[:, : self.start_index],
+#         posemb[0, self.start_index :],
+#     )
 
-    gs_old = int(math.sqrt(len(posemb_grid)))
+#     gs_old = int(math.sqrt(len(posemb_grid)))
 
-    posemb_grid = posemb_grid.reshape(1, gs_old, gs_old, -1).permute(0, 3, 1, 2)
-    posemb_grid = F.interpolate(posemb_grid, size=(gs_h, gs_w), mode="bilinear")
-    posemb_grid = posemb_grid.permute(0, 2, 3, 1).reshape(1, gs_h * gs_w, -1)
+#     posemb_grid = posemb_grid.reshape(1, gs_old, gs_old, -1).permute(0, 3, 1, 2)
+#     posemb_grid = F.interpolate(posemb_grid, size=(gs_h, gs_w), mode="bilinear")
+#     posemb_grid = posemb_grid.permute(0, 2, 3, 1).reshape(1, gs_h * gs_w, -1)
 
-    posemb = torch.cat([posemb_tok, posemb_grid], dim=1)
+#     posemb = torch.cat([posemb_tok, posemb_grid], dim=1)
 
-    return posemb
+#     return posemb
 
 
 def forward_flex_SSN_unet(self, x, pretrained_activations=[], input_dict_extra={}):
@@ -222,7 +223,8 @@ def forward_flex_SSN_unet(self, x, pretrained_activations=[], input_dict_extra={
 
     x = self.norm(x)
 
-    return x, ssn_return_dict
+    extra_return_dict = {'Q': ssn_return_dict['Q'], 'matseg_affinity': ssn_return_dict['Q_2D']}
+    return x, extra_return_dict
 
 # def forward_flex_SSN_unet_(self, x, pretrained_activations=[]):
 #     b, c, h, w = x.shape # image pixel space
@@ -271,6 +273,7 @@ def forward_flex_SSN_unet(self, x, pretrained_activations=[], input_dict_extra={
 
 
 def _make_vit_b_rn50_backbone_SSN_unet(
+    opt, 
     model,
     features=[256, 512, 768, 768],
     size=[384, 384],
@@ -413,7 +416,7 @@ def _make_vit_b_rn50_backbone_SSN_unet(
     )
 
     pretrained.model.start_index = start_index
-    pretrained.model.patch_size = [16, 16]
+    pretrained.model.patch_size = [opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.patch_size]*2
 
     # We inject this function into the VisionTransformer instances so that
     # we can use it with interpolated position embeddings without modifying the library source.
@@ -469,6 +472,7 @@ def _make_pretrained_vitb_unet_384_SSN(
     use_vit_only=False,
     enable_attention_hooks=False,
 ):
+    # [DPT-SSN model] (v1) https://i.imgur.com/iSmi5wt.png
     print('========= [_make_pretrained_vitb_unet_384_SSN] pretrained', pretrained)
     model = timm.create_model("vit_base_resnet50_384", pretrained=pretrained)
     # model = create_model_patch_embed_unet(opt)
@@ -485,6 +489,7 @@ def _make_pretrained_vitb_unet_384_SSN(
 
     hooks = [0, 1, 8, 11] if hooks == None else hooks
     return _make_vit_b_rn50_backbone_SSN_unet(
+        opt, 
         model,
         features=[256, 512, 768, 768],
         size=[384, 384],

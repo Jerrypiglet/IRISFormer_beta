@@ -85,7 +85,7 @@ class DPT_SSN(BaseModel):
         if self.channels_last == True:
             x.contiguous(memory_format=torch.channels_last)
 
-        layer_1, layer_2, layer_3, layer_4 = forward_vit_SSN(self.pretrained, x, input_dict_extra=input_dict_extra)
+        layer_1, layer_2, layer_3, layer_4, ssn_return_dict = forward_vit_SSN(self.pretrained, x, input_dict_extra=input_dict_extra)
 
         layer_1_rn = self.scratch.layer1_rn(layer_1)
         layer_2_rn = self.scratch.layer2_rn(layer_2)
@@ -99,7 +99,7 @@ class DPT_SSN(BaseModel):
 
         out = self.scratch.output_conv(path_1)
 
-        return out
+        return out, ssn_return_dict
 
 class DPTAlbedoModel_SSN(DPT_SSN):
     def __init__(
@@ -126,7 +126,7 @@ class DPTAlbedoModel_SSN(DPT_SSN):
             self.load(path, skip_keys=skip_keys, keep_keys=keep_keys)
 
     def forward(self, x, input_dict_extra={}):
-        x_out = super().forward(x, input_dict_extra=input_dict_extra)
+        x_out, ssn_return_dict = super().forward(x, input_dict_extra=input_dict_extra)
         x_out = torch.clamp(1.01 * torch.tanh(x_out ), -1, 1)
 
-        return x_out
+        return x_out, ssn_return_dict

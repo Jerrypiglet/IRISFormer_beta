@@ -547,8 +547,7 @@ class Model_Joint(nn.Module):
         # print(img_batch.shape)
         # img_batch = input_dict['imBatch'].half()
         # img_input = dpt_transform({"image": img_batch})["image"]
-        dpt_prediction = self.BRDF_Net.forward(img_batch, input_dict_extra=input_dict_extra)
-        # print(dpt_prediction.shape, dpt_prediction.dtype, dpt_prediction)
+        dpt_prediction, extra_DPT_return_dict = self.BRDF_Net.forward(img_batch, input_dict_extra=input_dict_extra)
         albedoPred = 0.5 * (dpt_prediction + 1)
         # if (not self.opt.cfg.DATASET.if_no_gt_semantics):
         # print(input_dict['segBRDFBatch'].shape, input_dict['albedoBatch'].shape)
@@ -560,9 +559,11 @@ class Model_Joint(nn.Module):
         albedoPred = torch.clamp(albedoPred, 0, 1)
         return_dict.update({'albedoPred': albedoPred})
 
+        # print(extra_DPT_return_dict.keys())
+        if 'matseg_affinity' in extra_DPT_return_dict:
+            return_dict.update({'albedo_extra_output_dict': {'matseg_affinity': extra_DPT_return_dict['matseg_affinity']}})
+
         return return_dict
-
-
 
     def forward_brdf(self, input_dict, input_dict_extra={}):
         assert 'input_dict_guide' in input_dict_extra

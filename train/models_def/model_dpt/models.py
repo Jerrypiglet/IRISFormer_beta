@@ -152,7 +152,7 @@ class DPTAlbedoModel(DPT):
         x_out = super().forward(x)
         x_out = torch.clamp(1.01 * torch.tanh(x_out ), -1, 1)
 
-        return x_out
+        return x_out, {}
 
 class DPTSegmentationModel(DPT):
     def __init__(self, num_classes, path=None, **kwargs):

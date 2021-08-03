@@ -87,7 +87,8 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
             'abs_affinity': abs_affinity, 
             'tensor_recon': recon_return_dict['I_hat'], 
             'Q': recon_return_dict['Q'], 
-            'C': recon_return_dict['C']
+            'C': recon_return_dict['C'], 
+            'Q_2D': recon_return_dict['Q_2D'], 
         })
 
 
@@ -125,4 +126,4 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
             im_single_hat = tensor_to_transform_J @ gamma.view(batch_size, J, N) # (B, D, N) where N = H * W
             im_single_hat = im_single_hat.view(batch_size, D, H, W)
 
-        return {'C': tensor_to_transform_J, 'Q': gamma.view(batch_size, J, N), 'I_hat': im_single_hat}
+        return {'C': tensor_to_transform_J, 'Q': gamma.view(batch_size, J, N), 'I_hat': im_single_hat, 'Q_2D': gamma}

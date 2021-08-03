@@ -86,6 +86,8 @@ def set_up_envs(opt):
         opt.cfg.DATA.if_load_png_not_hdr = True
         assert opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_large', 'dpt_base', 'dpt_hybrid', 'dpt_hybrid_SSN']
         
+        opt.cfg.MODEL_BRDF.DPT_baseline.modalities = opt.cfg.MODEL_BRDF.DPT_baseline.modalities.split('_')
+
         opt.cfg.DATA.if_pad_to_32x = True
         im_width_pad_to = int(np.ceil(opt.cfg.DATA.im_width/32.)*32)
         im_height_pad_to = int(np.ceil(opt.cfg.DATA.im_height/32.)*32)

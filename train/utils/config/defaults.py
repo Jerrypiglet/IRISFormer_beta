@@ -196,6 +196,7 @@ _C.MODEL_BRDF.use_scale_aware_albedo = False
 _C.MODEL_BRDF.DPT_baseline = CN()
 _C.MODEL_BRDF.DPT_baseline.enable = False
 _C.MODEL_BRDF.DPT_baseline.if_SGD = True
+_C.MODEL_BRDF.DPT_baseline.modalities = 'al'
 _C.MODEL_BRDF.DPT_baseline.model = 'dpt_hybrid'
 _C.MODEL_BRDF.DPT_baseline.use_vit_only = False
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_path = 'dpt_weights/dpt_hybrid-midas-501f0c75.pt'
@@ -210,7 +211,7 @@ _C.MODEL_BRDF.DPT_baseline.if_only_restore_backbone = False
 
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid = CN()
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.use_pretrained_backbone = True
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN = CN()
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN = CN() # dpt_hybrid_SSN (V1)
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.backbone_dims = 1344 # resnet: stem + stage 0,1,2
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.patch_size = 16
 # _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.spixel_h = 12
