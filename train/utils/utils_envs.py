@@ -16,19 +16,23 @@ from utils import transform
 
 
 def set_up_envs(opt):
-    opt.cfg.PATH.root = opt.cfg.PATH.root_cluster if opt.if_cluster else opt.cfg.PATH.root_local
+    assert opt.cluster in opt.cfg.PATH.cluster_names
+    CLUSTER_ID = opt.cfg.PATH.cluster_names.index(opt.cluster)
+
+    opt.cfg.PATH.root = opt.cfg.PATH.root_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.PATH.root_local
     if opt.if_cluster:
         opt.cfg.TRAINING.MAX_CKPT_KEEP = -1
         opt.if_save_pickles = True
 
-    opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_cluster if opt.if_cluster else opt.cfg.DATASET.dataset_path_local
-    opt.cfg.DATASET.layout_emitter_path = opt.cfg.DATASET.layout_emitter_path_cluster if opt.if_cluster else opt.cfg.DATASET.layout_emitter_path_local
-    opt.cfg.DATASET.png_path = opt.cfg.DATASET.png_path_cluster if opt.if_cluster else opt.cfg.DATASET.png_path_local
-    opt.cfg.DATASET.matpart_path = opt.cfg.DATASET.matpart_path_cluster if opt.if_cluster else opt.cfg.DATASET.matpart_path_local
-    opt.cfg.DATASET.matori_path = opt.cfg.DATASET.matori_path_cluster if opt.if_cluster else opt.cfg.DATASET.matori_path_local
-    opt.cfg.DATASET.envmap_path = opt.cfg.DATASET.envmap_path_cluster if opt.if_cluster else opt.cfg.DATASET.envmap_path_local
-    opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path = opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path_cluster if opt.if_cluster else opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path_local
-    opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path = opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path_cluster if opt.if_cluster else opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path_local
+    opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.dataset_path_local
+    opt.cfg.DATASET.layout_emitter_path = opt.cfg.DATASET.layout_emitter_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.layout_emitter_path_local
+    opt.cfg.DATASET.png_path = opt.cfg.DATASET.png_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.png_path_local
+    opt.cfg.DATASET.dataset_path_mini = opt.cfg.DATASET.dataset_path_mini_cluster[CLUSTER_ID] if opt.cluster else opt.cfg.DATASET.dataset_path_mini_local
+    opt.cfg.DATASET.matpart_path = opt.cfg.DATASET.matpart_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.matpart_path_local
+    opt.cfg.DATASET.matori_path = opt.cfg.DATASET.matori_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.matori_path_local
+    opt.cfg.DATASET.envmap_path = opt.cfg.DATASET.envmap_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.envmap_path_local
+    opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path = opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path_local
+    opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path = opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path_local
 
     if opt.data_root is not None:
         opt.cfg.DATASET.dataset_path = opt.data_root
@@ -48,7 +52,7 @@ def set_up_envs(opt):
     opt.cfg.DATASET.dataset_list = os.path.join(opt.cfg.PATH.root, opt.cfg.DATASET.dataset_list)
 
 
-    opt.cfg.MODEL_SEMSEG.semseg_path = opt.cfg.MODEL_SEMSEG.semseg_path_cluster if opt.if_cluster else opt.cfg.MODEL_SEMSEG.semseg_path_local
+    opt.cfg.MODEL_SEMSEG.semseg_path = opt.cfg.MODEL_SEMSEG.semseg_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.MODEL_SEMSEG.semseg_path_local
     opt.cfg.PATH.semseg_colors_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.semseg_colors_path)
     opt.cfg.PATH.semseg_names_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.semseg_names_path)
     opt.cfg.PATH.total3D_colors_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.total3D_colors_path)
@@ -291,17 +295,17 @@ def set_up_envs(opt):
     assert all(e in opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers_allowed for e in opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers)
 
     # DCN
-    opt.cfg.PATH.dcn_path = opt.cfg.PATH.dcn_cluster if opt.if_cluster else opt.cfg.PATH.dcn_local
+    opt.cfg.PATH.dcn_path = opt.cfg.PATH.dcn_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.PATH.dcn_local
     sys.path.insert(0, os.path.join(opt.cfg.PATH.dcn_path, 'functions'))
 
     # export
-    opt.cfg.PATH.torch_home_path = opt.cfg.PATH.torch_home_cluster if opt.if_cluster else opt.cfg.PATH.torch_home_local
+    opt.cfg.PATH.torch_home_path = opt.cfg.PATH.torch_home_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.PATH.torch_home_local
     os.system('export TORCH_HOME=%s'%opt.cfg.PATH.torch_home_path)
 
     # mis
     if opt.cfg.SOLVER.if_test_dataloader:
         opt.cfg.SOLVER.max_epoch = 1
-    opt.cfg.PATH.pretrained_path = opt.cfg.PATH.pretrained_cluster if opt.if_cluster else opt.cfg.PATH.pretrained_local
+    opt.cfg.PATH.pretrained_path = opt.cfg.PATH.pretrained_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.PATH.pretrained_local
 
     # dump
     if opt.cfg.DEBUG.if_dump_shadow_renderer:
@@ -390,7 +394,10 @@ def set_up_folders(opt):
 
     # >>>> SUMMARY WRITERS
     if opt.if_cluster:
-        opt.home_path = Path('/viscompfs/users/ruizhu/')
+        if opt.cluster == 'kubectl':
+            opt.home_path = Path('/viscompfs/users/ruizhu/') 
+        elif opt.cluster == 'nvidia':
+            opt.home_path = Path('/home/ruzhu/Documents/Projects/')
         opt.CKPT_PATH = opt.home_path / CKPT_PATH
         opt.SUMMARY_PATH = opt.home_path / SUMMARY_PATH
         opt.SUMMARY_VIS_PATH = opt.home_path / SUMMARY_VIS_PATH

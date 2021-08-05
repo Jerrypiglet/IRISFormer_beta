@@ -262,6 +262,11 @@ zz-torch-job-gpu20210802-055013-445mm
 20210802-023326
 20210802-060235
 zz-torch-job-gpu20210802-033758-hwkq6
+zz-torch-job-gpu20210803-021130-5f98w
+zz-torch-job-gpu20210803-022009-6scrm
+zz-torch-job-gpu20210803-011339-4dz8w
+zz-torch-job-gpu20210803-001658-gpjkh
+zz-torch-job-gpu20210803-011209-8j6pr
 zz-torch-job-gpu20210802-160314-9tskt
 zz-torch-job-gpu20210802-051807-nvbbg
 zz-torch-job-gpu20210802-052052-v2lpk
@@ -276,3 +281,14 @@ zz-torch-job-gpu20210802-235922-2clvd
 zz-torch-job-gpu20210803-011127-sj9sl
 zz-torch-job-gpu20210803-012003-nkmkx
 zz-torch-job-gpu20210803-021121-mpp42
+zz-torch-job-gpu20210803-023349-w5ghp
+zz-torch-job-gpu20210803-033017-9j7lx
+zz-torch-job-gpu20210803-033507-sqs79
+zz-torch-job-gpu20210803-033901-rs6dx
+zz-torch-job-gpu20210803-011050-kcf79
+zz-torch-job-gpu20210802-234748-65lqr
+zz-torch-job-gpu20210803-033846-jbrzb
+20210803-033112
+20210803-033846
+20210803-034308
+20210803-034344

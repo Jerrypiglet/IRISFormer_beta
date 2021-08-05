@@ -73,6 +73,7 @@ parser.add_argument('--debug', action='store_true', help='Debug eval')
 parser.add_argument('--ifMatMapInput', action='store_true', help='using mask as additional input')
 # parser.add_argument('--ifDataloaderOnly', action='store_true', help='benchmark dataloading overhead')
 parser.add_argument('--if_cluster', action='store_true', help='if using cluster')
+parser.add_argument('--cluster', type=str, default='kubectl', help='cluster name if if_cluster is True', choices={"kubectl", "nvidia"})
 parser.add_argument('--if_hdr_input_matseg', action='store_true', help='if using hdr images')
 parser.add_argument('--eval_every_iter', type=int, default=2000, help='')
 parser.add_argument('--save_every_iter', type=int, default=5000, help='')
@@ -157,7 +158,7 @@ if opt.is_master:
 # from detectron2.evaluation import COCOEvaluator, inference_on_dataset
 # import os.path as osp
 # from detectron2.engine import DefaultTrainer
-from detectron2.utils.events import EventStorage
+# from detectron2.utils.events import EventStorage
 
 # cfg_detectron = get_cfg()
 
@@ -449,291 +450,291 @@ else:
         
         start_iter = tid_start + len(brdf_loader_train) * epoch_0
         logger.info("Starting training from iteration {}".format(start_iter))
-        with EventStorage(start_iter) as storage:
-            for i, data_batch in tqdm(enumerate(brdf_loader_train)):
+        # with EventStorage(start_iter) as storage:
+        for i, data_batch in tqdm(enumerate(brdf_loader_train)):
 
-                if cfg.SOLVER.if_test_dataloader:
-                    if i % 100 == 0:
-                        print(data_batch.keys())
-                    if opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs:
-                        # print(data_batch.keys())
-                        # print(data_batch['boxes_valid_list'])
-                        # print(data_batch['frame_info'])
-                        ic(data_batch['num_valid_boxes'])
-                        frame_info_list = data_batch['frame_info']
-                        boxes_valid_list_list = data_batch['boxes_valid_list']
-                        for frame_info, boxes_valid_list in zip(frame_info_list, boxes_valid_list_list):
-                            frame_key = '%s-%s-%d'%(frame_info['meta_split'], frame_info['scene_name'], frame_info['frame_id'])
-                            if frame_key in train_obj_dict:
-                                continue
-                            else:
-                                if sum(boxes_valid_list) == 0:
-                                    print(sum(boxes_valid_list), boxes_valid_list)
-                                train_obj_dict[frame_key] = {'valid_obj_num': sum(boxes_valid_list), 'boxes_valid_list': boxes_valid_list}
-                    continue
-                reset_tictoc = False
-                # Evaluation for an epoch```
+            if cfg.SOLVER.if_test_dataloader:
+                if i % 100 == 0:
+                    print(data_batch.keys())
+                if opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs:
+                    # print(data_batch.keys())
+                    # print(data_batch['boxes_valid_list'])
+                    # print(data_batch['frame_info'])
+                    ic(data_batch['num_valid_boxes'])
+                    frame_info_list = data_batch['frame_info']
+                    boxes_valid_list_list = data_batch['boxes_valid_list']
+                    for frame_info, boxes_valid_list in zip(frame_info_list, boxes_valid_list_list):
+                        frame_key = '%s-%s-%d'%(frame_info['meta_split'], frame_info['scene_name'], frame_info['frame_id'])
+                        if frame_key in train_obj_dict:
+                            continue
+                        else:
+                            if sum(boxes_valid_list) == 0:
+                                print(sum(boxes_valid_list), boxes_valid_list)
+                            train_obj_dict[frame_key] = {'valid_obj_num': sum(boxes_valid_list), 'boxes_valid_list': boxes_valid_list}
+                continue
+            reset_tictoc = False
+            # Evaluation for an epoch```
 
-                synchronize()
-                print((tid - tid_start) % opt.eval_every_iter, opt.eval_every_iter)
-                if opt.eval_every_iter != -1 and (tid - tid_start) % opt.eval_every_iter == 0:
-                    val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift, 'if_register_detectron_only': False}
-                    if opt.if_vis:
-                        val_params.update({'batch_size_val_vis': batch_size_val_vis, 'detectron_dataset_name': 'vis'})
-                        with torch.no_grad():
-                            if opt.cfg.DEBUG.if_dump_anything:
-                                dump_joint(brdf_loader_val_vis, model, val_params)
-                            vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
-                        synchronize()                
-                    if opt.if_val:
-                        val_params.update({'detectron_dataset_name': 'val'})
-                        with torch.no_grad():
-                            val_epoch_joint(brdf_loader_val, model, val_params)
-                    model.train(not cfg.MODEL_SEMSEG.fix_bn)
-                    reset_tictoc = True
-                    
-                synchronize()
-
-                # Save checkpoint
-                if opt.save_every_iter != -1 and (tid - tid_start) % opt.save_every_iter == 0 and 'tmp' not in opt.task_name:
-                    check_save(opt, tid, tid, epoch, checkpointer, epochs_saved, opt.checkpoints_path_task, logger)
-                    reset_tictoc = True
-
-                synchronize()
-
-                torch.cuda.empty_cache()
-
-                if reset_tictoc:
-                    ts_iter_end = time.time()
-                ts_iter_start = time.time()
-                if tid > 5:
-                    ts_iter_end_start_list.append(ts_iter_start - ts_iter_end)
-
-                # if opt.ifDataloaderOnly:
-                #     continue
-                if tid % opt.debug_every_iter == 0:
-                    opt.if_vis_debug_pac = True
-
-
-                # ======= Load data from cpu to gpu
-
-                labels_dict = get_labels_dict_joint(data_batch, opt)
-                synchronize()
-
-                time_meters['data_to_gpu'].update(time.time() - ts_iter_start)
-                time_meters['ts'] = time.time()
-
-                if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list or 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-                    print('Valid objs num: ', [sum(x) for x in data_batch['boxes_valid_list']], 'Totasl objs num: ', [len(x) for x in data_batch['boxes_valid_list']])
-
-                # ======= Forward
-                optimizer.zero_grad()
-                output_dict, loss_dict = forward_joint(True, labels_dict, model, opt, time_meters)
-                synchronize()
+            synchronize()
+            print((tid - tid_start) % opt.eval_every_iter, opt.eval_every_iter)
+            if opt.eval_every_iter != -1 and (tid - tid_start) % opt.eval_every_iter == 0:
+                val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift, 'if_register_detectron_only': False}
+                if opt.if_vis:
+                    val_params.update({'batch_size_val_vis': batch_size_val_vis, 'detectron_dataset_name': 'vis'})
+                    with torch.no_grad():
+                        if opt.cfg.DEBUG.if_dump_anything:
+                            dump_joint(brdf_loader_val_vis, model, val_params)
+                        vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
+                    synchronize()                
+                if opt.if_val:
+                    val_params.update({'detectron_dataset_name': 'val'})
+                    with torch.no_grad():
+                        val_epoch_joint(brdf_loader_val, model, val_params)
+                model.train(not cfg.MODEL_SEMSEG.fix_bn)
+                reset_tictoc = True
                 
-                # print('=======loss_dict', loss_dict)
-                loss_dict_reduced = reduce_loss_dict(loss_dict, mark=tid, logger=logger) # **average** over multi GPUs
-                time_meters['ts'] = time.time()
+            synchronize()
 
-                # ======= Backward
-                loss = 0.
-                loss_keys_backward = []
-                loss_keys_print = []
-                if opt.cfg.MODEL_MATSEG.enable and (not opt.cfg.MODEL_MATSEG.if_freeze):
-                    #  and ((not opt.cfg.MODEL_MATSEG.freeze) or opt.cfg.MODEL_MATSEG.embed_dims <= 4):
-                    loss_keys_backward.append('loss_matseg-ALL')
-                    loss_keys_print.append('loss_matseg-ALL')
-                    loss_keys_print.append('loss_matseg-pull')
-                    loss_keys_print.append('loss_matseg-push')
-                    loss_keys_print.append('loss_matseg-binary')
+            # Save checkpoint
+            if opt.save_every_iter != -1 and (tid - tid_start) % opt.save_every_iter == 0 and 'tmp' not in opt.task_name:
+                check_save(opt, tid, tid, epoch, checkpointer, epochs_saved, opt.checkpoints_path_task, logger)
+                reset_tictoc = True
 
-                if (opt.cfg.MODEL_SEMSEG.enable and not opt.cfg.MODEL_SEMSEG.if_freeze) or (opt.cfg.MODEL_BRDF.enable_semseg_decoder):
-                    loss_keys_backward.append('loss_semseg-ALL')
-                    loss_keys_print.append('loss_semseg-ALL')
-                    if opt.cfg.MODEL_SEMSEG.enable:
-                        loss_keys_print.append('loss_semseg-main') 
-                        loss_keys_print.append('loss_semseg-aux') 
+            synchronize()
 
-                if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
-                    if not opt.cfg.MODEL_BRDF.if_freeze:
-                        loss_keys_backward.append('loss_brdf-ALL')
-                        loss_keys_print.append('loss_brdf-ALL')
-                    if 'al' in opt.cfg.MODEL_BRDF.enable_list and 'al' in opt.cfg.MODEL_BRDF.loss_list:
-                        loss_keys_print.append('loss_brdf-albedo') 
-                    if 'no' in opt.cfg.MODEL_BRDF.enable_list and 'no' in opt.cfg.MODEL_BRDF.loss_list:
-                        loss_keys_print.append('loss_brdf-normal') 
-                    if 'ro' in opt.cfg.MODEL_BRDF.enable_list and 'ro' in opt.cfg.MODEL_BRDF.loss_list:
-                        loss_keys_print.append('loss_brdf-rough') 
-                    if 'de' in opt.cfg.MODEL_BRDF.enable_list and 'de' in opt.cfg.MODEL_BRDF.loss_list:
-                        loss_keys_print.append('loss_brdf-depth') 
+            torch.cuda.empty_cache()
 
-                if opt.cfg.MODEL_LIGHT.enable:
-                    if not opt.cfg.MODEL_LIGHT.if_freeze:
-                        loss_keys_backward.append('loss_light-ALL')
-                        loss_keys_print.append('loss_light-ALL')
-
-                if opt.cfg.MODEL_MATCLS.enable:
-                    loss_keys_backward.append('loss_matcls-ALL')
-                    loss_keys_print.append('loss_matcls-ALL')
-                    loss_keys_print.append('loss_matcls-cls')
-                    if opt.cfg.MODEL_MATCLS.if_est_sup:
-                        loss_keys_print.append('loss_matcls-supcls')
-
-
-                if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
-                    if_use_layout_loss = 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list
-                    if_use_object_loss = 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list
-
-                    if if_use_layout_loss:
-                        if not opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_freeze:
-                            loss_keys_backward.append('loss_layout-ALL')
-                        loss_keys_print.append('loss_layout-ALL')
-                        loss_keys_print += ['loss_layout-pitch_cls', 
-                            'loss_layout-pitch_reg', 
-                            'loss_layout-roll_cls', 
-                            'loss_layout-roll_reg', 
-                            'loss_layout-lo_ori_cls', 
-                            'loss_layout-lo_ori_reg', 
-                            'loss_layout-lo_centroid', 
-                            'loss_layout-lo_coeffs', 
-                            'loss_layout-lo_corner', ]
-
-                    if if_use_object_loss:
-                        loss_keys_backward.append('loss_object-ALL')
-                        loss_keys_print.append('loss_object-ALL')
-                    if if_use_layout_loss and if_use_object_loss:
-                        loss_keys_backward.append('loss_joint-ALL')
-                        loss_keys_print.append('loss_joint-ALL')
-
-                    if 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
-                        loss_keys_backward.append('loss_mesh-ALL')
-                        loss_keys_print.append('loss_mesh-ALL')
-                        if opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'SVRLoss':
-                            for loss_name in ['loss_mesh-chamfer', 'loss_mesh-face', 'loss_mesh-edge', 'loss_mesh-boundary']:
-                                loss_keys_print.append(loss_name)
-                            
-
-                    if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
-                        if not opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_freeze:
-                            loss_keys_backward.append('loss_emitter-ALL')
-                        loss_keys_print.append('loss_emitter-ALL')
-                        loss_keys_print += ['loss_emitter-light_ratio', 
-                            'loss_emitter-cell_cls', 
-                            'loss_emitter-cell_axis', 
-                            'loss_emitter-cell_intensity', 
-                            'loss_emitter-cell_lamb'] 
-
-                if opt.cfg.MODEL_DETECTRON.enable:
-                    loss_keys_backward.append('loss_detectron-ALL')
-                    loss_keys_print += ['loss_detectron-ALL', 
-                        'loss_detectron-cls', 
-                        'loss_detectron-box_reg', 
-                        'loss_detectron-mask', 
-                        'loss_detectron-rpn_cls', 
-                        'loss_detectron-rpn_loc', ]
-
-                for loss_key in loss_keys_backward:
-                    if loss_key in opt.loss_weight_dict:
-                        loss_dict[loss_key] = loss_dict[loss_key] * opt.loss_weight_dict[loss_key]
-                        print('Multiply loss %s by weight %.3f'%(loss_key, opt.loss_weight_dict[loss_key]))
-                loss = sum([loss_dict[loss_key] for loss_key in loss_keys_backward])
-
-                if opt.is_master and tid % 20 == 0:
-                    print('----loss_dict', loss_dict.keys())
-                    print('----loss_keys_backward', loss_keys_backward)
-
-                loss.backward()
-
-                # clip_to = 1.
-                # torch.nn.utils.clip_grad_norm_(model.LAYOUT_EMITTER_NET_fc.parameters(), clip_to)
-                # torch.nn.utils.clip_grad_norm_(model.LAYOUT_EMITTER_NET_encoder.parameters(), clip_to)
-                # print(model.LAYOUT_EMITTER_NET_fc.fc_layout_5.weight)
-                # print(model.LAYOUT_EMITTER_NET_fc.fc_layout_5.weight.grad)
-
-                
-                optimizer.step()
-                time_meters['backward'].update(time.time() - time_meters['ts'])
-                time_meters['ts'] = time.time()
-                synchronize()
-
-                if opt.is_master:
-                    loss_keys_print = [x for x in loss_keys_print if 'ALL' in x] + [x for x in loss_keys_print if 'ALL' not in x]
-                    logger_str = 'Epoch %d - Tid %d -'%(epoch, tid) + ', '.join(['%s %.3f'%(loss_key, loss_dict_reduced[loss_key]) for loss_key in loss_keys_print])
-                    logger.info(white_blue(logger_str))
-
-                    for loss_key in loss_dict_reduced:
-                        writer.add_scalar('loss_train/%s'%loss_key, loss_dict_reduced[loss_key].item(), tid)
-                    writer.add_scalar('training/epoch', epoch, tid)
-
-                # End of iteration logging
+            if reset_tictoc:
                 ts_iter_end = time.time()
-                if opt.is_master and (tid - tid_start) > 5:
-                    ts_iter_start_end_list.append(ts_iter_end - ts_iter_start)
-                    if (tid - tid_start) % 10 == 0:
-                        logger.info(green('Rolling end-to-start %.2f, Rolling start-to-end %.2f'%(sum(ts_iter_end_start_list)/len(ts_iter_end_start_list), sum(ts_iter_start_end_list)/len(ts_iter_start_end_list))))
-                        logger.info(green('Training timings: ' + time_meters_to_string(time_meters)))
-                    if opt.is_master and tid % 100 == 0:
-                        usage_ratio = print_gpu_usage(handle, logger)
-                        writer.add_scalar('training/GPU_usage_ratio', usage_ratio, tid)
-                        writer.add_scalar('training/batch_size_per_gpu', len(data_batch['image_path']), tid)
-                        writer.add_scalar('training/gpus', opt.num_gpus, tid)
-                # if opt.is_master:
+            ts_iter_start = time.time()
+            if tid > 5:
+                ts_iter_end_start_list.append(ts_iter_start - ts_iter_end)
 
-                if tid % opt.debug_every_iter == 0:       
-                    if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool or opt.cfg.MODEL_MATSEG.if_albedo_safenet) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
-                        if opt.is_master and output_dict['im_trainval_RGB_mask_pooled_mean'] is not None:
-                            for sample_idx, im_trainval_RGB_mask_pooled_mean in enumerate(output_dict['im_trainval_RGB_mask_pooled_mean']):
-                                im_trainval_RGB_mask_pooled_mean = im_trainval_RGB_mask_pooled_mean.detach().cpu().numpy().squeeze().transpose(1, 2, 0)
-                                writer.add_image('TRAIN_im_trainval_RGB_debug/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), data_batch['im_trainval_RGB'][sample_idx].numpy().squeeze().transpose(1, 2, 0), tid, dataformats='HWC')
-                                writer.add_image('TRAIN_im_trainval_RGB_mask_pooled_mean/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), im_trainval_RGB_mask_pooled_mean, tid, dataformats='HWC')
-                                logger.info('Added debug pooling sample')
-                
-                # ===== Logging summaries of training samples
-                if tid % 2000 == 0:
-                    for sample_idx, (im_single, im_trainval_RGB, im_path) in enumerate(zip(data_batch['im_trainval'], data_batch['im_trainval_RGB'], data_batch['image_path'])):
-                        # im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
-                        im_trainval_RGB = im_trainval_RGB.numpy().squeeze().transpose(1, 2, 0)
+            # if opt.ifDataloaderOnly:
+            #     continue
+            if tid % opt.debug_every_iter == 0:
+                opt.if_vis_debug_pac = True
+
+
+            # ======= Load data from cpu to gpu
+
+            labels_dict = get_labels_dict_joint(data_batch, opt)
+            synchronize()
+
+            time_meters['data_to_gpu'].update(time.time() - ts_iter_start)
+            time_meters['ts'] = time.time()
+
+            if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list or 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
+                print('Valid objs num: ', [sum(x) for x in data_batch['boxes_valid_list']], 'Totasl objs num: ', [len(x) for x in data_batch['boxes_valid_list']])
+
+            # ======= Forward
+            optimizer.zero_grad()
+            output_dict, loss_dict = forward_joint(True, labels_dict, model, opt, time_meters)
+            synchronize()
+            
+            # print('=======loss_dict', loss_dict)
+            loss_dict_reduced = reduce_loss_dict(loss_dict, mark=tid, logger=logger) # **average** over multi GPUs
+            time_meters['ts'] = time.time()
+
+            # ======= Backward
+            loss = 0.
+            loss_keys_backward = []
+            loss_keys_print = []
+            if opt.cfg.MODEL_MATSEG.enable and (not opt.cfg.MODEL_MATSEG.if_freeze):
+                #  and ((not opt.cfg.MODEL_MATSEG.freeze) or opt.cfg.MODEL_MATSEG.embed_dims <= 4):
+                loss_keys_backward.append('loss_matseg-ALL')
+                loss_keys_print.append('loss_matseg-ALL')
+                loss_keys_print.append('loss_matseg-pull')
+                loss_keys_print.append('loss_matseg-push')
+                loss_keys_print.append('loss_matseg-binary')
+
+            if (opt.cfg.MODEL_SEMSEG.enable and not opt.cfg.MODEL_SEMSEG.if_freeze) or (opt.cfg.MODEL_BRDF.enable_semseg_decoder):
+                loss_keys_backward.append('loss_semseg-ALL')
+                loss_keys_print.append('loss_semseg-ALL')
+                if opt.cfg.MODEL_SEMSEG.enable:
+                    loss_keys_print.append('loss_semseg-main') 
+                    loss_keys_print.append('loss_semseg-aux') 
+
+            if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
+                if not opt.cfg.MODEL_BRDF.if_freeze:
+                    loss_keys_backward.append('loss_brdf-ALL')
+                    loss_keys_print.append('loss_brdf-ALL')
+                if 'al' in opt.cfg.MODEL_BRDF.enable_list and 'al' in opt.cfg.MODEL_BRDF.loss_list:
+                    loss_keys_print.append('loss_brdf-albedo') 
+                if 'no' in opt.cfg.MODEL_BRDF.enable_list and 'no' in opt.cfg.MODEL_BRDF.loss_list:
+                    loss_keys_print.append('loss_brdf-normal') 
+                if 'ro' in opt.cfg.MODEL_BRDF.enable_list and 'ro' in opt.cfg.MODEL_BRDF.loss_list:
+                    loss_keys_print.append('loss_brdf-rough') 
+                if 'de' in opt.cfg.MODEL_BRDF.enable_list and 'de' in opt.cfg.MODEL_BRDF.loss_list:
+                    loss_keys_print.append('loss_brdf-depth') 
+
+            if opt.cfg.MODEL_LIGHT.enable:
+                if not opt.cfg.MODEL_LIGHT.if_freeze:
+                    loss_keys_backward.append('loss_light-ALL')
+                    loss_keys_print.append('loss_light-ALL')
+
+            if opt.cfg.MODEL_MATCLS.enable:
+                loss_keys_backward.append('loss_matcls-ALL')
+                loss_keys_print.append('loss_matcls-ALL')
+                loss_keys_print.append('loss_matcls-cls')
+                if opt.cfg.MODEL_MATCLS.if_est_sup:
+                    loss_keys_print.append('loss_matcls-supcls')
+
+
+            if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
+                if_use_layout_loss = 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list
+                if_use_object_loss = 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list
+
+                if if_use_layout_loss:
+                    if not opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_freeze:
+                        loss_keys_backward.append('loss_layout-ALL')
+                    loss_keys_print.append('loss_layout-ALL')
+                    loss_keys_print += ['loss_layout-pitch_cls', 
+                        'loss_layout-pitch_reg', 
+                        'loss_layout-roll_cls', 
+                        'loss_layout-roll_reg', 
+                        'loss_layout-lo_ori_cls', 
+                        'loss_layout-lo_ori_reg', 
+                        'loss_layout-lo_centroid', 
+                        'loss_layout-lo_coeffs', 
+                        'loss_layout-lo_corner', ]
+
+                if if_use_object_loss:
+                    loss_keys_backward.append('loss_object-ALL')
+                    loss_keys_print.append('loss_object-ALL')
+                if if_use_layout_loss and if_use_object_loss:
+                    loss_keys_backward.append('loss_joint-ALL')
+                    loss_keys_print.append('loss_joint-ALL')
+
+                if 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
+                    loss_keys_backward.append('loss_mesh-ALL')
+                    loss_keys_print.append('loss_mesh-ALL')
+                    if opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'SVRLoss':
+                        for loss_name in ['loss_mesh-chamfer', 'loss_mesh-face', 'loss_mesh-edge', 'loss_mesh-boundary']:
+                            loss_keys_print.append(loss_name)
+                        
+
+                if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
+                    if not opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_freeze:
+                        loss_keys_backward.append('loss_emitter-ALL')
+                    loss_keys_print.append('loss_emitter-ALL')
+                    loss_keys_print += ['loss_emitter-light_ratio', 
+                        'loss_emitter-cell_cls', 
+                        'loss_emitter-cell_axis', 
+                        'loss_emitter-cell_intensity', 
+                        'loss_emitter-cell_lamb'] 
+
+            if opt.cfg.MODEL_DETECTRON.enable:
+                loss_keys_backward.append('loss_detectron-ALL')
+                loss_keys_print += ['loss_detectron-ALL', 
+                    'loss_detectron-cls', 
+                    'loss_detectron-box_reg', 
+                    'loss_detectron-mask', 
+                    'loss_detectron-rpn_cls', 
+                    'loss_detectron-rpn_loc', ]
+
+            for loss_key in loss_keys_backward:
+                if loss_key in opt.loss_weight_dict:
+                    loss_dict[loss_key] = loss_dict[loss_key] * opt.loss_weight_dict[loss_key]
+                    print('Multiply loss %s by weight %.3f'%(loss_key, opt.loss_weight_dict[loss_key]))
+            loss = sum([loss_dict[loss_key] for loss_key in loss_keys_backward])
+
+            if opt.is_master and tid % 20 == 0:
+                print('----loss_dict', loss_dict.keys())
+                print('----loss_keys_backward', loss_keys_backward)
+
+            loss.backward()
+
+            # clip_to = 1.
+            # torch.nn.utils.clip_grad_norm_(model.LAYOUT_EMITTER_NET_fc.parameters(), clip_to)
+            # torch.nn.utils.clip_grad_norm_(model.LAYOUT_EMITTER_NET_encoder.parameters(), clip_to)
+            # print(model.LAYOUT_EMITTER_NET_fc.fc_layout_5.weight)
+            # print(model.LAYOUT_EMITTER_NET_fc.fc_layout_5.weight.grad)
+
+            
+            optimizer.step()
+            time_meters['backward'].update(time.time() - time_meters['ts'])
+            time_meters['ts'] = time.time()
+            synchronize()
+
+            if opt.is_master:
+                loss_keys_print = [x for x in loss_keys_print if 'ALL' in x] + [x for x in loss_keys_print if 'ALL' not in x]
+                logger_str = 'Epoch %d - Tid %d -'%(epoch, tid) + ', '.join(['%s %.3f'%(loss_key, loss_dict_reduced[loss_key]) for loss_key in loss_keys_print])
+                logger.info(white_blue(logger_str))
+
+                for loss_key in loss_dict_reduced:
+                    writer.add_scalar('loss_train/%s'%loss_key, loss_dict_reduced[loss_key].item(), tid)
+                writer.add_scalar('training/epoch', epoch, tid)
+
+            # End of iteration logging
+            ts_iter_end = time.time()
+            if opt.is_master and (tid - tid_start) > 5:
+                ts_iter_start_end_list.append(ts_iter_end - ts_iter_start)
+                if (tid - tid_start) % 10 == 0:
+                    logger.info(green('Rolling end-to-start %.2f, Rolling start-to-end %.2f'%(sum(ts_iter_end_start_list)/len(ts_iter_end_start_list), sum(ts_iter_start_end_list)/len(ts_iter_start_end_list))))
+                    logger.info(green('Training timings: ' + time_meters_to_string(time_meters)))
+                if opt.is_master and tid % 100 == 0:
+                    usage_ratio = print_gpu_usage(handle, logger)
+                    writer.add_scalar('training/GPU_usage_ratio', usage_ratio, tid)
+                    writer.add_scalar('training/batch_size_per_gpu', len(data_batch['image_path']), tid)
+                    writer.add_scalar('training/gpus', opt.num_gpus, tid)
+            # if opt.is_master:
+
+            if tid % opt.debug_every_iter == 0:       
+                if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool or opt.cfg.MODEL_MATSEG.if_albedo_safenet) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
+                    if opt.is_master and output_dict['im_trainval_RGB_mask_pooled_mean'] is not None:
+                        for sample_idx, im_trainval_RGB_mask_pooled_mean in enumerate(output_dict['im_trainval_RGB_mask_pooled_mean']):
+                            im_trainval_RGB_mask_pooled_mean = im_trainval_RGB_mask_pooled_mean.detach().cpu().numpy().squeeze().transpose(1, 2, 0)
+                            writer.add_image('TRAIN_im_trainval_RGB_debug/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), data_batch['im_trainval_RGB'][sample_idx].numpy().squeeze().transpose(1, 2, 0), tid, dataformats='HWC')
+                            writer.add_image('TRAIN_im_trainval_RGB_mask_pooled_mean/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), im_trainval_RGB_mask_pooled_mean, tid, dataformats='HWC')
+                            logger.info('Added debug pooling sample')
+            
+            # ===== Logging summaries of training samples
+            if tid % 2000 == 0:
+                for sample_idx, (im_single, im_trainval_RGB, im_path) in enumerate(zip(data_batch['im_trainval'], data_batch['im_trainval_RGB'], data_batch['image_path'])):
+                    # im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
+                    im_trainval_RGB = im_trainval_RGB.numpy().squeeze().transpose(1, 2, 0)
+                    if opt.is_master:
+                        # writer.add_image('TRAIN_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
+                        writer.add_image('TRAIN_im_trainval_RGB/%d'%sample_idx, im_trainval_RGB, tid, dataformats='HWC')
+                        writer.add_text('TRAIN_image_name/%d'%sample_idx, im_path, tid)
+                if opt.cfg.DATA.load_matseg_gt:
+                    for sample_idx, (im_single, mat_aggre_map) in enumerate(zip(data_batch['im_matseg_transformed_trainval'], labels_dict['mat_aggre_map_cpu'])):
+                        im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
+                        mat_aggre_map = mat_aggre_map.numpy().squeeze()
                         if opt.is_master:
-                            # writer.add_image('TRAIN_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
-                            writer.add_image('TRAIN_im_trainval_RGB/%d'%sample_idx, im_trainval_RGB, tid, dataformats='HWC')
-                            writer.add_text('TRAIN_image_name/%d'%sample_idx, im_path, tid)
-                    if opt.cfg.DATA.load_matseg_gt:
-                        for sample_idx, (im_single, mat_aggre_map) in enumerate(zip(data_batch['im_matseg_transformed_trainval'], labels_dict['mat_aggre_map_cpu'])):
-                            im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
-                            mat_aggre_map = mat_aggre_map.numpy().squeeze()
-                            if opt.is_master:
-                                writer.add_image('TRAIN_matseg_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
-                                writer.add_image('TRAIN_matseg_mat_aggre_map_trainval/%d'%sample_idx, vis_index_map(mat_aggre_map), tid, dataformats='HWC')
-                            logger.info('Logged training mat seg')
-                    if opt.cfg.DATA.load_semseg_gt and opt.cfg.MODEL_SEMSEG.enable:
-                        for sample_idx, (im_single, semseg_label, semseg_pred) in enumerate(zip(data_batch['im_semseg_transformed_trainval'], data_batch['semseg_label'], output_dict['semseg_pred'].detach().cpu())):
-                            im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
-                            semseg_colors = np.loadtxt(os.path.join(opt.pwdpath, opt.cfg.PATH.semseg_colors_path)).astype('uint8')
-                            if opt.cfg.MODEL_SEMSEG.wallseg_only:
-                                semseg_colors = np.array([[0, 0, 0], [0, 80, 100]], dtype=np.uint8)
+                            writer.add_image('TRAIN_matseg_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
+                            writer.add_image('TRAIN_matseg_mat_aggre_map_trainval/%d'%sample_idx, vis_index_map(mat_aggre_map), tid, dataformats='HWC')
+                        logger.info('Logged training mat seg')
+                if opt.cfg.DATA.load_semseg_gt and opt.cfg.MODEL_SEMSEG.enable:
+                    for sample_idx, (im_single, semseg_label, semseg_pred) in enumerate(zip(data_batch['im_semseg_transformed_trainval'], data_batch['semseg_label'], output_dict['semseg_pred'].detach().cpu())):
+                        im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
+                        semseg_colors = np.loadtxt(os.path.join(opt.pwdpath, opt.cfg.PATH.semseg_colors_path)).astype('uint8')
+                        if opt.cfg.MODEL_SEMSEG.wallseg_only:
+                            semseg_colors = np.array([[0, 0, 0], [0, 80, 100]], dtype=np.uint8)
 
-                            semseg_label = np.uint8(semseg_label.numpy().squeeze())
-                            from utils.utils_vis import colorize
-                            semseg_label_color = np.array(colorize(semseg_label, semseg_colors).convert('RGB'))
-                            if opt.is_master:
-                                writer.add_image('TRAIN_semseg_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
-                                writer.add_image('TRAIN_semseg_label_trainval/%d'%sample_idx, semseg_label_color, tid, dataformats='HWC')
+                        semseg_label = np.uint8(semseg_label.numpy().squeeze())
+                        from utils.utils_vis import colorize
+                        semseg_label_color = np.array(colorize(semseg_label, semseg_colors).convert('RGB'))
+                        if opt.is_master:
+                            writer.add_image('TRAIN_semseg_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
+                            writer.add_image('TRAIN_semseg_label_trainval/%d'%sample_idx, semseg_label_color, tid, dataformats='HWC')
 
-                            prediction = np.argmax(semseg_pred.numpy().squeeze(), 0)
-                            gray_pred = np.uint8(prediction)
-                            color_pred = np.array(colorize(gray_pred, semseg_colors).convert('RGB'))
-                            if opt.is_master:
-                                writer.add_image('TRAIN_semseg_PRED/%d'%sample_idx, color_pred, tid, dataformats='HWC')
+                        prediction = np.argmax(semseg_pred.numpy().squeeze(), 0)
+                        gray_pred = np.uint8(prediction)
+                        color_pred = np.array(colorize(gray_pred, semseg_colors).convert('RGB'))
+                        if opt.is_master:
+                            writer.add_image('TRAIN_semseg_PRED/%d'%sample_idx, color_pred, tid, dataformats='HWC')
 
-                            logger.info('Logged training sem seg')
+                        logger.info('Logged training sem seg')
 
-                synchronize()
-                if tid % opt.debug_every_iter == 0:
-                    opt.if_vis_debug_pac = False
+            synchronize()
+            if tid % opt.debug_every_iter == 0:
+                opt.if_vis_debug_pac = False
 
-                tid += 1
-                if tid >= opt.max_iter and opt.max_iter != -1:
-                    break
+            tid += 1
+            if tid >= opt.max_iter and opt.max_iter != -1:
+                break
 
 
 if opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs:
