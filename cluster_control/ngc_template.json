@@ -1,0 +1,22 @@
+{
+    "dockerImageName": "nvidian/lpr/rui_semantic_inverse:latest",
+    "aceName": "nv-us-west-2",
+    "name": "VideoAPP.rui",
+    "command": " /root/miniconda3/etc/profile.d/conda.sh && cp -r /newfoundland/.config/rclone /root/.config/ && cp -r /newfoundland/.ssh ~/ && conda init bash && conda activate /newfoundland/envs/semanticInverse && which python && ",
+    "replicaCount": 1,
+    "publishedContainerPorts": [
+        8888
+    ],
+    "runPolicy": {
+        "preemptClass": "RUNONCE"
+    },
+    "workspaceMounts": [
+        {
+            "containerMountPoint": "/newfoundland",
+            "id": "ZUrD3egYRxegE6BQdz1WwA"
+        }
+    ],
+    "aceId": 257,
+    "resultContainerMountPoint": "/result",
+    "aceInstance": "dgx1v.16g.1.norm"
+}

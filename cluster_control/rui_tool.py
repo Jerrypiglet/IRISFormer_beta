@@ -48,7 +48,7 @@ def parse_args():
     # tb_parser.add_argument('--logs_path', type=str, help='python path in pod', default='/root/miniconda3/bin/python')
 
     create_parser = subparsers.add_parser('create', help='Create a batch of jobs')
-    create_parser.add_argument('-f', '--file', type=str, help='Path to template file')
+    create_parser.add_argument('-f', '--file', type=str, help='POD''ath to template file')
     create_parser.add_argument('-s', '--string', type=str, help='Input command')
     create_parser.add_argument('-d', '--deploy', action='store_true', help='deploy the code')
     create_parser.add_argument('--resume', type=str, help='resume_from: e.g. 20201129-232627', default='NoCkpt')

@@ -398,6 +398,8 @@ def set_up_folders(opt):
             opt.home_path = Path('/viscompfs/users/ruizhu/') 
         elif opt.cluster == 'nvidia':
             opt.home_path = Path('/home/ruzhu/Documents/Projects/')
+        elif opt.cluster == 'ngc':
+            opt.home_path = Path('/newfoundland/semanticInverse/')
         opt.CKPT_PATH = opt.home_path / CKPT_PATH
         opt.SUMMARY_PATH = opt.home_path / SUMMARY_PATH
         opt.SUMMARY_VIS_PATH = opt.home_path / SUMMARY_VIS_PATH
@@ -496,6 +498,7 @@ def set_up_checkpointing(opt, model, optimizer, scheduler, logger):
             skip_kws=['box_predictor.bbox_pred', 'box_predictor.cls_score', 'mask_head.predictor'])
 
     if opt.resume != 'NoCkpt':
+        print('=+++++=opt.resume', opt.resume)
         if opt.resume == 'resume':
             opt.resume = opt.task_name
         replace_kws = []
