@@ -4,6 +4,7 @@ import timm
 import types
 import math
 import torch.nn.functional as F
+import time
 
 # from models_def.model_matseg import Baseline
 
@@ -46,7 +47,7 @@ from .vit import (
     get_readout_oper
 )
 
-def QtC(codebook, gamma, im_height, im_width, Q_downsample_rate=1):
+def QtC(codebook, gamma, Q_height, Q_width, Q_downsample_rate=1):
     '''
     C: [B, D, J]
     gamma: [B, J, N]
@@ -54,26 +55,29 @@ def QtC(codebook, gamma, im_height, im_width, Q_downsample_rate=1):
     assert len(gamma.shape)==3
     batch_size, J, N = gamma.shape
     D = codebook.shape[1]
-    assert im_height * im_width == N
+    assert Q_height * Q_width == N
 
     if Q_downsample_rate != 1:
-        gamma_resampled = gamma.view(batch_size, J, im_height, im_width)
+        gamma_resampled = gamma.view(batch_size, J, Q_height, Q_width)
         gamma_resampled = F.interpolate(gamma_resampled, scale_factor=1./float(Q_downsample_rate))
         gamma_resampled = gamma_resampled / (torch.sum(gamma_resampled, 1, keepdims=True)+1e-6)
         gamma_resampled = gamma_resampled.view(batch_size, J, -1)
     else:
         gamma_resampled = gamma
 
-    # print(Q_downsample_rate, codebook.shape, gamma_resampled.shape)
+    # print(Q_downsample_rate, codebook.shape, gamma.shape, gamma_resampled.shape) # 16 torch.Size([2, 768, 320]) torch.Size([2, 320, 320])
     im_hat = codebook @ gamma_resampled
-    im_hat = im_hat.view(batch_size, D, im_height//Q_downsample_rate, im_width//Q_downsample_rate)
+    im_hat = im_hat.view(batch_size, D, Q_height//Q_downsample_rate, Q_width//Q_downsample_rate)
     return im_hat
 
 
-def forward_vit_SSN(pretrained, x, input_dict_extra={}):
+def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     b, c, h, w = x.shape
 
-    glob, ssn_return_dict = pretrained.model.forward_flex_SSN(x, pretrained.activations, input_dict_extra=input_dict_extra)
+
+    tic = time.time()
+    glob, ssn_return_dict = pretrained.model.forward_flex_SSN(opt, x, pretrained.activations, input_dict_extra=input_dict_extra)
+    print(time.time() - tic, '------------ forward_flex_SSN')
 
     layer_1 = pretrained.activations["1"]
     layer_2 = pretrained.activations["2"]
@@ -105,25 +109,45 @@ def forward_vit_SSN(pretrained, x, input_dict_extra={}):
     #     )
     # )
 
-    gamma = ssn_return_dict['Q'] # [b, J, N]
-    # print(Q.shape)
+    gamma = ssn_return_dict['Q'] # [b, J, N] for dpt_hybrid.ssn_from = 'matseg'; # [b, J, N/4/4] for dpt_hybrid.ssn_from = 'backbone'
 
     assert pretrained.model.patch_size[0]==pretrained.model.patch_size[1]
     # Q_downsample_rate = pretrained.model.patch_size[0]
-    Q_downsample_rate = 16
+
+    ssn_from = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.ssn_from
 
     if layer_1.ndim == 3:
         # layer_1 = unflatten(layer_1)
-        layer_1 = QtC(layer_1, gamma, h, w, Q_downsample_rate=Q_downsample_rate) # reassemble to [b, D, spixel_h, spixel_w]
+        if ssn_from == 'matseg':
+            layer_1 = QtC(layer_1, gamma, h, w, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
+        elif ssn_from == 'backbone':
+            layer_1 = QtC(layer_1, gamma, h//4, w//4, Q_downsample_rate=1) # reassemble to [b, D, spixel_h, spixel_w]
+        else:
+            assert False, 'invalid ssn_from!'
     if layer_2.ndim == 3:
         # layer_2 = unflatten(layer_2)
-        layer_2 = QtC(layer_2, gamma, h, w, Q_downsample_rate=Q_downsample_rate) # reassemble to [b, D, spixel_h, spixel_w]
+        if ssn_from == 'matseg':
+            layer_2 = QtC(layer_2, gamma, h, w, Q_downsample_rate=8) # reassemble to [b, D, spixel_h, spixel_w]
+        elif ssn_from == 'backbone':
+            layer_2 = QtC(layer_2, gamma, h//4, w//4, Q_downsample_rate=2) # reassemble to [b, D, spixel_h, spixel_w]
+        else:
+            assert False, 'invalid ssn_from!'
     if layer_3.ndim == 3:
         # layer_3 = unflatten(layer_3)
-        layer_3 = QtC(layer_3, gamma, h, w, Q_downsample_rate=Q_downsample_rate) # reassemble to [b, D, spixel_h, spixel_w]
+        if ssn_from == 'matseg':
+            layer_3 = QtC(layer_3, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
+        elif ssn_from == 'backbone':
+            layer_3 = QtC(layer_3, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
+        else:
+            assert False, 'invalid ssn_from!'
     if layer_4.ndim == 3:
         # layer_4 = unflatten(layer_4)
-        layer_4 = QtC(layer_4, gamma, h, w, Q_downsample_rate=Q_downsample_rate) # reassemble to [b, D, spixel_h, spixel_w]
+        if ssn_from == 'matseg':
+            layer_4 = QtC(layer_4, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
+        elif ssn_from == 'backbone':
+            layer_4 = QtC(layer_4, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
+        else:
+            assert False, 'invalid ssn_from!'
         
 
     # print('-->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape) # --> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 16, 20])
@@ -157,8 +181,8 @@ def forward_vit_SSN(pretrained, x, input_dict_extra={}):
 #     return posemb
 
 
-def forward_flex_SSN_unet(self, x, pretrained_activations=[], input_dict_extra={}):
-    b, c, h, w = x.shape # image pixel space
+def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_extra={}):
+    b, c, im_height, im_width = x.shape # image pixel space
 
     # pos_embed = self._resize_pos_embed_SSN_unet(
     #     self.pos_embed, h // self.patch_size[1], w // self.patch_size[0]
@@ -168,7 +192,10 @@ def forward_flex_SSN_unet(self, x, pretrained_activations=[], input_dict_extra={
 
     if hasattr(self.patch_embed, "backbone"):
         # print(self.patch_embed.backbone.forward_features(x).shape, '====')
+
+        tic = time.time()
         _ = self.patch_embed.backbone(x) # [patch_embed] https://github.com/rwightman/pytorch-image-models/blob/72b227dcf57c0c62291673b96bdc06576bb90457/timm/models/layers/patch_embed.py#L15
+        print(time.time() - tic, '------------ backbone')
         # if isinstance(x, (list, tuple)):
         #     x = x[-1]  # last feature if backbone outputs list/tuple of features
 
@@ -181,25 +208,34 @@ def forward_flex_SSN_unet(self, x, pretrained_activations=[], input_dict_extra={
     
     # print(h, w, self.patch_size)
     assert all([x!=1 for x in self.patch_size])
-    assert h%self.patch_size[0]==0 and w%self.patch_size[1]==0
+    assert im_height%self.patch_size[0]==0 and im_width%self.patch_size[1]==0
     im_feat = torch.cat(
         [
-            F.interpolate(pretrained_activations['feat_stem'], scale_factor=4), 
-            F.interpolate(pretrained_activations['feat_stage_0'], scale_factor=4), 
-            F.interpolate(pretrained_activations['feat_stage_1'], scale_factor=8), 
-            F.interpolate(pretrained_activations['feat_stage_2'], scale_factor=8), 
+            F.interpolate(pretrained_activations['feat_stem'], scale_factor=1), # torch.Size([4, 64, 64, 80])
+            F.interpolate(pretrained_activations['feat_stage_0'], scale_factor=1), # torch.Size([4, 256, 64, 80])
+            F.interpolate(pretrained_activations['feat_stage_1'], scale_factor=2), # torch.Size([4, 512, 32, 40])
+            F.interpolate(pretrained_activations['feat_stage_2'], scale_factor=2), # torch.Size([4, 512, 32, 40])
         ], dim=1)
-    # print(im_feat.shape, input_dict_extra['return_dict_matseg']['embedding'].shape)
-
-    assert im_feat.shape[-2:] == input_dict_extra['return_dict_matseg']['embedding'].shape[-2:]
+    # print(im_feat.shape, input_dict_extra['return_dict_matseg']['embedding'].shape) #  # torch.Size([4, D, 64, 80])
+    
+    # if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.ssn_from == 'matseg':
+    #     assert im_feat.shape[-2:] == input_dict_extra['return_dict_matseg']['embedding'].shape[-2:]
     batch_size, d = im_feat.shape[0], im_feat.shape[1]
-    spixel_dims = [h//self.patch_size[0], w//self.patch_size[1]]
+    spixel_dims = [im_height//self.patch_size[0], im_width//self.patch_size[1]]
 
     ssn_op = SSNFeatsTransformAdaptive(None, spixel_dims=spixel_dims)
-    ssn_return_dict = ssn_op(tensor_to_transform=im_feat, feats_in=input_dict_extra['return_dict_matseg']['embedding'], if_return_codebook_only=True)
+    tic = time.time()
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.ssn_from == 'matseg':
+        ssn_return_dict = ssn_op(tensor_to_transform=im_feat, feats_in=input_dict_extra['return_dict_matseg']['embedding'], if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
+    else:
+        ssn_return_dict = ssn_op(tensor_to_transform=im_feat, feats_in=pretrained_activations['feat_stage_2'].detach(), if_return_codebook_only=True, scale_down_gamma_tensor=(1./2., 1)) # Q: [im_height/4, im_width/4]
+    print(time.time() - tic, '------------ ssn_op')
+    
+    tic = time.time()
     c = ssn_return_dict['C'] # codebook
     c = c.view([batch_size, d, spixel_dims[0], spixel_dims[1]])
 
+    # print(ssn_return_dict['C'].shape, ssn_return_dict['Q_2D'].shape) # torch.Size([2, 1344, 320]) torch.Size([2, 320, 256, 320])
     x = self.patch_embed.proj(c).flatten(2).transpose(1, 2) # torch.Size([8, 320, 768])
 
     if getattr(self, "dist_token", None) is not None:
@@ -219,11 +255,15 @@ def forward_flex_SSN_unet(self, x, pretrained_activations=[], input_dict_extra={
     x = self.pos_drop(x)
 
     for idx, blk in enumerate(self.blocks):
+        tic = time.time()
         x = blk(x) # always [8, 321, 768]
+        print(time.time() - tic, '------------ block %d'%idx)
 
     x = self.norm(x)
 
     extra_return_dict = {'Q': ssn_return_dict['Q'], 'matseg_affinity': ssn_return_dict['Q_2D']}
+    print(time.time() - tic, '------------ the rest')
+
     return x, extra_return_dict
 
 # def forward_flex_SSN_unet_(self, x, pretrained_activations=[]):
@@ -340,16 +380,16 @@ def _make_vit_b_rn50_backbone_SSN_unet(
                 stride=1,
                 padding=0,
             ),
-            nn.ConvTranspose2d(
-                in_channels=features[0],
-                out_channels=features[0],
-                kernel_size=4,
-                stride=4,
-                padding=0,
-                bias=True,
-                dilation=1,
-                groups=1,
-            ),
+            # nn.ConvTranspose2d(
+            #     in_channels=features[0],
+            #     out_channels=features[0],
+            #     kernel_size=4,
+            #     stride=4,
+            #     padding=0,
+            #     bias=True,
+            #     dilation=1,
+            #     groups=1,
+            # ),
         )
 
         pretrained.act_postprocess2 = nn.Sequential(
@@ -363,16 +403,16 @@ def _make_vit_b_rn50_backbone_SSN_unet(
                 stride=1,
                 padding=0,
             ),
-            nn.ConvTranspose2d(
-                in_channels=features[1],
-                out_channels=features[1],
-                kernel_size=2,
-                stride=2,
-                padding=0,
-                bias=True,
-                dilation=1,
-                groups=1,
-            ),
+            # nn.ConvTranspose2d(
+            #     in_channels=features[1],
+            #     out_channels=features[1],
+            #     kernel_size=2,
+            #     stride=2,
+            #     padding=0,
+            #     bias=True,
+            #     dilation=1,
+            #     groups=1,
+            # ),
         )
     else:
         pretrained.act_postprocess1 = nn.Sequential(

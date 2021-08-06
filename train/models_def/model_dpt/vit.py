@@ -203,7 +203,7 @@ def forward_flex(self, x):
         )  # stole cls_tokens impl from Phil Wang, thanks
         x = torch.cat((cls_tokens, x), dim=1)
 
-    x = x + pos_embed
+    # x = x + pos_embed
     x = self.pos_drop(x)
 
     for blk in self.blocks:

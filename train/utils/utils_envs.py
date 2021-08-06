@@ -18,6 +18,8 @@ from utils import transform
 def set_up_envs(opt):
     assert opt.cluster in opt.cfg.PATH.cluster_names
     CLUSTER_ID = opt.cfg.PATH.cluster_names.index(opt.cluster)
+    opt.if_pad = False
+
 
     opt.cfg.PATH.root = opt.cfg.PATH.root_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.PATH.root_local
     if opt.if_cluster:
@@ -42,8 +44,7 @@ def set_up_envs(opt):
         opt.cfg.PATH.total3D_lists_path = opt.cfg.PATH.total3D_lists_path_zhengqinCVPR
     opt.cfg.DATASET.dataset_list = os.path.join(opt.cfg.PATH.total3D_lists_path, 'list')
     if opt.cfg.DATASET.mini:
-        if not opt.if_cluster:
-            opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_mini
+        opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_mini
         opt.cfg.DATASET.dataset_list = opt.cfg.DATASET.dataset_list_mini
     if opt.cfg.DATASET.tmp:
         opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_tmp
@@ -100,8 +101,10 @@ def set_up_envs(opt):
         opt.pad_op = transform.Pad([im_height_pad_to, im_width_pad_to], padding_with=im_pad_with)
 
         if opt.cfg.MODEL_BRDF.DPT_baseline.model == 'dpt_hybrid_SSN':
-            opt.cfg.MODEL_MATSEG.enable = True
-            opt.cfg.MODEL_MATSEG.if_freeze = True
+            assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.ssn_from in ['backbone', 'matseg']
+            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.ssn_from == 'matseg':
+                opt.cfg.MODEL_MATSEG.enable = True
+                opt.cfg.MODEL_MATSEG.if_freeze = True
 
     # ====== detectron (objects & masks) =====
     if opt.cfg.MODEL_DETECTRON.enable:
@@ -400,8 +403,14 @@ def set_up_folders(opt):
             opt.home_path = Path('/home/ruzhu/Documents/Projects/')
         elif opt.cluster == 'ngc':
             opt.home_path = Path('/newfoundland/semanticInverse/')
+            opt.SUMMARY_PATH_ALL = opt.home_path / SUMMARY_PATH
+            opt.home_path_tmp = Path('/result/')
+
         opt.CKPT_PATH = opt.home_path / CKPT_PATH
         opt.SUMMARY_PATH = opt.home_path / SUMMARY_PATH
+        if opt.cluster == 'ngc':
+            opt.SUMMARY_PATH = opt.home_path_tmp / SUMMARY_PATH
+            opt.SUMMARY_PATH.mkdir(exist_ok=True)
         opt.SUMMARY_VIS_PATH = opt.home_path / SUMMARY_VIS_PATH
 
     if not opt.if_cluster:

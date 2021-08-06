@@ -71,7 +71,7 @@ class encoder0(nn.Module):
         x1 = F.relu(self.gn1(self.conv1(self.pad1(x))), True)
         if self.if_feat_recon and 'x1' in self.opt.cfg.MODEL_GMM.feat_recon.layers_list:
             if self.if_feat_recon_use_matseg:
-                x1_ssn = self.ssn_x1(tensor_to_transform=x1, affinity_in=input_dict_extra['matseg_affinity'], scale_tensor_to_transform=2)
+                x1_ssn = self.ssn_x1(tensor_to_transform=x1, affinity_in=input_dict_extra['matseg_affinity'], scale_down_gamma_tensor=2)
             else:
                 x1_ssn = self.ssn_x1(tensor_to_transform=x1)
             x1 = x1_ssn['tensor_recon']
@@ -80,7 +80,7 @@ class encoder0(nn.Module):
         x2 = F.relu(self.gn2(self.conv2(self.pad2(x1))), True)
         if self.if_feat_recon and 'x2' in self.opt.cfg.MODEL_GMM.feat_recon.layers_list:
             if self.if_feat_recon_use_matseg:
-                x2_ssn = self.ssn_x2(tensor_to_transform=x2, affinity_in=input_dict_extra['matseg_affinity'], scale_tensor_to_transform=4)
+                x2_ssn = self.ssn_x2(tensor_to_transform=x2, affinity_in=input_dict_extra['matseg_affinity'], scale_down_gamma_tensor=4)
             else:
                 x2_ssn = self.ssn_x2(tensor_to_transform=x2)
             x2 = x2_ssn['tensor_recon']
@@ -89,7 +89,7 @@ class encoder0(nn.Module):
         x3 = F.relu(self.gn3(self.conv3(self.pad3(x2))), True)
         if self.if_feat_recon and 'x3' in self.opt.cfg.MODEL_GMM.feat_recon.layers_list:
             if self.if_feat_recon_use_matseg:
-                x3_ssn = self.ssn_x3(tensor_to_transform=x3, affinity_in=input_dict_extra['matseg_affinity'], scale_tensor_to_transform=8)
+                x3_ssn = self.ssn_x3(tensor_to_transform=x3, affinity_in=input_dict_extra['matseg_affinity'], scale_down_gamma_tensor=8)
             else:
                 x3_ssn = self.ssn_x3(tensor_to_transform=x3)
             x3 = x3_ssn['tensor_recon']
@@ -192,7 +192,7 @@ class decoder0(nn.Module):
             dx3 = F.interpolate(dx3, [x3.size(2), x3.size(3)], mode='bilinear')
         if self.if_feat_recon and 'dx3' in self.opt.cfg.MODEL_GMM.feat_recon.layers_list:
             if self.if_feat_recon_use_matseg:
-                dx3_ssn = self.ssn_dx3(tensor_to_transform=dx3, affinity_in=input_dict_extra['matseg_affinity'], scale_tensor_to_transform=8)
+                dx3_ssn = self.ssn_dx3(tensor_to_transform=dx3, affinity_in=input_dict_extra['matseg_affinity'], scale_down_gamma_tensor=8)
             else:
                 dx3_ssn = self.ssn_dx3(tensor_to_transform=dx3)
             dx3 = dx3_ssn['tensor_recon']
@@ -206,7 +206,7 @@ class decoder0(nn.Module):
             dx4 = F.interpolate(dx4, [x2.size(2), x2.size(3)], mode='bilinear')
         if self.if_feat_recon and 'dx4' in self.opt.cfg.MODEL_GMM.feat_recon.layers_list:
             if self.if_feat_recon_use_matseg:
-                dx4_ssn = self.ssn_dx4(tensor_to_transform=dx4, affinity_in=input_dict_extra['matseg_affinity'], scale_tensor_to_transform=4)
+                dx4_ssn = self.ssn_dx4(tensor_to_transform=dx4, affinity_in=input_dict_extra['matseg_affinity'], scale_gamma_tensor=4)
             else:
                 dx4_ssn = self.ssn_dx4(tensor_to_transform=dx4)
             dx4 = dx4_ssn['tensor_recon']

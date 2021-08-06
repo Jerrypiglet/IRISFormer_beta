@@ -108,11 +108,11 @@ def make_dataset(opt, split='train', data_root=None, data_list=None, logger=None
         meta_split_scene_name_frame_id_list.append((line_split[2].split('/')[0], line_split[0], int(line_split[1])))
 
     logger.info("==> Checking image&label pair [%s] list done! %d frames."%(split, len(image_label_list)))
-    # print(image_label_list[:5])
     if opt.cfg.DATASET.first != -1:
         return image_label_list[:opt.cfg.DATASET.first], meta_split_scene_name_frame_id_list[:opt.cfg.DATASET.first]
     else:
         return image_label_list, meta_split_scene_name_frame_id_list
+
 
 
 class openrooms(data.Dataset):
@@ -190,9 +190,11 @@ class openrooms(data.Dataset):
 
         if_load_immask = self.opt.cfg.DATA.load_brdf_gt and (not self.opt.cfg.DATASET.if_no_gt_semantics)
         if_load_immask = if_load_immask or self.opt.cfg.MODEL_MATSEG.enable
+        if_load_immask = False
+        self.opt.if_load_immask = if_load_immask
 
-        if self.opt.cfg.DATA.if_pad_to_32x:
-            assert if_load_immask
+        # if self.opt.cfg.DATA.if_pad_to_32x:
+        #     assert if_load_immask
 
         if if_load_immask:
             seg_path = hdr_image_path.replace('im_', 'immask_').replace('hdr', 'png').replace('DiffMat', '')
@@ -203,8 +205,8 @@ class openrooms(data.Dataset):
             mask = self.loadBinary(mask_path, channels = 3, dtype=np.int32, if_resize=True).squeeze() # [h, w, 3]
         else:
             seg = np.ones((1, self.im_height, self.im_width), dtype=np.float32)
-            mask_path = None
-            mask = None
+            mask_path = ''
+            mask = np.ones((self.im_height, self.im_width, 3), dtype=np.uint8)
         if self.opt.if_pad:
             mask = self.opt.pad_op(mask, name='mask')
             seg = self.opt.pad_op(seg, if_channel_first=True, name='seg')
@@ -412,6 +414,10 @@ class openrooms(data.Dataset):
                 segObj = segObj[np.newaxis, :, :]
 
             segObj = segObj.astype(np.float32 )
+        else:
+            segObj = np.ones_like(seg, dtype=np.float32)
+            segEnv = np.zeros_like(seg, dtype=np.float32)
+            segArea = np.zeros_like(seg, dtype=np.float32)
 
         if self.opt.cfg.DATA.load_light_gt:
             envmaps, envmapsInd = self.loadEnvmap(env_path )
@@ -448,15 +454,15 @@ class openrooms(data.Dataset):
             specularPre = self.loadH5(specularPre_path )
             specularPre = specularPre / max(specularPre.max(), 1e-10)
 
-        if if_load_immask:
-            batch_dict_brdf.update({
-                    'mask': torch.from_numpy(mask), 
-                    'maskPath': mask_path, 
-                    'segArea': torch.from_numpy(segArea),
-                    'segEnv': torch.from_numpy(segEnv),
-                    'segObj': torch.from_numpy(segObj),
-                    'object_type_seg': torch.from_numpy(seg), 
-                    })
+        # if if_load_immask:
+        batch_dict_brdf.update({
+                'mask': torch.from_numpy(mask), 
+                'maskPath': mask_path, 
+                'segArea': torch.from_numpy(segArea),
+                'segEnv': torch.from_numpy(segEnv),
+                'segObj': torch.from_numpy(segObj),
+                'object_type_seg': torch.from_numpy(seg), 
+                })
         # if self.transform is not None and not self.opt.if_hdr:
 
         if self.opt.cfg.DATA.load_light_gt:

@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+import time
 
 from .base_model import BaseModel
 from .blocks import (
@@ -85,7 +86,9 @@ class DPT_SSN(BaseModel):
         if self.channels_last == True:
             x.contiguous(memory_format=torch.channels_last)
 
-        layer_1, layer_2, layer_3, layer_4, ssn_return_dict = forward_vit_SSN(self.pretrained, x, input_dict_extra=input_dict_extra)
+        tic = time.time()
+        layer_1, layer_2, layer_3, layer_4, ssn_return_dict = forward_vit_SSN(self.opt, self.pretrained, x, input_dict_extra=input_dict_extra)
+        print(time.time() - tic, '------------ forward_vit_SSN')
 
         layer_1_rn = self.scratch.layer1_rn(layer_1)
         layer_2_rn = self.scratch.layer2_rn(layer_2)

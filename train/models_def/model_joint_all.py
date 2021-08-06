@@ -39,7 +39,7 @@ from models_def.model_dpt.transforms import NormalizeImage as dpt_NormalizeImage
 from models_def.model_dpt.transforms import PrepareForNet as dpt_PrepareForNet
 from torchvision.transforms import Compose
 import cv2
-
+import time
 
 from icecream import ic
 
@@ -547,7 +547,9 @@ class Model_Joint(nn.Module):
         # print(img_batch.shape)
         # img_batch = input_dict['imBatch'].half()
         # img_input = dpt_transform({"image": img_batch})["image"]
+        tic = time.time()
         dpt_prediction, extra_DPT_return_dict = self.BRDF_Net.forward(img_batch, input_dict_extra=input_dict_extra)
+        print(time.time() - tic, '------------ forward_brdf_DPT_baseline')
         albedoPred = 0.5 * (dpt_prediction + 1)
         # if (not self.opt.cfg.DATASET.if_no_gt_semantics):
         # print(input_dict['segBRDFBatch'].shape, input_dict['albedoBatch'].shape)
