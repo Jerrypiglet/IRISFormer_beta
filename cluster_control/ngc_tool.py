@@ -231,8 +231,10 @@ def create(args):
         splits = command_str.split(' ')
         task_name = [splits[x+1] for x in range(len(splits)) if splits[x].startswith('--task_name')][0]
         # task_name = task_name.replace('[\'', '').replace('\']', '')
+        json_content['command'] = json_content['command'].replace('sleep 48h', '')
         json_content['command'] += command_str
         json_content['name'] += '.%s'%task_name
+        json_content['aceInstance'] = args.instance
 
         tmp_json_filaname = 'yamls/tmp_%s.json'%args.datetime_str
         dump_json(tmp_json_filaname, json_content)
@@ -242,7 +244,7 @@ def create(args):
     if args.deploy:
         deploy_to_s3(args)
     
-    # create_job_from_json(tmp_json_filaname)
+    create_job_from_json(tmp_json_filaname)
 
     if args.resume == 'NoCkpt':
         task_dir = './tasks/%s'%args.datetime_str
