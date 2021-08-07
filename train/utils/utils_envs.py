@@ -442,8 +442,8 @@ def set_up_folders(opt):
             if 'POD' in opt.task_name:
                 print('====opt.summary_path_task exists! %s'%opt.summary_path_task)
                 if_delete = 'n'
-                opt.resume = opt.task_name
-                print(green('Resuming task %s'%opt.resume))
+                # opt.resume = opt.task_name
+                # print(green('Resuming task %s'%opt.resume))
 
                 if opt.reset_latest_ckpt:
                     os.system('rm %s'%(os.path.join(opt.checkpoints_path_task, 'last_checkpoint')))
