@@ -75,9 +75,9 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     b, c, h, w = x.shape
 
 
-    tic = time.time()
+    # tic = time.time()
     glob, ssn_return_dict = pretrained.model.forward_flex_SSN(opt, x, pretrained.activations, input_dict_extra=input_dict_extra)
-    print(time.time() - tic, '------------ forward_flex_SSN')
+    # print(time.time() - tic, '------------ forward_flex_SSN')
 
     layer_1 = pretrained.activations["1"]
     layer_2 = pretrained.activations["2"]
@@ -193,9 +193,9 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
     if hasattr(self.patch_embed, "backbone"):
         # print(self.patch_embed.backbone.forward_features(x).shape, '====')
 
-        tic = time.time()
+        # tic = time.time()
         _ = self.patch_embed.backbone(x) # [patch_embed] https://github.com/rwightman/pytorch-image-models/blob/72b227dcf57c0c62291673b96bdc06576bb90457/timm/models/layers/patch_embed.py#L15
-        print(time.time() - tic, '------------ backbone')
+        # print(time.time() - tic, '------------ backbone')
         # if isinstance(x, (list, tuple)):
         #     x = x[-1]  # last feature if backbone outputs list/tuple of features
 
@@ -224,14 +224,14 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
     spixel_dims = [im_height//self.patch_size[0], im_width//self.patch_size[1]]
 
     ssn_op = SSNFeatsTransformAdaptive(None, spixel_dims=spixel_dims)
-    tic = time.time()
+    # tic = time.time()
     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.ssn_from == 'matseg':
         ssn_return_dict = ssn_op(tensor_to_transform=im_feat, feats_in=input_dict_extra['return_dict_matseg']['embedding'], if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
     else:
         ssn_return_dict = ssn_op(tensor_to_transform=im_feat, feats_in=pretrained_activations['feat_stage_2'].detach(), if_return_codebook_only=True, scale_down_gamma_tensor=(1./2., 1)) # Q: [im_height/4, im_width/4]
-    print(time.time() - tic, '------------ ssn_op')
+    # print(time.time() - tic, '------------ ssn_op')
     
-    tic = time.time()
+    # tic = time.time()
     c = ssn_return_dict['C'] # codebook
     c = c.view([batch_size, d, spixel_dims[0], spixel_dims[1]])
 
@@ -254,14 +254,14 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
     # print(x.shape, pos_embed.shape) # torch.Size([8, 321, 768]) torch.Size([1, 321, 768])
     x = self.pos_drop(x)
     for idx, blk in enumerate(self.blocks):
-        tic = time.time()
+        # tic = time.time()
         x = blk(x) # always [8, 321, 768]
-        print(time.time() - tic, '------------ block %d'%idx)
+        # print(time.time() - tic, '------------ block %d'%idx)
 
     x = self.norm(x)
 
     extra_return_dict = {'Q': ssn_return_dict['Q'], 'matseg_affinity': ssn_return_dict['Q_2D']}
-    print(time.time() - tic, '------------ the rest')
+    # print(time.time() - tic, '------------ the rest')
 
     return x, extra_return_dict
 
