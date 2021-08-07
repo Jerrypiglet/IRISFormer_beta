@@ -20,6 +20,8 @@ def set_up_envs(opt):
     CLUSTER_ID = opt.cfg.PATH.cluster_names.index(opt.cluster)
     opt.if_pad = False
 
+    if opt.if_cluster and opt.cluster=='ngc':
+        opt.flush_secs = 300
 
     opt.cfg.PATH.root = opt.cfg.PATH.root_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.PATH.root_local
     if opt.if_cluster:
@@ -381,7 +383,7 @@ def set_up_logger(opt):
     synchronize()
 
     if opt.is_master:
-        writer = SummaryWriter(opt.summary_path_task, flush_secs=10)
+        writer = SummaryWriter(opt.summary_path_task, flush_secs=opt.flush_secs)
         print(green('=====>Summary writing to %s'%opt.summary_path_task))
     else:
         writer = None

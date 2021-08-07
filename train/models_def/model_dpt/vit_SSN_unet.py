@@ -253,7 +253,6 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
     # x = x + pos_embed
     # print(x.shape, pos_embed.shape) # torch.Size([8, 321, 768]) torch.Size([1, 321, 768])
     x = self.pos_drop(x)
-
     for idx, blk in enumerate(self.blocks):
         tic = time.time()
         x = blk(x) # always [8, 321, 768]
@@ -501,7 +500,7 @@ def _make_vit_b_rn50_backbone_SSN_unet(
 #     model.patch_embed.backbone = BackboneResnetFeat(opt.cfg.MODEL_MATSEG, embed_dims=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.backbone_dims, input_dim=3)
 #     return model
 
-from timm.models.vision_transformer_hybrid import HybridEmbed
+# from timm.models.vision_transformer_hybrid import HybridEmbed
 
 
 def _make_pretrained_vitb_unet_384_SSN(

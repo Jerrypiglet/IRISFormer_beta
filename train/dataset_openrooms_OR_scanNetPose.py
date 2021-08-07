@@ -103,9 +103,14 @@ def make_dataset(opt, split='train', data_root=None, data_list=None, logger=None
         else:
             raise (RuntimeError("Image list file line error : " + line + "\n"))
         '''
+
+        meta_split = line_split[2].split('/')[0]
+        # print(meta_split, opt.meta_splits_skip, meta_split in opt.meta_splits_skip)
+        if opt.meta_splits_skip is not None and meta_split in opt.meta_splits_skip:
+            continue
         item = (image_name, label_name)
         image_label_list.append(item)
-        meta_split_scene_name_frame_id_list.append((line_split[2].split('/')[0], line_split[0], int(line_split[1])))
+        meta_split_scene_name_frame_id_list.append((meta_split, line_split[0], int(line_split[1])))
 
     logger.info("==> Checking image&label pair [%s] list done! %d frames."%(split, len(image_label_list)))
     if opt.cfg.DATASET.first != -1:

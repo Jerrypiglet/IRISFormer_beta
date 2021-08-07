@@ -1,5 +1,6 @@
 import torch
-torch.autograd.set_detect_anomaly(True)
+# torch.autograd.set_detect_anomaly(True)
+# torch.backends.cudnn.benchmark = True
 import numpy as np
 from torch.autograd import Variable
 import torch.optim as optim
@@ -98,6 +99,7 @@ parser.add_argument('--replaced_keys', nargs='+', help='Replace those keys in th
 parser.add_argument('--replacedby', nargs='+', help='... with those keys from ckpt. Must be in the same length as ``replace_leys``', required=False)
 parser.add_argument("--if_save_pickles", type=str2bool, nargs='?', const=True, default=False)
 
+parser.add_argument('--meta_splits_skip', nargs='+', help='Skip those keys in the model', required=False)
 
 parser.add_argument(
     "--config-file",
