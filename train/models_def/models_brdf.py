@@ -601,6 +601,7 @@ class decoder0(nn.Module):
             x_out = torch.clamp(1.01 * torch.tanh(x_orig ), -1, 1)
         elif self.mode == 5: # clip to 0., inf
             x_out = self.relu(torch.mean(x_orig, dim=1).unsqueeze(1))
+            # x_out[x_out < 1e-8] = 1e-8
         elif self.mode == 6: # sigmoid to 0., 1. -> inverse to 0., inf
             x_out = torch.sigmoid(torch.mean(x_orig, dim=1).unsqueeze(1))
             x_out = 1. / (x_out + 1e-6)

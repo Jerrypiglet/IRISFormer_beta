@@ -32,8 +32,8 @@ from SimpleLayout.SimpleSceneTorchBatch import SimpleSceneTorchBatch
 from utils.utils_total3D.utils_OR_layout import get_layout_bdb_sunrgbd
 from utils.utils_total3D.utils_OR_cam import get_rotation_matix_result
 
-from models_def.model_dpt.models import DPTAlbedoModel
-from models_def.model_dpt.models_SSN import DPTAlbedoModel_SSN
+from models_def.model_dpt.models import DPTAlbedoDepthModel
+from models_def.model_dpt.models_SSN import DPTAlbedoDepthModel_SSN
 from models_def.model_dpt.transforms import Resize as dpt_Resize
 from models_def.model_dpt.transforms import NormalizeImage as dpt_NormalizeImage
 from models_def.model_dpt.transforms import PrepareForNet as dpt_PrepareForNet
@@ -119,8 +119,9 @@ class Model_Joint(nn.Module):
                 model_path = str(Path(self.opt.cfg.PATH.pretrained_path) / default_models[model_type]) if default_models[model_type]!='NA' else None
 
                 if model_type=='dpt_hybrid':
-                    self.BRDF_Net = DPTAlbedoModel(
+                    self.BRDF_Net = DPTAlbedoDepthModel(
                         opt=opt, 
+                        modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
                         path=model_path,
                         backbone="vitb_rn50_384",
                         non_negative=False,
@@ -129,8 +130,9 @@ class Model_Joint(nn.Module):
                         keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
                     )
                 elif model_type=='dpt_hybrid_SSN':
-                    self.BRDF_Net = DPTAlbedoModel_SSN(
+                    self.BRDF_Net = DPTAlbedoDepthModel_SSN(
                         opt=opt, 
+                        modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
                         path=model_path,
                         # backbone="vitb_rn50_384",
                         backbone="vitb_unet_384",
@@ -140,8 +142,9 @@ class Model_Joint(nn.Module):
                         keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
                     )
                 elif model_type=='dpt_large':
-                    self.BRDF_Net = DPTAlbedoModel(
+                    self.BRDF_Net = DPTAlbedoDepthModel(
                         opt=opt, 
+                        modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
                         path=model_path,
                         backbone="vitl16_384",
                         non_negative=False,
@@ -149,8 +152,9 @@ class Model_Joint(nn.Module):
                         skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
                     )
                 elif model_type=='dpt_base':
-                    self.BRDF_Net = DPTAlbedoModel(
+                    self.BRDF_Net = DPTAlbedoDepthModel(
                         opt=opt, 
+                        modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
                         path=model_path,
                         backbone="vitb16_384",
                         non_negative=False,
@@ -550,16 +554,28 @@ class Model_Joint(nn.Module):
         # tic = time.time()
         dpt_prediction, extra_DPT_return_dict = self.BRDF_Net.forward(img_batch, input_dict_extra=input_dict_extra)
         # print(time.time() - tic, '------------ forward_brdf_DPT_baseline')
-        albedoPred = 0.5 * (dpt_prediction + 1)
-        # if (not self.opt.cfg.DATASET.if_no_gt_semantics):
-        # print(input_dict['segBRDFBatch'].shape, input_dict['albedoBatch'].shape)
-        input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
-        if not self.cfg.MODEL_BRDF.use_scale_aware_albedo:
-            # print(input_dict['segBRDFBatch'].shape, albedoPred.shape)
-            albedoPred = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
-                    input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
-        albedoPred = torch.clamp(albedoPred, 0, 1)
-        return_dict.update({'albedoPred': albedoPred})
+        if self.cfg.MODEL_BRDF.DPT_baseline.modality == 'al':
+            albedoPred = 0.5 * (dpt_prediction + 1)
+            # if (not self.opt.cfg.DATASET.if_no_gt_semantics):
+            # print(input_dict['segBRDFBatch'].shape, input_dict['albedoBatch'].shape)
+            input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
+            if not self.cfg.MODEL_BRDF.use_scale_aware_albedo:
+                # print(input_dict['segBRDFBatch'].shape, albedoPred.shape)
+                albedoPred = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
+                        input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
+            albedoPred = torch.clamp(albedoPred, 0, 1)
+            return_dict.update({'albedoPred': albedoPred})
+        elif self.cfg.MODEL_BRDF.DPT_baseline.modality == 'de':
+            if self.cfg.MODEL_BRDF.use_scale_aware_depth:
+                depthPred = dpt_prediction
+            else:
+                depthPred = 0.5 * (dpt_prediction + 1) # [-1, 1] -> [0, 1]
+                depthPred = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
+                        input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
+            return_dict.update({'depthPred': depthPred})
+
+        else:
+            assert False, 'Unsupported modality: %s'%self.cfg.MODEL_BRDF.DPT_baseline.modality
 
         # print(extra_DPT_return_dict.keys())
         if 'matseg_affinity' in extra_DPT_return_dict:
@@ -654,7 +670,7 @@ class Model_Joint(nn.Module):
             if 'de' in self.cfg.MODEL_BRDF.enable_list:
                 depth_output = self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_extra=input_dict_extra)
                 if not self.cfg.MODEL_BRDF.use_scale_aware_depth:
-                    depthPred = 0.5 * (depth_output['x_out'] + 1) # [-1, 1] -> [0, 2] -> [0, 1]
+                    depthPred = 0.5 * (depth_output['x_out'] + 1) # [-1, 1] -> [0, 1]
                     depthPred = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
                             input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
                 else:

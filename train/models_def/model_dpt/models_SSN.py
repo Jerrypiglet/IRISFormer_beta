@@ -104,11 +104,15 @@ class DPT_SSN(BaseModel):
 
         return out, ssn_return_dict
 
-class DPTAlbedoModel_SSN(DPT_SSN):
+class DPTAlbedoDepthModel_SSN(DPT_SSN):
     def __init__(
-        self, opt, path=None, non_negative=False, scale=1.0, shift=0.0, skip_keys=[], keep_keys=[], **kwargs
+        self, opt, modality='al', path=None, non_negative=False, scale=1.0, shift=0.0, skip_keys=[], keep_keys=[], **kwargs
     ):
         features = kwargs["features"] if "features" in kwargs else 256
+
+        self.modality = modality
+        assert modality in ['al', 'de']
+        self.out_channels = {'al': 3, 'de': 1}[modality]
 
         self.scale = scale
         self.shift = shift
@@ -118,7 +122,7 @@ class DPTAlbedoModel_SSN(DPT_SSN):
             Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
             nn.Conv2d(features // 2, 32, kernel_size=3, stride=1, padding=1),
             nn.ReLU(True),
-            nn.Conv2d(32, 3, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(32, self.out_channels, kernel_size=1, stride=1, padding=0),
             # nn.ReLU(True) if non_negative else nn.Identity(),
             nn.Identity(),
         )
@@ -130,6 +134,9 @@ class DPTAlbedoModel_SSN(DPT_SSN):
 
     def forward(self, x, input_dict_extra={}):
         x_out, ssn_return_dict = super().forward(x, input_dict_extra=input_dict_extra)
-        x_out = torch.clamp(1.01 * torch.tanh(x_out ), -1, 1)
+        if self.modality == 'al':
+            x_out = torch.clamp(1.01 * torch.tanh(x_out ), -1, 1)
+        elif self.modality == 'de':
+            x_out = torch.clamp(x_out, 1e-8, 100)
 
         return x_out, ssn_return_dict

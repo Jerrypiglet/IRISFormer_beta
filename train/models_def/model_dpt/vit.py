@@ -101,10 +101,10 @@ class Transpose(nn.Module):
         return x
 
 
-def forward_vit(pretrained, x):
+def forward_vit(opt, pretrained, x):
     b, c, h, w = x.shape
 
-    glob = pretrained.model.forward_flex(x)
+    glob = pretrained.model.forward_flex(opt, x)
 
     layer_1 = pretrained.activations["1"]
     layer_2 = pretrained.activations["2"]
@@ -175,7 +175,7 @@ def _resize_pos_embed(self, posemb, gs_h, gs_w): # original at https://github.co
     return posemb
 
 
-def forward_flex(self, x):
+def forward_flex(self, opt, x):
     b, c, h, w = x.shape
 
     pos_embed = self._resize_pos_embed(
@@ -203,7 +203,8 @@ def forward_flex(self, x):
         )  # stole cls_tokens impl from Phil Wang, thanks
         x = torch.cat((cls_tokens, x), dim=1)
 
-    # x = x + pos_embed
+    if opt.cfg.MODEL_BRDF.DPT_baseline.if_pos_embed:
+        x = x + pos_embed
     x = self.pos_drop(x)
 
     for blk in self.blocks:

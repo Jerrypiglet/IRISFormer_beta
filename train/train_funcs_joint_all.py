@@ -752,11 +752,11 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
 
             # === BRDF-DPT superpixel segmentation
             if opt.cfg.MODEL_BRDF.DPT_baseline.enable:
-                for mode in opt.cfg.MODEL_BRDF.DPT_baseline.modalities:
-                    modality = {'al': 'albedo'}[mode]
-                    if not '%s_extra_output_dict'%modality in output_dict:
-                        continue
-                    
+                mode = opt.cfg.MODEL_BRDF.DPT_baseline.modality
+                modality = {'al': 'albedo', 'de': 'depth'}[mode]
+                if not '%s_extra_output_dict'%modality in output_dict:
+                    pass
+                else:
                     if opt.cfg.MODEL_BRDF.DPT_baseline.model == 'dpt_hybrid_SSN':
                         decoder_key = 'matseg'
                         affinity_matrix = output_dict['%s_extra_output_dict'%modality]['%s_affinity'%decoder_key]

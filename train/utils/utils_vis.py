@@ -41,6 +41,7 @@ def vis_disp_colormap(disp_array, file=None, normalize=True, min_scale=None):
     # disp_array = cv2.applyColorMap(disp_array, get_mpl_colormap('jet'))
     cm = plt.get_cmap('jet')
     # disp_array = disp_array[:, :, :3]
+    # print('-', disp_array.shape)
     if normalize:
         if min_scale is None:
             depth_min = np.amin(disp_array)
@@ -52,7 +53,9 @@ def vis_disp_colormap(disp_array, file=None, normalize=True, min_scale=None):
             disp_array -= min_scale[0]
             disp_array = disp_array * min_scale[1]
     disp_array = np.clip(disp_array, 0., 1.)
+    # print('--', disp_array.shape)
     disp_array = (cm(disp_array)[:, :, :3] * 255).astype(np.uint8)
+    # print('---', disp_array.shape)
     
     # print('+++++', np.amax(disp_array), np.amin(disp_array))
     if file is not None:

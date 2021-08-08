@@ -88,12 +88,14 @@ def set_up_envs(opt):
     opt.cfg.MODEL_BRDF.enable_list = [x for x in opt.cfg.MODEL_BRDF.enable_list.split('_') if x != '']
     opt.cfg.MODEL_BRDF.loss_list = [x for x in opt.cfg.MODEL_BRDF.loss_list.split('_') if x != '']
 
+    assert opt.cfg.MODEL_BRDF.depth_activation in ['sigmoid', 'relu', 'midas']
+    
     # ====== DPT =====
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.DPT_baseline.enable:
         opt.cfg.DATA.if_load_png_not_hdr = True
         assert opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_large', 'dpt_base', 'dpt_hybrid', 'dpt_hybrid_SSN']
         
-        opt.cfg.MODEL_BRDF.DPT_baseline.modalities = opt.cfg.MODEL_BRDF.DPT_baseline.modalities.split('_')
+        assert opt.cfg.MODEL_BRDF.DPT_baseline.modality in ['al', 'de']
 
         opt.cfg.DATA.if_pad_to_32x = True
         im_width_pad_to = int(np.ceil(opt.cfg.DATA.im_width/32.)*32)

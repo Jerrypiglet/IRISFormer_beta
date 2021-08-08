@@ -40,6 +40,8 @@ class DPT(BaseModel):
 
         self.channels_last = channels_last
 
+        self.opt = opt
+
         hooks = {
             "vitb_rn50_384": [0, 1, 8, 11],
             "vitb16_384": [2, 5, 8, 11],
@@ -71,7 +73,7 @@ class DPT(BaseModel):
         if self.channels_last == True:
             x.contiguous(memory_format=torch.channels_last)
 
-        layer_1, layer_2, layer_3, layer_4 = forward_vit(self.pretrained, x)
+        layer_1, layer_2, layer_3, layer_4 = forward_vit(self.opt, self.pretrained, x)
 
         layer_1_rn = self.scratch.layer1_rn(layer_1)
         layer_2_rn = self.scratch.layer2_rn(layer_2)
@@ -88,57 +90,67 @@ class DPT(BaseModel):
         return out
 
 
-class DPTDepthModel(DPT):
+# class DPTDepthModel(DPT):
+#     def __init__(
+#         self, path=None, non_negative=True, scale=1.0, shift=0.0, invert=False, **kwargs
+#     ):
+#         features = kwargs["features"] if "features" in kwargs else 256
+
+#         self.scale = scale
+#         self.shift = shift
+#         self.invert = invert
+
+#         head = nn.Sequential(
+#             nn.Conv2d(features, features // 2, kernel_size=3, stride=1, padding=1),
+#             Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
+#             nn.Conv2d(features // 2, 32, kernel_size=3, stride=1, padding=1),
+#             nn.ReLU(True),
+#             nn.Conv2d(32, 1, kernel_size=1, stride=1, padding=0),
+#             nn.ReLU(True) if non_negative else nn.Identity(),
+#             nn.Identity(),
+#         )
+
+#         super().__init__(head, **kwargs)
+
+#         if path is not None:
+#             self.load(path)
+
+#     def forward(self, x, input_dict_extra={}):
+#         # inv_depth = super().forward(x).squeeze(dim=1)
+
+#         # if self.invert:
+#         #     depth = self.scale * inv_depth + self.shift
+#         #     depth[depth < 1e-8] = 1e-8
+#         #     depth = 1.0 / depth
+#         #     return depth
+#         # else:
+#         #     return inv_depth
+#         x_out = super().forward(x)
+#         x_out = torch.clamp(x_out, 1e-8, 100)
+
+#         return x_out, {}
+
+
+
+class DPTAlbedoDepthModel(DPT):
     def __init__(
-        self, path=None, non_negative=True, scale=1.0, shift=0.0, invert=False, **kwargs
+        self, opt, modality='al', path=None, non_negative=False, scale=1.0, shift=0.0, skip_keys=[], keep_keys=[], **kwargs
     ):
         features = kwargs["features"] if "features" in kwargs else 256
 
+        self.modality = modality
+        assert modality in ['al', 'de']
+        self.out_channels = {'al': 3, 'de': 1}[modality]
+
         self.scale = scale
         self.shift = shift
-        self.invert = invert
 
         head = nn.Sequential(
             nn.Conv2d(features, features // 2, kernel_size=3, stride=1, padding=1),
             Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
             nn.Conv2d(features // 2, 32, kernel_size=3, stride=1, padding=1),
             nn.ReLU(True),
-            nn.Conv2d(32, 1, kernel_size=1, stride=1, padding=0),
-            nn.ReLU(True) if non_negative else nn.Identity(),
-            nn.Identity(),
-        )
-
-        super().__init__(head, **kwargs)
-
-        if path is not None:
-            self.load(path)
-
-    def forward(self, x):
-        inv_depth = super().forward(x).squeeze(dim=1)
-
-        if self.invert:
-            depth = self.scale * inv_depth + self.shift
-            depth[depth < 1e-8] = 1e-8
-            depth = 1.0 / depth
-            return depth
-        else:
-            return inv_depth
-
-class DPTAlbedoModel(DPT):
-    def __init__(
-        self, opt, path=None, non_negative=False, scale=1.0, shift=0.0, skip_keys=[], keep_keys=[], **kwargs
-    ):
-        features = kwargs["features"] if "features" in kwargs else 256
-
-        self.scale = scale
-        self.shift = shift
-
-        head = nn.Sequential(
-            nn.Conv2d(features, features // 2, kernel_size=3, stride=1, padding=1),
-            Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
-            nn.Conv2d(features // 2, 32, kernel_size=3, stride=1, padding=1),
-            nn.ReLU(True),
-            nn.Conv2d(32, 3, kernel_size=1, stride=1, padding=0),
+            nn.Conv2d(32, self.out_channels, kernel_size=1, stride=1, padding=0),
             # nn.ReLU(True) if non_negative else nn.Identity(),
             nn.Identity(),
         )
@@ -150,35 +162,38 @@ class DPTAlbedoModel(DPT):
 
     def forward(self, x, input_dict_extra={}):
         x_out = super().forward(x)
-        x_out = torch.clamp(1.01 * torch.tanh(x_out ), -1, 1)
+        if self.modality == 'al':
+            x_out = torch.clamp(1.01 * torch.tanh(x_out ), -1, 1)
+        elif self.modality == 'de':
+            x_out = torch.clamp(x_out, 1e-8, 100)
 
         return x_out, {}
 
-class DPTSegmentationModel(DPT):
-    def __init__(self, num_classes, path=None, **kwargs):
+# class DPTSegmentationModel(DPT):
+#     def __init__(self, num_classes, path=None, **kwargs):
 
-        features = kwargs["features"] if "features" in kwargs else 256
+#         features = kwargs["features"] if "features" in kwargs else 256
 
-        kwargs["use_bn"] = True
+#         kwargs["use_bn"] = True
 
-        head = nn.Sequential(
-            nn.Conv2d(features, features, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(features),
-            nn.ReLU(True),
-            nn.Dropout(0.1, False),
-            nn.Conv2d(features, num_classes, kernel_size=1),
-            Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
-        )
+#         head = nn.Sequential(
+#             nn.Conv2d(features, features, kernel_size=3, padding=1, bias=False),
+#             nn.BatchNorm2d(features),
+#             nn.ReLU(True),
+#             nn.Dropout(0.1, False),
+#             nn.Conv2d(features, num_classes, kernel_size=1),
+#             Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
+#         )
 
-        super().__init__(head, **kwargs)
+#         super().__init__(head, **kwargs)
 
-        self.auxlayer = nn.Sequential(
-            nn.Conv2d(features, features, kernel_size=3, padding=1, bias=False),
-            nn.BatchNorm2d(features),
-            nn.ReLU(True),
-            nn.Dropout(0.1, False),
-            nn.Conv2d(features, num_classes, kernel_size=1),
-        )
+#         self.auxlayer = nn.Sequential(
+#             nn.Conv2d(features, features, kernel_size=3, padding=1, bias=False),
+#             nn.BatchNorm2d(features),
+#             nn.ReLU(True),
+#             nn.Dropout(0.1, False),
+#             nn.Conv2d(features, num_classes, kernel_size=1),
+#         )
 
-        if path is not None:
-            self.load(path)
+#         if path is not None:
+#             self.load(path)
