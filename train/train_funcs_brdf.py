@@ -195,7 +195,7 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
             for n in range(0, len(depthPreds ) ):
                 if opt.cfg.MODEL_BRDF.if_use_midas_loss_depth:
                     midas_loss_func = ScaleAndShiftInvariantLoss()
-                    loss = midas_loss_func(depthPreds[n], input_dict['depthBatch'])
+                    loss = midas_loss_func(depthPreds[n].squeeze(1), input_dict['depthBatch'].squeeze(1))
                 else:
                     loss =  torch.sum( (torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) )
                         * ( torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum 
