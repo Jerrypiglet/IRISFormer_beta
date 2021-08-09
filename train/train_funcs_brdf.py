@@ -190,6 +190,7 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
 
         if 'de' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
             depthPreds = []
+            depthPred = output_dict['depthPred']
             depthPreds.append(depthPred )
             # if (not opt.cfg.DATASET.if_no_gt_semantics):
             loss_dict['loss_brdf-depth'] = []
