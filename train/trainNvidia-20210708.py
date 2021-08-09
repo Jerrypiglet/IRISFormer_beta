@@ -531,7 +531,7 @@ else:
 
             # ======= Forward
             optimizer.zero_grad()
-            output_dict, loss_dict = forward_joint(True, labels_dict, model, opt, time_meters)
+            output_dict, loss_dict = forward_joint(True, labels_dict, model, opt, time_meters, tid=tid)
             synchronize()
             
             # print('=======loss_dict', loss_dict)

@@ -2,7 +2,7 @@
     "dockerImageName": "nvidian/lpr/rui_pytorch_init:rui_dev_3",
     "aceName": "nv-us-west-2",
     "name": "VideoAPP.rui",
-    "command": "mkdir /root/.config && cp -r /newfoundland/.config/rclone /root/.config/ && cp -r /newfoundland/.ssh ~/ && cp -r /newfoundland/packages/pdist* /opt/conda/lib/python3.7/site-packages/ && which python && sleep 48h",
+    "command": "mkdir /root/.config && cp -r /newfoundland/.config/rclone /root/.config/ && cp -r /newfoundland/.ssh ~/ && which python && sleep 48h",
     "replicaCount": 1,
     "publishedContainerPorts": [
         8888

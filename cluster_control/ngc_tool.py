@@ -42,8 +42,8 @@ def parse_args():
     create_parser.add_argument('--deploy_src', type=str, help='deploy to target path', default='~/Documents/Projects/semanticInverse/train/')
     create_parser.add_argument('--deploy_s3', type=str, help='deploy s3 container', default='s3mm1:train_ngc')
     create_parser.add_argument('--deploy_tar', type=str, help='deploy to target path', default='/newfoundland/semanticInverse/job_list/train')
-    create_parser.add_argument('--python_path', type=str, help='python path in pod', default='python3')
-    create_parser.add_argument('--pip_path', type=str, help='python path in pod', default='pip3')
+    create_parser.add_argument('--python_path', type=str, help='python path in pod', default='/newfoundland/envs/semanticInverse/bin/python')
+    create_parser.add_argument('--pip_path', type=str, help='python path in pod', default='/newfoundland/envs/semanticInverse/bin/pip')
     # create_parser.add_argument('--gpus', type=int, help='nubmer of GPUs', default=2)  
     # create_parser.add_argument('--cpur', type=int, help='request of CPUs', default=10)
     # create_parser.add_argument('--cpul', type=int, help='limit of CPUs', default=30)
@@ -254,6 +254,8 @@ def create(args):
         n = text_file.write(command_str)
         text_file.close()
         print('yaml and command file saved to %s'%task_dir)
+
+    print(args.datetime_str)
 
     # os.remove(tmp_json_filaname)
     # print('========= REMOVED YAML file %s'%tmp_json_filaname)

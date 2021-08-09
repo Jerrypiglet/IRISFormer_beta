@@ -156,7 +156,7 @@ def get_labels_dict_joint(data_batch, opt):
     # labels_dict = {**labels_dict_matseg, **labels_dict_brdf}
     return labels_dict
 
-def forward_joint(is_train, labels_dict, model, opt, time_meters, if_vis=False, ):
+def forward_joint(is_train, labels_dict, model, opt, time_meters, if_vis=False, tid=-1):
     # forward model + compute losses
 
     # Forward model
@@ -178,7 +178,7 @@ def forward_joint(is_train, labels_dict, model, opt, time_meters, if_vis=False, 
         time_meters['ts'] = time.time()
     
     if opt.cfg.MODEL_BRDF.enable:
-        output_dict, loss_dict = postprocess_brdf(labels_dict, output_dict, loss_dict, opt, time_meters)
+        output_dict, loss_dict = postprocess_brdf(labels_dict, output_dict, loss_dict, opt, time_meters, tid=tid)
         time_meters['loss_brdf'].update(time.time() - time_meters['ts'])
         time_meters['ts'] = time.time()
 

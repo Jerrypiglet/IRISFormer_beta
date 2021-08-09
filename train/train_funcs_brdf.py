@@ -131,7 +131,7 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
 
     return input_batch, input_dict, preBatchDict
 
-def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_module_list=[]):
+def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_module_list=[], tid=-1):
     if opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
         opt.albeW, opt.normW, opt.rougW, opt.deptW = opt.cfg.MODEL_BRDF.albedoWeight, opt.cfg.MODEL_BRDF.normalWeight, opt.cfg.MODEL_BRDF.roughWeight, opt.cfg.MODEL_BRDF.depthWeight
 
@@ -190,14 +190,13 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
 
         if 'de' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
             depthPreds = []
-            depthPred = output_dict['depthPred']
             depthPreds.append(depthPred )
             # if (not opt.cfg.DATASET.if_no_gt_semantics):
             loss_dict['loss_brdf-depth'] = []
             for n in range(0, len(depthPreds ) ):
                 if opt.cfg.MODEL_BRDF.if_use_midas_loss_depth:
-                    midas_loss_func = ScaleAndShiftInvariantLoss()
-                    loss = midas_loss_func(depthPreds[n].squeeze(1), input_dict['depthBatch'].squeeze(1), mask=input_dict['segAllBatch'])
+                    midas_loss_func = ScaleAndShiftInvariantLoss(alpha=0.5 if (tid!=-1 and tid>100) else 0.)
+                    loss = midas_loss_func(depthPreds[n].squeeze(1), input_dict['depthBatch'].squeeze(1), mask=input_dict['segAllBatch'].squeeze())
                 else:
                     loss =  torch.sum( (torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) )
                         * ( torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum 
