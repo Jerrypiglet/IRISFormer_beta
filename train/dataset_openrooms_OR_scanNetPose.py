@@ -198,8 +198,8 @@ class openrooms(data.Dataset):
         # if_load_immask = False
         self.opt.if_load_immask = if_load_immask
 
-        # if self.opt.cfg.DATA.if_pad_to_32x:
-        #     assert if_load_immask
+        if self.opt.cfg.DATA.if_pad_to_32x:
+            assert if_load_immask
 
         if if_load_immask:
             seg_path = hdr_image_path.replace('im_', 'immask_').replace('hdr', 'png').replace('DiffMat', '')
@@ -212,9 +212,12 @@ class openrooms(data.Dataset):
             seg = np.ones((1, self.im_height, self.im_width), dtype=np.float32)
             mask_path = ''
             mask = np.ones((self.im_height, self.im_width, 3), dtype=np.uint8)
+
+        brdf_loss_mask = np.ones((self.im_height, self.im_width), dtype=np.uint8)
         if self.opt.if_pad:
             mask = self.opt.pad_op(mask, name='mask')
             seg = self.opt.pad_op(seg, if_channel_first=True, name='seg')
+            brdf_loss_mask = self.opt.pad_op(brdf_loss_mask, if_channel_2_input=True, name='brdf_loss_mask')
 
         hdr_scale = 1.
 
@@ -242,7 +245,7 @@ class openrooms(data.Dataset):
 
         im_trainval = im_trainval_RGB # [3, 240, 320], tensor, not in [0., 1.]
 
-        batch_dict.update({'image_path': str(png_image_path)})
+        batch_dict.update({'image_path': str(png_image_path), 'brdf_loss_mask': torch.from_numpy(brdf_loss_mask)})
 
         if self.opt.cfg.DATA.if_also_load_next_frame:
             png_image_next_path = Path(self.opt.cfg.DATASET.png_path) / meta_split / scene_name / ('im_%d.png'%(frame_id+1))

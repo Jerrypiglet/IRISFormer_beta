@@ -124,8 +124,8 @@ class ScaleAndShiftInvariantLoss(nn.Module):
         self.__prediction_ssi = None
 
     def forward(self, prediction, target, mask=None):
-        assert len(prediction.shape==3)
-        assert len(target.shape==3)
+        assert len(prediction.shape)==3
+        assert len(target.shape)==3
         if mask is None:
             mask = torch.ones_like(target, dtype=target.dtype).cuda()
 

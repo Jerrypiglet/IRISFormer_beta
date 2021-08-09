@@ -231,7 +231,11 @@ class Pad(object):
         if pad_h > 0 or pad_w > 0:
             if self.padding_with is None:
                 raise (RuntimeError("segtransform.Pad() need padding while padding argument is None\n"))
+            # if name=='brdf_loss_mask':
+            #     print(image.shape)
             image = cv2.copyMakeBorder(image, 0, pad_h, 0, pad_w, cv2.BORDER_CONSTANT, value=self.padding_with)
+            # if name=='brdf_loss_mask':
+            #     print(image.shape, '---')
             if label is not None:    
                 label = cv2.copyMakeBorder(label, 0, pad_h, 0, pad_w, cv2.BORDER_CONSTANT, value=self.padding_with)
 
@@ -247,9 +251,13 @@ class Pad(object):
                     label = label.transpose(2, 0, 1)
 
         if if_channel_2_input:
-            image = image.squeeze(2)
+            assert len(image.shape)==2
+        #     if name=='brdf_loss_mask':
+        #         print(image.shape, '--------')
+        #     image = image.squeeze(2)
             if label is not None:
-                label = label.squeeze(2)
+                assert len(label.shape)==2
+        #         label = label.squeeze(2)
 
         # print(image.shape)
 

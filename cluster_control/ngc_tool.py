@@ -11,7 +11,7 @@
 import argparse
 # from datetime import date
 from datetime import datetime
-import yaml
+# import yaml
 import subprocess
 import os, sys
 import pprint
@@ -42,15 +42,15 @@ def parse_args():
     create_parser.add_argument('--deploy_src', type=str, help='deploy to target path', default='~/Documents/Projects/semanticInverse/train/')
     create_parser.add_argument('--deploy_s3', type=str, help='deploy s3 container', default='s3mm1:train_ngc')
     create_parser.add_argument('--deploy_tar', type=str, help='deploy to target path', default='/newfoundland/semanticInverse/job_list/train')
-    create_parser.add_argument('--python_path', type=str, help='python path in pod', default='/newfoundland/envs/semanticInverse/bin/python')
-    create_parser.add_argument('--pip_path', type=str, help='python path in pod', default='/newfoundland/envs/semanticInverse/bin/pip')
+    create_parser.add_argument('--python_path', type=str, help='python path in pod', default='python3')
+    create_parser.add_argument('--pip_path', type=str, help='python path in pod', default='pip3')
     # create_parser.add_argument('--gpus', type=int, help='nubmer of GPUs', default=2)  
     # create_parser.add_argument('--cpur', type=int, help='request of CPUs', default=10)
     # create_parser.add_argument('--cpul', type=int, help='limit of CPUs', default=30)
     # create_parser.add_argument('--memr', type=int, help='request of memory in Gi', default=40)
     # create_parser.add_argument('--meml', type=int, help='limit of memory in Gi', default=50)
     create_parser.add_argument('--namespace', type=str, help='namespace of the job', default='ucsd-ravigroup')
-    create_parser.add_argument('--instance', type=str, help='instance of the job', default='dgx1v.16g.1.norm')
+    create_parser.add_argument('-i', '--instance', type=str, help='instance of the job', default='dgx1v.16g.1.norm')
     create_parser.add_argument('-v', '--verbose', action='store_true', help='Verbose')
     create_parser.add_argument('-r', '--num-replicas', type=int, help='Number of replicas')
     # create_parser.add_argument('-n', '--namespace', type=str, help='namespace')

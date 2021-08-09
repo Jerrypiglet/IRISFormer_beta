@@ -17,6 +17,8 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
     im_cpu = data_batch['im_trainval']
     input_dict['imBatch'] = im_cpu.cuda(non_blocking=True).contiguous()
 
+    input_dict['brdf_loss_mask'] = data_batch['brdf_loss_mask'].cuda(non_blocking=True).contiguous()
+
     if_load_mask = opt.cfg.DATA.load_brdf_gt
     
     if opt.cfg.DATA.load_brdf_gt:
@@ -195,7 +197,7 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
             for n in range(0, len(depthPreds ) ):
                 if opt.cfg.MODEL_BRDF.if_use_midas_loss_depth:
                     midas_loss_func = ScaleAndShiftInvariantLoss()
-                    loss = midas_loss_func(depthPreds[n].squeeze(1), input_dict['depthBatch'].squeeze(1))
+                    loss = midas_loss_func(depthPreds[n].squeeze(1), input_dict['depthBatch'].squeeze(1), mask=input_dict['segAllBatch'])
                 else:
                     loss =  torch.sum( (torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) )
                         * ( torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum 

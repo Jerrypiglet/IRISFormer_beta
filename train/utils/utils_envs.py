@@ -407,17 +407,17 @@ def set_up_folders(opt):
             opt.home_path = Path('/home/ruzhu/Documents/Projects/')
         elif opt.cluster == 'ngc':
             opt.home_path = Path('/newfoundland/semanticInverse/')
-            opt.SUMMARY_PATH_ALL = opt.home_path / SUMMARY_PATH
-            opt.home_path_tmp = Path('/result/')
+            # opt.SUMMARY_PATH_ALL = opt.home_path / SUMMARY_PATH
+            # opt.home_path_tmp = Path('/result/')
 
         opt.CKPT_PATH = opt.home_path / CKPT_PATH
         opt.SUMMARY_PATH = opt.home_path / SUMMARY_PATH
-        if opt.cluster == 'ngc':
-            opt.SUMMARY_PATH = opt.home_path_tmp / SUMMARY_PATH
-            opt.SUMMARY_PATH.mkdir(exist_ok=True)
+        # if opt.cluster == 'ngc':
+        #     opt.SUMMARY_PATH = opt.home_path_tmp / SUMMARY_PATH
+        #     opt.SUMMARY_PATH.mkdir(exist_ok=True)
         opt.SUMMARY_VIS_PATH = opt.home_path / SUMMARY_VIS_PATH
 
-    if not opt.if_cluster:
+    if not opt.if_cluster or 'DATE' in opt.task_name:
         if opt.resume != 'resume':
             opt.task_name = get_datetime() + '-' + opt.task_name
         # else:
@@ -427,6 +427,8 @@ def set_up_folders(opt):
     # else:
     #     opt.root = opt.cfg.PATH.root_cluster
     opt.summary_path_task = opt.SUMMARY_PATH / opt.task_name
+    # if opt.cluster == 'ngc':
+    #     opt.summary_path_all_task = opt.SUMMARY_PATH_ALL / opt.task_name
     opt.checkpoints_path_task = opt.CKPT_PATH / opt.task_name
     opt.summary_vis_path_task = opt.SUMMARY_VIS_PATH / opt.task_name
     opt.summary_vis_path_task_py = opt.summary_vis_path_task / 'py_files'

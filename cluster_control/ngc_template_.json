@@ -2,7 +2,7 @@
     "dockerImageName": "nvidian/lpr/rui_pytorch_init:rui_dev_3",
     "aceName": "nv-us-west-2",
     "name": "VideoAPP.rui",
-    "command": "mkdir /root/.config && cp -r /newfoundland/.config/rclone /root/.config/ && cp -r /newfoundland/.ssh ~/ && cp -r /newfoundland/packages/pdist* /opt/conda/lib/python3.7/site-packages/ && which python && sleep 48h",
+    "command": "cp -r /newfoundland/.config/rclone /root/.config/ && cp -r /newfoundland/.ssh ~/ && cd /newfoundland/semanticInverse/train && python models_def/model_nvidia/ssn/setup.py install && python models_def/model_nvidia/ssn_3d/setup.py install && which python && sleep 48h",
     "replicaCount": 1,
     "publishedContainerPorts": [
         8888

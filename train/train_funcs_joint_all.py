@@ -1274,7 +1274,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
 
         imBatch_vis = torch.cat(imBatch_list)
         segAllBatch_vis = torch.cat(segAllBatch_list)
-        segBRDFBatch_list_vis = torch.cat(segBRDFBatch_list)
+        segBRDFBatch_vis = torch.cat(segBRDFBatch_list)
 
 
         if opt.cascadeLevel > 0:
@@ -1329,7 +1329,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
         depth_min_and_scale_list = []
         if not opt.test_real and opt.is_master:
             for sample_idx in range(im_batch_vis_sdr.shape[0]):
-                writer.add_image('VAL_brdf-segBRDF_GT/%d'%sample_idx, segBRDFBatch_list_vis[sample_idx].cpu().detach().numpy().squeeze(), tid, dataformats='HW')
+                writer.add_image('VAL_brdf-segBRDF_GT/%d'%sample_idx, segBRDFBatch_vis[sample_idx].cpu().detach().numpy().squeeze(), tid, dataformats='HW')
+                segAll = segAllBatch_vis[sample_idx].cpu().detach().numpy().squeeze()
+                writer.add_image('VAL_brdf-segAll_GT/%d'%sample_idx, segAll, tid, dataformats='HW')
                 if 'al' in opt.cfg.MODEL_BRDF.enable_list:
                     writer.add_image('VAL_brdf-albedo_GT/%d'%sample_idx, albedo_gt_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                 if 'no' in opt.cfg.MODEL_BRDF.enable_list:
@@ -1337,7 +1339,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                 if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
                     writer.add_image('VAL_brdf-rough_GT/%d'%sample_idx, rough_gt_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                 if 'de' in opt.cfg.MODEL_BRDF.enable_list:
-                    depth_normalized, depth_min_and_scale = vis_disp_colormap(depth_gt_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True)
+                    depth_normalized, depth_min_and_scale = vis_disp_colormap(depth_gt_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True, valid_mask=segAll==1)
                     depth_min_and_scale_list.append(depth_min_and_scale)
                     writer.add_image('VAL_brdf-depth_GT/%d'%sample_idx, depth_normalized, tid, dataformats='HWC')
 
@@ -1415,7 +1417,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                         Image.fromarray((rough_pred_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8).squeeze()).save('{0}/{1}_roughPred_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
                         Image.fromarray((rough_gt_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8).squeeze()).save('{0}/{1}_roughGt_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
                 if 'de' in opt.cfg.MODEL_BRDF.enable_list:
-                    depth_normalized_pred, _ = vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True, min_scale=depth_min_and_scale_list[sample_idx] if (not opt.cfg.DATASET.if_no_gt_semantics) else None)
+                    depth_normalized_pred, _ = vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True, min_and_scale=depth_min_and_scale_list[sample_idx])
                     writer.add_image('VAL_brdf-depth_syncScale_PRED/%d'%sample_idx, depth_normalized_pred, tid, dataformats='HWC')
                     depth_not_normalized_pred = vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True)[0]
                     writer.add_image('VAL_brdf-depth_PRED/%d'%sample_idx, depth_not_normalized_pred, tid, dataformats='HWC')
