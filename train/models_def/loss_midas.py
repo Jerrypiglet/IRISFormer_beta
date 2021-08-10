@@ -1,3 +1,8 @@
+'''
+combine:
+- https://gist.github.com/ranftlr/1d6194db2e1dffa0a50c9b0a9549cbd2
+- https://gist.github.com/dvdhfnr/732c26b61a0e63a0abc8a5d769dbebd0
+'''
 import torch
 import torch.nn as nn
 
@@ -56,6 +61,18 @@ def mse_loss(prediction, target, mask, reduction=reduction_batch_based):
 
     return reduction(image_loss, 2 * M)
 
+def trimmed_mae_loss(prediction, target, mask, trim=0.2):
+    M = torch.sum(mask, (1, 2))
+    res = prediction - target
+
+    res = res[mask.bool()].abs()
+
+    trimmed, _ = torch.sort(res.view(-1), descending=False)[
+        : int(len(res) * (1.0 - trim))
+    ]
+
+    return trimmed.sum() / (2 * M.sum())
+
 
 def gradient_loss(prediction, target, mask, reduction=reduction_batch_based):
 
@@ -76,6 +93,23 @@ def gradient_loss(prediction, target, mask, reduction=reduction_batch_based):
 
     return reduction(image_loss, M)
 
+def normalize_prediction_robust(target, mask):
+    ssum = torch.sum(mask, (1, 2))
+    valid = ssum > 0
+
+    m = torch.zeros_like(ssum)
+    s = torch.ones_like(ssum)
+
+    m[valid] = torch.median(
+        (mask[valid] * target[valid]).view(valid.sum(), -1), dim=1
+    ).values
+    target = target - m.view(-1, 1, 1)
+
+    sq = torch.sum(mask * target.abs(), (1, 2))
+    s[valid] = torch.clamp((sq[valid] / ssum[valid]), min=1e-6)
+
+    return target / (s.view(-1, 1, 1))
+
 
 class MSELoss(nn.Module):
     def __init__(self, reduction='batch-based'):
@@ -88,6 +122,14 @@ class MSELoss(nn.Module):
 
     def forward(self, prediction, target, mask):
         return mse_loss(prediction, target, mask, reduction=self.__reduction)
+
+
+class TrimmedMAELoss(nn.Module):
+    def __init__(self, reduction='batch-based'):
+        super().__init__()
+
+    def forward(self, prediction, target, mask):
+        return trimmed_mae_loss(prediction, target, mask)
 
 
 class GradientLoss(nn.Module):
@@ -114,12 +156,16 @@ class GradientLoss(nn.Module):
 
 
 class ScaleAndShiftInvariantLoss(nn.Module):
-    def __init__(self, alpha=0.5, scales=4, reduction='batch-based'):
+    def __init__(self, alpha=0.5, scales=4, reduction='batch-based', loss_method='TrimmedMAELoss'):
         super().__init__()
+
+        self.__loss_method = loss_method
+        assert self.__loss_method in ['TrimmedMAELoss', 'MSELoss', 'L1loss']
 
         self.__data_loss = MSELoss(reduction=reduction)
         self.__regularization_loss = GradientLoss(scales=scales, reduction=reduction)
         self.__alpha = alpha
+
 
         self.__prediction_ssi = None
 
@@ -131,14 +177,21 @@ class ScaleAndShiftInvariantLoss(nn.Module):
         if mask is None:
             mask = torch.ones_like(target, dtype=target.dtype).cuda()
             
-        # print(prediction.shape, torch.mean(prediction), torch.median(prediction), torch.max(prediction), torch.min(prediction))
-        # print(target.shape, torch.mean(target), torch.median(target), torch.max(target), torch.min(target))
-        # print(mask.shape, torch.mean(mask), torch.median(mask), torch.max(mask), torch.min(mask))
+        print(prediction.shape, torch.mean(prediction), torch.median(prediction), torch.max(prediction), torch.min(prediction))
+        print(target.shape, torch.mean(target), torch.median(target), torch.max(target), torch.min(target))
+        print(mask.shape, torch.mean(mask), torch.median(mask), torch.max(mask), torch.min(mask))
 
-        scale, shift = compute_scale_and_shift(prediction, target, mask)
-        self.__prediction_ssi = scale.view(-1, 1, 1) * prediction + shift.view(-1, 1, 1)
+        if self.__loss_method =='MSELoss':
+            scale, shift = compute_scale_and_shift(prediction, target, mask)
+            # print(scale)
+            # print(shift)
+            self.__prediction_ssi = scale.view(-1, 1, 1) * prediction + shift.view(-1, 1, 1)
+            total = self.__data_loss(self.__prediction_ssi, target, mask)
+        elif self.__loss_method == 'TrimmedMAELoss':
+            self.__prediction_ssi = normalize_prediction_robust(prediction, mask)
+            target_ = normalize_prediction_robust(target, mask)
+            total = self.__data_loss(self.__prediction_ssi, target_, mask)
 
-        total = self.__data_loss(self.__prediction_ssi, target, mask)
         if self.__alpha > 0:
             total += self.__alpha * self.__regularization_loss(self.__prediction_ssi, target, mask)
 

@@ -6,7 +6,9 @@ from tqdm import tqdm
 import statistics
 import torchvision.utils as vutils
 from icecream import ic
-from models_def.loss_midas import ScaleAndShiftInvariantLoss
+from models_def.loss_midas import ScaleAndShiftInvariantLoss, GradientLoss
+
+regularization_loss = GradientLoss(scales=4, reduction='batch-based')
 
 def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
     input_dict = {}
@@ -196,11 +198,21 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
             loss_dict['loss_brdf-depth'] = []
             for n in range(0, len(depthPreds ) ):
                 if opt.cfg.MODEL_BRDF.if_use_midas_loss_depth:
-                    midas_loss_func = ScaleAndShiftInvariantLoss(alpha=0.5 if (tid!=-1 and tid>100) else 0.)
-                    loss = midas_loss_func(depthPreds[n].squeeze(1), input_dict['depthBatch'].squeeze(1), mask=input_dict['segAllBatch'].squeeze())
+                    # alpha = 0.5 if (tid!=-1 and tid>100) else 0.
+                    # alpha = 0.
+                    alpha = 0.5
+                    midas_loss_func = ScaleAndShiftInvariantLoss(alpha=alpha)
+                    invd_pred = 1./(depthPreds[n].squeeze(1)+1.)
+                    invd_gt = 1./(input_dict['depthBatch'].squeeze(1)+1.)
+                    loss = midas_loss_func(invd_pred, invd_gt, mask=input_dict['segAllBatch'].squeeze())
                 else:
                     loss =  torch.sum( (torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) )
                         * ( torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum 
+                    if opt.cfg.MODEL_BRDF.if_use_reg_loss_depth:
+                        reg_loss = regularization_loss(depthPreds[n].squeeze(1), input_dict['depthBatch'].squeeze(1), input_dict['segAllBatch'].squeeze())
+                        # print(reg_loss.item(), loss.item())
+                        loss += opt.cfg.MODEL_BRDF.reg_loss_depth_weight * reg_loss
+
                 loss_dict['loss_brdf-depth'].append(loss)
             loss_dict['loss_brdf-ALL'] += opt.deptW * loss_dict['loss_brdf-depth'][-1]
             # output_dict.update({'mat_seg-depthPreds': depthPreds})

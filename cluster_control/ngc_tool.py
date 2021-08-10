@@ -230,10 +230,14 @@ def create(args):
 
         splits = command_str.split(' ')
         task_name = [splits[x+1] for x in range(len(splits)) if splits[x].startswith('--task_name')][0]
+        task_name_ngc = task_name.lower()
+        model_name_ngc = task_name_ngc.split('_')[2]
         # task_name = task_name.replace('[\'', '').replace('\']', '')
         json_content['command'] = json_content['command'].replace('sleep 48h', '')
         json_content['command'] += command_str
-        json_content['name'] += '.%s'%task_name
+        json_content['name'] += '.%s.%s'%(model_name_ngc, task_name_ngc)
+        if len(json_content['name'])>=128:
+            json_content['name'] = json_content['name'][:128]
         json_content['aceInstance'] = args.instance
 
         tmp_json_filaname = 'yamls/tmp_%s.json'%args.datetime_str

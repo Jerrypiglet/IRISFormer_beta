@@ -106,17 +106,18 @@ class Model_Joint(nn.Module):
                 dpt_optimize = True
 
                 default_models = {
-                    "midas_v21": "dpt_weights/midas_v21-f6b98070.pt",
+                    # "midas_v21": "dpt_weights/midas_v21-f6b98070.pt",
                     "dpt_base": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_base_path,
                     "dpt_large": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_large_path,
                     "dpt_hybrid": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_path,
                     "dpt_hybrid_SSN": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN_path,
-                    "dpt_hybrid_kitti": "dpt_weights/dpt_hybrid_kitti-cb926ef4.pt",
-                    "dpt_hybrid_nyu": "dpt_weights/dpt_hybrid_nyu-2ce69ec7.pt",
+                    # "dpt_hybrid_kitti": "dpt_weights/dpt_hybrid_kitti-cb926ef4.pt",
+                    # "dpt_hybrid_nyu": "dpt_weights/dpt_hybrid_nyu-2ce69ec7.pt",
                 }
                 
                 model_type = self.opt.cfg.MODEL_BRDF.DPT_baseline.model
                 model_path = str(Path(self.opt.cfg.PATH.pretrained_path) / default_models[model_type]) if default_models[model_type]!='NA' else None
+                if_non_negative = True if self.opt.cfg.MODEL_BRDF.DPT_baseline.modality in ['de'] else False
 
                 if model_type=='dpt_hybrid':
                     self.BRDF_Net = DPTAlbedoDepthModel(
@@ -124,7 +125,7 @@ class Model_Joint(nn.Module):
                         modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
                         path=model_path,
                         backbone="vitb_rn50_384",
-                        non_negative=False,
+                        non_negative=if_non_negative,
                         enable_attention_hooks=False,
                         skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
                         keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
@@ -136,7 +137,7 @@ class Model_Joint(nn.Module):
                         path=model_path,
                         # backbone="vitb_rn50_384",
                         backbone="vitb_unet_384",
-                        non_negative=False,
+                        non_negative=if_non_negative,
                         enable_attention_hooks=False,
                         skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
                         keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
@@ -147,7 +148,7 @@ class Model_Joint(nn.Module):
                         modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
                         path=model_path,
                         backbone="vitl16_384",
-                        non_negative=False,
+                        non_negative=if_non_negative,
                         enable_attention_hooks=False,
                         skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
                     )
@@ -157,7 +158,7 @@ class Model_Joint(nn.Module):
                         modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
                         path=model_path,
                         backbone="vitb16_384",
-                        non_negative=False,
+                        non_negative=if_non_negative,
                         enable_attention_hooks=False,
                         skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
                     )

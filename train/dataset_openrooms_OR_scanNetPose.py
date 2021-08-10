@@ -68,6 +68,11 @@ def get_bdb2d_transform(split, crop_bdb): # crop_bdb: [x1, x2, y1, y2] in float
         data_transforms_nocrop_nonormalize = transform.Compose(data_transforms_nocrop_nonormalize)
         return data_transforms_nocrop_nonormalize
 
+def return_percent(list_in, percent=1.):
+    len_list = len(list_in)
+    return_len = max(1, int(np.floor(len_list*percent)))
+    return list_in[:return_len]
+
 def make_dataset(opt, split='train', data_root=None, data_list=None, logger=None):
     assert split in ['train', 'val', 'test']
     if not os.path.isfile(data_list):
@@ -115,6 +120,8 @@ def make_dataset(opt, split='train', data_root=None, data_list=None, logger=None
     logger.info("==> Checking image&label pair [%s] list done! %d frames."%(split, len(image_label_list)))
     if opt.cfg.DATASET.first != -1:
         return image_label_list[:opt.cfg.DATASET.first], meta_split_scene_name_frame_id_list[:opt.cfg.DATASET.first]
+    elif opt.cfg.DATASET.if_quarter:
+        return return_percent(image_label_list, 0.25), return_percent(meta_split_scene_name_frame_id_list, 0.25)
     else:
         return image_label_list, meta_split_scene_name_frame_id_list
 

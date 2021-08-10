@@ -151,7 +151,7 @@ class DPTAlbedoDepthModel(DPT):
             nn.Conv2d(features // 2, 32, kernel_size=3, stride=1, padding=1),
             nn.ReLU(True),
             nn.Conv2d(32, self.out_channels, kernel_size=1, stride=1, padding=0),
-            # nn.ReLU(True) if non_negative else nn.Identity(),
+            nn.ReLU(True) if non_negative else nn.Identity(),
             nn.Identity(),
         )
 
@@ -164,8 +164,9 @@ class DPTAlbedoDepthModel(DPT):
         x_out = super().forward(x)
         if self.modality == 'al':
             x_out = torch.clamp(1.01 * torch.tanh(x_out ), -1, 1)
-        elif self.modality == 'de':
-            x_out = torch.clamp(x_out, 1e-8, 100)
+        # elif self.modality == 'de':
+            # x_out = torch.clamp(x_out, 1e-8, 100)
+            # return x_out
 
         return x_out, {}
 

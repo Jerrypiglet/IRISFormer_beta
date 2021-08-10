@@ -675,9 +675,9 @@ else:
                 if (tid - tid_start) % 10 == 0:
                     logger.info(green('Rolling end-to-start %.2f, Rolling start-to-end %.2f'%(sum(ts_iter_end_start_list)/len(ts_iter_end_start_list), sum(ts_iter_start_end_list)/len(ts_iter_start_end_list))))
                     logger.info(green('Training timings: ' + time_meters_to_string(time_meters)))
-                if len(ts_iter_end_start_list) > 100:
-                    ts_iter_end_start_list = []
-                    ts_iter_start_end_list = []
+                # if len(ts_iter_end_start_list) > 100:
+                #     ts_iter_end_start_list = []
+                #     ts_iter_start_end_list = []
                 if opt.is_master and tid % 100 == 0:
                     usage_ratio = print_gpu_usage(handle, logger)
                     writer.add_scalar('training/GPU_usage_ratio', usage_ratio, tid)
