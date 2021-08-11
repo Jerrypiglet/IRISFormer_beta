@@ -158,6 +158,7 @@ class DPTAlbedoDepthModel(DPT):
         super().__init__(opt, head, **kwargs)
 
         if path is not None:
+            print('===== [DPTAlbedoDepthModel] Loading %s'%path)
             self.load(path, skip_keys=skip_keys, keep_keys=keep_keys)
 
     def forward(self, x, input_dict_extra={}):

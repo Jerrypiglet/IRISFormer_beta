@@ -93,7 +93,7 @@ def set_up_envs(opt):
     # ====== DPT =====
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.DPT_baseline.enable:
         opt.cfg.DATA.if_load_png_not_hdr = True
-        assert opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_large', 'dpt_base', 'dpt_hybrid', 'dpt_hybrid_SSN']
+        assert opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_large', 'dpt_base', 'dpt_hybrid', 'dpt_hybrid_SSN', 'dpt_base_SSN']
         
         assert opt.cfg.MODEL_BRDF.DPT_baseline.modality in ['al', 'de']
 
@@ -104,11 +104,12 @@ def set_up_envs(opt):
         opt.if_pad = True
         opt.pad_op = transform.Pad([im_height_pad_to, im_width_pad_to], padding_with=im_pad_with)
 
-        if opt.cfg.MODEL_BRDF.DPT_baseline.model == 'dpt_hybrid_SSN':
-            assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.ssn_from in ['backbone', 'matseg']
+        if opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_hybrid_SSN', 'dpt_base_SSN']:
+            assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.ssn_from in ['backbone', 'matseg', 'on-the-fly']
             if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.ssn_from == 'matseg':
                 opt.cfg.MODEL_MATSEG.enable = True
-                opt.cfg.MODEL_MATSEG.if_freeze = True
+                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.if_freeze_matseg:
+                    opt.cfg.MODEL_MATSEG.if_freeze = True
 
     # ====== detectron (objects & masks) =====
     if opt.cfg.MODEL_DETECTRON.enable:
@@ -310,8 +311,8 @@ def set_up_envs(opt):
     os.system('export TORCH_HOME=%s'%opt.cfg.PATH.torch_home_path)
 
     # mis
-    if opt.cfg.SOLVER.if_test_dataloader:
-        opt.cfg.SOLVER.max_epoch = 1
+    # if opt.cfg.SOLVER.if_test_dataloader:
+    #     opt.cfg.SOLVER.max_epoch = 10
     opt.cfg.PATH.pretrained_path = opt.cfg.PATH.pretrained_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.PATH.pretrained_local
 
     # dump

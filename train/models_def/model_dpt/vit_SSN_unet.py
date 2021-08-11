@@ -74,10 +74,7 @@ def QtC(codebook, gamma, Q_height, Q_width, Q_downsample_rate=1):
 def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     b, c, h, w = x.shape
 
-
-    # tic = time.time()
     glob, ssn_return_dict = pretrained.model.forward_flex_SSN(opt, x, pretrained.activations, input_dict_extra=input_dict_extra)
-    # print(time.time() - tic, '------------ forward_flex_SSN')
 
     layer_1 = pretrained.activations["1"]
     layer_2 = pretrained.activations["2"]
@@ -95,7 +92,7 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     layer_3 = pretrained.act_postprocess3[0:2](layer_3)
     layer_4 = pretrained.act_postprocess4[0:2](layer_4)
 
-    # print('->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape) # -> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 320]) torch.Size([2, 768, 320])
+    print('->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape) # -> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 320]) torch.Size([2, 768, 320])
 
     # unflatten = nn.Sequential( # 'Re-assemble' in DPT paper
     #     nn.Unflatten(
@@ -112,7 +109,6 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     gamma = ssn_return_dict['Q'] # [b, J, N] for dpt_hybrid.ssn_from = 'matseg'; # [b, J, N/4/4] for dpt_hybrid.ssn_from = 'backbone'
 
     assert pretrained.model.patch_size[0]==pretrained.model.patch_size[1]
-    # Q_downsample_rate = pretrained.model.patch_size[0]
 
     ssn_from = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.ssn_from
 
@@ -265,51 +261,6 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
 
     return x, extra_return_dict
 
-# def forward_flex_SSN_unet_(self, x, pretrained_activations=[]):
-#     b, c, h, w = x.shape # image pixel space
-
-#     # pos_embed = self._resize_pos_embed_SSN_unet(
-#     #     self.pos_embed, h // self.patch_size[1], w // self.patch_size[0]
-#     # )
-
-#     B = x.shape[0]
-
-#     for key in ["feat_stem", "stage_0", "stage_1", "stage_2"]:
-#         print(key, pretrained_activations[key].shape)
-
-#     if hasattr(self.patch_embed, "backbone"):
-#         # print(self.patch_embed.backbone.forward_features(x).shape, '====')
-#         x = self.patch_embed.backbone(x) # [patch_embed] https://github.com/rwightman/pytorch-image-models/blob/72b227dcf57c0c62291673b96bdc06576bb90457/timm/models/layers/patch_embed.py#L15
-#         if isinstance(x, (list, tuple)):
-#             x = x[-1]  # last feature if backbone outputs list/tuple of features
-#         # print(x.shape, self.patch_embed.proj(x).shape) # torch.Size([8, 1024, 16, 20]) torch.Size([8, 768, 16, 20])
-
-#     x = self.patch_embed.proj(x).flatten(2).transpose(1, 2) # torch.Size([8, 320, 768])
-
-#     if getattr(self, "dist_token", None) is not None:
-#         cls_tokens = self.cls_token.expand(
-#             B, -1, -1
-#         )  # stole cls_tokens impl from Phil Wang, thanks
-#         dist_token = self.dist_token.expand(B, -1, -1)
-#         x = torch.cat((cls_tokens, dist_token, x), dim=1)
-#     else:
-#         cls_tokens = self.cls_token.expand(
-#             B, -1, -1
-#         )  # stole cls_tokens impl from Phil Wang, thanks
-#         x = torch.cat((cls_tokens, x), dim=1)
-
-#     # x = x + pos_embed
-#     # print(x.shape, pos_embed.shape) # torch.Size([8, 321, 768]) torch.Size([1, 321, 768])
-#     x = self.pos_drop(x)
-
-#     for idx, blk in enumerate(self.blocks):
-#         x = blk(x) # always [8, 321, 768]
-
-#     x = self.norm(x)
-
-#     return x
-
-
 
 def _make_vit_b_rn50_backbone_SSN_unet(
     opt, 
@@ -321,8 +272,7 @@ def _make_vit_b_rn50_backbone_SSN_unet(
     use_vit_only=False,
     use_readout="ignore",
     start_index=1,
-    enable_attention_hooks=False,
-):
+    enable_attention_hooks=False):
     pretrained = nn.Module()
 
     pretrained.model = model
@@ -468,40 +418,6 @@ def _make_vit_b_rn50_backbone_SSN_unet(
     # )
 
     return pretrained
-
-# class BackboneResnetFeat(Baseline):
-#     def forward(self, x):
-#         # bottom up
-#         c1, c2, c3, c4, c5 = self.backbone(x)
-#         # print(x.shape, c1.shape, c2.shape, c3.shape, c4.shape, c5.shape) # torch.Size([8, 3, 240, 320]) torch.Size([8, 128, 120, 160]) torch.Size([8, 256, 60, 80]) torch.Size([8, 512, 30, 40]) torch.Size([8, 1024, 15, 20]) torch.Size([8, 2048, 8, 10])
-
-#         # top down
-#         p0, p1, p2, p3, p4, p5 = self.top_down((c1, c2, c3, c4, c5)) # [16, 3, 192, 256],  [16, 64, 96, 128],  [16, 128, 48, 64],  [16, 256, 24, 32],  [16, 256, 12, 16],  [16, 512, 6, 8]
-#         # feats_matseg_dict = {'p0': p0, 'p1': p1, 'p2': p2, 'p3': p3, 'p4': p4, 'p5': p5}
-#         # print(p0.shape, p1.shape, p2.shape, p3.shape, p4.shape, p5.shape)
-
-#         # output
-#         # logit = self.pred_prob(p0)
-#         embedding = self.embedding_conv(p0)
-#         # depth = self.pred_depth(p0)
-#         # surface_normal = self.pred_surface_normal(p0)
-#         # param = self.pred_param(p0)
-
-#         # return_dict = {'logit': logit, 'embedding': embedding, 'feats_matseg_dict': feats_matseg_dict}
-#         # return return_dict
-#         # return prob, embedding
-#         # return prob, embedding, depth, surface_normal, param
-
-#         return embedding
-
-# def create_model_patch_embed_unet(opt):
-#     model = nn.Module()
-#     model.patch_embed = nn.Module()
-#     model.patch_embed.backbone = BackboneResnetFeat(opt.cfg.MODEL_MATSEG, embed_dims=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.backbone_dims, input_dim=3)
-#     return model
-
-# from timm.models.vision_transformer_hybrid import HybridEmbed
-
 
 def _make_pretrained_vitb_unet_384_SSN(
     opt, 

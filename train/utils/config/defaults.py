@@ -209,7 +209,7 @@ _C.MODEL_BRDF.DPT_baseline.model = 'dpt_hybrid'
 _C.MODEL_BRDF.DPT_baseline.use_vit_only = False
 # _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_path = 'dpt_weights/dpt_hybrid-midas-501f0c75.pt'
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_path = 'NA'
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN_path = 'NA'
+# _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN_path = 'NA'
 _C.MODEL_BRDF.DPT_baseline.dpt_base_path = 'NA'
 # _C.MODEL_BRDF.DPT_baseline.dpt_large_path = 'dpt_weights/dpt_large-midas-2f21e586.pt'
 _C.MODEL_BRDF.DPT_baseline.dpt_large_path = 'NA'
@@ -224,6 +224,7 @@ _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.ssn_from = 'matseg' # ['backbone', 'matseg
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN = CN() # dpt_hybrid_SSN (V1)
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.backbone_dims = 1344 # resnet: stem + stage 0,1,2
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.patch_size = 16
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.if_freeze_matseg = True
 # _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.spixel_h = 12
 # _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.spixel_w = 16
 

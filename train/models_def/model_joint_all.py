@@ -110,7 +110,9 @@ class Model_Joint(nn.Module):
                     "dpt_base": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_base_path,
                     "dpt_large": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_large_path,
                     "dpt_hybrid": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_path,
-                    "dpt_hybrid_SSN": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN_path,
+                    "dpt_hybrid_SSN": 'NA',
+                    "dpt_base_SSN": 'NA',
+                    
                     # "dpt_hybrid_kitti": "dpt_weights/dpt_hybrid_kitti-cb926ef4.pt",
                     # "dpt_hybrid_nyu": "dpt_weights/dpt_hybrid_nyu-2ce69ec7.pt",
                 }
@@ -154,6 +156,16 @@ class Model_Joint(nn.Module):
                     )
                 elif model_type=='dpt_base':
                     self.BRDF_Net = DPTAlbedoDepthModel(
+                        opt=opt, 
+                        modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
+                        path=model_path,
+                        backbone="vitb16_384",
+                        non_negative=if_non_negative,
+                        enable_attention_hooks=False,
+                        skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
+                    )
+                elif model_type=='dpt_base_SSN':
+                    self.BRDF_Net = DPTAlbedoDepthModel_SSN(
                         opt=opt, 
                         modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
                         path=model_path,
@@ -400,7 +412,7 @@ class Model_Joint(nn.Module):
                 or self.cfg.MODEL_MATSEG.use_pred_as_input \
                 or self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool or self.cfg.MODEL_MATSEG.if_albedo_pac_conv or self.cfg.MODEL_MATSEG.if_albedo_safenet \
                 or (self.cfg.MODEL_GMM.feat_recon.enable and self.cfg.MODEL_GMM.feat_recon.use_matseg) \
-                or (self.opt.cfg.MODEL_BRDF.DPT_baseline.enable and self.opt.cfg.MODEL_BRDF.DPT_baseline.model=='dpt_hybrid_SSN'):
+                or (self.opt.cfg.MODEL_BRDF.DPT_baseline.enable and self.opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_hybrid_SSN', 'dpt_base_SSN', 'dpt_large_SSN']):
 
                 input_dict_extra.update({'return_dict_matseg': return_dict_matseg})
 
@@ -552,9 +564,7 @@ class Model_Joint(nn.Module):
         # print(img_batch.shape)
         # img_batch = input_dict['imBatch'].half()
         # img_input = dpt_transform({"image": img_batch})["image"]
-        # tic = time.time()
         dpt_prediction, extra_DPT_return_dict = self.BRDF_Net.forward(img_batch, input_dict_extra=input_dict_extra)
-        # print(time.time() - tic, '------------ forward_brdf_DPT_baseline')
         if self.cfg.MODEL_BRDF.DPT_baseline.modality == 'al':
             albedoPred = 0.5 * (dpt_prediction + 1)
             # if (not self.opt.cfg.DATASET.if_no_gt_semantics):
