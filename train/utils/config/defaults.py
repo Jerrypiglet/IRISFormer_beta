@@ -61,6 +61,7 @@ _C.DEBUG.if_dump_perframe_BRDF = False
 
 _C.DATASET = CN()
 _C.DATASET.mini = False # load mini OR from SSD to enable faster dataloading for debugging purposes etc.
+_C.DATASET.binary = False # load binary version of dataset instead of from per-sample files
 _C.DATASET.tmp = False # load tmp OR list from DATASET.dataset_list_tmp
 _C.DATASET.first = -1 # laod first # of the entire dataset: train/val
 _C.DATASET.dataset_name = 'openrooms'
@@ -108,6 +109,9 @@ _C.DATASET.dataset_list = ''
 _C.DATASET.dataset_path_mini = ''
 _C.DATASET.dataset_path_mini_local = '/data/ruizhu/openrooms_mini'
 _C.DATASET.dataset_path_mini_cluster = ['/data/ruizhu/openrooms_mini', '/local/ruzhu/data/openrooms_mini', '/datasets_mount/openrooms_mini']
+_C.DATASET.dataset_path_mini_binary = ''
+_C.DATASET.dataset_path_mini_binary_local = '/data/ruizhu/openrooms_mini'
+_C.DATASET.dataset_path_mini_binary_cluster = ['/home/ruizhu/Documents/data/OR-seq-mini-240x320', '', '']
 _C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini/list'
 # _C.DATASET.dataset_path_mini = '/data/ruizhu/openrooms_mini-val'
 # _C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini-val/list'

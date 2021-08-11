@@ -1,9 +1,11 @@
+from ctypes import resize
 import os.path as osp
 import cv2
 import numpy as np
 import trimesh
 from PIL import Image, ImageDraw, ImageFont
 import os.path as osp
+import struct
 
 def loadHdr_simple(imName):
     im_rec = cv2.imread(str(imName), -1)
@@ -128,3 +130,4 @@ def draw_projected_bdb3d(draw, bdb2D_from_3D, front_flags=None, color=(255, 255,
     #     fill=color, width=width)
     # draw.line(clip2rec([bdb2D_from_3D[3], bdb2D_from_3D[7]], W=W, H=H, line_width=width),
     #     fill=color, width=width)
+

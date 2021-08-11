@@ -32,6 +32,7 @@ def set_up_envs(opt):
     opt.cfg.DATASET.layout_emitter_path = opt.cfg.DATASET.layout_emitter_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.layout_emitter_path_local
     opt.cfg.DATASET.png_path = opt.cfg.DATASET.png_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.png_path_local
     opt.cfg.DATASET.dataset_path_mini = opt.cfg.DATASET.dataset_path_mini_cluster[CLUSTER_ID] if opt.cluster else opt.cfg.DATASET.dataset_path_mini_local
+    opt.cfg.DATASET.dataset_path_mini_binary = opt.cfg.DATASET.dataset_path_mini_binary_cluster[CLUSTER_ID] if opt.cluster else opt.cfg.DATASET.dataset_path_mini_binary_local
     opt.cfg.DATASET.matpart_path = opt.cfg.DATASET.matpart_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.matpart_path_local
     opt.cfg.DATASET.matori_path = opt.cfg.DATASET.matori_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.matori_path_local
     opt.cfg.DATASET.envmap_path = opt.cfg.DATASET.envmap_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.envmap_path_local
@@ -46,7 +47,10 @@ def set_up_envs(opt):
         opt.cfg.PATH.total3D_lists_path = opt.cfg.PATH.total3D_lists_path_zhengqinCVPR
     opt.cfg.DATASET.dataset_list = os.path.join(opt.cfg.PATH.total3D_lists_path, 'list')
     if opt.cfg.DATASET.mini:
-        opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_mini
+        if opt.cfg.DATASET.binary:
+            opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_mini_binary
+        else:
+            opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_mini
         opt.cfg.DATASET.dataset_list = opt.cfg.DATASET.dataset_list_mini
     if opt.cfg.DATASET.tmp:
         opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_tmp
