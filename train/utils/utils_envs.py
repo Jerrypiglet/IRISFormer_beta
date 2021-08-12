@@ -488,7 +488,7 @@ def set_up_dist(opt):
     opt.distributed = opt.num_gpus > 1
     if opt.distributed:
         torch.cuda.set_device(opt.local_rank)
-        process_group = torch.distributed.init_process_group(
+        opt.process_group = torch.distributed.init_process_group(
             backend="nccl", world_size=opt.num_gpus, init_method="env://"
         )
         # synchronize()

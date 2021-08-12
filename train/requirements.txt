@@ -1,6 +1,6 @@
-torch==1.9.0
-torchvision
-opencv-python==4.2.0.34
+torch==1.8.0
+torchvision==0.9.0
+opencv-python==4.3.0.38
 psutil
 h5py
 matplotlib

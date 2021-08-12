@@ -6,10 +6,15 @@ import numpy as np
 import h5py # https://www.christopherlovell.co.uk/blog/2016/04/27/h5py-intro.html
 from multiprocessing import Pool
 from utils_io import loadBinary
+import argparse
 
-RAW_path = Path('/data/ruizhu/openrooms_mini')
-RAW_png_path = Path('/data/ruizhu/OR-pngs')
-DEST_path = Path('/home/ruizhu/Documents/data/OR-seq-mini-240x320')
+# RAW_path = Path('/data/ruizhu/openrooms_mini')
+# RAW_png_path = Path('/data/ruizhu/OR-pngs')
+# DEST_path = Path('/home/ruizhu/Documents/data/OR-seq-mini-240x320')
+
+RAW_path = Path('/siggraphasia20dataset/code/Routine/DatasetCreation/')
+RAW_png_path = Path('/siggraphasia20dataset/pngs')
+DEST_path = Path('/ruidata/ORfull-seq-240x320')
 
 resize_HW = [240, 320] # set to [-1, -1] for not resizing!
 dataset_if_save_space = True
@@ -17,7 +22,17 @@ if_resize = resize_HW!=[-1, -1]
 
 # print(list(RAW_path.iterdir()))
 # for x in tqdm():
-meta_splits = ['mainDiffLight_xml', 'mainDiffLight_xml1', 'mainDiffMat_xml', 'mainDiffMat_xml1', 'main_xml', 'main_xml1']
+parser = argparse.ArgumentParser()
+parser.add_argument('--meta_split', type=str, default='NA', help='')
+opt = parser.parse_args()
+
+meta_splits_available = ['mainDiffLight_xml', 'mainDiffLight_xml1', 'mainDiffMat_xml', 'mainDiffMat_xml1', 'main_xml', 'main_xml1']
+
+if opt.meta_split != 'NA':
+    assert opt.meta_split in meta_splits_available
+    meta_splits = [opt.meta_split]
+else:
+    meta_splits = meta_splits_available
 
 def process_scene(src_scene_Path):
     frame_count = 0
@@ -26,7 +41,6 @@ def process_scene(src_scene_Path):
     if 'scene' not in scene_name:
         return 0
         
-    dest_path = DEST_path / meta_split / scene_name
     src_png_path = RAW_png_path / meta_split / scene_name
 
     # print(y.exists(), png_path.exists())
@@ -42,8 +56,8 @@ def process_scene(src_scene_Path):
     sample_ids = [int(_.replace('im_', '').replace('.hdr', '')) for _ in hdr_file_names] # start with 1, ...
     sample_ids.sort()
     
-    dest_path.mkdir(exist_ok=True, parents=True)
 
+    sample_id_list = []
     im_uint8_list = []
     seg_uint8_list = []
     albedo_uint8_list = []
@@ -52,6 +66,8 @@ def process_scene(src_scene_Path):
     for sample_id in sample_ids:
         png_image_path = src_png_path / ('im_%d.png'%sample_id)
         assert png_image_path.exists()
+
+        sample_id_list.append(sample_id)
 
         im = Image.open(str(str(png_image_path)))
         if if_resize:
@@ -93,19 +109,26 @@ def process_scene(src_scene_Path):
     # print(seg_uint8_concat.shape)
     # print(albedo_uint8_concat.shape)
     # print(depth_float32_concat.shape)
-
-    dest_h5_file = dest_path / 'im_png.h5'
+    
+    dest_path_img = DEST_path / 'im_png' / meta_split / scene_name
+    dest_path_img.mkdir(exist_ok=True, parents=True)
+    dest_h5_file = dest_path_img / 'im_png.h5'
     hf = h5py.File(str(dest_h5_file), 'w')
+    hf.create_dataset('sample_id_list', data=sample_id_list)
     hf.create_dataset('im_uint8', data=im_uint8_concat)
     hf.create_dataset('seg_uint8', data=seg_uint8_concat)
     hf.close()
 
-    dest_h5_file = dest_path / 'albedo.h5'
+    dest_path_albedo = DEST_path / 'albedo' / meta_split / scene_name
+    dest_path_albedo.mkdir(exist_ok=True, parents=True)
+    dest_h5_file = dest_path_albedo / 'albedo.h5'
     hf = h5py.File(str(dest_h5_file), 'w')
     hf.create_dataset('albedo_uint8', data=albedo_uint8_concat)
     hf.close()
 
-    dest_h5_file = dest_path / 'depth.h5'
+    dest_path_depth = DEST_path / 'depth' / meta_split / scene_name
+    dest_path_depth.mkdir(exist_ok=True, parents=True)
+    dest_h5_file = dest_path_depth / 'depth.h5'
     hf = h5py.File(str(dest_h5_file), 'w')
     hf.create_dataset('depth_float32', data=depth_float32_concat)
     hf.close()
@@ -123,7 +146,10 @@ for meta_split in meta_splits:
         continue
 
     p = Pool(processes=16)
-    frame_counts = p.map(process_scene, meta_split_Path.iterdir())
+    meta_split_list = list(meta_split_Path.iterdir())
+    # frame_counts = p.map(process_scene, meta_split_list)
+    frame_counts = list(tqdm(p.imap_unordered(process_scene, meta_split_list), total=len(meta_split_list)))
+
     frame_counts_list.append(frame_counts)
     print(meta_split, frame_counts)
     p.close()
