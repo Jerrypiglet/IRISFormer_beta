@@ -125,6 +125,9 @@ class AppGMM(torch.nn.Module):
         ed=time.time()
         print(f'ssn_2d batched took {(ed-st)*1000:.4f} ms')
 
+        # ssn_2d with index_add=False batched took 139.0760 ms
+        # ssn_2d with index_add=True batched took 70.9851 ms
+
         gamma_map = abs_affinity.reshape(abs_affinity.shape[0], abs_affinity.shape[1], H, W) # B J H W
         gamma_map_cmp = abs_affinity_cmp.reshape(abs_affinity_cmp.shape[0], abs_affinity_cmp.shape[1], H, W) # B J H W
 

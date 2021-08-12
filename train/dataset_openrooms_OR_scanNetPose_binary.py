@@ -149,7 +149,7 @@ class openrooms_binary(data.IterableDataset):
         assert self.split in ['train', 'val', 'test']
         self.task = self.split if task is None else task
         self.if_for_training = if_for_training
-        self.data_root = self.opt.cfg.DATASET.dataset_path
+        self.data_root = self.opt.cfg.DATASET.dataset_path_binary
         split_to_list = {'train': 'train_scenes.txt', 'val': 'val_scenes.txt', 'test': 'test_scenes.txt'}
         data_list_file = os.path.join(self.cfg.PATH.root, self.cfg.DATASET.dataset_list)
         data_list_file = os.path.join(data_list_file, split_to_list[split])
@@ -226,7 +226,7 @@ class openrooms_binary(data.IterableDataset):
     #             yield batch_dict
 
     def __iter__(self): # https://gist.github.com/kklemon/c745e9ee2474f6907f2a3189c0da68b5  
-        idx = 0
+        index = 0
         worker_info = torch.utils.data.get_worker_info()
         # mod = self.world_size
         # shift = self.rank
@@ -251,141 +251,153 @@ class openrooms_binary(data.IterableDataset):
 
         # meta_split_scene_name_list_per_worker = self.meta_split_scene_name_list
 
-        for meta_split, scene_name in meta_split_scene_name_list_per_worker:
-            im_png_h5 = Path(self.opt.cfg.DATASET.dataset_path) / meta_split / scene_name / 'im_png.h5'
-            assert im_png_h5.exists(), '%s does not exist!'%(str(im_png_h5))
-            with h5py.File(str(im_png_h5), 'r') as hf:
-                sample_id_list = np.array(hf.get('sample_id_list'))
-                im_uint8_array = np.array(hf.get('im_uint8'))
-                seg_uint8_array = np.array(hf.get('seg_uint8'))
+        if_load_immask = self.opt.cfg.DATA.load_brdf_gt and (not self.opt.cfg.DATASET.if_no_gt_semantics)
 
-            for frame_id in sample_id_list:
+        for meta_split, scene_name in meta_split_scene_name_list_per_worker:
+            im_png_h5 = Path(self.data_root) / 'im_png' / meta_split / scene_name / 'im_png.h5'
+            assert im_png_h5.exists(), '%s does not exist!'%(str(im_png_h5))
+            try:
+                with h5py.File(str(im_png_h5), 'r') as hf:
+                    sample_id_list = np.array(hf.get('sample_id_list'))
+                    im_uint8_array = np.array(hf.get('im_uint8'))
+                    if if_load_immask:
+                        seg_uint8_array = np.array(hf.get('seg_uint8'))
+                        mask_int32_array = np.array(hf.get('mask_int32'))
+                    if self.opt.cfg.DATASET.binary_in_one_file:
+                        if 'al' in self.cfg.DATA.data_read_list:
+                            albedo_uint8_array = np.array(hf.get('albedo_uint8'))
+                        if 'de' in self.cfg.DATA.data_read_list:
+                            depth_float32_array = np.array(hf.get('depth_float32'))
+
+            except OSError:
+                print('[!!!!!!] Error reading '+str(im_png_h5))
+
+            brdf_batch_dict = {}
+            if 'al' in self.cfg.DATA.data_read_list:
+                if not self.opt.cfg.DATASET.binary_in_one_file:
+                    albedo_h5 = Path(self.data_root) / 'albedo' / meta_split / scene_name / 'albedo.h5'
+                    assert albedo_h5.exists(), '%s does not exist!'%(str(albedo_h5))
+                    with h5py.File(str(albedo_h5), 'r') as hf:
+                        albedo_uint8_array = np.array(hf.get('albedo_uint8'))
+                brdf_batch_dict['albedo'] = albedo_uint8_array
+
+            if 'de' in self.cfg.DATA.data_read_list:
+                if not self.opt.cfg.DATASET.binary_in_one_file:
+                    depth_h5 = Path(self.data_root) / 'depth' / meta_split / scene_name / 'depth.h5'
+                    assert depth_h5.exists(), '%s does not exist!'%(str(depth_h5))
+                    with h5py.File(str(depth_h5), 'r') as hf:
+                        depth_float32_array = np.array(hf.get('depth_float32'))
+                brdf_batch_dict['depth'] = depth_float32_array
+
+            for in_batch_idx, frame_id in enumerate(sample_id_list):
                 scene_key = '-'.join([meta_split, scene_name])
                 frame_info = {'scene_key': scene_key, 'meta_split': meta_split, 'scene_name': scene_name, 'frame_id': frame_id}
                 batch_dict = {'frame_info': frame_info}
-                idx += 1
                 if [scene_key, frame_id] not in self.scene_key_frame_id_list_this_rank:
                     continue
                 
-                # print(idx, len(meta_split_scene_name_list_per_worker), len(sample_id_list), len(self.scene_key_frame_id_list))
+                scene_total3d_path = Path(self.cfg.DATASET.layout_emitter_path) / meta_split / scene_name
+                frame_info = {'index': index, 'meta_split': meta_split, 'scene_name': scene_name, 'frame_id': frame_id, 'frame_key': '%s-%s-%d'%(meta_split, scene_name, frame_id), \
+                    'scene_total3d_path': scene_total3d_path}
+                batch_dict = {'image_index': index, 'frame_info': frame_info, 'image_path': ''}
+
+                if_load_immask = if_load_immask or self.opt.cfg.MODEL_MATSEG.enable
+                # if_load_immask = False
+                self.opt.if_load_immask = if_load_immask
+
+                if self.opt.cfg.DATA.if_pad_to_32x:
+                    assert if_load_immask
+
+                mask_path = ''
+                if if_load_immask:
+                    # seg_path = hdr_image_path.replace('im_', 'immask_').replace('hdr', 'png').replace('DiffMat', '')
+                    # # Read segmentation
+                    # seg = 0.5 * (self.loadImage(seg_path ) + 1)[0:1, :, :]
+                    seg = 0.5 * (self.loadImage(im=seg_uint8_array[in_batch_idx] ) + 1)[0:1, :, :]
+                    # semantics_path = hdr_image_path.replace('DiffMat', '').replace('DiffLight', '')
+                    # mask_path = semantics_path.replace('im_', 'imcadmatobj_').replace('hdr', 'dat')
+                    # print(mask_int32_array.shape, sample_id_list, meta_split, scene_name)
+                    # print(mask_int32_array[in_batch_idx].shape)
+                    mask = self.loadBinary(im=mask_int32_array[in_batch_idx]).squeeze() # [h, w, 3]
+                else:
+                    seg = np.ones((1, self.im_height, self.im_width), dtype=np.float32)
+                    mask = np.ones((self.im_height, self.im_width, 3), dtype=np.uint8)
+
+                brdf_loss_mask = np.ones((self.im_height, self.im_width), dtype=np.uint8)
+                if self.opt.if_pad:
+                    mask = self.opt.pad_op(mask, name='mask')
+                    seg = self.opt.pad_op(seg, if_channel_first=True, name='seg')
+                    brdf_loss_mask = self.opt.pad_op(brdf_loss_mask, if_channel_2_input=True, name='brdf_loss_mask')
+
+                hdr_scale = 1.
+
+                # Read PNG image
+                # image = Image.open(str(png_image_path))
+                # im_RGB_uint8 = np.array(image)
+                im_RGB_uint8 = im_uint8_array[in_batch_idx]
+                # im_RGB_uint8 = cv2.resize(im_RGB_uint8, (self.im_width, self.im_height), interpolation = cv2.INTER_AREA )
+
+                image_transformed_fixed = self.transforms_fixed(im_RGB_uint8)
+                im_trainval_RGB = self.transforms_resize(im_RGB_uint8) # not necessarily \in [0., 1.] [!!!!]
+                # print(im_trainval_RGB.shape, type(im_trainval_RGB), torch.max(im_trainval_RGB), torch.min(im_trainval_RGB), torch.mean(im_trainval_RGB))
+                im_SDR_RGB = im_RGB_uint8.astype(np.float32) / 255.
+                if self.opt.if_pad:
+                    im_SDR_RGB = self.opt.pad_op(im_SDR_RGB, name='im_SDR_RGB')
+
+                im_trainval = im_trainval_RGB # [3, 240, 320], tensor, not in [0., 1.]
+
+                batch_dict.update({'brdf_loss_mask': torch.from_numpy(brdf_loss_mask)})
+
+                if self.opt.cfg.DATA.if_also_load_next_frame:
+                    assert False, 'currently not supported'
+                    png_image_next_path = Path(self.opt.cfg.DATASET.png_path) / meta_split / scene_name / ('im_%d.png'%(frame_id+1))
+                    if not png_image_next_path.exists():
+                        return self.__getitem__((index+1)%len(self.meta_split_scene_name_list))
+                    image_next = Image.open(str(png_image_next_path))
+                    im_RGB_uint8_next = np.array(image_next)
+                    im_RGB_uint8_next = cv2.resize(im_RGB_uint8_next, (self.im_width, self.im_height), interpolation = cv2.INTER_AREA )
+                    im_SDR_RGB_next = im_RGB_uint8_next.astype(np.float32) / 255.
+                    batch_dict.update({'im_SDR_RGB_next': im_SDR_RGB_next})
+
+                
+                # image_transformed_fixed: normalized, not augmented [only needed in semseg]
+
+                # im_trainval: normalized, augmented; HDR (same as im_trainval_RGB in png case) -> for input to network
+
+                # im_trainval_RGB: normalized, augmented; LDR (SRGB space)
+                # im_SDR_RGB: normalized, NOT augmented; LDR
+                # im_RGB_uint8: im_SDR_RGB -> 255
+
+                # print('------', image_transformed_fixed.shape, im_trainval.shape, im_trainval_RGB.shape, im_SDR_RGB.shape, im_RGB_uint8.shape, )
+                # png: ------ torch.Size([3, 240, 320]) (240, 320, 3) torch.Size([3, 240, 320]) (240, 320, 3) (240, 320, 3)
+                # hdr: ------ torch.Size([3, 240, 320]) (3, 240, 320) (3, 240, 320) (3, 240, 320) (240, 320, 3)
+
+                batch_dict.update({'hdr_scale': hdr_scale, 'image_transformed_fixed': image_transformed_fixed, 'im_trainval': im_trainval, 'im_trainval_RGB': im_trainval_RGB, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
+
+                # ====== BRDF =====
+                # image_path = batch_dict['image_path']
+                # if self.opt.cfg.DATA.load_brdf_gt and (not self.opt.cfg.DATASET.if_no_gt_semantics):
+                if self.opt.cfg.DATA.load_brdf_gt:
+                    batch_dict_brdf = self.load_brdf_lighting('', if_load_immask, '', mask, seg, hdr_scale, frame_info, brdf_batch_dict=brdf_batch_dict, in_batch_idx=in_batch_idx)
+                    batch_dict.update(batch_dict_brdf)
+
+                if self.opt.cfg.MODEL_GMM.enable:
+                    self.load_scannet_compatible(batch_dict, frame_info)
+
+                # ====== matseg =====
+                if self.opt.cfg.DATA.load_matseg_gt:
+                    mat_seg_dict = self.load_matseg(mask, im_RGB_uint8)
+                    batch_dict.update(mat_seg_dict)
+
+                index += 1
                 yield batch_dict
-                # print('======', len(self.meta_split_scene_name_list), worker_info.id, self.opt.rank, '======', len(meta_split_scene_name_list_per_worker))
-                # if (idx + shift) % mod == 0:
-                #     yield batch_dict
 
-
-    def __(self):
-        scene_total3d_path = Path(self.cfg.DATASET.layout_emitter_path) / meta_split / scene_name
-        if self.opt.cfg.DATASET.tmp:
-            png_image_path = Path(hdr_image_path.replace('.hdr', '.png').replace('.rgbe', '.png'))
-        else:
-            png_image_path = Path(self.opt.cfg.DATASET.png_path) / meta_split / scene_name / ('im_%d.png'%frame_id)
-        frame_info = {'index': index, 'meta_split': meta_split, 'scene_name': scene_name, 'frame_id': frame_id, 'frame_key': '%s-%s-%d'%(meta_split, scene_name, frame_id), \
-            'scene_total3d_path': scene_total3d_path, 'png_image_path': png_image_path}
-        batch_dict = {'image_index': index, 'frame_info': frame_info}
-
-        if_load_immask = self.opt.cfg.DATA.load_brdf_gt and (not self.opt.cfg.DATASET.if_no_gt_semantics)
-        if_load_immask = if_load_immask or self.opt.cfg.MODEL_MATSEG.enable
-        # if_load_immask = False
-        self.opt.if_load_immask = if_load_immask
-
-        if self.opt.cfg.DATA.if_pad_to_32x:
-            assert if_load_immask
-
-        if if_load_immask:
-            seg_path = hdr_image_path.replace('im_', 'immask_').replace('hdr', 'png').replace('DiffMat', '')
-            # Read segmentation
-            seg = 0.5 * (self.loadImage(seg_path ) + 1)[0:1, :, :]
-            semantics_path = hdr_image_path.replace('DiffMat', '').replace('DiffLight', '')
-            mask_path = semantics_path.replace('im_', 'imcadmatobj_').replace('hdr', 'dat')
-            mask = self.loadBinary(mask_path, channels = 3, dtype=np.int32, if_resize=True).squeeze() # [h, w, 3]
-        else:
-            seg = np.ones((1, self.im_height, self.im_width), dtype=np.float32)
-            mask_path = ''
-            mask = np.ones((self.im_height, self.im_width, 3), dtype=np.uint8)
-
-        brdf_loss_mask = np.ones((self.im_height, self.im_width), dtype=np.uint8)
-        if self.opt.if_pad:
-            mask = self.opt.pad_op(mask, name='mask')
-            seg = self.opt.pad_op(seg, if_channel_first=True, name='seg')
-            brdf_loss_mask = self.opt.pad_op(brdf_loss_mask, if_channel_2_input=True, name='brdf_loss_mask')
-
-        hdr_scale = 1.
-
-        # Read PNG image
-        image = Image.open(str(png_image_path))
-        im_RGB_uint8 = np.array(image)
-        im_RGB_uint8 = cv2.resize(im_RGB_uint8, (self.im_width, self.im_height), interpolation = cv2.INTER_AREA )
-
-        image_transformed_fixed = self.transforms_fixed(im_RGB_uint8)
-        im_trainval_RGB = self.transforms_resize(im_RGB_uint8) # not necessarily \in [0., 1.] [!!!!]
-        # print(im_trainval_RGB.shape, type(im_trainval_RGB), torch.max(im_trainval_RGB), torch.min(im_trainval_RGB), torch.mean(im_trainval_RGB))
-        im_SDR_RGB = im_RGB_uint8.astype(np.float32) / 255.
-        if self.opt.if_pad:
-            im_SDR_RGB = self.opt.pad_op(im_SDR_RGB, name='im_SDR_RGB')
-
-        im_trainval = im_trainval_RGB # [3, 240, 320], tensor, not in [0., 1.]
-
-        batch_dict.update({'image_path': str(png_image_path), 'brdf_loss_mask': torch.from_numpy(brdf_loss_mask)})
-
-        if self.opt.cfg.DATA.if_also_load_next_frame:
-            png_image_next_path = Path(self.opt.cfg.DATASET.png_path) / meta_split / scene_name / ('im_%d.png'%(frame_id+1))
-            if not png_image_next_path.exists():
-                return self.__getitem__((index+1)%len(self.meta_split_scene_name_list))
-            image_next = Image.open(str(png_image_next_path))
-            im_RGB_uint8_next = np.array(image_next)
-            im_RGB_uint8_next = cv2.resize(im_RGB_uint8_next, (self.im_width, self.im_height), interpolation = cv2.INTER_AREA )
-            im_SDR_RGB_next = im_RGB_uint8_next.astype(np.float32) / 255.
-            batch_dict.update({'im_SDR_RGB_next': im_SDR_RGB_next})
-
-        
-        # image_transformed_fixed: normalized, not augmented [only needed in semseg]
-
-        # im_trainval: normalized, augmented; HDR (same as im_trainval_RGB in png case) -> for input to network
-
-        # im_trainval_RGB: normalized, augmented; LDR (SRGB space)
-        # im_SDR_RGB: normalized, NOT augmented; LDR
-        # im_RGB_uint8: im_SDR_RGB -> 255
-
-        # print('------', image_transformed_fixed.shape, im_trainval.shape, im_trainval_RGB.shape, im_SDR_RGB.shape, im_RGB_uint8.shape, )
-        # png: ------ torch.Size([3, 240, 320]) (240, 320, 3) torch.Size([3, 240, 320]) (240, 320, 3) (240, 320, 3)
-        # hdr: ------ torch.Size([3, 240, 320]) (3, 240, 320) (3, 240, 320) (3, 240, 320) (240, 320, 3)
-
-        batch_dict.update({'hdr_scale': hdr_scale, 'image_transformed_fixed': image_transformed_fixed, 'im_trainval': im_trainval, 'im_trainval_RGB': im_trainval_RGB, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
-
-        # ====== BRDF =====
-        # image_path = batch_dict['image_path']
-        # if self.opt.cfg.DATA.load_brdf_gt and (not self.opt.cfg.DATASET.if_no_gt_semantics):
-        if self.opt.cfg.DATA.load_brdf_gt:
-            batch_dict_brdf = self.load_brdf_lighting(hdr_image_path, if_load_immask, mask_path, mask, seg, hdr_scale, frame_info)
-            batch_dict.update(batch_dict_brdf)
-
-        if self.opt.cfg.MODEL_GMM.enable:
-            self.load_scannet_compatible(batch_dict, frame_info)
-
-        # ====== matseg =====
-        if self.opt.cfg.DATA.load_matseg_gt:
-            mat_seg_dict = self.load_matseg(mask, im_RGB_uint8)
-            batch_dict.update(mat_seg_dict)
-
-
-        return batch_dict
-
-    def convert_write_png(self, hdr_image_path, seg, png_image_path):
-        # Read HDR image
-        im_ori = self.loadHdr(hdr_image_path)
-        # == no random scaling for inference
-        im_SDR_fixedscale, _ = self.scaleHdr(im_ori, seg, forced_fixed_scale=True)
-        im_SDR_RGB = np.clip(im_SDR_fixedscale**(1.0/2.2), 0., 1.)
-        im_RGB_uint8 = (255. * im_SDR_RGB).transpose(1, 2, 0).astype(np.uint8)
-        Image.fromarray(im_RGB_uint8).save(png_image_path)
-        print(yellow('>>> Saved png file to %s'%png_image_path))
 
     def load_scannet_compatible(self, batch_dict, frame_info):
         meta_split, scene_name, frame_id = frame_info['meta_split'], frame_info['scene_name'], frame_info['frame_id']
         if self.opt.cfg.DATA.load_cam_pose:
             # if loading OR cam.txt files: need to inverse of def computeCameraEx() /home/ruizhu/Documents/Projects/Total3DUnderstanding/utils_OR/DatasetCreation/sampleCameraPoseFromScanNet.py
-            cam_txt_path = Path(self.opt.cfg.DATASET.dataset_path) / meta_split / scene_name / ('pose_%d.txt'%frame_id)
+            cam_txt_path = Path(self.data_root) / meta_split / scene_name / ('pose_%d.txt'%frame_id)
             pose_ExtM = read_ExtM_from_txt(cam_txt_path)
             batch_dict.update({'pose_ExtM': pose_ExtM})
 
@@ -419,15 +431,15 @@ class openrooms_binary(data.IterableDataset):
         # print(cam_K_scaled)
 
 
-    def load_brdf_lighting(self, hdr_image_path, if_load_immask, mask_path, mask, seg, hdr_scale, frame_info):
+    def load_brdf_lighting(self, hdr_image_path, if_load_immask, mask_path, mask, seg, hdr_scale, frame_info, brdf_batch_dict=None, in_batch_idx=-1):
         batch_dict_brdf = {}
         # Get paths for BRDF params
         if 'al' in self.cfg.DATA.data_read_list:
-            albedo_path = hdr_image_path.replace('im_', 'imbaseColor_').replace('rgbe', 'png').replace('hdr', 'png')
-            if self.opt.cfg.DATASET.dataset_if_save_space:
-                albedo_path = albedo_path.replace('DiffLight', '')
+            # albedo_path = hdr_image_path.replace('im_', 'imbaseColor_').replace('rgbe', 'png').replace('hdr', 'png')
+            # if self.opt.cfg.DATASET.dataset_if_save_space:
+            #     albedo_path = albedo_path.replace('DiffLight', '')
             # Read albedo
-            albedo = self.loadImage(albedo_path, isGama = False)
+            albedo = self.loadImage(im=brdf_batch_dict['albedo'][in_batch_idx], isGama = False)
             albedo = (0.5 * (albedo + 1) ) ** 2.2
             if self.opt.if_pad:
                 albedo = self.opt.pad_op(albedo, if_channel_first=True, name='albedo')
@@ -458,16 +470,17 @@ class openrooms_binary(data.IterableDataset):
             batch_dict_brdf.update({'rough': torch.from_numpy(rough),})
 
         if 'de' in self.cfg.DATA.data_read_list or 'de' in self.cfg.DATA.data_read_list:
-            depth_path = hdr_image_path.replace('im_', 'imdepth_').replace('rgbe', 'dat').replace('hdr', 'dat')
-            if self.opt.cfg.DATASET.dataset_if_save_space:
-                depth_path = depth_path.replace('DiffLight', '').replace('DiffMat', '')
+            # depth_path = hdr_image_path.replace('im_', 'imdepth_').replace('rgbe', 'dat').replace('hdr', 'dat')
+            # if self.opt.cfg.DATASET.dataset_if_save_space:
+            #     depth_path = depth_path.replace('DiffLight', '').replace('DiffMat', '')
             # Read depth
-            depth = self.loadBinary(depth_path)
+            depth = self.loadBinary(im=brdf_batch_dict['depth'][in_batch_idx])
             if self.opt.if_pad:
                 depth = self.opt.pad_op(depth, if_channel_first=True, name='depth')
 
             batch_dict_brdf.update({'depth': torch.from_numpy(depth),})
             if self.opt.cfg.DATA.if_also_load_next_frame:
+                assert False
                 frame_id = frame_info['frame_id']
                 depth_path_next = depth_path.replace('%d.dat'%frame_id, '%d.dat'%(frame_id+1))
                 depth_next = self.loadBinary(depth_path_next)
@@ -658,15 +671,16 @@ class openrooms_binary(data.IterableDataset):
 
         return mat_aggre_map, num_mats-1
 
-    def loadImage(self, imName, isGama = False):
-        if not(osp.isfile(imName ) ):
-            self.logger.warning('File does not exist: ' + imName )
-            assert(False), 'File does not exist: ' + imName 
+    def loadImage(self, imName=None, im=None, isGama = False):
 
-        im = Image.open(imName)
-        im = im.resize([self.im_width, self.im_height], Image.ANTIALIAS )
-
-        im = np.asarray(im, dtype=np.float32)
+        if im is None:
+            if not(osp.isfile(imName ) ):
+                self.logger.warning('File does not exist: ' + imName )
+                assert(False), 'File does not exist: ' + imName 
+            im = Image.open(imName)
+            im = im.resize([self.im_width, self.im_height], Image.ANTIALIAS )
+            im = np.asarray(im, dtype=np.float32)
+            
         if isGama:
             im = (im / 255.0) ** 2.2
             im = 2 * im - 1
@@ -711,33 +725,34 @@ class openrooms_binary(data.IterableDataset):
         hdr = scale * hdr
         return np.clip(hdr, 0, 1), scale 
 
-    def loadBinary(self, imName, channels = 1, dtype=np.float32, if_resize=True):
-        assert dtype in [np.float32, np.int32], 'Invalid binary type outside (np.float32, np.int32)!'
-        if not(osp.isfile(imName ) ):
-            assert(False ), '%s doesnt exist!'%imName
-        with open(imName, 'rb') as fIn:
-            hBuffer = fIn.read(4)
-            height = struct.unpack('i', hBuffer)[0]
-            wBuffer = fIn.read(4)
-            width = struct.unpack('i', wBuffer)[0]
-            dBuffer = fIn.read(4 * channels * width * height )
-            if dtype == np.float32:
-                decode_char = 'f'
-            elif dtype == np.int32:
-                decode_char = 'i'
-            depth = np.asarray(struct.unpack(decode_char * channels * height * width, dBuffer), dtype=dtype)
-            depth = depth.reshape([height, width, channels] )
-            if if_resize:
-                # print(self.im_width, self.im_height, width, height)
+    def loadBinary(self, imName=None, im=None, channels = 1, dtype=np.float32, if_resize=True):
+        if im is None:
+            assert dtype in [np.float32, np.int32], 'Invalid binary type outside (np.float32, np.int32)!'
+            if not(osp.isfile(imName ) ):
+                assert(False ), '%s doesnt exist!'%imName
+            with open(imName, 'rb') as fIn:
+                hBuffer = fIn.read(4)
+                height = struct.unpack('i', hBuffer)[0]
+                wBuffer = fIn.read(4)
+                width = struct.unpack('i', wBuffer)[0]
+                dBuffer = fIn.read(4 * channels * width * height )
                 if dtype == np.float32:
-                    depth = cv2.resize(depth, (self.im_width, self.im_height), interpolation=cv2.INTER_AREA )
+                    decode_char = 'f'
                 elif dtype == np.int32:
-                    depth = cv2.resize(depth.astype(np.float32), (self.im_width, self.im_height), interpolation=cv2.INTER_NEAREST)
-                    depth = depth.astype(np.int32)
+                    decode_char = 'i'
+                im = np.asarray(struct.unpack(decode_char * channels * height * width, dBuffer), dtype=dtype)
+                im = im.reshape([height, width, channels] )
+                if if_resize:
+                    # print(self.im_width, self.im_height, width, height)
+                    if dtype == np.float32:
+                        im = cv2.resize(im, (self.im_width, self.im_height), interpolation=cv2.INTER_AREA )
+                    elif dtype == np.int32:
+                        im = cv2.resize(im.astype(np.float32), (self.im_width, self.im_height), interpolation=cv2.INTER_NEAREST)
+                        im = im.astype(np.int32)
 
-            depth = np.squeeze(depth)
+                im = np.squeeze(im)
 
-        return depth[np.newaxis, :, :]
+        return im[np.newaxis, :, :]
 
     def loadH5(self, imName ): 
         try:

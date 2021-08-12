@@ -30,6 +30,9 @@ def loadBinary(imName, channels = 1, dtype=np.float32, resize_HW=[-1, -1]):
             decode_char = 'i'
         depth = np.asarray(struct.unpack(decode_char * channels * height * width, dBuffer), dtype=dtype)
         depth = depth.reshape([height, width, channels] )
+
+        # print(depth.shape)
+
         if if_resize:
             if dtype == np.float32:
                 depth = cv2.resize(depth, (resize_HW[1], resize_HW[0]), interpolation=cv2.INTER_AREA )
@@ -38,5 +41,6 @@ def loadBinary(imName, channels = 1, dtype=np.float32, resize_HW=[-1, -1]):
                 depth = depth.astype(np.int32)
 
         depth = np.squeeze(depth)
+        # print('>>>>', depth.shape)
 
     return depth

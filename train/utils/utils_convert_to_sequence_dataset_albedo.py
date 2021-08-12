@@ -12,13 +12,13 @@ import argparse
 # RAW_png_path = Path('/data/ruizhu/OR-pngs')
 # DEST_path = Path('/home/ruizhu/Documents/data/OR-seq-mini-240x320')
 
-# RAW_path = Path('/siggraphasia20dataset/code/Routine/DatasetCreation/')
-# RAW_png_path = Path('/siggraphasia20dataset/pngs')
-# DEST_path = Path('/ruidata/ORfull-seq-240x320')
+RAW_path = Path('/siggraphasia20dataset/code/Routine/DatasetCreation/')
+RAW_png_path = Path('/siggraphasia20dataset/pngs')
+DEST_path = Path('/ruidata/ORfull-seq-240x320-albedoInOneFile')
 
-RAW_path = Path('/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms')
-RAW_png_path = Path('/data/ruizhu/OR-pngs')
-DEST_path = Path('/newfoundland/ruizhu/ORfull-seq-240x320')
+# RAW_path = Path('/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms')
+# RAW_png_path = Path('/data/ruizhu/OR-pngs')
+# DEST_path = Path('/newfoundland/ruizhu/ORfull-seq-240x320')
 
 resize_HW = [240, 320] # set to [-1, -1] for not resizing!
 dataset_if_save_space = True
@@ -30,10 +30,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--meta_split', type=str, default='NA', help='')
 opt = parser.parse_args()
 
-# meta_splits_available = ['mainDiffLight_xml', 'mainDiffLight_xml1', 'mainDiffMat_xml', 'mainDiffMat_xml1', 'main_xml', 'main_xml1']
-meta_splits_available = ['mainDiffLight_xml']
-# modalities_convert = ['im_seg', 'depth', 'albedo']
-modalities_convert = ['im_seg']
+meta_splits_available = ['mainDiffLight_xml', 'mainDiffLight_xml1', 'mainDiffMat_xml', 'mainDiffMat_xml1', 'main_xml', 'main_xml1']
+# meta_splits_available = ['mainDiffLight_xml']
+# modalities_convert = ['im_seg_depth', 'depth', 'albedo']
+modalities_convert = ['im_seg', 'albedo']
 
 if opt.meta_split != 'NA':
     assert opt.meta_split in meta_splits_available
@@ -48,8 +48,8 @@ def process_scene(src_scene_Path):
     if 'scene' not in scene_name:
         return 0
     
-    if scene_name != 'scene0048_00':
-        return 0
+    # if scene_name != 'scene0048_00':
+    #     return 0
         
     src_png_path = RAW_png_path / meta_split / scene_name
 
@@ -124,41 +124,42 @@ def process_scene(src_scene_Path):
 
         frame_count += 1
 
+    dest_path_img = DEST_path / 'im_png' / meta_split / scene_name
+    dest_path_img.mkdir(exist_ok=True, parents=True)
+    dest_h5_file = dest_path_img / 'im_png.h5'
+    hf = h5py.File(str(dest_h5_file), 'w')
+    
     if 'im_seg' in modalities_convert:
         im_uint8_concat = np.stack(im_uint8_list) # [_, 240, 320, 3]
         seg_uint8_concat = np.stack(seg_uint8_list) # [_, 240, 320, 3]
         mask_int32_concat = np.stack(mask_int32_list) # [_, 240, 320, 3]
-        dest_path_img = DEST_path / 'im_png' / meta_split / scene_name
-        dest_path_img.mkdir(exist_ok=True, parents=True)
-        dest_h5_file = dest_path_img / 'im_png.h5'
-        hf = h5py.File(str(dest_h5_file), 'w')
         hf.create_dataset('sample_id_list', data=sample_id_list)
         hf.create_dataset('im_uint8', data=im_uint8_concat)
         hf.create_dataset('seg_uint8', data=seg_uint8_concat)
         hf.create_dataset('mask_int32', data=mask_int32_concat)
-        hf.close()
         assert im_uint8_concat.shape[0]==seg_uint8_concat.shape[0]==mask_int32_concat.shape[0]==frame_count
 
     if 'albedo' in modalities_convert:
         albedo_uint8_concat = np.stack(albedo_uint8_list) # [_, 240, 320, 3]
-        dest_path_albedo = DEST_path / 'albedo' / meta_split / scene_name
-        dest_path_albedo.mkdir(exist_ok=True, parents=True)
-        dest_h5_file = dest_path_albedo / 'albedo.h5'
-        hf = h5py.File(str(dest_h5_file), 'w')
+        # dest_path_albedo = DEST_path / 'albedo' / meta_split / scene_name
+        # dest_path_albedo.mkdir(exist_ok=True, parents=True)
+        # dest_h5_file = dest_path_albedo / 'albedo.h5'
+        # hf = h5py.File(str(dest_h5_file), 'w')
         hf.create_dataset('albedo_uint8', data=albedo_uint8_concat)
-        hf.close()
+        # hf.close()
         assert albedo_uint8_concat.shape[0]==frame_count
 
     if 'depth' in modalities_convert:
         depth_float32_concat = np.stack(depth_float32_list) # [_, 240, 320]
-        dest_path_depth = DEST_path / 'depth' / meta_split / scene_name
-        dest_path_depth.mkdir(exist_ok=True, parents=True)
-        dest_h5_file = dest_path_depth / 'depth.h5'
-        hf = h5py.File(str(dest_h5_file), 'w')
+        # dest_path_depth = DEST_path / 'depth' / meta_split / scene_name
+        # dest_path_depth.mkdir(exist_ok=True, parents=True)
+        # dest_h5_file = dest_path_depth / 'depth.h5'
+        # hf = h5py.File(str(dest_h5_file), 'w')
         hf.create_dataset('depth_float32', data=depth_float32_concat)
-        hf.close()
+        # hf.close()
         assert depth_float32_concat.shape[0]==frame_count
 
+    hf.close()
     # print(im_uint8_concat.shape)
     # print(seg_uint8_concat.shape)
     # print(albedo_uint8_concat.shape)

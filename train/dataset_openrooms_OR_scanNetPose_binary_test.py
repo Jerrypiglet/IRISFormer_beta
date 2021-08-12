@@ -252,7 +252,7 @@ class openrooms_binary(data.IterableDataset):
         # meta_split_scene_name_list_per_worker = self.meta_split_scene_name_list
 
         for meta_split, scene_name in meta_split_scene_name_list_per_worker:
-            im_png_h5 = Path(self.opt.cfg.DATASET.dataset_path) / meta_split / scene_name / 'im_png.h5'
+            im_png_h5 = Path(self.opt.cfg.DATASET.dataset_path) / 'im_png' / meta_split / scene_name / 'im_png.h5'
             assert im_png_h5.exists(), '%s does not exist!'%(str(im_png_h5))
             with h5py.File(str(im_png_h5), 'r') as hf:
                 sample_id_list = np.array(hf.get('sample_id_list'))

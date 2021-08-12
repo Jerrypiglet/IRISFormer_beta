@@ -214,7 +214,7 @@ class openrooms(data.Dataset):
             seg = 0.5 * (self.loadImage(seg_path ) + 1)[0:1, :, :]
             semantics_path = hdr_image_path.replace('DiffMat', '').replace('DiffLight', '')
             mask_path = semantics_path.replace('im_', 'imcadmatobj_').replace('hdr', 'dat')
-            mask = self.loadBinary(mask_path, channels = 3, dtype=np.int32, if_resize=True).squeeze() # [h, w, 3]
+            mask = self.loadBinary(mask_path, channels = 3, dtype=np.int32, if_resize=True, modality='mask').squeeze() # [h, w, 3]
         else:
             seg = np.ones((1, self.im_height, self.im_width), dtype=np.float32)
             mask_path = ''
@@ -637,7 +637,7 @@ class openrooms(data.Dataset):
         hdr = scale * hdr
         return np.clip(hdr, 0, 1), scale 
 
-    def loadBinary(self, imName, channels = 1, dtype=np.float32, if_resize=True):
+    def loadBinary(self, imName, channels = 1, dtype=np.float32, if_resize=True, modality=''):
         assert dtype in [np.float32, np.int32], 'Invalid binary type outside (np.float32, np.int32)!'
         if not(osp.isfile(imName ) ):
             assert(False ), '%s doesnt exist!'%imName
@@ -662,6 +662,9 @@ class openrooms(data.Dataset):
                     depth = depth.astype(np.int32)
 
             depth = np.squeeze(depth)
+
+        # if modality=='mask':
+        #     print(depth.shape, depth[np.newaxis, :, :].shape)
 
         return depth[np.newaxis, :, :]
 

@@ -32,6 +32,7 @@ from utils.bin_mean_shift_N import Bin_Mean_Shift_N
 from utils.comm import synchronize
 from utils.utils_misc import *
 from utils.utils_dataloader import make_data_loader
+from utils.utils_dataloader_binary import make_data_loader_binary
 from utils.utils_training import reduce_loss_dict, check_save, print_gpu_usage, time_meters_to_string, find_free_port
 from torch.optim.lr_scheduler import MultiStepLR, ReduceLROnPlateau, StepLR
 
@@ -211,14 +212,17 @@ transforms_val_matseg = get_transform_matseg('val', opt)
 transforms_train_resize = get_transform_resize('train', opt)
 transforms_val_resize = get_transform_resize('val', opt)
 
+openrooms_to_use = openrooms_binary if opt.cfg.DATASET.binary else openrooms
+make_data_loader_to_use = make_data_loader_binary if opt.cfg.DATASET.binary else make_data_loader
+
 if opt.if_train:
-    brdf_dataset_train = openrooms(opt, 
+    brdf_dataset_train = openrooms_to_use(opt, 
         transforms_fixed = transforms_val_resize, 
         transforms_semseg = transforms_train_semseg, 
         transforms_matseg = transforms_train_matseg,
         transforms_resize = transforms_train_resize, 
         cascadeLevel = opt.cascadeLevel, split = 'train', if_for_training=True, logger=logger)
-    brdf_loader_train, _ = make_data_loader(
+    brdf_loader_train, _ = make_data_loader_to_use(
         opt,
         brdf_dataset_train,
         is_train=True,
@@ -252,14 +256,14 @@ if opt.if_val:
     )
 
 if opt.if_overfit_val and opt.if_train:
-    brdf_dataset_train = openrooms(opt, 
+    brdf_dataset_train = openrooms_to_use(opt, 
         transforms_fixed = transforms_val_resize, 
         transforms_semseg = transforms_val_semseg, 
         transforms_matseg = transforms_val_matseg,
         transforms_resize = transforms_val_resize, 
         cascadeLevel = opt.cascadeLevel, split = 'val', if_for_training=True, load_first = -1, logger=logger)
 
-    brdf_loader_train, _ = make_data_loader(
+    brdf_loader_train, _ = make_data_loader_to_use(
         opt,
         brdf_dataset_train,
         is_train=True,
@@ -385,6 +389,8 @@ if not opt.if_train:
         with torch.no_grad():
             val_epoch_joint(brdf_loader_val, model, val_params)
 else:
+    epoch_length = len(brdf_dataset_train) // opt.num_gpus // opt.cfg.SOLVER.ims_per_batch
+    
     for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         epoch = epoch_0 + epoch_start
 
@@ -397,13 +403,13 @@ else:
         # ts_iter_start = ts
         ts_iter_end = ts_epoch_start
         
-        print('=======NEW EPOCH', opt.rank, cfg.MODEL_SEMSEG.fix_bn)
+        print('=======NEW EPOCH of length %d'%epoch_length, opt.rank, cfg.MODEL_SEMSEG.fix_bn)
         synchronize()
 
         if tid >= opt.max_iter and opt.max_iter != -1:
             break
         
-        start_iter = tid_start + len(brdf_loader_train) * epoch_0
+        start_iter = tid_start + epoch_length * epoch_0
         logger.info("Starting training from iteration {}".format(start_iter))
         # with EventStorage(start_iter) as storage:
         for i, data_batch in tqdm(enumerate(brdf_loader_train)):

@@ -10,7 +10,8 @@ from torch.functional import Tensor
 import torch.nn.functional as F
 from tensorboardX import SummaryWriter
 
-import models_def.model_nvidia.ssn.ssn as ssn
+# import models_def.model_nvidia.ssn.ssn as ssn
+import models_def.model_nvidia.ssn.ssn_tmp as ssn
 
 class SSNFeatsTransformAdaptive(torch.nn.Module):
     '''
@@ -106,12 +107,12 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
             scale_down_gamma = scale_down_gamma_tensor
             scale_down_tensor = 1
             
-        if scale_down_gamma != -1: # scale Q
+        if scale_down_gamma != 1: # scale Q
             # print(gamma.shape, tensor_to_transform.shape, scale_down_gamma_tensor)
             gamma_resized = F.interpolate(gamma, scale_factor=1./float(scale_down_gamma))
             gamma_resized = gamma_resized / (torch.sum(gamma_resized, 1, keepdims=True)+1e-6)
             gamma = gamma_resized
-        if scale_down_tensor != -1: # scale tensor
+        if scale_down_tensor != 1: # scale tensor
             # print(gamma.shape, tensor_to_transform.shape, scale_down_gamma_tensor)
             tensor_to_transform_resized = F.interpolate(tensor_to_transform, scale_factor=1./float(scale_down_tensor))
             tensor_to_transform_resized = tensor_to_transform_resized / (torch.sum(tensor_to_transform_resized, 1, keepdims=True)+1e-6)

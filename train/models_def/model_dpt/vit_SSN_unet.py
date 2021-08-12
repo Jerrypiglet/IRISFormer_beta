@@ -92,7 +92,7 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     layer_3 = pretrained.act_postprocess3[0:2](layer_3)
     layer_4 = pretrained.act_postprocess4[0:2](layer_4)
 
-    print('->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape) # -> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 320]) torch.Size([2, 768, 320])
+    # print('->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape) # -> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 320]) torch.Size([2, 768, 320])
 
     # unflatten = nn.Sequential( # 'Re-assemble' in DPT paper
     #     nn.Unflatten(
