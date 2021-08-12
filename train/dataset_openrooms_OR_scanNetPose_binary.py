@@ -241,8 +241,6 @@ class openrooms_binary(data.IterableDataset):
             meta_split_scene_name_list_workers = [scenes_this_rank]
             worker_id = 0
         else:
-            # num_scenes_per_worker = scenes_this_rank // worker_info.num_workers
-            # scenes_this_rank += scenes_this_rank[:len(scenes_this_rank)-num_scenes_per_worker*worker_info.num_workers]
             meta_split_scene_name_list_workers = [list(_) for _ in np.array_split(scenes_this_rank, worker_info.num_workers)]
             worker_id = worker_info.id
         meta_split_scene_name_list_per_worker = meta_split_scene_name_list_workers[worker_id]
