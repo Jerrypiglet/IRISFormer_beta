@@ -44,8 +44,8 @@ def parse_args():
     create_parser.add_argument('--deploy_tar', type=str, help='deploy to target path', default='/newfoundland/semanticInverse/job_list/train')
     # create_parser.add_argument('--python_path', type=str, help='python path in pod', default='/newfoundland/envs/semanticInverse/bin/python')
     # create_parser.add_argument('--pip_path', type=str, help='python path in pod', default='/newfoundland/envs/semanticInverse/bin/pip')
-    create_parser.add_argument('--python_path', type=str, help='python path in pod', default='/newfoundland/envs/py39/bin/python') # torch 1.8.0
-    create_parser.add_argument('--pip_path', type=str, help='python path in pod', default='/newfoundland/envs/py39/bin/pip') # torch 1.8.0
+    create_parser.add_argument('--python_path', type=str, help='python path in pod', default='/newfoundland/envs/py38/bin/python') # torch 1.8.0
+    create_parser.add_argument('--pip_path', type=str, help='python path in pod', default='/newfoundland/envs/py38/bin/pip') # torch 1.8.0
     # create_parser.add_argument('--gpus', type=int, help='nubmer of GPUs', default=2)  
     # create_parser.add_argument('--cpur', type=int, help='request of CPUs', default=10)
     # create_parser.add_argument('--cpul', type=int, help='limit of CPUs', default=30)

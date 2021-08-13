@@ -1,8 +1,8 @@
 {
     "dockerImageName": "nvidian/lpr/rui_pytorch_init:rui_dev_3",
     "aceName": "nv-us-west-2",
-    "name": "VideoAPP.rui",
-    "command": "cp -r /newfoundland/.config/rclone /root/.config/ && cp -r /newfoundland/.ssh ~/ && cd /newfoundland/semanticInverse/train && python models_def/model_nvidia/ssn/setup.py install && python models_def/model_nvidia/ssn_3d/setup.py install && which python && sleep 48h",
+    "name": "ml-model",
+    "command": "mkdir /root/.config && cp -r /newfoundland/.config/rclone /root/.config/ && cp -r /newfoundland/.ssh ~/ && export TORCH_HOME=/newfoundland/torch && which python && sleep 48h",
     "replicaCount": 1,
     "publishedContainerPorts": [
         8888
@@ -48,9 +48,17 @@
         {
             "containerMountPoint":"/datasets_mount/main_xml1",
             "id": 83903
+        },
+        {
+            "containerMountPoint":"/datasets_mount/ORfull-seq-240x320",
+            "id": 84096
+        },
+        {
+            "containerMountPoint":"/datasets_mount/ORfull-seq-240x320-albedoInOneFile",
+            "id": 84138
         }
     ],
     "aceId": 257,
     "resultContainerMountPoint": "/result",
-    "aceInstance": "dgx1v.16g.1.norm"
+    "aceInstance": "dgx1v.16g.2.norm"
 }
