@@ -17,6 +17,8 @@ spec:
       labels:
         k8s-app: nginx
     spec:
+      nodeSelector:
+        kubernetes.io/hostname: k8s-haosu-10.sdsc.optiputer.net
       containers:
       - name: container
         # image: localhost:30081/jerrypiglet/deeplearningconda38v5

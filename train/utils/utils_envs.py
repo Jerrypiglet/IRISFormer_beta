@@ -22,6 +22,7 @@ def set_up_envs(opt):
 
     if opt.if_cluster and opt.cluster=='ngc':
         opt.cfg.flush_secs = 300
+        opt.cfg.DATASET.binary = True
 
     opt.cfg.PATH.root = opt.cfg.PATH.root_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.PATH.root_local
     if opt.if_cluster:

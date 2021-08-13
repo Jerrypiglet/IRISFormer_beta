@@ -570,12 +570,13 @@ class Model_Joint(nn.Module):
             # if (not self.opt.cfg.DATASET.if_no_gt_semantics):
             # print(input_dict['segBRDFBatch'].shape, input_dict['albedoBatch'].shape)
             input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
-            if not self.cfg.MODEL_BRDF.use_scale_aware_albedo:
-                # print(input_dict['segBRDFBatch'].shape, albedoPred.shape)
-                albedoPred = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
-                        input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
             albedoPred = torch.clamp(albedoPred, 0, 1)
-            return_dict.update({'albedoPred': albedoPred})
+            # if not self.cfg.MODEL_BRDF.use_scale_aware_albedo:
+            # print(input_dict['segBRDFBatch'].shape, albedoPred.shape)
+            albedoPred_aligned = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
+                    input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
+            albedoPred_aligned = torch.clamp(albedoPred_aligned, 0, 1)
+            return_dict.update({'albedoPred': albedoPred, 'albedoPred_aligned': albedoPred_aligned})
         elif self.cfg.MODEL_BRDF.DPT_baseline.modality == 'de':
             if self.cfg.MODEL_BRDF.use_scale_aware_depth:
                 depthPred = dpt_prediction
@@ -665,11 +666,12 @@ class Model_Joint(nn.Module):
                 albedoPred = 0.5 * (albedo_output['x_out'] + 1)
                 # if (not self.opt.cfg.DATASET.if_no_gt_semantics):
                 input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
-                if not self.cfg.MODEL_BRDF.use_scale_aware_albedo:
-                    albedoPred = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
-                            input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
                 albedoPred = torch.clamp(albedoPred, 0, 1)
-                return_dict.update({'albedoPred': albedoPred, 'albedo_extra_output_dict': albedo_output['extra_output_dict']})
+                # if not self.cfg.MODEL_BRDF.use_scale_aware_albedo:
+                albedoPred_aligned = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
+                        input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
+                albedoPred_aligned = torch.clamp(albedoPred_aligned, 0, 1)
+                return_dict.update({'albedoPred': albedoPred, 'albedoPred_aligned': albedoPred_aligned, 'albedo_extra_output_dict': albedo_output['extra_output_dict']})
             if 'no' in self.cfg.MODEL_BRDF.enable_list:
                 normal_output = self.BRDF_Net['normalDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_extra=input_dict_extra)
                 normalPred = normal_output['x_out']

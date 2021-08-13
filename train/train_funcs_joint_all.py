@@ -619,6 +619,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
         renderedImBatch_list = []
         
         albedoPreds_list = []
+        albedoPreds_aligned_list = []
         normalPreds_list = []
         roughPreds_list = []
         depthPreds_list = []
@@ -1187,6 +1188,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     # if (not opt.cfg.DATASET.if_no_gt_semantics):
                     albedoBatch_list.append(input_dict['albedoBatch'])
                     albedoPreds_list.append(output_dict['albedoPreds'][n])
+                    albedoPreds_aligned_list.append(output_dict['albedoPreds_aligned'][n])
+
                 if 'no' in opt.cfg.MODEL_BRDF.enable_list:
                     # if (not opt.cfg.DATASET.if_no_gt_semantics):
                     normalBatch_list.append(input_dict['normalBatch'])
@@ -1259,6 +1262,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
             # if (not opt.cfg.DATASET.if_no_gt_semantics):
             albedoBatch_vis = torch.cat(albedoBatch_list)
             albedoPreds_vis = torch.cat(albedoPreds_list)
+            albedoPreds_aligned_vis = torch.cat(albedoPreds_aligned_list)
         if 'no' in opt.cfg.MODEL_BRDF.enable_list:
             # if (not opt.cfg.DATASET.if_no_gt_semantics):
             normalBatch_vis = torch.cat(normalBatch_list)
@@ -1370,9 +1374,12 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
         # ==== Preds
         if 'al' in opt.cfg.MODEL_BRDF.enable_list:
             albedo_pred_batch_vis_sdr = ( (albedoPreds_vis ) ** (1.0/2.2) ).data
+            albedo_pred_aligned_batch_vis_sdr = ( (albedoPreds_aligned_vis ) ** (1.0/2.2) ).data
             if opt.is_master:
                 vutils.save_image(albedo_pred_batch_vis_sdr,
                         '{0}/{1}_albedoPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
+                vutils.save_image(albedo_pred_aligned_batch_vis_sdr,
+                        '{0}/{1}_albedoPred_aligned_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
         if 'no' in opt.cfg.MODEL_BRDF.enable_list:
             normal_pred_batch_vis_sdr = ( 0.5*(normalPreds_vis + 1) ).data
             if opt.is_master:
@@ -1393,6 +1400,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
 
         if 'al' in opt.cfg.MODEL_BRDF.enable_list:
             albedo_pred_batch_vis_sdr_numpy = albedo_pred_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
+            albedo_pred_aligned_batch_vis_sdr_numpy = albedo_pred_aligned_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
         if 'no' in opt.cfg.MODEL_BRDF.enable_list:
             normal_pred_batch_vis_sdr_numpy = normal_pred_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
         if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
@@ -1403,6 +1411,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
             for sample_idx in tqdm(range(im_batch_vis_sdr.shape[0])):
                 if 'al' in opt.cfg.MODEL_BRDF.enable_list:
                     writer.add_image('VAL_brdf-albedo_PRED/%d'%sample_idx, albedo_pred_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
+                    writer.add_image('VAL_brdf-albedo_scaleAligned_PRED/%d'%sample_idx, albedo_pred_aligned_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                     if opt.cfg.DEBUG.if_dump_perframe_BRDF:
                         Image.fromarray((albedo_pred_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8)).save('{0}/{1}_albedoPred_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
                         Image.fromarray((albedo_gt_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8)).save('{0}/{1}_albedoGt_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))

@@ -10,6 +10,7 @@ tqdm
 tensorboard
 torchsummary
 statistics
+tables
 pyyaml
 yacs
 pathlib

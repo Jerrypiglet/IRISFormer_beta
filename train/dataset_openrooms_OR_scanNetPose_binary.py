@@ -25,6 +25,8 @@ from utils.utils_total3D.data_config import RECON_3D_CLS_OR_dict
 from scipy.spatial import cKDTree
 import copy
 import h5py
+import tables
+
 # import math
 # from detectron2.structures import BoxMode
 # from detectron2.data.dataset_mapper import DatasetMapper

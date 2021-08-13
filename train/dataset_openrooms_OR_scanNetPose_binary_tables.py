@@ -296,7 +296,7 @@ class openrooms_binary(data.IterableDataset):
                     # with h5py.File(str(albedo_h5), 'r') as hf:
                     #     albedo_uint8_array = np.array(hf.get('albedo_uint8'))
                     h5file = tables.open_file(str(albedo_h5), driver="H5FD_CORE")
-                    sample_id_list = h5file.root.albedo_uint8.read()
+                    albedo_uint8_array = h5file.root.albedo_uint8.read()
                     h5file.close()
                 brdf_batch_dict['albedo'] = albedo_uint8_array
 
@@ -304,8 +304,12 @@ class openrooms_binary(data.IterableDataset):
                 if not self.opt.cfg.DATASET.binary_in_one_file:
                     depth_h5 = Path(self.data_root) / 'depth' / meta_split / scene_name / 'depth.h5'
                     assert depth_h5.exists(), '%s does not exist!'%(str(depth_h5))
-                    with h5py.File(str(depth_h5), 'r') as hf:
-                        depth_float32_array = np.array(hf.get('depth_float32'))
+                    # with h5py.File(str(depth_h5), 'r') as hf:
+                    #     depth_float32_array = np.array(hf.get('depth_float32'))
+                    h5file = tables.open_file(str(depth_h5), driver="H5FD_CORE")
+                    depth_float32_array = h5file.root.depth_float32.read()
+                    h5file.close()
+
                 brdf_batch_dict['depth'] = depth_float32_array
 
             for in_batch_idx, frame_id in enumerate(sample_id_list):

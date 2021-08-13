@@ -22,6 +22,7 @@ print(sys.path)
 # from dataset_openroomsV4_total3d_matcls_ import openrooms, collate_fn_OR
 from dataset_openrooms_OR_scanNetPose import openrooms, collate_fn_OR
 from dataset_openrooms_OR_scanNetPose_binary import openrooms_binary
+# from dataset_openrooms_OR_scanNetPose_binary_tables import openrooms_binary
 import torch.distributed as dist
 
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -412,11 +413,15 @@ else:
         start_iter = tid_start + epoch_length * epoch_0
         logger.info("Starting training from iteration {}".format(start_iter))
         # with EventStorage(start_iter) as storage:
+        if cfg.SOLVER.if_test_dataloader:
+            tic = time.time()
+            tic_list = []
         for i, data_batch in tqdm(enumerate(brdf_loader_train)):
 
             if cfg.SOLVER.if_test_dataloader:
                 if i % 100 == 0:
                     print(data_batch.keys())
+                    print(opt.task_name, 'On average: %.4f iter/s'%((len(tic_list)+1e-6)/(sum(tic_list)+1e-6)))
                 if opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs:
                     # print(data_batch.keys())
                     # print(data_batch['boxes_valid_list'])
@@ -432,6 +437,9 @@ else:
                             if sum(boxes_valid_list) == 0:
                                 print(sum(boxes_valid_list), boxes_valid_list)
                             train_obj_dict[frame_key] = {'valid_obj_num': sum(boxes_valid_list), 'boxes_valid_list': boxes_valid_list}
+
+                tic_list.append(time.time()-tic)
+                tic = time.time()
                 continue
             reset_tictoc = False
             # Evaluation for an epoch```

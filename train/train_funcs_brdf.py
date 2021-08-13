@@ -148,7 +148,10 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
 
         if 'al' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
             albedoPreds = []
-            albedoPred = output_dict['albedoPred']
+            if opt.cfg.MODEL_BRDF.use_scale_aware_albedo:
+                albedoPred = output_dict['albedoPred']
+            else:
+                albedoPred = output_dict['albedoPred_aligned']
             albedoPreds.append(albedoPred ) 
             # if (not opt.cfg.DATASET.if_no_gt_semantics):
             loss_dict['loss_brdf-albedo'] = []
@@ -159,7 +162,8 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
             loss_dict['loss_brdf-ALL'] += 4 * opt.albeW * loss_dict['loss_brdf-albedo'][-1]
             # output_dict.update({'mat_seg-albedoPreds': albedoPreds})
             loss_dict['loss_brdf-albedo'] = loss_dict['loss_brdf-albedo'][-1]
-            output_dict['albedoPreds'] = albedoPreds
+            output_dict['albedoPreds'] = [output_dict['albedoPred']]
+            output_dict['albedoPreds_aligned'] = [output_dict['albedoPred_aligned']]
 
         if 'no' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
             normalPreds = []
