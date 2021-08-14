@@ -210,9 +210,12 @@ _C.MODEL_BRDF.encoder_exclude = '' # e.g. 'x4_x5
 _C.MODEL_BRDF.use_scale_aware_depth = True
 _C.MODEL_BRDF.depth_activation = 'relu'
 _C.MODEL_BRDF.use_scale_aware_albedo = False # [default: False] set to False to use **scale-invariant** loss for albedo
-_C.MODEL_BRDF.if_use_midas_loss_depth = False
-_C.MODEL_BRDF.if_use_reg_loss_depth = False
-_C.MODEL_BRDF.reg_loss_depth_weight = 0.5
+_C.MODEL_BRDF.loss = CN()
+_C.MODEL_BRDF.loss.if_use_midas_loss_depth = False
+_C.MODEL_BRDF.loss.if_use_reg_loss_depth = False
+_C.MODEL_BRDF.loss.reg_loss_depth_weight = 0.5
+_C.MODEL_BRDF.loss.if_use_reg_loss_albedo = False
+_C.MODEL_BRDF.loss.reg_loss_albedo_weight = 0.5
 
 _C.MODEL_BRDF.DPT_baseline = CN()
 _C.MODEL_BRDF.DPT_baseline.enable = False

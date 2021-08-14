@@ -76,20 +76,21 @@ def trimmed_mae_loss(prediction, target, mask, trim=0.2):
 
 def gradient_loss(prediction, target, mask, reduction=reduction_batch_based):
 
-    M = torch.sum(mask, (1, 2))
+    M = torch.sum(mask, (2, 3))
 
     diff = prediction - target
     diff = torch.mul(mask, diff)
 
-    grad_x = torch.abs(diff[:, :, 1:] - diff[:, :, :-1])
-    mask_x = torch.mul(mask[:, :, 1:], mask[:, :, :-1])
+    grad_x = torch.abs(diff[:, :, :, 1:] - diff[:, :, :, :-1])
+    mask_x = torch.mul(mask[:, :, :, 1:], mask[:, :, :, :-1])
     grad_x = torch.mul(mask_x, grad_x)
 
-    grad_y = torch.abs(diff[:, 1:, :] - diff[:, :-1, :])
-    mask_y = torch.mul(mask[:, 1:, :], mask[:, :-1, :])
+    grad_y = torch.abs(diff[:, :, 1:, :] - diff[:, :, :-1, :])
+    mask_y = torch.mul(mask[:, :, 1:, :], mask[:, :, :-1, :])
     grad_y = torch.mul(mask_y, grad_y)
 
-    image_loss = torch.sum(grad_x, (1, 2)) + torch.sum(grad_y, (1, 2))
+    image_loss = torch.sum(grad_x, (2, 3)) + torch.sum(grad_y, (2, 3))
+    image_loss = torch.mean(image_loss)
 
     return reduction(image_loss, M)
 
@@ -146,11 +147,20 @@ class GradientLoss(nn.Module):
     def forward(self, prediction, target, mask):
         total = 0
 
+        assert len(prediction.shape)==len(target.shape)==4
+        if len(mask.shape)==3:
+            mask = mask.unsqueeze(1)
+        elif len(mask.shape)!=4:
+            raise (RuntimeError("[GradientLoss] len(mask) has to be in [3, 4]! Got %d"%len(mask.shape)))
+
+        assert len(mask.shape)==4
+        assert mask.shape[-2:]==prediction.shape[-2:]==target.shape[-2:]
+
         for scale in range(self.__scales):
             step = pow(2, scale)
 
-            total += gradient_loss(prediction[:, ::step, ::step], target[:, ::step, ::step],
-                                   mask[:, ::step, ::step], reduction=self.__reduction)
+            total += gradient_loss(prediction[:, :, ::step, ::step], target[:, :, ::step, ::step],
+                                   mask[:, :, ::step, ::step], reduction=self.__reduction)
 
         return total
 

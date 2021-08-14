@@ -157,8 +157,13 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
             loss_dict['loss_brdf-albedo'] = []
             assert len(albedoPreds) == 1
             for n in range(0, len(albedoPreds) ):
-                loss_dict['loss_brdf-albedo'].append( torch.sum( (albedoPreds[n] - input_dict['albedoBatch'])
-                    * (albedoPreds[n] - input_dict['albedoBatch']) * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch'] ) ) / pixelObjNum / 3.0 )
+                loss = torch.sum( (albedoPreds[n] - input_dict['albedoBatch'])
+                    * (albedoPreds[n] - input_dict['albedoBatch']) * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch'] ) ) / pixelObjNum / 3.0
+                if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_albedo:
+                    reg_loss = regularization_loss(albedoPreds[n], input_dict['albedoBatch'], input_dict['segBRDFBatch'].squeeze())
+                    loss += opt.cfg.MODEL_BRDF.loss.reg_loss_albedo_weight * reg_loss
+                loss_dict['loss_brdf-albedo'].append(loss)
+
             loss_dict['loss_brdf-ALL'] += 4 * opt.albeW * loss_dict['loss_brdf-albedo'][-1]
             # output_dict.update({'mat_seg-albedoPreds': albedoPreds})
             loss_dict['loss_brdf-albedo'] = loss_dict['loss_brdf-albedo'][-1]
@@ -201,7 +206,7 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
             # if (not opt.cfg.DATASET.if_no_gt_semantics):
             loss_dict['loss_brdf-depth'] = []
             for n in range(0, len(depthPreds ) ):
-                if opt.cfg.MODEL_BRDF.if_use_midas_loss_depth:
+                if opt.cfg.MODEL_BRDF.loss.if_use_midas_loss_depth:
                     # alpha = 0.5 if (tid!=-1 and tid>100) else 0.
                     # alpha = 0.
                     alpha = 0.5
@@ -212,8 +217,8 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
                 else:
                     loss =  torch.sum( (torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) )
                         * ( torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum 
-                    if opt.cfg.MODEL_BRDF.if_use_reg_loss_depth:
-                        reg_loss = regularization_loss(depthPreds[n].squeeze(1), input_dict['depthBatch'].squeeze(1), input_dict['segAllBatch'].squeeze())
+                    if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_depth:
+                        reg_loss = regularization_loss(depthPreds[n], input_dict['depthBatch'], input_dict['segAllBatch'].squeeze())
                         # print(reg_loss.item(), loss.item())
                         loss += opt.cfg.MODEL_BRDF.reg_loss_depth_weight * reg_loss
 
