@@ -31,7 +31,6 @@ from utils.config import cfg
 from utils.bin_mean_shift import Bin_Mean_Shift
 from utils.bin_mean_shift_3 import Bin_Mean_Shift_3
 from utils.bin_mean_shift_N import Bin_Mean_Shift_N
-from utils.comm import synchronize
 from utils.utils_misc import *
 from utils.utils_dataloader import make_data_loader
 from utils.utils_dataloader_binary import make_data_loader_binary
@@ -360,7 +359,6 @@ ts_iter_start_end_list = []
 num_mat_masks_MAX = 0
 
 model.train(not opt.cfg.MODEL_SEMSEG.fix_bn)
-synchronize()
 
 
 # for epoch in list(range(opt.epochIdFineTune+1, opt.cfg.SOLVER.max_epoch)):
@@ -386,7 +384,6 @@ if not opt.if_train:
         val_params.update({'batch_size_val_vis': batch_size_val_vis, 'detectron_dataset_name': 'vis'})
         with torch.no_grad():
             vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
-        synchronize()                
     if opt.if_val:
         val_params.update({'detectron_dataset_name': 'val'})
         with torch.no_grad():
@@ -407,7 +404,6 @@ else:
         ts_iter_end = ts_epoch_start
         
         print('=======NEW EPOCH of length %d'%epoch_length, opt.rank, cfg.MODEL_SEMSEG.fix_bn)
-        synchronize()
 
         if tid >= opt.max_iter and opt.max_iter != -1:
             break
@@ -459,7 +455,6 @@ else:
             reset_tictoc = False
             # Evaluation for an epoch```
 
-            synchronize()
             print((tid - tid_start) % opt.eval_every_iter, opt.eval_every_iter)
             if opt.eval_every_iter != -1 and (tid - tid_start) % opt.eval_every_iter == 0:
                 val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift, 'if_register_detectron_only': False}
@@ -469,7 +464,6 @@ else:
                         if opt.cfg.DEBUG.if_dump_anything:
                             dump_joint(brdf_loader_val_vis, model, val_params)
                         vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
-                    synchronize()                
                 if opt.if_val:
                     val_params.update({'detectron_dataset_name': 'val'})
                     with torch.no_grad():
@@ -477,16 +471,14 @@ else:
                 model.train(not cfg.MODEL_SEMSEG.fix_bn)
                 reset_tictoc = True
                 
-            synchronize()
 
             # Save checkpoint
             if opt.save_every_iter != -1 and (tid - tid_start) % opt.save_every_iter == 0 and 'tmp' not in opt.task_name:
                 check_save(opt, tid, tid, epoch, checkpointer, epochs_saved, opt.checkpoints_path_task, logger)
                 reset_tictoc = True
 
-            synchronize()
 
-            torch.cuda.empty_cache()
+            # torch.cuda.empty_cache()
 
             if reset_tictoc:
                 ts_iter_end = time.time()
@@ -503,7 +495,6 @@ else:
             # ======= Load data from cpu to gpu
 
             labels_dict = get_labels_dict_joint(data_batch, opt)
-            synchronize()
 
             time_meters['data_to_gpu'].update(time.time() - ts_iter_start)
             time_meters['ts'] = time.time()
@@ -514,7 +505,6 @@ else:
             # ======= Forward
             optimizer.zero_grad()
             output_dict, loss_dict = forward_joint(True, labels_dict, model, opt, time_meters, tid=tid)
-            synchronize()
             
             # print('=======loss_dict', loss_dict)
             loss_dict_reduced = reduce_loss_dict(loss_dict, mark=tid, logger=logger) # **average** over multi GPUs
@@ -639,7 +629,6 @@ else:
             optimizer.step()
             time_meters['backward'].update(time.time() - time_meters['ts'])
             time_meters['ts'] = time.time()
-            synchronize()
 
             if opt.is_master:
                 loss_keys_print = [x for x in loss_keys_print if 'ALL' in x] + [x for x in loss_keys_print if 'ALL' not in x]
@@ -665,61 +654,6 @@ else:
                     writer.add_scalar('training/GPU_usage_ratio', usage_ratio, tid)
                     writer.add_scalar('training/batch_size_per_gpu', len(data_batch['image_path']), tid)
                     writer.add_scalar('training/gpus', opt.num_gpus, tid)
-            # if opt.is_master:
-
-            # if tid % opt.debug_every_iter == 0:       
-            #     if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool or opt.cfg.MODEL_MATSEG.if_albedo_safenet) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
-            #         if opt.is_master and output_dict['im_trainval_RGB_mask_pooled_mean'] is not None:
-            #             for sample_idx, im_trainval_RGB_mask_pooled_mean in enumerate(output_dict['im_trainval_RGB_mask_pooled_mean']):
-            #                 im_trainval_RGB_mask_pooled_mean = im_trainval_RGB_mask_pooled_mean.detach().cpu().numpy().squeeze().transpose(1, 2, 0)
-            #                 writer.add_image('TRAIN_im_trainval_RGB_debug/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), data_batch['im_trainval_RGB'][sample_idx].numpy().squeeze().transpose(1, 2, 0), tid, dataformats='HWC')
-            #                 writer.add_image('TRAIN_im_trainval_RGB_mask_pooled_mean/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), im_trainval_RGB_mask_pooled_mean, tid, dataformats='HWC')
-            #                 logger.info('Added debug pooling sample')
-            
-            # ===== Logging summaries of training samples
-            # if tid % 2000 == 0:
-            #     for sample_idx, (im_single, im_trainval_RGB, im_path) in enumerate(zip(data_batch['im_trainval'], data_batch['im_trainval_RGB'], data_batch['image_path'])):
-            #         # im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
-            #         im_trainval_RGB = im_trainval_RGB.numpy().squeeze().transpose(1, 2, 0)
-            #         if opt.is_master:
-            #             # writer.add_image('TRAIN_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
-            #             writer.add_image('TRAIN_im_trainval_RGB/%d'%sample_idx, im_trainval_RGB, tid, dataformats='HWC')
-            #             writer.add_text('TRAIN_image_name/%d'%sample_idx, im_path, tid)
-            #     if opt.cfg.DATA.load_matseg_gt:
-            #         for sample_idx, (im_single, mat_aggre_map) in enumerate(zip(data_batch['im_matseg_transformed_trainval'], labels_dict['mat_aggre_map_cpu'])):
-            #             im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
-            #             mat_aggre_map = mat_aggre_map.numpy().squeeze()
-            #             if opt.is_master:
-            #                 writer.add_image('TRAIN_matseg_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
-            #                 writer.add_image('TRAIN_matseg_mat_aggre_map_trainval/%d'%sample_idx, vis_index_map(mat_aggre_map), tid, dataformats='HWC')
-            #             logger.info('Logged training mat seg')
-            #     if opt.cfg.DATA.load_semseg_gt and opt.cfg.MODEL_SEMSEG.enable:
-            #         for sample_idx, (im_single, semseg_label, semseg_pred) in enumerate(zip(data_batch['im_semseg_transformed_trainval'], data_batch['semseg_label'], output_dict['semseg_pred'].detach().cpu())):
-            #             im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
-            #             semseg_colors = np.loadtxt(os.path.join(opt.pwdpath, opt.cfg.PATH.semseg_colors_path)).astype('uint8')
-            #             if opt.cfg.MODEL_SEMSEG.wallseg_only:
-            #                 semseg_colors = np.array([[0, 0, 0], [0, 80, 100]], dtype=np.uint8)
-
-            #             semseg_label = np.uint8(semseg_label.numpy().squeeze())
-            #             from utils.utils_vis import colorize
-            #             semseg_label_color = np.array(colorize(semseg_label, semseg_colors).convert('RGB'))
-            #             if opt.is_master:
-            #                 writer.add_image('TRAIN_semseg_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
-            #                 writer.add_image('TRAIN_semseg_label_trainval/%d'%sample_idx, semseg_label_color, tid, dataformats='HWC')
-
-            #             prediction = np.argmax(semseg_pred.numpy().squeeze(), 0)
-            #             gray_pred = np.uint8(prediction)
-            #             color_pred = np.array(colorize(gray_pred, semseg_colors).convert('RGB'))
-            #             if opt.is_master:
-            #                 writer.add_image('TRAIN_semseg_PRED/%d'%sample_idx, color_pred, tid, dataformats='HWC')
-
-            #             logger.info('Logged training sem seg')
-
-            synchronize()
-
-            print('->', tid, opt.rank)
-            if tid % opt.debug_every_iter == 0:
-                opt.if_vis_debug_pac = False
 
             tid += 1
             if tid >= opt.max_iter and opt.max_iter != -1:

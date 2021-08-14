@@ -20,9 +20,6 @@ def set_up_envs(opt):
     CLUSTER_ID = opt.cfg.PATH.cluster_names.index(opt.cluster)
     opt.if_pad = False
 
-    if opt.if_cluster and opt.cluster=='ngc':
-        opt.cfg.flush_secs = 300
-        # opt.cfg.DATASET.binary = True
 
     opt.cfg.PATH.root = opt.cfg.PATH.root_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.PATH.root_local
     if opt.if_cluster:
@@ -43,8 +40,13 @@ def set_up_envs(opt):
 
     if opt.data_root is not None:
         opt.cfg.DATASET.dataset_path = opt.data_root
-    # if opt.cfg.DATASET.binary:
-    #     opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_binary
+    if opt.if_cluster and opt.cluster=='ngc':
+        opt.cfg.flush_secs = 300
+        # opt.cfg.DATASET.binary = True
+        if opt.cfg.DATASET.if_quarter:
+            opt.cfg.DATASET.dataset_path_binary += '-quarter'
+        if opt.cfg.DATASET.binary_if_to_memory:
+            opt.cfg.DATASET.dataset_path_binary = opt.cfg.DATASET.dataset_path_binary.replace('/datasets_mount', opt.cfg.DATASET.binary_memory_path)
     
 
     if opt.cfg.PATH.total3D_lists_path_if_zhengqinCVPR:

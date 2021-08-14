@@ -270,18 +270,22 @@ class openrooms_binary(data.IterableDataset):
                 #             albedo_uint8_array = np.array(hf.get('albedo_uint8'))
                 #         if 'de' in self.cfg.DATA.data_read_list:
                 #             depth_float32_array = np.array(hf.get('depth_float32'))
-
+                print(str(im_png_h5))
                 h5file = tables.open_file(str(im_png_h5), driver="H5FD_CORE")
                 sample_id_list = h5file.root.sample_id_list.read()
                 im_uint8_array = h5file.root.im_uint8.read()
                 if if_load_immask:
                     seg_uint8_array = h5file.root.seg_uint8.read()
-                    mask_int32_array = h5file.root.mask_int32.read()
+                    mask_int32_array = h5file.root.mask_int32.read().astype(np.int32)
                 if self.opt.cfg.DATASET.binary_in_one_file:
-                    if 'al' in self.cfg.DATA.data_read_list:
-                        albedo_uint8_array = h5file.root.albedo_uint8.read()
-                    if 'de' in self.cfg.DATA.data_read_list:
-                        depth_float32_array = h5file.root.depth_float32.read()
+                    try:
+                        if 'al' in self.cfg.DATA.data_read_list:
+                            albedo_uint8_array = h5file.root.albedo_uint8.read()
+                        if 'de' in self.cfg.DATA.data_read_list:
+                            depth_float32_array = h5file.root.depth_float32.read()
+                    except:
+                        print(str(im_png_h5))
+
                 h5file.close()                
 
 

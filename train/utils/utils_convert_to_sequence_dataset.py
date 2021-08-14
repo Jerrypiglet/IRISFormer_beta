@@ -14,6 +14,12 @@ from multiprocessing import Pool
 from utils_io import loadBinary
 import argparse
 
+
+def return_percent(list_in, percent=1.):
+    len_list = len(list_in)
+    return_len = max(1, int(np.floor(len_list*percent)))
+    return list_in[:return_len]
+
 # RAW_path = Path('/data/ruizhu/openrooms_mini')
 # RAW_png_path = Path('/data/ruizhu/OR-pngs')
 # DEST_path = Path('/home/ruizhu/Documents/data/OR-seq-mini-240x320')
@@ -21,6 +27,8 @@ import argparse
 RAW_path = Path('/siggraphasia20dataset/code/Routine/DatasetCreation/')
 RAW_png_path = Path('/siggraphasia20dataset/pngs')
 DEST_path = Path('/ruidata/ORfull-seq-240x320-RE1smaller')
+
+PERCENT = 0.25
 
 # RAW_path = Path('/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms')
 # RAW_png_path = Path('/data/ruizhu/OR-pngs')
@@ -194,6 +202,7 @@ for meta_split in meta_splits:
 
     p = Pool(processes=32)
     scene_list = list(meta_split_Path.iterdir())
+    scene_list = return_percent(scene_list, PERCENT)
     frame_counts = p.map(process_scene, scene_list)
     # frame_counts = list(tqdm(p.imap_unordered(process_scene, scene_list), total=len(scene_list)))
 

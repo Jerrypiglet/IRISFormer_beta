@@ -26,7 +26,7 @@ from train_funcs_light import get_labels_dict_light, postprocess_light
 from train_funcs_layout_object_emitter import get_labels_dict_layout_emitter, postprocess_layout_object_emitter
 from train_funcs_matcls import get_labels_dict_matcls, postprocess_matcls
 from train_funcs_detectron import postprocess_detectron, gather_lists
-from utils.comm import synchronize
+# from utils.comm import synchronize
 
 from utils.utils_metrics import compute_errors_depth_nyu
 from train_funcs_matcls import getG1IdDict, getRescaledMatFromID
@@ -196,13 +196,13 @@ def forward_joint(is_train, labels_dict, model, opt, time_meters, if_vis=False, 
         output_dict, loss_dict = postprocess_matcls(labels_dict, output_dict, loss_dict, opt, time_meters, if_vis=if_vis)
         time_meters['loss_matcls'].update(time.time() - time_meters['ts'])
         time_meters['ts'] = time.time()
-        synchronize()
+        # synchronize()
 
     if opt.cfg.MODEL_DETECTRON.enable:
         output_dict, loss_dict = postprocess_detectron(labels_dict, output_dict, loss_dict, opt, time_meters, if_vis=if_vis, is_train=is_train)
         time_meters['loss_detectron'].update(time.time() - time_meters['ts'])
         time_meters['ts'] = time.time()
-        synchronize()
+        # synchronize()
 
 
     return output_dict, loss_dict
@@ -465,7 +465,7 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
                 # print('----', opt.rank, [x['image_id'] for x in input_dict['detectron_dict_list']])
 
 
-            synchronize()
+            # synchronize()
 
     # ======= Metering
 
@@ -483,7 +483,7 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
             if not pickle_path.exists():
                 torch.save(coco_dictt_labels, str(pickle_path))
                 logger.info(green('[Detectron] Dumped detectron pickle: %s'%str(pickle_path)))
-        synchronize()
+        # synchronize()
 
         coco_dictt_labels = torch.load(str(pickle_path))
         # brdf_dataset_val.run(OR_detectron_path)
@@ -510,7 +510,7 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
                         writer.add_scalar('VAL/DETECTRON-%s-%s_val'%(task_name, metric), dict_items[1][metric], tid)
         # writer.add_scalar('VAL/DETECTRON-mAcc_val', mAcc, tid)
         # writer.add_scalar('VAL/DETECTRON-allAcc_val', allAcc, tid)
-        synchronize()
+        # synchronize()
 
         
     if opt.is_master:
@@ -582,7 +582,7 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
                 writer.add_scalar('VAL/BRDF-normal_median_val', brdf_meters['normal_median_error_meter'].get_median(), tid)
                 logger.info('Val result - normal: mean: %.4f, median: %.4f'%(brdf_meters['normal_mean_error_meter'].avg, brdf_meters['normal_median_error_meter'].get_median()))
 
-    synchronize()
+    # synchronize()
     logger.info(red('Evaluation timings: ' + time_meters_to_string(time_meters)))
 
 
@@ -654,7 +654,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
             # ======= Forward
             output_dict, _ = forward_joint(False, input_dict, model, opt, time_meters, if_vis=True)
 
-            synchronize()
+            # synchronize()
             
             # ======= Vis imagges
             colors = np.loadtxt(os.path.join(opt.pwdpath, opt.cfg.PATH.semseg_colors_path)).astype('uint8')
@@ -1246,9 +1246,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                         # writer.add_image('VAL_GMM_im_gt/%d'%(sample_idx), im_single, tid, dataformats='HWC')
 
 
-            synchronize()
+            # synchronize()
 
-    synchronize()
+    # synchronize()
 
 
 
@@ -1468,5 +1468,5 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
 
     # opt.albedo_pooling_debug = False
 
-    synchronize()
+    # synchronize()
     opt.if_vis_debug_pac = False
