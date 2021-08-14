@@ -4,6 +4,12 @@ from tqdm import tqdm
 from PIL import Image
 import numpy as np
 import h5py # https://www.christopherlovell.co.uk/blog/2016/04/27/h5py-intro.html
+'''
+dtype ranges and sizes:
+https://docs.oracle.com/cd/E19253-01/817-6223/chp-typeopexpr-2/index.html
+https://clickhouse.tech/docs/en/sql-reference/data-types/int-uint/
+'''
+
 from multiprocessing import Pool
 from utils_io import loadBinary
 import argparse
@@ -12,13 +18,13 @@ import argparse
 # RAW_png_path = Path('/data/ruizhu/OR-pngs')
 # DEST_path = Path('/home/ruizhu/Documents/data/OR-seq-mini-240x320')
 
-# RAW_path = Path('/siggraphasia20dataset/code/Routine/DatasetCreation/')
-# RAW_png_path = Path('/siggraphasia20dataset/pngs')
-# DEST_path = Path('/ruidata/ORfull-seq-240x320')
+RAW_path = Path('/siggraphasia20dataset/code/Routine/DatasetCreation/')
+RAW_png_path = Path('/siggraphasia20dataset/pngs')
+DEST_path = Path('/ruidata/ORfull-seq-240x320-RE1smaller')
 
-RAW_path = Path('/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms')
-RAW_png_path = Path('/data/ruizhu/OR-pngs')
-DEST_path = Path('/newfoundland/ruizhu/ORfull-seq-240x320')
+# RAW_path = Path('/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms')
+# RAW_png_path = Path('/data/ruizhu/OR-pngs')
+# DEST_path = Path('/newfoundland/ruizhu/ORfull-seq-240x320')
 
 resize_HW = [240, 320] # set to [-1, -1] for not resizing!
 dataset_if_save_space = True
@@ -30,10 +36,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--meta_split', type=str, default='NA', help='')
 opt = parser.parse_args()
 
-# meta_splits_available = ['mainDiffLight_xml', 'mainDiffLight_xml1', 'mainDiffMat_xml', 'mainDiffMat_xml1', 'main_xml', 'main_xml1']
-meta_splits_available = ['mainDiffLight_xml']
-# modalities_convert = ['im_seg', 'depth', 'albedo']
-modalities_convert = ['im_seg']
+meta_splits_available = ['mainDiffLight_xml', 'mainDiffLight_xml1', 'mainDiffMat_xml', 'mainDiffMat_xml1', 'main_xml', 'main_xml1']
+# meta_splits_available = ['mainDiffLight_xml']
+modalities_convert = ['im_seg', 'depth', 'albedo']
+# modalities_convert = ['im_seg']
 
 if opt.meta_split != 'NA':
     assert opt.meta_split in meta_splits_available
@@ -48,8 +54,8 @@ def process_scene(src_scene_Path):
     if 'scene' not in scene_name:
         return 0
     
-    if scene_name != 'scene0048_00':
-        return 0
+    # if scene_name != 'scene0048_00':
+    #     return 0
         
     src_png_path = RAW_png_path / meta_split / scene_name
 
@@ -98,7 +104,9 @@ def process_scene(src_scene_Path):
 
             semantics_path = str(hdr_image_path).replace('DiffMat', '').replace('DiffLight', '')
             mask_path = semantics_path.replace('im_', 'imcadmatobj_').replace('hdr', 'dat')
-            mask_int32 = loadBinary(mask_path, channels = 3, dtype=np.int32, resize_HW=resize_HW)
+            mask_int32 = loadBinary(mask_path, channels = 3, dtype=np.int32, resize_HW=resize_HW).astype(np.uint16)
+            assert np.amax(mask_int32) <= 65535 and np.amin(mask_int32) >= 0
+            # print(mask_int32, np.amax(mask_int32))
             # print(mask_int32.shape)
             # .squeeze() # [h, w, 3]
             assert len(mask_int32.shape)==3
@@ -136,6 +144,7 @@ def process_scene(src_scene_Path):
         hf.create_dataset('im_uint8', data=im_uint8_concat)
         hf.create_dataset('seg_uint8', data=seg_uint8_concat)
         hf.create_dataset('mask_int32', data=mask_int32_concat)
+        # print(type(sample_id_list[0]), im_uint8_concat.dtype, seg_uint8_concat.dtype, mask_int32_concat.dtype, )
         hf.close()
         assert im_uint8_concat.shape[0]==seg_uint8_concat.shape[0]==mask_int32_concat.shape[0]==frame_count
 

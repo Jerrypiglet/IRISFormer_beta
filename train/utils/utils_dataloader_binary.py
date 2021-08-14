@@ -53,15 +53,15 @@ def make_data_loader_binary(opt, dataset, is_train=True, start_iter=0, logger=No
         images_per_gpu = cfg.SOLVER.ims_per_batch if batch_size_override==-1 else batch_size_override
         shuffle = True
         num_iters = cfg.SOLVER.max_iter
-        drop_last = False
+        drop_last = True
         persistent_workers = True
     else:
         images_per_gpu = cfg.TEST.ims_per_batch if batch_size_override==-1 else batch_size_override
         shuffle = False
         num_iters = None
         start_iter = 0
-        drop_last = False
-        persistent_workers = False
+        drop_last = True
+        persistent_workers = True
 
     if override_shuffle is not None:
         shuffle = override_shuffle
@@ -78,7 +78,7 @@ def make_data_loader_binary(opt, dataset, is_train=True, start_iter=0, logger=No
     shuffle = shuffle and cfg.DATASET.binary_if_shuffle
 
     if shuffle:
-        bf_dataset = BufferedShuffleDataset(dataset, buffer_size=200) # https://pytorch.org/docs/1.8.0/data.html?highlight=bufferedshuffledataset#torch.utils.data.BufferedShuffleDataset
+        bf_dataset = BufferedShuffleDataset(dataset, buffer_size=100) # https://pytorch.org/docs/1.8.0/data.html?highlight=bufferedshuffledataset#torch.utils.data.BufferedShuffleDataset
     else:
         bf_dataset = dataset
 
@@ -92,6 +92,7 @@ def make_data_loader_binary(opt, dataset, is_train=True, start_iter=0, logger=No
         # shuffle=shuffle,
         persistent_workers=persistent_workers, 
         worker_init_fn=worker_init_fn, 
+        # timeout=10
         # drop_last=is_train, 
         # multiprocessing_context=mp.get_context('fork')
         # multiprocessing_context='forkserver'

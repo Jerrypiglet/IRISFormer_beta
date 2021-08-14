@@ -21,7 +21,7 @@ print(sys.path)
 
 # from dataset_openroomsV4_total3d_matcls_ import openrooms, collate_fn_OR
 from dataset_openrooms_OR_scanNetPose import openrooms, collate_fn_OR
-from dataset_openrooms_OR_scanNetPose_binary_test import openrooms_binary
+from dataset_openrooms_OR_scanNetPose_binary_test_ import openrooms_binary
 import torch.distributed as dist
 
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -181,11 +181,19 @@ if opt.if_train:
 # for epoch_0 in range(2):
 #     print('=======NEW EPOCH', opt.rank, cfg.MODEL_SEMSEG.fix_bn)
 synchronize()
+from train_funcs_detectron import gather_lists
 
 frame_list = []
+count_samples = 0
 for i, data_batch in tqdm(enumerate(brdf_loader_train)):
+    count_samples += len(data_batch['frame_info'])
+    count_samples_gathered = gather_lists([count_samples], opt.num_gpus)
+
+    print('->', i, opt.rank)
     if opt.rank==0:
-        print('--', i, opt.rank, len(data_batch['frame_info']), len(brdf_dataset_train.scene_key_frame_id_list_this_rank))
+        print('-', count_samples_gathered, '-')
+
+    # print('->', i, opt.rank, len(data_batch['frame_info']), count_samples, len(brdf_dataset_train.scene_key_frame_id_list_this_rank))
     # print(data_batch)
     scene_key_list, frame_id_list = [_['scene_key'] for _ in data_batch['frame_info']], [_['frame_id'] for _ in data_batch['frame_info']]
 
@@ -198,8 +206,7 @@ print('---->', opt.rank, [x for x in frame_list if x not in brdf_dataset_train.s
 # synchronize()
 
 # if opt.distributed:
-#     from train_funcs_detectron import gather_lists
-#     frame_list_gathered = gather_lists(frame_list, opt.num_gpus)
+# frame_list_gathered = gather_lists(frame_list, opt.num_gpus)
 #     print(len(frame_list_gathered))
 
 #     print(len(brdf_dataset_train.scene_key_frame_id_list))

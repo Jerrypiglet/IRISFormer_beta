@@ -21,9 +21,10 @@ print(sys.path)
 
 # from dataset_openroomsV4_total3d_matcls_ import openrooms, collate_fn_OR
 from dataset_openrooms_OR_scanNetPose import openrooms, collate_fn_OR
-from dataset_openrooms_OR_scanNetPose_binary import openrooms_binary
-# from dataset_openrooms_OR_scanNetPose_binary_tables import openrooms_binary
+# from dataset_openrooms_OR_scanNetPose_binary_ import openrooms_binary
+from dataset_openrooms_OR_scanNetPose_binary_tables import openrooms_binary
 import torch.distributed as dist
+from train_funcs_detectron import gather_lists
 
 from torch.nn.parallel import DistributedDataParallel as DDP
 from utils.config import cfg
@@ -214,6 +215,7 @@ transforms_train_resize = get_transform_resize('train', opt)
 transforms_val_resize = get_transform_resize('val', opt)
 
 openrooms_to_use = openrooms_binary if opt.cfg.DATASET.binary else openrooms
+print('+++++++++openrooms_to_use', openrooms_to_use)
 make_data_loader_to_use = make_data_loader_binary if opt.cfg.DATASET.binary else make_data_loader
 
 if opt.if_train:
@@ -275,7 +277,7 @@ if opt.if_overfit_val and opt.if_train:
     )
 
 if opt.if_overfit_train and opt.if_val:
-    brdf_dataset_val = openrooms(opt, 
+    brdf_dataset_val = openrooms_to_use(opt, 
         transforms_fixed = transforms_val_resize, 
         transforms_semseg = transforms_val_semseg, 
         transforms_matseg = transforms_val_matseg,
@@ -283,7 +285,7 @@ if opt.if_overfit_train and opt.if_val:
         # cascadeLevel = opt.cascadeLevel, split = 'val', logger=logger)
         # cascadeLevel = opt.cascadeLevel, split = 'val', load_first = 20 if opt.mini_val else -1, logger=logger)
         cascadeLevel = opt.cascadeLevel, split = 'train', if_for_training=False, load_first = -1, logger=logger)
-    brdf_loader_val, _ = make_data_loader(
+    brdf_loader_val, _ = make_data_loader_to_use(
         opt,
         brdf_dataset_val,
         is_train=False,
@@ -416,7 +418,20 @@ else:
         if cfg.SOLVER.if_test_dataloader:
             tic = time.time()
             tic_list = []
+
+        count_samples_this_rank = 0
+    
         for i, data_batch in tqdm(enumerate(brdf_loader_train)):
+
+            if opt.cfg.DATASET.binary:
+                count_samples_this_rank += len(data_batch['frame_info'])
+                count_samples_gathered = gather_lists([count_samples_this_rank], opt.num_gpus)
+                # print('->', i, opt.rank)
+                if opt.rank==0:
+                    print('-', count_samples_gathered, '-', len(brdf_dataset_train.scene_key_frame_id_list_this_rank))
+            
+                if max(count_samples_gathered)>=len(brdf_dataset_train.scene_key_frame_id_list_this_rank):
+                    break
 
             if cfg.SOLVER.if_test_dataloader:
                 if i % 100 == 0:
@@ -701,6 +716,8 @@ else:
             #             logger.info('Logged training sem seg')
 
             synchronize()
+
+            print('->', tid, opt.rank)
             if tid % opt.debug_every_iter == 0:
                 opt.if_vis_debug_pac = False
 

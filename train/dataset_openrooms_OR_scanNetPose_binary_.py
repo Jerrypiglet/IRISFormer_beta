@@ -136,7 +136,7 @@ def get_per_frame_dataset_info(opt, split='train', data_root=None, data_list=Non
 
 class openrooms_binary(data.IterableDataset):
     def __init__(self, opt, logger=basic_logger(), transforms_fixed=None, transforms_semseg=None, transforms_matseg=None, transforms_resize=None, 
-            split='train', task=None, if_for_training=True, rseed = 1, 
+            split='train', task=None, if_for_training=True, load_first = -1, rseed = 1, 
             cascadeLevel = 0):
 
         if logger is None:

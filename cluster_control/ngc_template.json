@@ -18,6 +18,38 @@
     ],
     "datasetMounts":[
         {
+            "containerMountPoint":"/datasets_mount/openrooms_mini",
+            "id": 83774
+        }, 
+        {
+            "containerMountPoint":"/datasets_mount/OR-pngs",
+            "id": 83723
+        }, 
+        {
+            "containerMountPoint":"/datasets_mount/mainDiffLight_xml1",
+            "id": 83819
+        }, 
+        {
+            "containerMountPoint":"/datasets_mount/main_xml",
+            "id": 83823
+        }, 
+        {
+            "containerMountPoint":"/datasets_mount/mainDiffMat_xml",
+            "id": 83832
+        }, 
+        {
+            "containerMountPoint":"/datasets_mount/mainDiffLight_xml",
+            "id": 83836
+        }, 
+        {
+            "containerMountPoint":"/datasets_mount/mainDiffMat_xml1",
+            "id": 83865
+        }, 
+        {
+            "containerMountPoint":"/datasets_mount/main_xml1",
+            "id": 83903
+        },
+        {
             "containerMountPoint":"/datasets_mount/ORfull-seq-240x320",
             "id": 84096
         },
