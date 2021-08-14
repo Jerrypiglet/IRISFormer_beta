@@ -47,6 +47,8 @@ def set_up_envs(opt):
             opt.cfg.DATASET.dataset_path_binary += '-quarter'
         if opt.cfg.DATASET.binary_if_to_memory:
             opt.cfg.DATASET.dataset_path_binary = opt.cfg.DATASET.dataset_path_binary.replace('/datasets_mount', opt.cfg.DATASET.binary_memory_path)
+
+        print('=======', opt.cfg.DATASET.dataset_path_binary)
     
 
     if opt.cfg.PATH.total3D_lists_path_if_zhengqinCVPR:

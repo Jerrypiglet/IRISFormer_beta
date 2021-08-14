@@ -76,6 +76,7 @@ _C.DATASET.dataset_path_binary = ''
 _C.DATASET.dataset_path_binary_local = '/newfoundland2/ruizhu/ORfull-seq-240x320'
 # _C.DATASET.dataset_path_binary_local = '/newfoundland2/ruizhu/ORfull-seq-240x320-albedoInOneFile'
 _C.DATASET.dataset_path_binary_cluster = ['/ruidata/ORfull-seq-240x320-RE1smaller', '', '/datasets_mount/ORfull-seq-240x320-RE1smaller']
+_C.DATASET.dataset_path_binary_root = '/datasets_mount'
 # _C.DATASET.dataset_path_binary_cluster = ['/ruidata/ORfull-seq-240x320-albedoInOneFile', '/local/ruzhu/data/ORfull-seq-240x320', '/datasets_mount/ORfull-seq-240x320-albedoInOneFile']
 _C.DATASET.dataset_path_test = ''
 _C.DATASET.dataset_path_test_local = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms_test'

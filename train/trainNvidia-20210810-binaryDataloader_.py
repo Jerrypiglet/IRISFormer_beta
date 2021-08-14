@@ -22,7 +22,7 @@ print(sys.path)
 # from dataset_openroomsV4_total3d_matcls_ import openrooms, collate_fn_OR
 from dataset_openrooms_OR_scanNetPose import openrooms, collate_fn_OR
 # from dataset_openrooms_OR_scanNetPose_binary_ import openrooms_binary
-from dataset_openrooms_OR_scanNetPose_binary_tables import openrooms_binary
+from dataset_openrooms_OR_scanNetPose_binary_tables_ import openrooms_binary
 import torch.distributed as dist
 from train_funcs_detectron import gather_lists
 
@@ -31,7 +31,7 @@ from utils.config import cfg
 from utils.bin_mean_shift import Bin_Mean_Shift
 from utils.bin_mean_shift_3 import Bin_Mean_Shift_3
 from utils.bin_mean_shift_N import Bin_Mean_Shift_N
-from utils.comm import synchronize
+# from utils.comm import synchronize
 from utils.utils_misc import *
 from utils.utils_dataloader import make_data_loader
 from utils.utils_dataloader_binary import make_data_loader_binary
@@ -360,7 +360,7 @@ ts_iter_start_end_list = []
 num_mat_masks_MAX = 0
 
 model.train(not opt.cfg.MODEL_SEMSEG.fix_bn)
-synchronize()
+# synchronize()
 
 
 # for epoch in list(range(opt.epochIdFineTune+1, opt.cfg.SOLVER.max_epoch)):
@@ -386,7 +386,7 @@ if not opt.if_train:
         val_params.update({'batch_size_val_vis': batch_size_val_vis, 'detectron_dataset_name': 'vis'})
         with torch.no_grad():
             vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
-        synchronize()                
+        # synchronize()                
     if opt.if_val:
         val_params.update({'detectron_dataset_name': 'val'})
         with torch.no_grad():
@@ -407,7 +407,7 @@ else:
         ts_iter_end = ts_epoch_start
         
         print('=======NEW EPOCH of length %d'%epoch_length, opt.rank, cfg.MODEL_SEMSEG.fix_bn)
-        synchronize()
+        # synchronize()
 
         if tid >= opt.max_iter and opt.max_iter != -1:
             break
@@ -459,7 +459,7 @@ else:
             reset_tictoc = False
             # Evaluation for an epoch```
 
-            synchronize()
+            # synchronize()
             print((tid - tid_start) % opt.eval_every_iter, opt.eval_every_iter)
             if opt.eval_every_iter != -1 and (tid - tid_start) % opt.eval_every_iter == 0:
                 val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift, 'if_register_detectron_only': False}
@@ -469,7 +469,7 @@ else:
                         if opt.cfg.DEBUG.if_dump_anything:
                             dump_joint(brdf_loader_val_vis, model, val_params)
                         vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
-                    synchronize()                
+                    # synchronize()                
                 if opt.if_val:
                     val_params.update({'detectron_dataset_name': 'val'})
                     with torch.no_grad():
@@ -477,16 +477,16 @@ else:
                 model.train(not cfg.MODEL_SEMSEG.fix_bn)
                 reset_tictoc = True
                 
-            synchronize()
+            # synchronize()
 
             # Save checkpoint
             if opt.save_every_iter != -1 and (tid - tid_start) % opt.save_every_iter == 0 and 'tmp' not in opt.task_name:
                 check_save(opt, tid, tid, epoch, checkpointer, epochs_saved, opt.checkpoints_path_task, logger)
                 reset_tictoc = True
 
-            synchronize()
+            # synchronize()
 
-            torch.cuda.empty_cache()
+            # torch.cuda.empty_cache()
 
             if reset_tictoc:
                 ts_iter_end = time.time()
@@ -503,7 +503,7 @@ else:
             # ======= Load data from cpu to gpu
 
             labels_dict = get_labels_dict_joint(data_batch, opt)
-            synchronize()
+            # synchronize()
 
             time_meters['data_to_gpu'].update(time.time() - ts_iter_start)
             time_meters['ts'] = time.time()
@@ -514,7 +514,7 @@ else:
             # ======= Forward
             optimizer.zero_grad()
             output_dict, loss_dict = forward_joint(True, labels_dict, model, opt, time_meters, tid=tid)
-            synchronize()
+            # synchronize()
             
             # print('=======loss_dict', loss_dict)
             loss_dict_reduced = reduce_loss_dict(loss_dict, mark=tid, logger=logger) # **average** over multi GPUs
@@ -639,7 +639,7 @@ else:
             optimizer.step()
             time_meters['backward'].update(time.time() - time_meters['ts'])
             time_meters['ts'] = time.time()
-            synchronize()
+            # synchronize()
 
             if opt.is_master:
                 loss_keys_print = [x for x in loss_keys_print if 'ALL' in x] + [x for x in loss_keys_print if 'ALL' not in x]
@@ -715,7 +715,7 @@ else:
 
             #             logger.info('Logged training sem seg')
 
-            synchronize()
+            # synchronize()
 
             print('->', tid, opt.rank)
             if tid % opt.debug_every_iter == 0:
