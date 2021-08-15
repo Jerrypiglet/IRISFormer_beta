@@ -28,6 +28,7 @@ def set_up_envs(opt):
 
     opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.dataset_path_local
     opt.cfg.DATASET.dataset_path_binary = opt.cfg.DATASET.dataset_path_binary_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.dataset_path_binary_local
+    opt.cfg.DATASET.dataset_path_pickle = opt.cfg.DATASET.dataset_path_pickle_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.dataset_path_pickle_local
     opt.cfg.DATASET.layout_emitter_path = opt.cfg.DATASET.layout_emitter_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.layout_emitter_path_local
     opt.cfg.DATASET.png_path = opt.cfg.DATASET.png_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.png_path_local
     opt.cfg.DATASET.dataset_path_mini = opt.cfg.DATASET.dataset_path_mini_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.dataset_path_mini_local
@@ -45,8 +46,8 @@ def set_up_envs(opt):
         # opt.cfg.DATASET.binary = True
         if opt.cfg.DATASET.if_quarter:
             opt.cfg.DATASET.dataset_path_binary += '-quarter'
-        if opt.cfg.DATASET.binary_if_to_memory:
-            opt.cfg.DATASET.dataset_path_binary = opt.cfg.DATASET.dataset_path_binary.replace('/datasets_mount', opt.cfg.DATASET.binary_memory_path)
+        if opt.cfg.DATASET.binary.if_to_memory:
+            opt.cfg.DATASET.dataset_path_binary = opt.cfg.DATASET.dataset_path_binary.replace('/datasets_mount', opt.cfg.DATASET.binary.memory_path)
 
         print('=======', opt.cfg.DATASET.dataset_path_binary)
     
@@ -58,8 +59,10 @@ def set_up_envs(opt):
     if opt.cfg.DATASET.mini:
         # else:
         opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_mini
-        if opt.cfg.DATASET.binary:
+        if opt.cfg.DATASET.if_binary:
             opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_mini_binary
+        if opt.cfg.DATASET.if_pickle:
+            opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_mini_pickle
         opt.cfg.DATASET.dataset_list = opt.cfg.DATASET.dataset_list_mini
     if opt.cfg.DATASET.tmp:
         opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_tmp

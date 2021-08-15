@@ -61,11 +61,6 @@ _C.DEBUG.if_dump_perframe_BRDF = False
 
 _C.DATASET = CN()
 _C.DATASET.mini = False # load mini OR from SSD to enable faster dataloading for debugging purposes etc.
-_C.DATASET.binary = False # load binary version of dataset instead of from per-sample files
-_C.DATASET.binary_in_one_file = False
-_C.DATASET.binary_if_shuffle = False
-_C.DATASET.binary_if_to_memory = False
-_C.DATASET.binary_memory_path = '/dev/shm'
 _C.DATASET.tmp = False # load tmp OR list from DATASET.dataset_list_tmp
 _C.DATASET.first = -1 # laod first # of the entire dataset: train/val
 _C.DATASET.dataset_name = 'openrooms'
@@ -75,8 +70,13 @@ _C.DATASET.dataset_path_cluster = ['/siggraphasia20dataset/code/Routine/DatasetC
 _C.DATASET.dataset_path_binary = ''
 _C.DATASET.dataset_path_binary_local = '/newfoundland2/ruizhu/ORfull-seq-240x320'
 # _C.DATASET.dataset_path_binary_local = '/newfoundland2/ruizhu/ORfull-seq-240x320-albedoInOneFile'
-_C.DATASET.dataset_path_binary_cluster = ['/ruidata/ORfull-seq-240x320-RE1smaller', '', '/datasets_mount/ORfull-seq-240x320-RE1smaller']
+_C.DATASET.dataset_path_binary_cluster = ['ORfull-seq-240x320-smaller-RE', '', '/datasets_mount/ORfull-seq-240x320']
 _C.DATASET.dataset_path_binary_root = '/datasets_mount'
+
+_C.DATASET.dataset_path_pickle = ''
+_C.DATASET.dataset_path_pickle_local = '/newfoundland2/ruizhu/ORfull-perFramePickles-240x320'
+_C.DATASET.dataset_path_pickle_cluster = ['/ruidata/ORfull-perFramePickles-240x320', '', '/datasets_mount/ORfull-perFramePickles-240x320']
+
 # _C.DATASET.dataset_path_binary_cluster = ['/ruidata/ORfull-seq-240x320-albedoInOneFile', '/local/ruzhu/data/ORfull-seq-240x320', '/datasets_mount/ORfull-seq-240x320-albedoInOneFile']
 _C.DATASET.dataset_path_test = ''
 _C.DATASET.dataset_path_test_local = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms_test'
@@ -85,6 +85,16 @@ _C.DATASET.png_path = ''
 _C.DATASET.png_path_local = '/data/ruizhu/OR-pngs'
 # _C.DATASET.png_path_local = ''
 _C.DATASET.png_path_cluster = ['/siggraphasia20dataset/pngs', '/local/ruzhu/data/OR-pngs', '/datasets_mount/OR-pngs']
+
+_C.DATASET.if_binary = False # load binary version of dataset instead of from per-sample files
+_C.DATASET.binary = CN()
+_C.DATASET.binary.if_in_one_file = False
+_C.DATASET.binary.if_shuffle = False
+_C.DATASET.binary.if_to_memory = False
+_C.DATASET.binary.memory_path = '/dev/shm'
+
+_C.DATASET.if_pickle = False
+_C.DATASET.pickle = CN()
 
 _C.DATASET.layout_emitter_path = ''
 # _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-OR45_total3D_train_test_data'
@@ -122,6 +132,9 @@ _C.DATASET.dataset_path_mini_cluster = ['/data/ruizhu/openrooms_mini', '/local/r
 _C.DATASET.dataset_path_mini_binary = ''
 _C.DATASET.dataset_path_mini_binary_local = '/home/ruizhu/Documents/data/OR-seq-mini-240x320'
 _C.DATASET.dataset_path_mini_binary_cluster = ['', '', '']
+_C.DATASET.dataset_path_mini_pickle = ''
+_C.DATASET.dataset_path_mini_pickle_local = '/ruidata/ORfull-perFramePickles-240x320'
+_C.DATASET.dataset_path_mini_pickle_cluster = ['', '', '']
 _C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini/list'
 # _C.DATASET.dataset_path_mini = '/data/ruizhu/openrooms_mini-val'
 # _C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini-val/list'

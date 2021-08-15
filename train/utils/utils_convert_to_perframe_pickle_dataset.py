@@ -16,26 +16,23 @@ import argparse
 
 
 def return_percent(list_in, percent=1.):
-    if percent==1.:
-        return list_in
-        
     len_list = len(list_in)
     return_len = max(1, int(np.floor(len_list*percent)))
     return list_in[:return_len]
 
 # RAW_path = Path('/data/ruizhu/openrooms_mini')
 # RAW_png_path = Path('/data/ruizhu/OR-pngs')
-# DEST_path = Path('/home/ruizhu/Documents/data/OR-seq-mini-240x320')
+# DEST_path = Path('/home/ruizhu/Documents/data/OR-perFramePickles-mini-240x320')
 
-RAW_path = Path('/siggraphasia20dataset/code/Routine/DatasetCreation/')
-RAW_png_path = Path('/siggraphasia20dataset/pngs')
-DEST_path = Path('/ruidata/ORfull-seq-240x320-smaller-RE')
+# RAW_path = Path('/siggraphasia20dataset/code/Routine/DatasetCreation/')
+# RAW_png_path = Path('/siggraphasia20dataset/pngs')
+# DEST_path = Path('/ruidata/ORfull-perFramePickles-240x320')
 
-PERCENT = 1
+PERCENT = 1.
 
-# RAW_path = Path('/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms')
-# RAW_png_path = Path('/data/ruizhu/OR-pngs')
-# DEST_path = Path('/newfoundland/ruizhu/ORfull-seq-240x320')
+RAW_path = Path('/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms')
+RAW_png_path = Path('/data/ruizhu/OR-pngs')
+DEST_path = Path('/newfoundland/ruizhu/ORfull-perFramePickles-240x320')
 
 resize_HW = [240, 320] # set to [-1, -1] for not resizing!
 dataset_if_save_space = True
@@ -62,6 +59,8 @@ def process_scene(src_scene_Path):
     frame_count = 0
     meta_split, scene_name = str(src_scene_Path).split('/')[-2:]
 
+    # print(meta_split, scene_name)
+
     if 'scene' not in scene_name:
         return 0
     
@@ -83,20 +82,18 @@ def process_scene(src_scene_Path):
     sample_ids = [int(_.replace('im_', '').replace('.hdr', '')) for _ in hdr_file_names] # start with 1, ...
     sample_ids.sort()
     
-    sample_id_list = []
-    im_uint8_list = []
-    seg_uint8_list = []
-    mask_int32_list = []
-    albedo_uint8_list = []
-    depth_float32_list = []
 
     for sample_id in sample_ids:
         png_image_path = src_png_path / ('im_%d.png'%sample_id)
         assert png_image_path.exists()
 
-        sample_id_list.append(sample_id)
-
         hdr_image_path = src_scene_Path / ('im_%d.hdr'%sample_id)
+
+        dest_path_img = DEST_path / meta_split / scene_name
+        dest_path_img.mkdir(exist_ok=True, parents=True)
+
+        dest_h5_file = dest_path_img / ('%06d.h5'%sample_id)
+        hf = h5py.File(str(dest_h5_file), 'w')
 
         if 'im_seg' in modalities_convert:
             im = Image.open(str(str(png_image_path)))
@@ -104,14 +101,16 @@ def process_scene(src_scene_Path):
                 im = im.resize([resize_HW[1], resize_HW[0]], Image.ANTIALIAS )
             im_uint8 = np.array(im)
 
-            im_uint8_list.append(im_uint8)
+            # im_uint8_list.append(im_uint8)
+            hf.create_dataset('im_uint8', data=im_uint8)
 
             seg_path = str(hdr_image_path).replace('im_', 'immask_').replace('hdr', 'png').replace('DiffMat', '')
             seg = Image.open(seg_path)
             if if_resize:
                 seg = seg.resize([resize_HW[1], resize_HW[0]], Image.ANTIALIAS )
             seg_uint8 = np.asarray(seg, dtype=np.uint8)
-            seg_uint8_list.append(seg_uint8)
+            # seg_uint8_list.append(seg_uint8)
+            hf.create_dataset('seg_uint8', data=seg_uint8)
 
             semantics_path = str(hdr_image_path).replace('DiffMat', '').replace('DiffLight', '')
             mask_path = semantics_path.replace('im_', 'imcadmatobj_').replace('hdr', 'dat')
@@ -122,7 +121,8 @@ def process_scene(src_scene_Path):
             # .squeeze() # [h, w, 3]
             assert len(mask_int32.shape)==3
             # print(mask_int32.shape, mask_int32.dtype)
-            mask_int32_list.append(mask_int32)
+            # mask_int32_list.append(mask_int32)
+            hf.create_dataset('mask_int32', data=mask_int32)
 
         if 'albedo' in modalities_convert:
             albedo_path = str(hdr_image_path).replace('im_', 'imbaseColor_').replace('rgbe', 'png').replace('hdr', 'png')
@@ -132,63 +132,22 @@ def process_scene(src_scene_Path):
             if if_resize:
                 albedo = albedo.resize([resize_HW[1], resize_HW[0]], Image.ANTIALIAS )
             albedo_uint8 = np.asarray(albedo, dtype=np.uint8)
-            albedo_uint8_list.append(albedo_uint8)
+            # albedo_uint8_list.append(albedo_uint8)
+            hf.create_dataset('albedo_uint8', data=albedo_uint8)
+
 
         if 'depth' in modalities_convert:
             depth_path = str(hdr_image_path).replace('im_', 'imdepth_').replace('rgbe', 'dat').replace('hdr', 'dat')
             if dataset_if_save_space:
                 depth_path = depth_path.replace('DiffLight', '').replace('DiffMat', '')
             depth_float32 = loadBinary(depth_path, resize_HW=resize_HW)
-            depth_float32_list.append(depth_float32)
+            # depth_float32_list.append(depth_float32)
+            hf.create_dataset('depth_float32', data=depth_float32)
 
         frame_count += 1
 
-    if 'im_seg' in modalities_convert:
-        im_uint8_concat = np.stack(im_uint8_list) # [_, 240, 320, 3]
-        seg_uint8_concat = np.stack(seg_uint8_list) # [_, 240, 320, 3]
-        mask_int32_concat = np.stack(mask_int32_list) # [_, 240, 320, 3]
-        dest_path_img = DEST_path / 'im_png' / meta_split / scene_name
-        dest_path_img.mkdir(exist_ok=True, parents=True)
-        dest_h5_file = dest_path_img / 'im_png.h5'
-        hf = h5py.File(str(dest_h5_file), 'w')
-        hf.create_dataset('sample_id_list', data=sample_id_list)
-        hf.create_dataset('im_uint8', data=im_uint8_concat)
-        hf.create_dataset('seg_uint8', data=seg_uint8_concat)
-        hf.create_dataset('mask_int32', data=mask_int32_concat)
-        # print(type(sample_id_list[0]), im_uint8_concat.dtype, seg_uint8_concat.dtype, mask_int32_concat.dtype, )
         hf.close()
-        assert im_uint8_concat.shape[0]==seg_uint8_concat.shape[0]==mask_int32_concat.shape[0]==frame_count
 
-    if 'albedo' in modalities_convert:
-        albedo_uint8_concat = np.stack(albedo_uint8_list) # [_, 240, 320, 3]
-        dest_path_albedo = DEST_path / 'albedo' / meta_split / scene_name
-        dest_path_albedo.mkdir(exist_ok=True, parents=True)
-        dest_h5_file = dest_path_albedo / 'albedo.h5'
-        hf = h5py.File(str(dest_h5_file), 'w')
-        hf.create_dataset('albedo_uint8', data=albedo_uint8_concat)
-        hf.close()
-        assert albedo_uint8_concat.shape[0]==frame_count
-
-    if 'depth' in modalities_convert:
-        depth_float32_concat = np.stack(depth_float32_list) # [_, 240, 320]
-        dest_path_depth = DEST_path / 'depth' / meta_split / scene_name
-        dest_path_depth.mkdir(exist_ok=True, parents=True)
-        dest_h5_file = dest_path_depth / 'depth.h5'
-        hf = h5py.File(str(dest_h5_file), 'w')
-        hf.create_dataset('depth_float32', data=depth_float32_concat)
-        hf.close()
-        assert depth_float32_concat.shape[0]==frame_count
-
-    # print(im_uint8_concat.shape)
-    # print(seg_uint8_concat.shape)
-    # print(albedo_uint8_concat.shape)
-    # print(depth_float32_concat.shape)
-    
-
-
-
-    # hf = h5py.File(str(dest_h5_file), 'r')
-    # data_read = np.array(hf.get('data'))
     print(frame_count, str(src_png_path))
     assert frame_count!= 0, str(src_png_path)
 

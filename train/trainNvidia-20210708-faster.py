@@ -21,6 +21,9 @@ print(sys.path)
 
 # from dataset_openroomsV4_total3d_matcls_ import openrooms, collate_fn_OR
 from dataset_openrooms_OR_scanNetPose import openrooms, collate_fn_OR
+# from dataset_openrooms_OR_scanNetPose_binary_tables_ import openrooms_binary
+from dataset_openrooms_OR_scanNetPose_pickle import openrooms_pickle
+# from utils.utils_dataloader_binary import make_data_loader_binary
 import torch.distributed as dist
 
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -252,8 +255,16 @@ transforms_val_matseg = get_transform_matseg('val', opt)
 transforms_train_resize = get_transform_resize('train', opt)
 transforms_val_resize = get_transform_resize('val', opt)
 
+openrooms_to_use = openrooms
+make_data_loader_to_use = make_data_loader
+
+if opt.cfg.DATASET.if_pickle:
+    openrooms_to_use = openrooms_pickle
+    
+print('+++++++++openrooms_to_use', openrooms_to_use)
+
 if opt.if_train:
-    brdf_dataset_train = openrooms(opt, 
+    brdf_dataset_train = openrooms_to_use(opt, 
         transforms_fixed = transforms_val_resize, 
         transforms_semseg = transforms_train_semseg, 
         transforms_matseg = transforms_train_matseg,
@@ -278,7 +289,7 @@ if opt.cfg.MODEL_SEMSEG.enable:
 # else:
 
 if opt.if_val:
-    brdf_dataset_val = openrooms(opt, 
+    brdf_dataset_val = openrooms_to_use(opt, 
         transforms_fixed = transforms_val_resize, 
         transforms_semseg = transforms_val_semseg, 
         transforms_matseg = transforms_val_matseg,
@@ -299,7 +310,7 @@ if opt.if_val:
     )
 
 if opt.if_overfit_val and opt.if_train:
-    brdf_dataset_train = openrooms(opt, 
+    brdf_dataset_train = openrooms_to_use(opt, 
         transforms_fixed = transforms_val_resize, 
         transforms_semseg = transforms_val_semseg, 
         transforms_matseg = transforms_val_matseg,
@@ -317,7 +328,7 @@ if opt.if_overfit_val and opt.if_train:
     )
 
 if opt.if_overfit_train and opt.if_val:
-    brdf_dataset_val = openrooms(opt, 
+    brdf_dataset_val = openrooms_to_use(opt, 
         transforms_fixed = transforms_val_resize, 
         transforms_semseg = transforms_val_semseg, 
         transforms_matseg = transforms_val_matseg,

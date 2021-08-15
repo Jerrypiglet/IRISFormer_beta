@@ -265,7 +265,7 @@ class openrooms_binary(data.IterableDataset):
                 #     if if_load_immask:
                 #         seg_uint8_array = np.array(hf.get('seg_uint8'))
                 #         mask_int32_array = np.array(hf.get('mask_int32'))
-                #     if self.opt.cfg.DATASET.binary_in_one_file:
+                #     if self.opt.cfg.DATASET.binary.if_in_one_file:
                 #         if 'al' in self.cfg.DATA.data_read_list:
                 #             albedo_uint8_array = np.array(hf.get('albedo_uint8'))
                 #         if 'de' in self.cfg.DATA.data_read_list:
@@ -277,7 +277,7 @@ class openrooms_binary(data.IterableDataset):
                 if if_load_immask:
                     seg_uint8_array = h5file.root.seg_uint8.read()
                     mask_int32_array = h5file.root.mask_int32.read().astype(np.int32)
-                if self.opt.cfg.DATASET.binary_in_one_file:
+                if self.opt.cfg.DATASET.binary.if_in_one_file:
                     try:
                         if 'al' in self.cfg.DATA.data_read_list:
                             albedo_uint8_array = h5file.root.albedo_uint8.read()
@@ -294,7 +294,7 @@ class openrooms_binary(data.IterableDataset):
 
             brdf_batch_dict = {}
             if 'al' in self.cfg.DATA.data_read_list:
-                if not self.opt.cfg.DATASET.binary_in_one_file:
+                if not self.opt.cfg.DATASET.binary.if_in_one_file:
                     albedo_h5 = Path(self.data_root) / 'albedo' / meta_split / scene_name / 'albedo.h5'
                     assert albedo_h5.exists(), '%s does not exist!'%(str(albedo_h5))
                     # with h5py.File(str(albedo_h5), 'r') as hf:
@@ -305,7 +305,7 @@ class openrooms_binary(data.IterableDataset):
                 brdf_batch_dict['albedo'] = albedo_uint8_array
 
             if 'de' in self.cfg.DATA.data_read_list:
-                if not self.opt.cfg.DATASET.binary_in_one_file:
+                if not self.opt.cfg.DATASET.binary.if_in_one_file:
                     depth_h5 = Path(self.data_root) / 'depth' / meta_split / scene_name / 'depth.h5'
                     assert depth_h5.exists(), '%s does not exist!'%(str(depth_h5))
                     # with h5py.File(str(depth_h5), 'r') as hf:

@@ -75,7 +75,7 @@ def make_data_loader_binary(opt, dataset, is_train=True, start_iter=0, logger=No
     if num_workers <= 0:
         random.seed(134714)
     
-    shuffle = shuffle and cfg.DATASET.binary_if_shuffle
+    shuffle = shuffle and cfg.DATASET.binary.if_shuffle
 
     if shuffle:
         bf_dataset = BufferedShuffleDataset(dataset, buffer_size=100) # https://pytorch.org/docs/1.8.0/data.html?highlight=bufferedshuffledataset#torch.utils.data.BufferedShuffleDataset

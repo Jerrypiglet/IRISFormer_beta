@@ -191,6 +191,7 @@ class openrooms(data.Dataset):
         hdr_image_path, semseg_label_path = self.data_list[index]
         meta_split, scene_name, frame_id = self.meta_split_scene_name_frame_id_list[index]
         assert frame_id > 0
+
         scene_total3d_path = Path(self.cfg.DATASET.layout_emitter_path) / meta_split / scene_name
         if self.opt.cfg.DATASET.tmp:
             png_image_path = Path(hdr_image_path.replace('.hdr', '.png').replace('.rgbe', '.png'))
