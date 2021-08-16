@@ -634,13 +634,28 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
     # opt.albedo_pooling_debug = True
 
     # ===== Gather vis of N batches
+
+    brdf_dataset_val = params_mis['brdf_dataset_val']
+
     with torch.no_grad():
         im_single_list = []
+        count_samples_this_rank = 0
         for batch_id, data_batch in tqdm(enumerate(brdf_loader_val)):
             # for i, x in enumerate(data_batch['image_path']):
             #     ic(i, x)
             if batch_size*batch_id >= opt.cfg.TEST.vis_max_samples:
                 break
+
+            if opt.cfg.DATASET.binary and opt.distributed:
+                count_samples_this_rank += len(data_batch['frame_info'])
+                count_samples_gathered = gather_lists([count_samples_this_rank], opt.num_gpus)
+                # print('->', i, opt.rank)
+                if opt.rank==0:
+                    print('-', count_samples_gathered, '-', len(brdf_dataset_val.scene_key_frame_id_list_this_rank))
+            
+                if max(count_samples_gathered)>=len(brdf_dataset_val.scene_key_frame_id_list_this_rank):
+                    break
+
 
             # print(batch_id, batch_size)
 

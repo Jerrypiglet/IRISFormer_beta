@@ -62,15 +62,16 @@ _C.DEBUG.if_dump_perframe_BRDF = False
 _C.DATASET = CN()
 _C.DATASET.mini = False # load mini OR from SSD to enable faster dataloading for debugging purposes etc.
 _C.DATASET.tmp = False # load tmp OR list from DATASET.dataset_list_tmp
-_C.DATASET.first = -1 # laod first # of the entire dataset: train/val
+_C.DATASET.first_scenes = -1 # laod first # of the entire dataset: train/val
 _C.DATASET.dataset_name = 'openrooms'
 _C.DATASET.dataset_path = ''
 _C.DATASET.dataset_path_local = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms'
 _C.DATASET.dataset_path_cluster = ['/siggraphasia20dataset/code/Routine/DatasetCreation/', '', '/datasets_mount/']
 _C.DATASET.dataset_path_binary = ''
+
 _C.DATASET.dataset_path_binary_local = '/newfoundland2/ruizhu/ORfull-seq-240x320'
 # _C.DATASET.dataset_path_binary_local = '/newfoundland2/ruizhu/ORfull-seq-240x320-albedoInOneFile'
-_C.DATASET.dataset_path_binary_cluster = ['ORfull-seq-240x320-smaller-RE', '', '/datasets_mount/ORfull-seq-240x320']
+_C.DATASET.dataset_path_binary_cluster = ['/ruidata/ORfull-seq-240x320-smaller-RE', '', '/datasets_mount/ORfull-seq-240x320-smaller-RE']
 _C.DATASET.dataset_path_binary_root = '/datasets_mount'
 
 _C.DATASET.dataset_path_pickle = ''

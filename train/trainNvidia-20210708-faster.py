@@ -21,10 +21,12 @@ print(sys.path)
 
 # from dataset_openroomsV4_total3d_matcls_ import openrooms, collate_fn_OR
 from dataset_openrooms_OR_scanNetPose import openrooms, collate_fn_OR
-# from dataset_openrooms_OR_scanNetPose_binary_tables_ import openrooms_binary
+from dataset_openrooms_OR_scanNetPose_binary_tables_ import openrooms_binary
 from dataset_openrooms_OR_scanNetPose_pickle import openrooms_pickle
-# from utils.utils_dataloader_binary import make_data_loader_binary
+from utils.utils_dataloader_binary import make_data_loader_binary
 import torch.distributed as dist
+from train_funcs_detectron import gather_lists
+
 
 from torch.nn.parallel import DistributedDataParallel as DDP
 from utils.config import cfg
@@ -260,6 +262,9 @@ make_data_loader_to_use = make_data_loader
 
 if opt.cfg.DATASET.if_pickle:
     openrooms_to_use = openrooms_pickle
+if opt.cfg.DATASET.if_binary:
+    openrooms_to_use = openrooms_binary
+    make_data_loader_to_use = make_data_loader_binary
     
 print('+++++++++openrooms_to_use', openrooms_to_use)
 
@@ -270,7 +275,7 @@ if opt.if_train:
         transforms_matseg = transforms_train_matseg,
         transforms_resize = transforms_train_resize, 
         cascadeLevel = opt.cascadeLevel, split = 'train', if_for_training=True, logger=logger)
-    brdf_loader_train, _ = make_data_loader(
+    brdf_loader_train, _ = make_data_loader_to_use(
         opt,
         brdf_dataset_train,
         is_train=True,
@@ -297,7 +302,7 @@ if opt.if_val:
         # cascadeLevel = opt.cascadeLevel, split = 'val', logger=logger)
         # cascadeLevel = opt.cascadeLevel, split = 'val', load_first = 20 if opt.mini_val else -1, logger=logger)
         cascadeLevel = opt.cascadeLevel, split = 'val', if_for_training=False, load_first = -1, logger=logger)
-    brdf_loader_val, _ = make_data_loader(
+    brdf_loader_val, _ = make_data_loader_to_use(
         opt,
         brdf_dataset_val,
         is_train=False,
@@ -317,7 +322,7 @@ if opt.if_overfit_val and opt.if_train:
         transforms_resize = transforms_val_resize, 
         cascadeLevel = opt.cascadeLevel, split = 'val', if_for_training=True, load_first = -1, logger=logger)
 
-    brdf_loader_train, _ = make_data_loader(
+    brdf_loader_train, _ = make_data_loader_to_use(
         opt,
         brdf_dataset_train,
         is_train=True,
@@ -336,7 +341,7 @@ if opt.if_overfit_train and opt.if_val:
         # cascadeLevel = opt.cascadeLevel, split = 'val', logger=logger)
         # cascadeLevel = opt.cascadeLevel, split = 'val', load_first = 20 if opt.mini_val else -1, logger=logger)
         cascadeLevel = opt.cascadeLevel, split = 'train', if_for_training=False, load_first = -1, logger=logger)
-    brdf_loader_val, _ = make_data_loader(
+    brdf_loader_val, _ = make_data_loader_to_use(
         opt,
         brdf_dataset_val,
         is_train=False,
@@ -464,11 +469,30 @@ else:
         start_iter = tid_start + len(brdf_loader_train) * epoch_0
         logger.info("Starting training from iteration {}".format(start_iter))
         # with EventStorage(start_iter) as storage:
+
+        if cfg.SOLVER.if_test_dataloader:
+            tic = time.time()
+            tic_list = []
+
+        count_samples_this_rank = 0
+
         for i, data_batch in tqdm(enumerate(brdf_loader_train)):
+
+            if opt.cfg.DATASET.if_binary and opt.distributed:
+                count_samples_this_rank += len(data_batch['frame_info'])
+                count_samples_gathered = gather_lists([count_samples_this_rank], opt.num_gpus)
+                # print('->', i, opt.rank)
+                if opt.rank==0:
+                    print('-', count_samples_gathered, '-', len(brdf_dataset_train.scene_key_frame_id_list_this_rank))
+            
+                if max(count_samples_gathered)>=len(brdf_dataset_train.scene_key_frame_id_list_this_rank):
+                    break
+
 
             if cfg.SOLVER.if_test_dataloader:
                 if i % 100 == 0:
                     print(data_batch.keys())
+                    print(opt.task_name, 'On average: %.4f iter/s'%((len(tic_list)+1e-6)/(sum(tic_list)+1e-6)))
                 if opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs:
                     # print(data_batch.keys())
                     # print(data_batch['boxes_valid_list'])
@@ -484,6 +508,8 @@ else:
                             if sum(boxes_valid_list) == 0:
                                 print(sum(boxes_valid_list), boxes_valid_list)
                             train_obj_dict[frame_key] = {'valid_obj_num': sum(boxes_valid_list), 'boxes_valid_list': boxes_valid_list}
+                tic_list.append(time.time()-tic)
+                tic = time.time()
                 continue
             reset_tictoc = False
             # Evaluation for an epoch```

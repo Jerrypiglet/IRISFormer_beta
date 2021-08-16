@@ -50,12 +50,16 @@
             "id": 83903
         },
         {
-            "containerMountPoint":"/datasets_mount/ORfull-seq-240x320",
-            "id": 84096
+            "containerMountPoint":"/datasets_mount/ORfull-seq-240x320-smaller-RE",
+            "id": 84286
         },
         {
-            "containerMountPoint":"/datasets_mount/ORfull-seq-240x320-albedoInOneFile",
-            "id": 84138
+            "containerMountPoint":"/datasets_mount/ORfull-seq-240x320-smaller-RE-quarter",
+            "id": 84291
+        },
+        {
+            "containerMountPoint":"/datasets_mount/ORfull-perFramePickles-240x320",
+            "id": 84283
         }
     ],
     "aceId": 257,

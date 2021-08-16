@@ -39,7 +39,7 @@ def parse_args():
     create_parser.add_argument('-s', '--string', type=str, help='Input command')
     create_parser.add_argument('-d', '--deploy', action='store_true', help='deploy the code')
     create_parser.add_argument('-c', '--copy', action='store_true', help='copy dataset to tmp storage')
-    create_parser.add_argument('--copy_cmd', type=str, help='cmd to transfer data via network to local fast storage', default='rclone copy --progress --fast-list --checkers=64 --transfers=64 s3mm1:buffer-or/ORfull-seq-240x320-RE1smaller-quarter /dev/shm/ORfull-seq-240x320-RE1smaller-quarter')
+    create_parser.add_argument('--copy_cmd', type=str, help='cmd to transfer data via network to local fast storage', default='rclone copy --progress --fast-list --checkers=128 --transfers=128 s3mm1:buffer-or/ORfull-seq-240x320-smaller-RE-quarter4 /dev/shm/ORfull-seq-240x320-smaller-RE-quarter')
     create_parser.add_argument('--resume', type=str, help='resume_from: e.g. 20201129-232627', default='NoCkpt')
     create_parser.add_argument('--deploy_src', type=str, help='deploy to target path', default='~/Documents/Projects/semanticInverse/train/')
     create_parser.add_argument('--deploy_s3', type=str, help='deploy s3 container', default='s3mm1:train_ngc')
@@ -238,6 +238,10 @@ def create(args):
         model_name_ngc = task_name_ngc.split('_')[2]
         # task_name = task_name.replace('[\'', '').replace('\']', '')
         json_content['command'] = json_content['command'].replace('sleep 48h', '')
+        if 'binary.if_to_memory True' in command_str:
+            json_content['command'] += args.copy_cmd
+            json_content['command'] += ' && '
+            print('[!!!!!!!] adding dumping to memory cmd: %s'%args.copy_cmd)
         json_content['command'] += command_str
         # if args.copy:
         #     json_content['command'] += ' DATASET.binary_if_to_memory True'

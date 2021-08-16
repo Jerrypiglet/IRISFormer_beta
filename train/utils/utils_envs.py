@@ -44,9 +44,9 @@ def set_up_envs(opt):
     if opt.if_cluster and opt.cluster=='ngc':
         opt.cfg.flush_secs = 300
         # opt.cfg.DATASET.binary = True
-        if opt.cfg.DATASET.if_quarter:
-            opt.cfg.DATASET.dataset_path_binary += '-quarter'
-        if opt.cfg.DATASET.binary.if_to_memory:
+        if opt.cfg.DATASET.if_binary and opt.cfg.DATASET.binary.if_to_memory:
+            if opt.cfg.DATASET.if_quarter:
+                opt.cfg.DATASET.dataset_path_binary += '-quarter'
             opt.cfg.DATASET.dataset_path_binary = opt.cfg.DATASET.dataset_path_binary.replace('/datasets_mount', opt.cfg.DATASET.binary.memory_path)
 
         print('=======', opt.cfg.DATASET.dataset_path_binary)

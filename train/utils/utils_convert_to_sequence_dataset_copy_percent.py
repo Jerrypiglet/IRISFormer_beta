@@ -21,9 +21,13 @@ def return_percent(list_in, percent=1.):
 
 # DEST_path = Path('/ruidata/ORfull-seq-240x320-RE1smaller')
 
-LIST_path = Path('/home/ruizhu/Documents/Projects/semanticInverse/train/data/openrooms/list_OR_V4full/list')
-DEST_path = Path('/newfoundland2/ruizhu/ORfull-seq-240x320-RE1smaller')
-DEST_percent_path = Path('/newfoundland2/ruizhu/ORfull-seq-240x320-RE1smaller-quarter')
+# LIST_path = Path('/home/ruizhu/Documents/Projects/semanticInverse/train/data/openrooms/list_OR_V4full/list')
+# DEST_path = Path('/newfoundland2/ruizhu/ORfull-seq-240x320-smaller-RE')
+# DEST_percent_path = Path('/newfoundland2/ruizhu/ORfull-seq-240x320-smaller-RE-quarter')
+
+LIST_path = Path('/viscompfs/users/ruizhu/semanticInverse/train/train/data/openrooms/list_OR_V4full/list')
+DEST_path = Path('/ruidata/ORfull-seq-240x320-smaller-RE')
+DEST_percent_path = Path('/ruidata/ORfull-seq-240x320-smaller-RE-quarter4')
 
 PERCENT = 0.25
 
@@ -45,21 +49,39 @@ else:
 import time
 tic = time.time()
 
-valid_scene_list = []
+valid_scene_list_quarter = []
+valid_scene_list_all = []
 for split in ['train', 'val']:
+    valid_scene_split = []
     list_path = LIST_path / ('%s_scenes.txt'%split)
     scene_list_RAW = open(str(list_path)).readlines()
     for _ in scene_list_RAW:
         meta_split, scene_name = _.strip().split(' ')
         if 'scene' in scene_name:
-            valid_scene_list.append([meta_split, scene_name])
+            valid_scene_split.append([meta_split, scene_name])
+            valid_scene_list_all.append([meta_split, scene_name])
+    valid_scene_split = return_percent(valid_scene_split, PERCENT)
+    valid_scene_list_quarter += valid_scene_split
 
-valid_scene_list = return_percent(valid_scene_list, PERCENT)
-print('Copying %d valid scenes...'%len(valid_scene_list))
+print(valid_scene_list_quarter[:5])
 
-for meta_split, scene_name in tqdm(valid_scene_list):
-    for modality in modalities_convert:    
-        src_path = DEST_path / modality / meta_split / scene_name
-        dest_path = DEST_percent_path / modality / meta_split / scene_name
-        dest_path.parent.mkdir(exist_ok=True, parents=True)
-        shutil.copytree(str(src_path), str(dest_path))
+print('Copying %d valid scenes (originally %d scenes)...'%(len(valid_scene_list_quarter), len(valid_scene_list_all)))
+
+scene_list = []
+for meta_split, scene_name in tqdm(valid_scene_list_quarter):
+    for modality in modalities_convert:
+        scene_list.append([modality, meta_split, scene_name])
+
+def copy_scene(scene):
+    modality, meta_split, scene_name = scene
+    src_path = DEST_path / modality / meta_split / scene_name
+    dest_path = DEST_percent_path / modality / meta_split / scene_name
+    dest_path.parent.mkdir(exist_ok=True, parents=True)
+    shutil.copytree(str(src_path), str(dest_path))
+    
+p = Pool(processes=32)
+# p.map(copy_frame, valid_frame_list)
+list(tqdm(p.imap_unordered(copy_scene, scene_list), total=len(scene_list)))
+
+p.close()
+p.join()

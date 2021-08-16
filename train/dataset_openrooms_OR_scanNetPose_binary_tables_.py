@@ -100,8 +100,8 @@ def make_dataset(opt, split='train', data_root=None, data_list=None, logger=None
         meta_split, scene_name = line_split
         meta_split_scene_name_list.append([meta_split, scene_name])
 
-    if opt.cfg.DATASET.first != -1:
-        return meta_split_scene_name_list[:opt.cfg.DATASET.first]
+    if opt.cfg.DATASET.first_scenes != -1:
+        return meta_split_scene_name_list[:opt.cfg.DATASET.first_scenes]
     elif opt.cfg.DATASET.if_quarter:
         return return_percent(meta_split_scene_name_list, 0.25)
     else:
@@ -136,7 +136,7 @@ def get_per_frame_dataset_info(opt, split='train', data_root=None, data_list=Non
 
 class openrooms_binary(data.IterableDataset):
     def __init__(self, opt, logger=basic_logger(), transforms_fixed=None, transforms_semseg=None, transforms_matseg=None, transforms_resize=None, 
-            split='train', task=None, if_for_training=True, rseed = 1, 
+            split='train', task=None, if_for_training=True, rseed = 1, load_first = -1, 
             cascadeLevel = 0):
 
         if logger is None:

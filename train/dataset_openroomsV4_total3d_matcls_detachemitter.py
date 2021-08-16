@@ -162,8 +162,8 @@ def make_dataset(opt, split='train', data_root=None, data_list=None, logger=None
 
     logger.info("==> Checking image&label pair [%s] list done! %d frames."%(split, len(image_label_list)))
     # print(image_label_list[:5])
-    if opt.cfg.DATASET.first != -1:
-        return image_label_list[:opt.cfg.DATASET.first], meta_split_scene_name_frame_id_list[:opt.cfg.DATASET.first]
+    if opt.cfg.DATASET.first_scenes != -1:
+        return image_label_list[:opt.cfg.DATASET.first_scenes], meta_split_scene_name_frame_id_list[:opt.cfg.DATASET.first_scenes]
     else:
         return image_label_list, meta_split_scene_name_frame_id_list
 

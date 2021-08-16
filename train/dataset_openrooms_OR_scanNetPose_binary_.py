@@ -100,8 +100,8 @@ def make_dataset(opt, split='train', data_root=None, data_list=None, logger=None
         meta_split, scene_name = line_split
         meta_split_scene_name_list.append([meta_split, scene_name])
 
-    if opt.cfg.DATASET.first != -1:
-        return meta_split_scene_name_list[:opt.cfg.DATASET.first]
+    if opt.cfg.DATASET.first_scenes != -1:
+        return meta_split_scene_name_list[:opt.cfg.DATASET.first_scenes]
     elif opt.cfg.DATASET.if_quarter:
         return return_percent(meta_split_scene_name_list, 0.25)
     else:

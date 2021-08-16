@@ -462,7 +462,7 @@ else:
             # synchronize()
             print((tid - tid_start) % opt.eval_every_iter, opt.eval_every_iter)
             if opt.eval_every_iter != -1 and (tid - tid_start) % opt.eval_every_iter == 0:
-                val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift, 'if_register_detectron_only': False}
+                val_params = {'brdf_dataset_val': brdf_dataset_val, 'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift, 'if_register_detectron_only': False}
                 if opt.if_vis:
                     val_params.update({'batch_size_val_vis': batch_size_val_vis, 'detectron_dataset_name': 'vis'})
                     with torch.no_grad():

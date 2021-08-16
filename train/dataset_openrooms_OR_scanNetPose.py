@@ -73,6 +73,31 @@ def return_percent(list_in, percent=1.):
     return_len = max(1, int(np.floor(len_list*percent)))
     return list_in[:return_len]
 
+def get_valid_scenes(opt, frames_list_path, split, logger=None):
+    scenes_list_path = str(frames_list_path).replace('.txt', '_scenes.txt')
+    if not os.path.isfile(scenes_list_path):
+        raise (RuntimeError("Scene list file do not exist: " + scenes_list_path + "\n"))
+    if logger is None:
+        logger = basic_logger()
+
+    meta_split_scene_name_list = []
+    list_read = open(scenes_list_path).readlines()
+    logger.info("Totally {} scenes in {} set.".format(len(list_read), split))
+    for line in list_read:
+        line = line.strip()
+        line_split = line.split(' ')
+        if split == 'test':
+            assert False, 'No support for test split for now.'
+        else:
+            if len(line_split) not in [2]:
+                raise (RuntimeError("Scene list file read line error : " + line + "\n"))
+
+        meta_split, scene_name = line_split
+        meta_split_scene_name_list.append([meta_split, scene_name])
+
+    return meta_split_scene_name_list
+
+
 def make_dataset(opt, split='train', data_root=None, data_list=None, logger=None):
     assert split in ['train', 'val', 'test']
     if not os.path.isfile(data_list):
@@ -118,12 +143,27 @@ def make_dataset(opt, split='train', data_root=None, data_list=None, logger=None
         meta_split_scene_name_frame_id_list.append((meta_split, line_split[0], int(line_split[1])))
 
     logger.info("==> Checking image&label pair [%s] list done! %d frames."%(split, len(image_label_list)))
-    if opt.cfg.DATASET.first != -1:
-        return image_label_list[:opt.cfg.DATASET.first], meta_split_scene_name_frame_id_list[:opt.cfg.DATASET.first]
+
+    all_scenes = get_valid_scenes(opt, data_list, split, logger=logger)
+
+    if opt.cfg.DATASET.first_scenes != -1:
+        # return image_label_list[:opt.cfg.DATASET.first_scenes], meta_split_scene_name_frame_id_list[:opt.cfg.DATASET.first_scenes]
+        assert False
     elif opt.cfg.DATASET.if_quarter:
-        return return_percent(image_label_list, 0.25), return_percent(meta_split_scene_name_frame_id_list, 0.25)
+        # return return_percent(image_label_list, 0.25), return_percent(meta_split_scene_name_frame_id_list, 0.25)
+        all_scenes = return_percent(all_scenes, 0.25)
+        image_label_list_valid = []
+        meta_split_scene_name_frame_id_list_valid = []
+        for image_label, meta_split_scene_name_frame_id in zip(image_label_list, meta_split_scene_name_frame_id_list):
+            meta_split, scene_name = meta_split_scene_name_frame_id[0], meta_split_scene_name_frame_id[1]
+            if [meta_split, scene_name] in all_scenes:
+                image_label_list_valid.append(image_label)
+                meta_split_scene_name_frame_id_list_valid.append(meta_split_scene_name_frame_id)
+        
+        return image_label_list_valid, meta_split_scene_name_frame_id_list_valid, all_scenes
+
     else:
-        return image_label_list, meta_split_scene_name_frame_id_list
+        return image_label_list, meta_split_scene_name_frame_id_list, all_scenes
 
 
 
@@ -151,13 +191,13 @@ class openrooms(data.Dataset):
         split_to_list = {'train': 'train.txt', 'val': 'val.txt', 'test': 'test.txt'}
         data_list = os.path.join(self.cfg.PATH.root, self.cfg.DATASET.dataset_list)
         data_list = os.path.join(data_list, split_to_list[split])
-        self.data_list, self.meta_split_scene_name_frame_id_list = make_dataset(opt, split, self.data_root, data_list, logger=self.logger)
+        self.data_list, self.meta_split_scene_name_frame_id_list, self.all_scenes_list = make_dataset(opt, split, self.data_root, data_list, logger=self.logger)
         assert len(self.data_list) == len(self.meta_split_scene_name_frame_id_list)
         if load_first != -1:
             self.data_list = self.data_list[:load_first] # [('/data/ruizhu/openrooms_mini-val/mainDiffLight_xml1/scene0509_00/im_1.hdr', '/data/ruizhu/openrooms_mini-val/main_xml1/scene0509_00/imsemLabel_1.npy'), ...
             self.meta_split_scene_name_frame_id_list = self.meta_split_scene_name_frame_id_list[:load_first] # [('mainDiffLight_xml1', 'scene0509_00', 1)
 
-        logger.info(white_blue('%s-%s: total frames: %d'%(self.dataset_name, self.split, len(self.dataset_name))))
+        logger.info(white_blue('%s-%s: total frames: %d; total scenes %d'%(self.dataset_name, self.split, len(self.data_list),len(self.all_scenes_list))))
 
         self.OR = opt.cfg.MODEL_LAYOUT_EMITTER.data.OR
         self.valid_class_ids = RECON_3D_CLS_OR_dict[self.OR]
