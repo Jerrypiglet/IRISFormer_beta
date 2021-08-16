@@ -419,7 +419,7 @@ else:
     
         for i, data_batch in tqdm(enumerate(brdf_loader_train)):
 
-            if opt.cfg.DATASET.binary and opt.distributed:
+            if opt.cfg.DATASET.if_binary and opt.distributed:
                 count_samples_this_rank += len(data_batch['frame_info'])
                 count_samples_gathered = gather_lists([count_samples_this_rank], opt.num_gpus)
                 # print('->', i, opt.rank)

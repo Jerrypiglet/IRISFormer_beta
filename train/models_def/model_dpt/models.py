@@ -76,14 +76,22 @@ class DPT(BaseModel):
         layer_1, layer_2, layer_3, layer_4 = forward_vit(self.opt, self.pretrained, x)
 
         layer_1_rn = self.scratch.layer1_rn(layer_1)
+        # print(self.scratch.layer1_rn, layer_1.shape, layer_1_rn.shape) # [hybrid] Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False) torch.Size([2, 256, 64, 80]) torch.Size([2, 256, 64, 80])
         layer_2_rn = self.scratch.layer2_rn(layer_2)
+        # print(self.scratch.layer2_rn, layer_2.shape, layer_2_rn.shape) # [hybrid] Conv2d(512, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False) torch.Size([2, 512, 32, 40]) torch.Size([2, 256, 32, 40])
         layer_3_rn = self.scratch.layer3_rn(layer_3)
+        # print(self.scratch.layer3_rn, layer_3.shape, layer_3_rn.shape) # [hybrid] Conv2d(768, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False) torch.Size([2, 768, 16, 20]) torch.Size([2, 256, 16, 20])
         layer_4_rn = self.scratch.layer4_rn(layer_4)
+        # print(self.scratch.layer4_rn, layer_4.shape, layer_4_rn.shape) # [hybrid] Conv2d(768, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False) torch.Size([2, 768, 8, 10]) torch.Size([2, 256, 8, 10])
 
         path_4 = self.scratch.refinenet4(layer_4_rn)
+        # print(self.scratch.refinenet4, layer_4_rn.shape, path_4.shape)
         path_3 = self.scratch.refinenet3(path_4, layer_3_rn)
+        # print(self.scratch.refinenet3, layer_3_rn.shape, path_3.shape)
         path_2 = self.scratch.refinenet2(path_3, layer_2_rn)
+        # print(self.scratch.refinenet2, layer_2_rn.shape, path_2.shape)
         path_1 = self.scratch.refinenet1(path_2, layer_1_rn)
+        # print(self.scratch.refinenet1, layer_1_rn.shape, path_1.shape)
 
         out = self.scratch.output_conv(path_1)
 

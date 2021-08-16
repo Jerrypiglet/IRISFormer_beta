@@ -85,14 +85,16 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
 
     # [layer_3 and layer_4 are from transformer layers]
     # print(x.shape)
-    # print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape) # torch.Size([8, 256, 64, 80]) torch.Size([8, 512, 32, 40]) torch.Size([8, 321, 768]) torch.Size([8, 321, 768])
+    print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+    # hybrid-SSN: torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 321, 768]) torch.Size([1, 321, 768])
 
     layer_1 = pretrained.act_postprocess1[0:2](layer_1)
     layer_2 = pretrained.act_postprocess2[0:2](layer_2)
     layer_3 = pretrained.act_postprocess3[0:2](layer_3)
     layer_4 = pretrained.act_postprocess4[0:2](layer_4)
 
-    # print('->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape) # -> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 320]) torch.Size([2, 768, 320])
+    print('->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+    # hybrid-SSN: -> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 320]) torch.Size([2, 768, 320])
 
     # unflatten = nn.Sequential( # 'Re-assemble' in DPT paper
     #     nn.Unflatten(
@@ -146,16 +148,16 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
             assert False, 'invalid ssn_from!'
         
 
-    # print('-->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape) # --> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 16, 20])
+    print('-->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+    # hybrid-SSN: --> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 16, 20])
 
     layer_1 = pretrained.act_postprocess1[3 : len(pretrained.act_postprocess1)](layer_1)
     layer_2 = pretrained.act_postprocess2[3 : len(pretrained.act_postprocess2)](layer_2)
     layer_3 = pretrained.act_postprocess3[3 : len(pretrained.act_postprocess3)](layer_3)
     layer_4 = pretrained.act_postprocess4[3 : len(pretrained.act_postprocess4)](layer_4)
     
-    # print(pretrained.act_postprocess3[3 : len(pretrained.act_postprocess3)])
-    # print('---->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape) # --> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 8, 10])
-
+    print('---->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+    # hybrid-SSN: ----> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 8, 10])
 
     return layer_1, layer_2, layer_3, layer_4, ssn_return_dict
 
