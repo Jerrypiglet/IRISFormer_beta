@@ -26,6 +26,7 @@ a.pkl
 tmp
 third-parties_outside/adobe_svbrdf-master/train_list_cs.txt
 third_parties_outside/apex
+third_parties_outside/YOGO
 tmp.py
 tmp.pickle
 notebooks/scene_mesh_debug*.obj

@@ -29,6 +29,7 @@
 			"**/third_parties_outside/adobe_svbrdf-master/**": true,
 			"**/third_parties_outside/apex/**": true,
 			"**/third_parties_outside/DPT/**": true,
+			"**/third_parties_outside/YOGO/**": true,
 			"**/third_parties_outside/Deformable-Convolution-V2-PyTorch/**": true,
 			"**/third_parties_outside/detectron_elvis/outfileelvis/**": true,
 			"**/third_parties_outside/photoshape/**": true,
