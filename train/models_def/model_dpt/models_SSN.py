@@ -50,12 +50,13 @@ class DPT_SSN(BaseModel):
 
         # assert backbone in ['vitb_rn50_384', 'vitb_unet_384'], 'Backbone %s unsupported in DPT_SSN!'%backbone
         # assert backbone in ['vitb_unet_384', 'vitb16_384'], 'Backbone %s unsupported in DPT_SSN!'%backbone
-        assert backbone in ['vitb_unet_384'], 'Backbone %s unsupported in DPT_SSN!'%backbone
+        assert backbone in ['vitb_unet_384', 'vitl_unet_384'], 'Backbone %s unsupported in DPT_SSN!'%backbone
 
         self.channels_last = channels_last
 
         hooks = {
             "vitb_rn50_384": [0, 1, 8, 11],
+            "vitl_unet_384": [0, 1, 8, 11],
             "vitb_unet_384": [0, 1, 8, 11],
             "vitb16_384": [2, 5, 8, 11],
             "vitl16_384": [5, 11, 17, 23],

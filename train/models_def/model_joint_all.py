@@ -144,6 +144,17 @@ class Model_Joint(nn.Module):
                         skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
                         keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
                     )
+                elif model_type=='dpt_large_SSN':
+                    self.BRDF_Net = DPTAlbedoDepthModel_SSN(
+                        opt=opt, 
+                        modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
+                        path=model_path,
+                        backbone="vitl_unet_384",
+                        non_negative=if_non_negative,
+                        enable_attention_hooks=False,
+                        skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
+                        keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
+                    )
                 elif model_type=='dpt_large':
                     self.BRDF_Net = DPTAlbedoDepthModel(
                         opt=opt, 

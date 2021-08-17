@@ -119,7 +119,7 @@ def set_up_envs(opt):
     # ====== DPT =====
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.DPT_baseline.enable:
         opt.cfg.DATA.if_load_png_not_hdr = True
-        assert opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_large', 'dpt_base', 'dpt_hybrid', 'dpt_hybrid_SSN', 'dpt_base_SSN']
+        assert opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_large', 'dpt_base', 'dpt_hybrid', 'dpt_hybrid_SSN', 'dpt_base_SSN', 'dpt_large_SSN']
         
         assert opt.cfg.MODEL_BRDF.DPT_baseline.modality in ['al', 'de']
 
@@ -131,8 +131,8 @@ def set_up_envs(opt):
         opt.pad_op = transform.Pad([im_height_pad_to, im_width_pad_to], padding_with=im_pad_with)
 
         if opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_hybrid_SSN', 'dpt_base_SSN']:
-            assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.ssn_from in ['backbone', 'matseg', 'on-the-fly']
-            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.ssn_from == 'matseg':
+            assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.ssn_from in ['backbone', 'matseg', 'on-the-fly']
+            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.ssn_from == 'matseg':
                 opt.cfg.MODEL_MATSEG.enable = True
                 if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.if_freeze_matseg:
                     opt.cfg.MODEL_MATSEG.if_freeze = True

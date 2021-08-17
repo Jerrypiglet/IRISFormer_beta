@@ -252,7 +252,7 @@ _C.MODEL_BRDF.DPT_baseline.if_only_restore_backbone = False
 
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid = CN()
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.use_pretrained_backbone = True
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.ssn_from = 'matseg' # ['backbone', 'matseg']
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.ssn_from = 'matseg' # ['backbone', 'matseg']
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN = CN() # dpt_hybrid_SSN (V1)
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.backbone_dims = 1344 # resnet: stem + stage 0,1,2
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.patch_size = 16
@@ -261,6 +261,13 @@ _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.if_dense = True
 # _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.spixel_h = 12
 # _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.spixel_w = 16
 
+_C.MODEL_BRDF.DPT_baseline.dpt_large = CN()
+_C.MODEL_BRDF.DPT_baseline.dpt_large_SSN = CN() # dpt_hybrid_SSN (V1)
+_C.MODEL_BRDF.DPT_baseline.dpt_large_SSN.ssn_from = 'matseg' # ['backbone', 'matseg']
+_C.MODEL_BRDF.DPT_baseline.dpt_large_SSN.backbone_dims = 1344 # resnet: stem + stage 0,1,2
+_C.MODEL_BRDF.DPT_baseline.dpt_large_SSN.patch_size = 16
+_C.MODEL_BRDF.DPT_baseline.dpt_large_SSN.if_freeze_matseg = True
+_C.MODEL_BRDF.DPT_baseline.dpt_large_SSN.if_dense = True
 
 # ===== per-pixel lighting
 _C.MODEL_LIGHT = CN()

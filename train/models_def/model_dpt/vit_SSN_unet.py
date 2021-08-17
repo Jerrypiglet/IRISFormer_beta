@@ -112,7 +112,7 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
 
     assert pretrained.model.patch_size[0]==pretrained.model.patch_size[1]
 
-    ssn_from = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.ssn_from
+    ssn_from = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.ssn_from
 
     if layer_1.ndim == 3:
         # layer_1 = unflatten(layer_1)
@@ -216,14 +216,14 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
         ], dim=1)
     # print(im_feat.shape, input_dict_extra['return_dict_matseg']['embedding'].shape) #  # torch.Size([4, D, 64, 80])
     
-    # if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.ssn_from == 'matseg':
+    # if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.ssn_from == 'matseg':
     #     assert im_feat.shape[-2:] == input_dict_extra['return_dict_matseg']['embedding'].shape[-2:]
     batch_size, d = im_feat.shape[0], im_feat.shape[1]
     spixel_dims = [im_height//self.patch_size[0], im_width//self.patch_size[1]]
 
     ssn_op = SSNFeatsTransformAdaptive(None, spixel_dims=spixel_dims, if_dense=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.if_dense)
     # tic = time.time()
-    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.ssn_from == 'matseg':
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.ssn_from == 'matseg':
         ssn_return_dict = ssn_op(tensor_to_transform=im_feat, feats_in=input_dict_extra['return_dict_matseg']['embedding'], if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
     else:
         ssn_return_dict = ssn_op(tensor_to_transform=im_feat, feats_in=pretrained_activations['feat_stage_2'].detach(), if_return_codebook_only=True, scale_down_gamma_tensor=(1./2., 1)) # Q: [im_height/4, im_width/4]
