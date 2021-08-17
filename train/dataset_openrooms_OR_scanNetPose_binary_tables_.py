@@ -78,7 +78,7 @@ def return_percent(list_in, percent=1.):
     return_len = max(1, int(np.floor(len_list*percent)))
     return list_in[:return_len]
 
-def make_dataset(opt, split='train', data_root=None, data_list=None, logger=None):
+def make_dataset(opt, split, task, data_root=None, data_list=None, logger=None):
     assert split in ['train', 'val', 'test']
     if not os.path.isfile(data_list):
         raise (RuntimeError("Scene list file do not exist: " + data_list + "\n"))
@@ -102,7 +102,7 @@ def make_dataset(opt, split='train', data_root=None, data_list=None, logger=None
 
     if opt.cfg.DATASET.first_scenes != -1:
         return meta_split_scene_name_list[:opt.cfg.DATASET.first_scenes]
-    elif opt.cfg.DATASET.if_quarter:
+    elif opt.cfg.DATASET.if_quarter and task != 'vis':
         return return_percent(meta_split_scene_name_list, 0.25)
     else:
         return meta_split_scene_name_list
@@ -155,7 +155,7 @@ class openrooms_binary(data.IterableDataset):
         split_to_list = {'train': 'train_scenes.txt', 'val': 'val_scenes.txt', 'test': 'test_scenes.txt'}
         data_list_file = os.path.join(self.cfg.PATH.root, self.cfg.DATASET.dataset_list)
         data_list_file = os.path.join(data_list_file, split_to_list[split])
-        self.meta_split_scene_name_list = make_dataset(opt, split, self.data_root, data_list_file, logger=self.logger)
+        self.meta_split_scene_name_list = make_dataset(opt, split, self.task, self.data_root, data_list_file, logger=self.logger)
 
         self.scene_key_frame_id_list = get_per_frame_dataset_info(opt, split, self.data_root, data_list_file, valid_scene_key_list=['-'.join(_) for _ in self.meta_split_scene_name_list], logger=self.logger)
         self.num_frames = len(self.scene_key_frame_id_list)

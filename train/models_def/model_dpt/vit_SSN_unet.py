@@ -85,7 +85,7 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
 
     # [layer_3 and layer_4 are from transformer layers]
     # print(x.shape)
-    print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+    # print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # hybrid-SSN: torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 321, 768]) torch.Size([1, 321, 768])
 
     layer_1 = pretrained.act_postprocess1[0:2](layer_1)
@@ -93,7 +93,7 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     layer_3 = pretrained.act_postprocess3[0:2](layer_3)
     layer_4 = pretrained.act_postprocess4[0:2](layer_4)
 
-    print('->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+    # print('->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # hybrid-SSN: -> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 320]) torch.Size([2, 768, 320])
 
     # unflatten = nn.Sequential( # 'Re-assemble' in DPT paper
@@ -148,7 +148,7 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
             assert False, 'invalid ssn_from!'
         
 
-    print('-->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+    # print('-->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # hybrid-SSN: --> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 16, 20])
 
     layer_1 = pretrained.act_postprocess1[3 : len(pretrained.act_postprocess1)](layer_1)
@@ -156,7 +156,7 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     layer_3 = pretrained.act_postprocess3[3 : len(pretrained.act_postprocess3)](layer_3)
     layer_4 = pretrained.act_postprocess4[3 : len(pretrained.act_postprocess4)](layer_4)
     
-    print('---->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+    # print('---->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # hybrid-SSN: ----> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 8, 10])
 
     return layer_1, layer_2, layer_3, layer_4, ssn_return_dict
@@ -221,7 +221,7 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
     batch_size, d = im_feat.shape[0], im_feat.shape[1]
     spixel_dims = [im_height//self.patch_size[0], im_width//self.patch_size[1]]
 
-    ssn_op = SSNFeatsTransformAdaptive(None, spixel_dims=spixel_dims)
+    ssn_op = SSNFeatsTransformAdaptive(None, spixel_dims=spixel_dims, if_dense=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.if_dense)
     # tic = time.time()
     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.ssn_from == 'matseg':
         ssn_return_dict = ssn_op(tensor_to_transform=im_feat, feats_in=input_dict_extra['return_dict_matseg']['embedding'], if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]

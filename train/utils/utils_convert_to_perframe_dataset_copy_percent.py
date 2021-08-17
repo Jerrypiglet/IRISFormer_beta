@@ -15,6 +15,7 @@ def return_percent(list_in, percent=1.):
     return_len = max(1, int(np.floor(len_list*percent)))
     return list_in[:return_len]
 
+# LIST_path = Path('/home/ruizhu/Documents/Projects/semanticInverse/train/data/openrooms/list_OR_V4full/list')
 # RAW_path = Path('/data/ruizhu/openrooms_mini')
 # RAW_png_path = Path('/data/ruizhu/OR-pngs')
 # DEST_path = Path('/home/ruizhu/Documents/data/OR-seq-mini-240x320')
@@ -28,7 +29,6 @@ def return_percent(list_in, percent=1.):
 LIST_path = Path('/viscompfs/users/ruizhu/semanticInverse/train/train/data/openrooms/list_OR_V4full/list')
 DEST_path = Path('/ruidata/ORfull-perFramePickles-240x320')
 DEST_percent_path = Path('/ruidata/ORfull-perFramePickles-240x320-quarter')
-
 
 PERCENT = 0.25
 
@@ -50,8 +50,11 @@ else:
 import time
 tic = time.time()
 
-valid_frame_list = []
+
+valid_frame_list_all = []
+
 for split in ['train', 'val']:
+    valid_frame_list_quarter = []
     list_path = LIST_path / ('%s.txt'%split)
     frame_list_RAW = open(str(list_path)).readlines()
     for _ in frame_list_RAW:
@@ -59,10 +62,13 @@ for split in ['train', 'val']:
         meta_split = _.strip().split(' ')[2].split('/')[0]
         frame_id = int(_.strip().split(' ')[1])
         if 'scene' in scene_name:
-            valid_frame_list.append([meta_split, scene_name, frame_id])
+            valid_frame_list_quarter.append([meta_split, scene_name, frame_id])
 
-valid_frame_list = return_percent(valid_frame_list, PERCENT)
-print('Copying %d valid scenes...'%len(valid_frame_list))
+    valid_frame_list_quarter = return_percent(valid_frame_list_quarter, PERCENT)
+    valid_frame_list_all += valid_frame_list_quarter
+
+print('Copying %d valid frames...'%len(valid_frame_list_all))
+print(valid_frame_list_all[:10])
 
 def copy_frame(frame_info):
     meta_split, scene_name, frame_id = frame_info[0], frame_info[1], frame_info[2]
@@ -72,8 +78,8 @@ def copy_frame(frame_info):
     shutil.copyfile(str(src_path), str(dest_path))
 
 p = Pool(processes=32)
-# p.map(copy_frame, valid_frame_list)
-list(tqdm(p.imap_unordered(copy_frame, valid_frame_list), total=len(valid_frame_list)))
+# p.map(copy_frame, valid_frame_list_all)
+list(tqdm(p.imap_unordered(copy_frame, valid_frame_list_all), total=len(valid_frame_list_all)))
 
 p.close()
 p.join()

@@ -10,8 +10,8 @@ from torch.functional import Tensor
 import torch.nn.functional as F
 from tensorboardX import SummaryWriter
 
-import models_def.model_nvidia.ssn.ssn as ssn
-import models_def.model_nvidia.ssn.ssn_fullJ as ssn_fullJ
+# import models_def.model_nvidia.ssn.ssn as ssn
+import models_def.model_nvidia.ssn.ssn_tmp as ssn
 
 class SSNFeatsTransformAdaptive(torch.nn.Module):
     '''
@@ -19,7 +19,7 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
     '''
 
     def __init__(
-            self, args, spixel_dims, n_iter=10, if_dense=False):
+            self, args, spixel_dims, n_iter=10):
         '''
         '''
         super().__init__()
@@ -41,8 +41,6 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
         self.total_step=0
 
         self.opt = args
-
-        self.if_dense = if_dense
 
     def forward(self, tensor_to_transform, feats_in=None, affinity_in=None, scale_down_gamma_tensor=1, index_add=True, if_return_codebook_only=False):
         '''
@@ -68,11 +66,9 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
         assert self.spixel_nums[1] <= W
         J = self.spixel_nums[0] * self.spixel_nums[1]
 
-        ssn.ssn_iter_to_use = ssn_fullJ.ssn_iter if self.if_dense else ssn.ssn_iter
-
         if affinity_in is None:
-            abs_affinity, dist_matrix, spixel_features = \
-                ssn.ssn_iter_to_use(
+            abs_affinity, dist_matrix_, spixel_features_ = \
+                ssn.ssn_iter(
                     feats_in, n_iter=self.n_iter, 
                     num_spixels_width=self.num_spixels_width, 
                     num_spixels_height=self.num_spixels_height, 

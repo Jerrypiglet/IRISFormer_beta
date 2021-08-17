@@ -159,10 +159,12 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
             for n in range(0, len(albedoPreds) ):
                 loss = torch.sum( (albedoPreds[n] - input_dict['albedoBatch'])
                     * (albedoPreds[n] - input_dict['albedoBatch']) * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch'] ) ) / pixelObjNum / 3.0
-                if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_albedo:
-                    reg_loss = regularization_loss(albedoPreds[n], input_dict['albedoBatch'], input_dict['segBRDFBatch'].squeeze())
-                    loss += opt.cfg.MODEL_BRDF.loss.reg_loss_albedo_weight * reg_loss
                 loss_dict['loss_brdf-albedo'].append(loss)
+
+                if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_albedo:
+                    reg_loss = regularization_loss(albedoPreds[n], input_dict['albedoBatch'], input_dict['segBRDFBatch'].squeeze(1))
+                    loss_dict['loss_brdf-albedo-reg'] = opt.cfg.MODEL_BRDF.loss.reg_loss_albedo_weight * reg_loss
+                    loss_dict['loss_brdf-ALL'] += 4 * opt.albeW * loss_dict['loss_brdf-albedo-reg']
 
             loss_dict['loss_brdf-ALL'] += 4 * opt.albeW * loss_dict['loss_brdf-albedo'][-1]
             # output_dict.update({'mat_seg-albedoPreds': albedoPreds})
@@ -220,7 +222,8 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
                     if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_depth:
                         reg_loss = regularization_loss(depthPreds[n], input_dict['depthBatch'], input_dict['segAllBatch'].squeeze())
                         # print(reg_loss.item(), loss.item())
-                        loss += opt.cfg.MODEL_BRDF.reg_loss_depth_weight * reg_loss
+                        loss_dict['loss_brdf-depth-reg'] = opt.cfg.MODEL_BRDF.reg_loss_depth_weight * reg_loss
+                        loss_dict['loss_brdf-ALL'] += opt.deptW * loss_dict['loss_brdf-depth-reg']
 
                 loss_dict['loss_brdf-depth'].append(loss)
             loss_dict['loss_brdf-ALL'] += opt.deptW * loss_dict['loss_brdf-depth'][-1]

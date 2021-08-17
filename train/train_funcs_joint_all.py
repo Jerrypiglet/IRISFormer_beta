@@ -257,6 +257,11 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
                 'loss_brdf-rough-paper', 
                 'loss_brdf-depth-paper'
             ]
+            if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_albedo:
+                loss_keys += ['loss_brdf-albedo-reg']
+            if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_depth:
+                loss_keys += ['loss_brdf-depth-reg']
+
         if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
             loss_keys += ['loss_semseg-ALL']
 

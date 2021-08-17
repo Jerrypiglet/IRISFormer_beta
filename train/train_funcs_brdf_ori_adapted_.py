@@ -1,4 +1,6 @@
 import torch
+
+import torch
 from torch.autograd import Variable
 import models_def.models as models
 import torch.nn.functional as F
@@ -188,6 +190,7 @@ def val_epoch(brdfLoaderVal, model, optimizer, writer, opt, tid):
         model[key].eval()
 
     loss_dict = {'loss_albedo': [], 'loss_normal': [], 'loss_rough': [], 'loss_depth': []}
+    loss_dict.update({'loss_albedo-reg': [], 'loss_depth-reg': []})
 
     with torch.no_grad():
         for i, dataBatch in tqdm(enumerate(brdfLoaderVal)):

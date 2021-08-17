@@ -101,7 +101,7 @@ def get_valid_scenes(opt, frames_list_path, split, logger=None):
 
     return meta_split_scene_name_list
 
-def make_dataset(opt, split='train', data_root=None, data_list=None, logger=None):
+def make_dataset(opt, split, task, data_root=None, data_list=None, logger=None):
     assert split in ['train', 'val', 'test']
     if not os.path.isfile(data_list):
         raise (RuntimeError("Image list file do not exist: " + data_list + "\n"))
@@ -152,18 +152,21 @@ def make_dataset(opt, split='train', data_root=None, data_list=None, logger=None
     if opt.cfg.DATASET.first_scenes != -1:
         # return image_label_list[:opt.cfg.DATASET.first_scenes], meta_split_scene_name_frame_id_list[:opt.cfg.DATASET.first_scenes]
         assert False
-    elif opt.cfg.DATASET.if_quarter:
-        all_scenes = return_percent(all_scenes, 0.25)
-        image_label_list_valid = []
-        meta_split_scene_name_frame_id_list_valid = []
-        for image_label, meta_split_scene_name_frame_id in zip(image_label_list, meta_split_scene_name_frame_id_list):
-            meta_split, scene_name = meta_split_scene_name_frame_id[0], meta_split_scene_name_frame_id[1]
-            if [meta_split, scene_name] in all_scenes:
-                image_label_list_valid.append(image_label)
-                meta_split_scene_name_frame_id_list_valid.append(meta_split_scene_name_frame_id)
+    elif opt.cfg.DATASET.if_quarter and task != 'vis':
+        # all_scenes = return_percent(all_scenes, 0.25)
+        # image_label_list_valid = []
+        # meta_split_scene_name_frame_id_list_valid = []
+        # for image_label, meta_split_scene_name_frame_id in zip(image_label_list, meta_split_scene_name_frame_id_list):
+        #     meta_split, scene_name = meta_split_scene_name_frame_id[0], meta_split_scene_name_frame_id[1]
+        #     if [meta_split, scene_name] in all_scenes:
+        #         image_label_list_valid.append(image_label)
+        #         meta_split_scene_name_frame_id_list_valid.append(meta_split_scene_name_frame_id)
         
-        return image_label_list_valid, meta_split_scene_name_frame_id_list_valid, all_scenes
-        # return return_percent(image_label_list, 0.25), return_percent(meta_split_scene_name_frame_id_list, 0.25)
+        # return image_label_list_valid, meta_split_scene_name_frame_id_list_valid, all_scenes
+        meta_split_scene_name_frame_id_list_quarter = return_percent(meta_split_scene_name_frame_id_list, 0.25)
+        all_scenes = list(set(['/'.join([x[0], x[1]]) for x in meta_split_scene_name_frame_id_list_quarter]))
+        all_scenes = [x.split('/') for x in all_scenes]
+        return return_percent(image_label_list, 0.25), meta_split_scene_name_frame_id_list_quarter, all_scenes
     else:
         return image_label_list, meta_split_scene_name_frame_id_list, all_scenes
 
@@ -193,13 +196,13 @@ class openrooms_pickle(data.Dataset):
         split_to_list = {'train': 'train.txt', 'val': 'val.txt', 'test': 'test.txt'}
         data_list = os.path.join(self.cfg.PATH.root, self.cfg.DATASET.dataset_list)
         data_list = os.path.join(data_list, split_to_list[split])
-        self.data_list, self.meta_split_scene_name_frame_id_list, self.all_scenes_list = make_dataset(opt, split, self.data_root, data_list, logger=self.logger)
+        self.data_list, self.meta_split_scene_name_frame_id_list, self.all_scenes_list = make_dataset(opt, split, self.task, self.data_root, data_list, logger=self.logger)
         assert len(self.data_list) == len(self.meta_split_scene_name_frame_id_list)
         if load_first != -1:
             self.data_list = self.data_list[:load_first] # [('/data/ruizhu/openrooms_mini-val/mainDiffLight_xml1/scene0509_00/im_1.hdr', '/data/ruizhu/openrooms_mini-val/main_xml1/scene0509_00/imsemLabel_1.npy'), ...
             self.meta_split_scene_name_frame_id_list = self.meta_split_scene_name_frame_id_list[:load_first] # [('mainDiffLight_xml1', 'scene0509_00', 1)
 
-        logger.info(white_blue('%s-%s: total frames: %d; total scenes %d'%(self.dataset_name, self.split, len(self.data_list),len(self.all_scenes_list))))
+        logger.info(white_blue('%s-%s: total frames: %d; total scenes %d; from path %s'%(self.dataset_name, self.split, len(self.data_list),len(self.all_scenes_list), self.data_root   )))
 
         self.OR = opt.cfg.MODEL_LAYOUT_EMITTER.data.OR
         self.valid_class_ids = RECON_3D_CLS_OR_dict[self.OR]
@@ -307,7 +310,7 @@ class openrooms_pickle(data.Dataset):
         if self.opt.cfg.DATA.if_pad_to_32x:
             assert if_load_immask
 
-        pickle_return_dict = self.load_one_pickle(frame_info, if_load_immask=if_load_immask)
+        pickle_return_dict = self.load_one_pickle_tables(frame_info, if_load_immask=if_load_immask)
 
         if if_load_immask:
             seg_path = hdr_image_path.replace('im_', 'immask_').replace('hdr', 'png').replace('DiffMat', '')

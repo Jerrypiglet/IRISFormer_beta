@@ -20,19 +20,20 @@ def return_percent(list_in, percent=1.):
     return_len = max(1, int(np.floor(len_list*percent)))
     return list_in[:return_len]
 
-# RAW_path = Path('/data/ruizhu/openrooms_mini')
-# RAW_png_path = Path('/data/ruizhu/OR-pngs')
-# DEST_path = Path('/home/ruizhu/Documents/data/OR-perFramePickles-mini-240x320')
+PERCENT = 1.
+
+RAW_path = Path('/data/ruizhu/openrooms_mini')
+RAW_png_path = Path('/data/ruizhu/OR-pngs')
+DEST_path = Path('/home/ruizhu/Documents/data/OR-perFramePickles-mini-240x320')
 
 # RAW_path = Path('/siggraphasia20dataset/code/Routine/DatasetCreation/')
 # RAW_png_path = Path('/siggraphasia20dataset/pngs')
 # DEST_path = Path('/ruidata/ORfull-perFramePickles-240x320')
 
-PERCENT = 1.
 
-RAW_path = Path('/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms')
-RAW_png_path = Path('/data/ruizhu/OR-pngs')
-DEST_path = Path('/newfoundland/ruizhu/ORfull-perFramePickles-240x320')
+# RAW_path = Path('/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms')
+# RAW_png_path = Path('/data/ruizhu/OR-pngs')
+# DEST_path = Path('/newfoundland/ruizhu/ORfull-perFramePickles-240x320')
 
 resize_HW = [240, 320] # set to [-1, -1] for not resizing!
 dataset_if_save_space = True

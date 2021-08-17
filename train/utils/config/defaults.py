@@ -87,12 +87,13 @@ _C.DATASET.png_path_local = '/data/ruizhu/OR-pngs'
 # _C.DATASET.png_path_local = ''
 _C.DATASET.png_path_cluster = ['/siggraphasia20dataset/pngs', '/local/ruzhu/data/OR-pngs', '/datasets_mount/OR-pngs']
 
+_C.DATASET.if_to_memory = False
+_C.DATASET.memory_path = '/dev/shm'
+
 _C.DATASET.if_binary = False # load binary version of dataset instead of from per-sample files
 _C.DATASET.binary = CN()
 _C.DATASET.binary.if_in_one_file = False
 _C.DATASET.binary.if_shuffle = False
-_C.DATASET.binary.if_to_memory = False
-_C.DATASET.binary.memory_path = '/dev/shm'
 
 _C.DATASET.if_pickle = False
 _C.DATASET.pickle = CN()
@@ -134,8 +135,8 @@ _C.DATASET.dataset_path_mini_binary = ''
 _C.DATASET.dataset_path_mini_binary_local = '/home/ruizhu/Documents/data/OR-seq-mini-240x320'
 _C.DATASET.dataset_path_mini_binary_cluster = ['', '', '']
 _C.DATASET.dataset_path_mini_pickle = ''
-_C.DATASET.dataset_path_mini_pickle_local = '/ruidata/ORfull-perFramePickles-240x320'
-_C.DATASET.dataset_path_mini_pickle_cluster = ['', '', '']
+_C.DATASET.dataset_path_mini_pickle_local = '/home/ruizhu/Documents/data/OR-perFramePickles-mini-240x320'
+_C.DATASET.dataset_path_mini_pickle_cluster = ['/ruidata/ORfull-perFramePickles-240x320', '', '']
 _C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini/list'
 # _C.DATASET.dataset_path_mini = '/data/ruizhu/openrooms_mini-val'
 # _C.DATASET.dataset_list_mini = 'data/openrooms/list_ORmini-val/list'
@@ -256,6 +257,7 @@ _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN = CN() # dpt_hybrid_SSN (V1)
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.backbone_dims = 1344 # resnet: stem + stage 0,1,2
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.patch_size = 16
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.if_freeze_matseg = True
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.if_dense = True
 # _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.spixel_h = 12
 # _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.spixel_w = 16
 

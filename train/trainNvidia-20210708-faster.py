@@ -517,7 +517,7 @@ else:
             # synchronize()
             print((tid - tid_start) % opt.eval_every_iter, opt.eval_every_iter)
             if opt.eval_every_iter != -1 and (tid - tid_start) % opt.eval_every_iter == 0:
-                val_params = {'brdf_dataset_val': brdf_dataset_val, 'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift, 'if_register_detectron_only': False}
+                val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift, 'if_register_detectron_only': False}
                 if opt.if_vis:
                     val_params.update({'batch_size_val_vis': batch_size_val_vis, 'detectron_dataset_name': 'vis'})
                     with torch.no_grad():
@@ -526,7 +526,7 @@ else:
                         vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
                     synchronize()                
                 if opt.if_val:
-                    val_params.update({'detectron_dataset_name': 'val'})
+                    val_params.update({'brdf_dataset_val': brdf_dataset_val, 'detectron_dataset_name': 'val'})
                     with torch.no_grad():
                         val_epoch_joint(brdf_loader_val, model, val_params)
                 model.train(not cfg.MODEL_SEMSEG.fix_bn)
@@ -600,12 +600,16 @@ else:
                     loss_keys_print.append('loss_brdf-ALL')
                 if 'al' in opt.cfg.MODEL_BRDF.enable_list and 'al' in opt.cfg.MODEL_BRDF.loss_list:
                     loss_keys_print.append('loss_brdf-albedo') 
+                    if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_albedo:
+                        loss_keys_print.append('loss_brdf-albedo-reg') 
                 if 'no' in opt.cfg.MODEL_BRDF.enable_list and 'no' in opt.cfg.MODEL_BRDF.loss_list:
                     loss_keys_print.append('loss_brdf-normal') 
                 if 'ro' in opt.cfg.MODEL_BRDF.enable_list and 'ro' in opt.cfg.MODEL_BRDF.loss_list:
                     loss_keys_print.append('loss_brdf-rough') 
                 if 'de' in opt.cfg.MODEL_BRDF.enable_list and 'de' in opt.cfg.MODEL_BRDF.loss_list:
                     loss_keys_print.append('loss_brdf-depth') 
+                    if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_depth:
+                        loss_keys_print.append('loss_brdf-depth-reg') 
 
             if opt.cfg.MODEL_LIGHT.enable:
                 if not opt.cfg.MODEL_LIGHT.if_freeze:

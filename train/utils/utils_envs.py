@@ -28,7 +28,10 @@ def set_up_envs(opt):
 
     opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.dataset_path_local
     opt.cfg.DATASET.dataset_path_binary = opt.cfg.DATASET.dataset_path_binary_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.dataset_path_binary_local
+    opt.cfg.DATASET.dataset_path_mini_binary = opt.cfg.DATASET.dataset_path_mini_binary_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.dataset_path_mini_binary_local
     opt.cfg.DATASET.dataset_path_pickle = opt.cfg.DATASET.dataset_path_pickle_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.dataset_path_pickle_local
+    opt.cfg.DATASET.dataset_path_mini_pickle = opt.cfg.DATASET.dataset_path_mini_pickle_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.dataset_path_mini_pickle_local
+
     opt.cfg.DATASET.layout_emitter_path = opt.cfg.DATASET.layout_emitter_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.layout_emitter_path_local
     opt.cfg.DATASET.png_path = opt.cfg.DATASET.png_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.png_path_local
     opt.cfg.DATASET.dataset_path_mini = opt.cfg.DATASET.dataset_path_mini_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.dataset_path_mini_local
@@ -42,15 +45,19 @@ def set_up_envs(opt):
     if opt.data_root is not None:
         opt.cfg.DATASET.dataset_path = opt.data_root
     if opt.if_cluster and opt.cluster=='ngc':
-        opt.cfg.flush_secs = 300
+        opt.cfg.flush_secs = 120
         # opt.cfg.DATASET.binary = True
-        if opt.cfg.DATASET.if_binary and opt.cfg.DATASET.binary.if_to_memory:
+        if opt.cfg.DATASET.if_to_memory:
             if opt.cfg.DATASET.if_quarter:
                 opt.cfg.DATASET.dataset_path_binary += '-quarter'
-            opt.cfg.DATASET.dataset_path_binary = opt.cfg.DATASET.dataset_path_binary.replace('/datasets_mount', opt.cfg.DATASET.binary.memory_path)
+                opt.cfg.DATASET.dataset_path_pickle += '-quarter'
+            if opt.cfg.DATASET.if_binary:
+                opt.cfg.DATASET.dataset_path_binary = opt.cfg.DATASET.dataset_path_binary.replace('/datasets_mount', opt.cfg.DATASET.memory_path)
+            if opt.cfg.DATASET.if_pickle:
+                opt.cfg.DATASET.dataset_path_pickle = opt.cfg.DATASET.dataset_path_pickle.replace('/datasets_mount', opt.cfg.DATASET.memory_path)
 
         print('=======', opt.cfg.DATASET.dataset_path_binary)
-    
+        print('=======', opt.cfg.DATASET.dataset_path_pickle)
 
     if opt.cfg.PATH.total3D_lists_path_if_zhengqinCVPR:
         assert False, 'paths not correctly configured! (we use Zhengqins test set as val set, but they are in a different path (/eccv20dataset/DatasetNew_test) than the main dataset'
@@ -60,15 +67,18 @@ def set_up_envs(opt):
         # else:
         opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_mini
         if opt.cfg.DATASET.if_binary:
-            opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_mini_binary
+            opt.cfg.DATASET.dataset_path_binary = opt.cfg.DATASET.dataset_path_mini_binary
         if opt.cfg.DATASET.if_pickle:
-            opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_mini_pickle
+            opt.cfg.DATASET.dataset_path_pickle = opt.cfg.DATASET.dataset_path_mini_pickle
         opt.cfg.DATASET.dataset_list = opt.cfg.DATASET.dataset_list_mini
     if opt.cfg.DATASET.tmp:
         opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_tmp
         opt.cfg.DATASET.dataset_list = opt.cfg.DATASET.dataset_list_tmp
         opt.cf.DATASET.dataset_if_save_space = False
     opt.cfg.DATASET.dataset_list = os.path.join(opt.cfg.PATH.root, opt.cfg.DATASET.dataset_list)
+
+    print('======= DATASET.dataset_path ', opt.cfg.DATASET.dataset_path)
+
 
 
     opt.cfg.MODEL_SEMSEG.semseg_path = opt.cfg.MODEL_SEMSEG.semseg_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.MODEL_SEMSEG.semseg_path_local
