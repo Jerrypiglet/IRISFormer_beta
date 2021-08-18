@@ -222,7 +222,7 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
                     if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_depth:
                         reg_loss = regularization_loss(depthPreds[n], input_dict['depthBatch'], input_dict['segAllBatch'].squeeze())
                         # print(reg_loss.item(), loss.item())
-                        loss_dict['loss_brdf-depth-reg'] = opt.cfg.MODEL_BRDF.reg_loss_depth_weight * reg_loss
+                        loss_dict['loss_brdf-depth-reg'] = opt.cfg.MODEL_BRDF.loss.reg_loss_depth_weight * reg_loss
                         loss_dict['loss_brdf-ALL'] += opt.deptW * loss_dict['loss_brdf-depth-reg']
 
                 loss_dict['loss_brdf-depth'].append(loss)

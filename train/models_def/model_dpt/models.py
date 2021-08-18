@@ -169,8 +169,8 @@ class DPTAlbedoDepthModel(DPT):
         if path is not None:
             print(magenta('===== [DPTAlbedoDepthModel] Loading %s'%path))
             self.load(path, skip_keys=skip_keys, keep_keys=keep_keys)
-        else:
-            assert False, str(path)
+        # else:
+        #     assert False, str(path)
 
     def forward(self, x, input_dict_extra={}):
         x_out = super().forward(x)
