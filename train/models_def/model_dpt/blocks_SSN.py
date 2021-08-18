@@ -6,6 +6,7 @@ from .vit_SSN_rn50 import (
 )
 from .vit_SSN_unet import (
     _make_pretrained_vitb_unet_384_SSN,
+    _make_pretrained_vitl_unet_384_SSN,
     forward_vit_SSN
 )
 from .vit_SSN_bl import (
@@ -30,16 +31,16 @@ def _make_encoder_SSN(
     enable_attention_hooks=False,
 ):
 
-    # if backbone == "vitl16_384":
-    #     pretrained = _make_pretrained_vitl16_384(
-    #         use_pretrained,
-    #         hooks=hooks,
-    #         use_readout=use_readout,
-    #         enable_attention_hooks=enable_attention_hooks,
-    #     )
-    #     scratch = _make_scratch_SSN(
-    #         [256, 512, 1024, 1024], features, groups=groups, expand=expand
-    #     )  # ViT-L/16 - 85.0% Top1 (backbone)
+    if backbone == "vitl16_384":
+        pretrained = _make_pretrained_vitl16_384(
+            use_pretrained,
+            hooks=hooks,
+            use_readout=use_readout,
+            enable_attention_hooks=enable_attention_hooks,
+        )
+        scratch = _make_scratch_SSN(
+            [256, 512, 1024, 1024], features, groups=groups, expand=expand
+        )  # ViT-L/16 - 85.0% Top1 (backbone)
     # elif backbone == "vitb_rn50_384":
     #     pretrained = _make_pretrained_vitb_rn50_384_SSN(
     #         use_pretrained,
@@ -77,8 +78,19 @@ def _make_encoder_SSN(
         )
         scratch = _make_scratch_SSN(
             [256, 512, 768, 768], features, groups=groups, expand=expand
-        )  # ViT-H/16 - 85.0% Top1 (backbone)
-
+        )
+    elif backbone == "vitl_unet_384":
+        pretrained = _make_pretrained_vitl_unet_384_SSN(
+            opt, 
+            use_pretrained,
+            hooks=hooks,
+            use_vit_only=use_vit_only,
+            use_readout=use_readout,
+            enable_attention_hooks=enable_attention_hooks,
+        )
+        scratch = _make_scratch_SSN(
+            [256, 512, 1024, 1024], features, groups=groups, expand=expand
+        )
     else:
         print(f"Backbone '{backbone}' not implemented")
         assert False

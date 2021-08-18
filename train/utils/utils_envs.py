@@ -130,11 +130,11 @@ def set_up_envs(opt):
         opt.if_pad = True
         opt.pad_op = transform.Pad([im_height_pad_to, im_width_pad_to], padding_with=im_pad_with)
 
-        if opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_hybrid_SSN', 'dpt_base_SSN']:
-            assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.ssn_from in ['backbone', 'matseg', 'on-the-fly']
-            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.ssn_from == 'matseg':
+        if opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_hybrid_SSN', 'dpt_base_SSN', 'dpt_large_SSN']:
+            assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from in ['backbone', 'matseg', 'on-the-fly']
+            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from == 'matseg':
                 opt.cfg.MODEL_MATSEG.enable = True
-                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_SSN.if_freeze_matseg:
+                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_freeze_matseg:
                     opt.cfg.MODEL_MATSEG.if_freeze = True
 
     # ====== detectron (objects & masks) =====

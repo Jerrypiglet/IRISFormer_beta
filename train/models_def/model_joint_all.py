@@ -109,6 +109,7 @@ class Model_Joint(nn.Module):
                     # "midas_v21": "dpt_weights/midas_v21-f6b98070.pt",
                     "dpt_base": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_base_path,
                     "dpt_large": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_large_path,
+                    "dpt_large_SSN": 'NA',
                     "dpt_hybrid": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_path,
                     "dpt_hybrid_SSN": 'NA',
                     "dpt_base_SSN": 'NA',

@@ -56,7 +56,7 @@ class DPT_SSN(BaseModel):
 
         hooks = {
             "vitb_rn50_384": [0, 1, 8, 11],
-            "vitl_unet_384": [0, 1, 8, 11],
+            "vitl_unet_384": [5, 11, 17, 23],
             "vitb_unet_384": [0, 1, 8, 11],
             "vitb16_384": [2, 5, 8, 11],
             "vitl16_384": [5, 11, 17, 23],
