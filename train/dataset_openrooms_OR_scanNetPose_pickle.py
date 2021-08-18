@@ -335,7 +335,9 @@ class openrooms_pickle(data.Dataset):
 
         brdf_loss_mask = np.ones((self.im_height, self.im_width), dtype=np.uint8)
         if self.if_extra_op:
-            mask = self.extra_op(mask.astype(np.uint8), name='mask')
+            # print(np.amax(mask), np.amin(mask))
+            mask = self.extra_op(mask, name='mask') # if resize, willl not work because mask is of dtype int32
+            # print('->', np.amax(mask), np.amin(mask))
             seg = self.extra_op(seg, if_channel_first=True, name='seg')
             brdf_loss_mask = self.extra_op(brdf_loss_mask, if_channel_2_input=True, name='brdf_loss_mask')
 

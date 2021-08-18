@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from utils.utils_misc import *
 
 from .base_model import BaseModel
 from .blocks import (
@@ -166,8 +167,10 @@ class DPTAlbedoDepthModel(DPT):
         super().__init__(opt, head, **kwargs)
 
         if path is not None:
-            print('===== [DPTAlbedoDepthModel] Loading %s'%path)
+            print(magenta('===== [DPTAlbedoDepthModel] Loading %s'%path))
             self.load(path, skip_keys=skip_keys, keep_keys=keep_keys)
+        else:
+            assert False, str(path)
 
     def forward(self, x, input_dict_extra={}):
         x_out = super().forward(x)

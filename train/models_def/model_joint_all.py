@@ -111,7 +111,7 @@ class Model_Joint(nn.Module):
                     "dpt_large": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_large_path,
                     "dpt_large_SSN": 'NA',
                     "dpt_hybrid": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_path,
-                    "dpt_hybrid_SSN": 'NA',
+                    "dpt_hybrid_SSN": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_path,
                     "dpt_base_SSN": 'NA',
                     
                     # "dpt_hybrid_kitti": "dpt_weights/dpt_hybrid_kitti-cb926ef4.pt",
@@ -134,6 +134,13 @@ class Model_Joint(nn.Module):
                         keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
                     )
                 elif model_type=='dpt_hybrid_SSN':
+                    # print(model_path, model_type, self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_path)
+                    # assert False
+                    skip_keys = []
+                    if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv:
+                        skip_keys += ['scratch.output_conv']
+                    if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_patch_embed_proj:
+                        skip_keys += ['pretrained.model.patch_embed.proj']
                     self.BRDF_Net = DPTAlbedoDepthModel_SSN(
                         opt=opt, 
                         modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
@@ -142,7 +149,7 @@ class Model_Joint(nn.Module):
                         backbone="vitb_unet_384",
                         non_negative=if_non_negative,
                         enable_attention_hooks=False,
-                        skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
+                        skip_keys=skip_keys, 
                         keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
                     )
                 elif model_type=='dpt_large_SSN':

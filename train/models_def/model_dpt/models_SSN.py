@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from utils.utils_misc import *
 import time
 
 from .base_model import BaseModel
@@ -130,7 +131,10 @@ class DPTAlbedoDepthModel_SSN(DPT_SSN):
         super().__init__(opt, head, **kwargs)
 
         if path is not None:
+            print(magenta('===== [DPTAlbedoDepthModel_SSN] Loading %s'%path))
             self.load(path, skip_keys=skip_keys, keep_keys=keep_keys)
+        else:
+            assert False, str(path)
 
     def forward(self, x, input_dict_extra={}):
         x_out, ssn_return_dict = super().forward(x, input_dict_extra=input_dict_extra)

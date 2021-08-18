@@ -95,6 +95,8 @@ def set_up_envs(opt):
     # ===== data =====
     opt.cfg.DATA.data_read_list = [x for x in list(set(opt.cfg.DATA.data_read_list.split('_'))) if x != '']
 
+    opt.if_pad = False
+    opt.if_resize = False
     if opt.cfg.DATA.if_pad_to_32x:
         im_width_pad_to = int(np.ceil(opt.cfg.DATA.im_width/32.)*32)
         im_height_pad_to = int(np.ceil(opt.cfg.DATA.im_height/32.)*32)

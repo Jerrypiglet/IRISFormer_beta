@@ -725,7 +725,7 @@ else:
                     writer.add_scalar('training/GPU_usage_ratio', usage_ratio, tid)
                     writer.add_scalar('training/batch_size_per_gpu', len(data_batch['image_path']), tid)
                     writer.add_scalar('training/gpus', opt.num_gpus, tid)
-                    writer.add_scalar('training/gpus', optimizer.param_groups[0]['lr'], tid)
+                    writer.add_scalar('training/lr', optimizer.param_groups[0]['lr'], tid)
             # if opt.is_master:
 
             # if tid % opt.debug_every_iter == 0:       
