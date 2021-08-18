@@ -226,6 +226,13 @@ class openrooms(data.Dataset):
                 tfv_transform.ToTensor()])
             self.T_to_tensor = tfv_transform.ToTensor()
 
+        self.if_extra_op = False
+        if opt.cfg.DATA.if_pad_to_32x:
+            self.extra_op = opt.pad_op
+            self.if_extra_op = True
+        elif opt.cfg.DATA.if_resize_to_32x:
+            self.extra_op = opt.resize_op
+            self.if_extra_op = True
 
     def __len__(self):
         return len(self.data_list)
@@ -250,7 +257,7 @@ class openrooms(data.Dataset):
         # if_load_immask = False
         self.opt.if_load_immask = if_load_immask
 
-        if self.opt.cfg.DATA.if_pad_to_32x:
+        if self.if_extra_op:
             assert if_load_immask
 
         if if_load_immask:
@@ -266,10 +273,10 @@ class openrooms(data.Dataset):
             mask = np.ones((self.im_height, self.im_width, 3), dtype=np.uint8)
 
         brdf_loss_mask = np.ones((self.im_height, self.im_width), dtype=np.uint8)
-        if self.opt.if_pad:
-            mask = self.opt.pad_op(mask, name='mask')
-            seg = self.opt.pad_op(seg, if_channel_first=True, name='seg')
-            brdf_loss_mask = self.opt.pad_op(brdf_loss_mask, if_channel_2_input=True, name='brdf_loss_mask')
+        if self.if_extra_op:
+            mask = self.extra_op(mask.astype(np.uint8), name='mask')
+            seg = self.extra_op(seg, if_channel_first=True, name='seg')
+            brdf_loss_mask = self.extra_op(brdf_loss_mask, if_channel_2_input=True, name='brdf_loss_mask')
 
         hdr_scale = 1.
 
@@ -292,8 +299,8 @@ class openrooms(data.Dataset):
         im_trainval_RGB = self.transforms_resize(im_RGB_uint8) # not necessarily \in [0., 1.] [!!!!]
         # print(im_trainval_RGB.shape, type(im_trainval_RGB), torch.max(im_trainval_RGB), torch.min(im_trainval_RGB), torch.mean(im_trainval_RGB))
         im_SDR_RGB = im_RGB_uint8.astype(np.float32) / 255.
-        if self.opt.if_pad:
-            im_SDR_RGB = self.opt.pad_op(im_SDR_RGB, name='im_SDR_RGB')
+        if self.if_extra_op:
+            im_SDR_RGB = self.extra_op(im_SDR_RGB, name='im_SDR_RGB')
 
         im_trainval = im_trainval_RGB # [3, 240, 320], tensor, not in [0., 1.]
 
@@ -400,8 +407,8 @@ class openrooms(data.Dataset):
             # Read albedo
             albedo = self.loadImage(albedo_path, isGama = False)
             albedo = (0.5 * (albedo + 1) ) ** 2.2
-            if self.opt.if_pad:
-                albedo = self.opt.pad_op(albedo, if_channel_first=True, name='albedo')
+            if self.if_extra_op:
+                albedo = self.extra_op(albedo, if_channel_first=True, name='albedo')
 
             batch_dict_brdf.update({'albedo': torch.from_numpy(albedo)})
 
@@ -412,8 +419,8 @@ class openrooms(data.Dataset):
             # normalize the normal vector so that it will be unit length
             normal = self.loadImage(normal_path )
             normal = normal / np.sqrt(np.maximum(np.sum(normal * normal, axis=0), 1e-5) )[np.newaxis, :]
-            if self.opt.if_pad:
-                normal = self.opt.pad_op(normal, if_channel_first=True, name='normal')
+            if self.if_extra_op:
+                normal = self.extra_op(normal, if_channel_first=True, name='normal')
 
             batch_dict_brdf.update({'normal': torch.from_numpy(normal),})
 
@@ -423,8 +430,8 @@ class openrooms(data.Dataset):
                 rough_path = rough_path.replace('DiffLight', '')
             # Read roughness
             rough = self.loadImage(rough_path )[0:1, :, :]
-            if self.opt.if_pad:
-                rough = self.opt.pad_op(rough, if_channel_first=True, name='rough')
+            if self.if_extra_op:
+                rough = self.extra_op(rough, if_channel_first=True, name='rough')
 
             batch_dict_brdf.update({'rough': torch.from_numpy(rough),})
 
@@ -434,16 +441,16 @@ class openrooms(data.Dataset):
                 depth_path = depth_path.replace('DiffLight', '').replace('DiffMat', '')
             # Read depth
             depth = self.loadBinary(depth_path)
-            if self.opt.if_pad:
-                depth = self.opt.pad_op(depth, if_channel_first=True, name='depth')
+            if self.if_extra_op:
+                depth = self.extra_op(depth, if_channel_first=True, name='depth')
 
             batch_dict_brdf.update({'depth': torch.from_numpy(depth),})
             if self.opt.cfg.DATA.if_also_load_next_frame:
                 frame_id = frame_info['frame_id']
                 depth_path_next = depth_path.replace('%d.dat'%frame_id, '%d.dat'%(frame_id+1))
                 depth_next = self.loadBinary(depth_path_next)
-                if self.opt.if_pad:
-                    depth_next = self.opt.pad_op(depth_next, if_channel_first=True, name='depth_next')
+                if self.if_extra_op:
+                    depth_next = self.extra_op(depth_next, if_channel_first=True, name='depth_next')
 
                 batch_dict_brdf.update({'depth_next': torch.from_numpy(depth_next),})
 
@@ -569,10 +576,10 @@ class openrooms(data.Dataset):
     def load_matseg(self, mask, im_RGB_uint8):
         # >>>> Rui: Read obj mask
         mat_aggre_map, num_mat_masks = self.get_map_aggre_map(mask) # 0 for invalid region
-        # if self.opt.if_pad:
-        #     mat_aggre_map = self.opt.pad_op(mat_aggre_map, name='mat_aggre_map', if_channel_2_input=True)
-        # if self.opt.if_pad:
-        #     im_RGB_uint8 = self.opt.pad_op(im_RGB_uint8, name='im_RGB_uint8')
+        # if self.if_extra_op:
+        #     mat_aggre_map = self.extra_op(mat_aggre_map, name='mat_aggre_map', if_channel_2_input=True)
+        # if self.if_extra_op:
+        #     im_RGB_uint8 = self.extra_op(im_RGB_uint8, name='im_RGB_uint8')
         # print(mat_aggre_map.shape, im_RGB_uint8.shape)
         im_matseg_transformed_trainval, mat_aggre_map_transformed = self.transforms_matseg(im_RGB_uint8, mat_aggre_map.squeeze()) # augmented
         # print(im_matseg_transformed_trainval.shape, mat_aggre_map_transformed.shape)

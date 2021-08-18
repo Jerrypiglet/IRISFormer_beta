@@ -263,6 +263,7 @@ make_data_loader_to_use = make_data_loader
 if opt.cfg.DATASET.if_pickle:
     openrooms_to_use = openrooms_pickle
 if opt.cfg.DATASET.if_binary:
+    assert False, 'not supporting image resizing'
     openrooms_to_use = openrooms_binary
     make_data_loader_to_use = make_data_loader_binary
     
@@ -724,6 +725,7 @@ else:
                     writer.add_scalar('training/GPU_usage_ratio', usage_ratio, tid)
                     writer.add_scalar('training/batch_size_per_gpu', len(data_batch['image_path']), tid)
                     writer.add_scalar('training/gpus', opt.num_gpus, tid)
+                    writer.add_scalar('training/gpus', optimizer.param_groups[0]['lr'], tid)
             # if opt.is_master:
 
             # if tid % opt.debug_every_iter == 0:       

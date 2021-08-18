@@ -95,6 +95,18 @@ def set_up_envs(opt):
     # ===== data =====
     opt.cfg.DATA.data_read_list = [x for x in list(set(opt.cfg.DATA.data_read_list.split('_'))) if x != '']
 
+    if opt.cfg.DATA.if_pad_to_32x:
+        im_width_pad_to = int(np.ceil(opt.cfg.DATA.im_width/32.)*32)
+        im_height_pad_to = int(np.ceil(opt.cfg.DATA.im_height/32.)*32)
+        im_pad_with = 0
+        opt.if_pad = True
+        opt.pad_op = transform.Pad([im_height_pad_to, im_width_pad_to], padding_with=im_pad_with)
+    if opt.cfg.DATA.if_resize_to_32x:
+        im_width_resize_to = int(np.ceil(opt.cfg.DATA.im_width/32.)*32)
+        im_height_resize_to = int(np.ceil(opt.cfg.DATA.im_height/32.)*32)
+        opt.if_resize = True
+        opt.resize_op = transform.Resize_flexible((im_width_resize_to, im_height_resize_to))
+
     # ====== GMM =====
     if opt.cfg.MODEL_GMM.enable:
         opt.cfg.DATA.if_load_png_not_hdr = True
@@ -123,12 +135,8 @@ def set_up_envs(opt):
         
         assert opt.cfg.MODEL_BRDF.DPT_baseline.modality in ['al', 'de']
 
-        opt.cfg.DATA.if_pad_to_32x = True
-        im_width_pad_to = int(np.ceil(opt.cfg.DATA.im_width/32.)*32)
-        im_height_pad_to = int(np.ceil(opt.cfg.DATA.im_height/32.)*32)
-        im_pad_with = 0
-        opt.if_pad = True
-        opt.pad_op = transform.Pad([im_height_pad_to, im_width_pad_to], padding_with=im_pad_with)
+        assert opt.cfg.DATA.if_pad_to_32x or opt.cfg.DATA.if_resize_to_32x
+        assert not(opt.cfg.DATA.if_pad_to_32x and opt.cfg.DATA.if_resize_to_32x)
 
         if opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_hybrid_SSN', 'dpt_base_SSN', 'dpt_large_SSN']:
             assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from in ['backbone', 'matseg', 'on-the-fly']

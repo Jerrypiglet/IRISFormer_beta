@@ -94,6 +94,9 @@ def get_transform_resize(split, opt):
             assert False, 'Not implemented!'
         if opt.if_pad:
             transform_resize_list_train.insert(1, opt.pad_op)
+        if opt.if_resize:
+            transform_resize_list_train.insert(1, opt.resize_op)
+
         train_transform = transform.Compose(transform_resize_list_train)
         return train_transform
     else:
@@ -104,6 +107,9 @@ def get_transform_resize(split, opt):
             ]
         if opt.if_pad:
             transform_resize_list_val.insert(1, opt.pad_op)
+        if opt.if_resize:
+            transform_resize_list_val.insert(1, opt.resize_op)
+
         val_transform = transform.Compose(transform_resize_list_val)
     return val_transform
 
@@ -130,6 +136,8 @@ def get_transform_matseg(split, opt):
         ]
         if opt.if_pad:
             transform_semseg_list_train.insert(1, opt.pad_op)
+        if opt.if_resize:
+            transform_semseg_list_train.insert(1, opt.resize_op)
 
         train_transform = transform.Compose(transform_semseg_list_train)
         return train_transform
@@ -141,6 +149,8 @@ def get_transform_matseg(split, opt):
             ]
         if opt.if_pad:
             transform_semseg_list_val.insert(1, opt.pad_op)
+        if opt.if_resize:
+            transform_semseg_list_val.insert(1, opt.resize_op)
 
         val_transform = transform.Compose(transform_semseg_list_val)
     return val_transform

@@ -166,6 +166,7 @@ _C.DATA.im_width = 320
 _C.DATA.im_height_ori = 480
 _C.DATA.im_width_ori = 640
 _C.DATA.if_pad_to_32x = False # if pad both height and width to multplicative of 32 (for DPT)
+_C.DATA.if_resize_to_32x = True # if pad both height and width to multplicative of 32 (for DPT)
 _C.DATA.load_semseg_gt = False
 _C.DATA.load_matseg_gt = False
 _C.DATA.load_brdf_gt = False

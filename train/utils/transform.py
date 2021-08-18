@@ -93,6 +93,54 @@ class Resize(object):
         else:
             return image
 
+class Resize_flexible(object):
+    # Resize the input to the given size, 'size' is a 2-element tuple or list in the order of (w, h).
+    def __init__(self, size):
+        assert (isinstance(size, collections.Iterable) and len(size) == 2) and isinstance(size, tuple)
+        self.size = size
+
+    def __call__(self, image, label=None, if_channel_first=False, if_channel_2_input=False, name=''):
+        if image is None:
+            return image
+
+        if if_channel_2_input:
+            image = image[:, :, np.newaxis]
+        assert len(image.shape)==3
+
+        if if_channel_first:
+            image = image.transpose(1, 2, 0)
+            if label is not None:
+                label = label.transpose(1, 2, 0)
+
+        h, w, c = image.shape
+        assert c in [1, 3]
+
+        # print(image.shape, image.dtype, self.size)
+        image = cv2.resize(image, self.size, interpolation=cv2.INTER_LINEAR)
+        if label is not None:    
+            label = cv2.resize(label, self.size, interpolation=cv2.INTER_NEAREST)
+
+        if if_channel_first:
+            if c == 1:
+                image = image[np.newaxis, :, :]
+            else:
+                image = image.transpose(2, 0, 1)
+            if label is not None:
+                if c == 1:
+                    label = label[:, :, np.newaxis]
+                else:
+                    label = label.transpose(2, 0, 1)
+
+        if if_channel_2_input:
+            assert len(image.shape)==2
+            if label is not None:
+                assert len(label.shape)==2
+
+        if label is not None:
+            return image, label
+        else:
+            return image
+
 
 class RandScale(object):
     # Randomly resize image & label with scale factor in [scale_min, scale_max]
