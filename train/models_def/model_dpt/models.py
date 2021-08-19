@@ -53,7 +53,7 @@ class DPT(BaseModel):
         self.pretrained, self.scratch = _make_encoder(
             backbone,
             features,
-            False,  # Set to true of you want to train from scratch, uses ImageNet weights
+            opt.cfg.MODEL_BRDF.DPT_baseline.if_imagenet_backbone,  # Set to true of you want to train from scratch, uses ImageNet weights
             groups=1,
             expand=False,
             exportable=False,
@@ -160,8 +160,8 @@ class DPTAlbedoDepthModel(DPT):
             nn.Conv2d(features, features // 2, kernel_size=3, stride=1, padding=1),
             Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
             nn.Conv2d(features // 2, 32, kernel_size=3, stride=1, padding=1),
-            # nn.BatchNorm2d(32) if self.if_batch_norm else nn.Identity(),
-            nn.GroupNorm(num_groups=4, num_channels=32) if self.if_batch_norm else nn.Identity(),
+            nn.BatchNorm2d(32) if self.if_batch_norm else nn.Identity(),
+            # nn.GroupNorm(num_groups=4, num_channels=32) if self.if_batch_norm else nn.Identity(),
             nn.ReLU(True),
             nn.Conv2d(32, self.out_channels, kernel_size=1, stride=1, padding=0),
             # nn.BatchNorm2d(self.out_channels) if self.if_batch_norm else nn.Identity(),
@@ -169,6 +169,8 @@ class DPTAlbedoDepthModel(DPT):
             nn.ReLU(True) if non_negative else nn.Identity(),
             nn.Identity(),
         )
+        # if self.if_batch_norm:
+        #     head.insert(3, nn.GroupNorm(num_groups=4, num_channels=32))
 
         super().__init__(opt, head, **kwargs)
 
@@ -193,7 +195,7 @@ class DPTAlbedoDepthModel(DPT):
             depth = self.scale * x_out + self.shift
             depth[depth < 1e-8] = 1e-8
             depth = 1.0 / depth
-            x_out = torch.clip(depth*5000., 1e-6, 2000000.)
+            # x_out = torch.clip(x_out*5000., 1e-6, 2000000.)
             print('[DPTAlbedoDepthModel - x_out 3]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
             # pass
 
