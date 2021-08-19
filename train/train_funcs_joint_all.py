@@ -1324,7 +1324,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
         if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
             rough_gt_batch_vis_sdr = (0.5*(roughBatch_vis + 1) ).data
         if 'de' in opt.cfg.MODEL_BRDF.enable_list:
-            depthOut = 1 / torch.clamp(depthBatch_vis + 1, 1e-6, 10) * segAllBatch_vis.expand_as(depthBatch_vis)
+            depthOut = 1 / torch.clamp(depthBatch_vis + 1, 1e-6, 10) * segAllBatch_vis.expand_as(depthBatch_vis) # invert the gt depth just for visualization purposes!
             depth_gt_batch_vis_sdr = ( depthOut*segAllBatch_vis.expand_as(depthBatch_vis) ).data
 
         if not opt.test_real and opt.is_master:

@@ -597,13 +597,13 @@ class Model_Joint(nn.Module):
             albedoPred_aligned = torch.clamp(albedoPred_aligned, 0, 1)
             return_dict.update({'albedoPred': albedoPred, 'albedoPred_aligned': albedoPred_aligned})
         elif self.cfg.MODEL_BRDF.DPT_baseline.modality == 'de':
-            if self.cfg.MODEL_BRDF.use_scale_aware_depth:
-                depthPred = dpt_prediction
-            else:
-                depthPred = 0.5 * (dpt_prediction + 1) # [-1, 1] -> [0, 1]
-                depthPred = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
-                        input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
-            return_dict.update({'depthPred': depthPred})
+            # if self.cfg.MODEL_BRDF.use_scale_aware_depth:
+            depthPred = dpt_prediction
+            # else:
+            # depthPred = 0.5 * (dpt_prediction + 1) # [-1, 1] -> [0, 1]
+            depthPred_aligned = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
+                    input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
+            return_dict.update({'depthPred': depthPred, 'depthPred_aligned': depthPred_aligned})
 
         else:
             assert False, 'Unsupported modality: %s'%self.cfg.MODEL_BRDF.DPT_baseline.modality
@@ -701,14 +701,13 @@ class Model_Joint(nn.Module):
                 return_dict.update({'roughPred': roughPred, 'rough_extra_output_dict': rough_output['extra_output_dict']})
             if 'de' in self.cfg.MODEL_BRDF.enable_list:
                 depth_output = self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_extra=input_dict_extra)
-                if not self.cfg.MODEL_BRDF.use_scale_aware_depth:
-                    depthPred = 0.5 * (depth_output['x_out'] + 1) # [-1, 1] -> [0, 1]
-                    depthPred = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
-                            input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
-                else:
-                    depthPred = depth_output['x_out']
+                depthPred = depth_output['x_out']
+                # if not self.cfg.MODEL_BRDF.use_scale_aware_depth:
+                depthPred_aligned = 0.5 * (depth_output['x_out'] + 1) # [-1, 1] -> [0, 1]
+                depthPred_aligned = models_brdf.LSregress(depthPred_aligned *  input_dict['segAllBatch'].expand_as(depthPred_aligned),
+                        input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred_aligned)
 
-                return_dict.update({'depthPred': depthPred, 'depth_extra_output_dict': depth_output['extra_output_dict']})
+                return_dict.update({'depthPred': depthPred, 'depthPred_aligned': depthPred_aligned, 'depth_extra_output_dict': depth_output['extra_output_dict']})
 
 
             # print(x1.shape, x2.shape, x3.shape, x4.shape, x5.shape, x6.shape)

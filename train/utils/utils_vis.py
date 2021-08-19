@@ -39,7 +39,7 @@ def reindex_output_map(index_map, invalid_index):
 def vis_disp_colormap(disp_array, file=None, normalize=True, min_and_scale=None, valid_mask=None):
     # disp_array = cv2.applyColorMap(disp_array, cv2.COLORMAP_JET)
     # disp_array = cv2.applyColorMap(disp_array, get_mpl_colormap('jet'))
-    cm = plt.get_cmap('jet')
+    cm = plt.get_cmap('jet') # the larger the hotter
     # disp_array = disp_array[:, :, :3]
     # print('-', disp_array.shape)
     if valid_mask is not None:

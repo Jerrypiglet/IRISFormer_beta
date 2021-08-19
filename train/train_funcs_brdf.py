@@ -204,7 +204,11 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
 
         if 'de' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
             depthPreds = []
-            depthPred = output_dict['depthPred']
+            if opt.cfg.MODEL_BRDF.use_scale_aware_depth:
+                depthPred = output_dict['depthPred']
+            else:
+                depthPred = output_dict['depthPred_aligned']
+
             depthPreds.append(depthPred )
             # if (not opt.cfg.DATASET.if_no_gt_semantics):
             loss_dict['loss_brdf-depth'] = []
@@ -218,6 +222,9 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
                     invd_gt = 1./(input_dict['depthBatch'].squeeze(1)+1.)
                     loss = midas_loss_func(invd_pred, invd_gt, mask=input_dict['segAllBatch'].squeeze())
                 else:
+                    print('-', torch.max(input_dict['depthBatch']), torch.min(input_dict['depthBatch']), torch.median(input_dict['depthBatch']))
+                    print('--', torch.max(depthPreds[n]), torch.min(depthPreds[n]), torch.median(depthPreds[n]))
+
                     loss =  torch.sum( (torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) )
                         * ( torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum 
                     if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_depth:

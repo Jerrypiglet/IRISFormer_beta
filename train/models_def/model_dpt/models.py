@@ -154,12 +154,18 @@ class DPTAlbedoDepthModel(DPT):
         self.scale = scale
         self.shift = shift
 
+        self.if_batch_norm = opt.cfg.MODEL_BRDF.DPT_baseline.if_batch_norm
+
         head = nn.Sequential(
             nn.Conv2d(features, features // 2, kernel_size=3, stride=1, padding=1),
             Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
             nn.Conv2d(features // 2, 32, kernel_size=3, stride=1, padding=1),
+            # nn.BatchNorm2d(32) if self.if_batch_norm else nn.Identity(),
+            nn.GroupNorm(num_groups=4, num_channels=32) if self.if_batch_norm else nn.Identity(),
             nn.ReLU(True),
             nn.Conv2d(32, self.out_channels, kernel_size=1, stride=1, padding=0),
+            # nn.BatchNorm2d(self.out_channels) if self.if_batch_norm else nn.Identity(),
+            # nn.GroupNorm(self.out_channels) if self.if_batch_norm else nn.Identity(),
             nn.ReLU(True) if non_negative else nn.Identity(),
             nn.Identity(),
         )
@@ -174,17 +180,22 @@ class DPTAlbedoDepthModel(DPT):
 
     def forward(self, x, input_dict_extra={}):
         # print('[DPTAlbedoDepthModel - x]', x.shape, torch.max(x), torch.min(x), torch.median(x)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
-
         x_out = super().forward(x)
+        print('[DPTAlbedoDepthModel - x_out 1]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
         if self.modality == 'al':
             x_out = torch.clamp(1.01 * torch.tanh(x_out ), -1, 1)
+            print('[DPTAlbedoDepthModel - x_out 2]', self.if_batch_norm, x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
         elif self.modality == 'de':
+            '''
+            where x_out is disparity (inversed * baseline)'''
             # x_out = torch.clamp(x_out, 1e-8, 100)
             # print('[DPTAlbedoDepthModel - x_out]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
-            # depth = self.scale * x_out + self.shift
-            # depth[depth < 1e-8] = 1e-8
-            # depth = 1.0 / depth
-            pass
+            depth = self.scale * x_out + self.shift
+            depth[depth < 1e-8] = 1e-8
+            depth = 1.0 / depth
+            x_out = torch.clip(depth*5000., 1e-6, 2000000.)
+            print('[DPTAlbedoDepthModel - x_out 3]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
+            # pass
 
         return x_out, {}
 

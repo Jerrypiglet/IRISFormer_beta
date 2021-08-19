@@ -237,6 +237,7 @@ _C.MODEL_BRDF.DPT_baseline = CN()
 _C.MODEL_BRDF.DPT_baseline.enable = False
 _C.MODEL_BRDF.DPT_baseline.if_SGD = True
 _C.MODEL_BRDF.DPT_baseline.if_pos_embed = True
+_C.MODEL_BRDF.DPT_baseline.if_batch_norm = False
 _C.MODEL_BRDF.DPT_baseline.modality = 'al'
 _C.MODEL_BRDF.DPT_baseline.model = 'dpt_hybrid'
 _C.MODEL_BRDF.DPT_baseline.use_vit_only = False
