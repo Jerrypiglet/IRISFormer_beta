@@ -222,6 +222,20 @@ model.print_net()
 # set up optimizers
 # optimizer = get_optimizer(model.parameters(), cfg.SOLVER)
 optimizer = optim.Adam(model.parameters(), lr=cfg.SOLVER.lr, betas=(0.5, 0.999) )
+if 'dpt_hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
+    backbone_params = []
+    other_params = []
+    for k, v in model.named_parameters():
+        if 'BRDF_Net.pretrained.model.patch_embed.backbone' in k:
+            backbone_params.append(v)
+        else:
+            other_params.append(v)
+    # my_list = ['BRDF_Net.pretrained.model.patch_embed.backbone']
+    # backbone_params = list(filter(lambda kv: kv[0] in my_list, model.named_parameters()))
+    # other_params = list(filter(lambda kv: kv[0] not in my_list, model.named_parameters()))
+    optimizer_backbone = optim.Adam(backbone_params, lr=1e-5, betas=(0.5, 0.999) )
+    optimizer_others = optim.Adam(other_params, lr=1e-5, betas=(0.5, 0.999) )
+
 if opt.cfg.MODEL_BRDF.DPT_baseline.enable and opt.cfg.MODEL_BRDF.DPT_baseline.if_SGD:
     optimizer = optim.SGD(model.parameters(), lr=cfg.SOLVER.lr, momentum=0.9)
    
@@ -571,7 +585,11 @@ else:
                 print('Valid objs num: ', [sum(x) for x in data_batch['boxes_valid_list']], 'Totasl objs num: ', [len(x) for x in data_batch['boxes_valid_list']])
 
             # ======= Forward
-            optimizer.zero_grad()
+            if 'dpt_hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
+                optimizer_backbone.zero_grad()
+                optimizer_others.zero_grad()
+            else:
+                optimizer.zero_grad()
             output_dict, loss_dict = forward_joint(True, labels_dict, model, opt, time_meters, tid=tid)
             # synchronize()
             
@@ -698,8 +716,11 @@ else:
             # print(model.LAYOUT_EMITTER_NET_fc.fc_layout_5.weight)
             # print(model.LAYOUT_EMITTER_NET_fc.fc_layout_5.weight.grad)
 
-            
-            optimizer.step()
+            if 'dpt_hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
+                optimizer_backbone.step()
+                optimizer_others.step()
+            else:
+                optimizer.step()
             time_meters['backward'].update(time.time() - time_meters['ts'])
             time_meters['ts'] = time.time()
             # synchronize()
