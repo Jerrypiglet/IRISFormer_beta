@@ -580,6 +580,7 @@ class Model_Joint(nn.Module):
     def forward_brdf_DPT_baseline(self, input_dict, input_dict_extra={}):
         return_dict = {}
         img_batch = input_dict['imBatch']
+        input_dict_extra.update({'brdf_loss_mask': input_dict['brdf_loss_mask']})
         # print(img_batch.shape)
         # img_batch = input_dict['imBatch'].half()
         # img_input = dpt_transform({"image": img_batch})["image"]

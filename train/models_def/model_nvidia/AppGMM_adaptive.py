@@ -44,7 +44,7 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
 
         self.if_dense = if_dense
 
-    def forward(self, tensor_to_transform, feats_in=None, affinity_in=None, scale_down_gamma_tensor=1, index_add=True, if_return_codebook_only=False):
+    def forward(self, tensor_to_transform, feats_in=None, affinity_in=None, mask=None, scale_down_gamma_tensor=1, index_add=True, if_return_codebook_only=False):
         '''
         INPUTS:
         tensor_to_transform -      nbatch x D1 x H x W
@@ -66,6 +66,8 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
         batch_size, D, H, W = feats_in.shape
         assert self.spixel_nums[0] <= H
         assert self.spixel_nums[1] <= W
+        if mask is not None:
+            assert mask.shape==(batch_size, H, W)
         J = self.spixel_nums[0] * self.spixel_nums[1]
 
         ssn.ssn_iter_to_use = ssn_fullJ.ssn_iter if self.if_dense else ssn.ssn_iter
@@ -76,6 +78,7 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
                     feats_in, n_iter=self.n_iter, 
                     num_spixels_width=self.num_spixels_width, 
                     num_spixels_height=self.num_spixels_height, 
+                    mask=mask, 
                     index_add=index_add)
             abs_affinity = abs_affinity.view(batch_size, J, H, W)
         else:

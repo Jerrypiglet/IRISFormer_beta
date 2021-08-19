@@ -228,11 +228,17 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
     spixel_dims = [im_height//self.patch_size[0], im_width//self.patch_size[1]]
 
     ssn_op = SSNFeatsTransformAdaptive(None, spixel_dims=spixel_dims, if_dense=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_dense)
+
+    # print(input_dict_extra['brdf_loss_mask'].shape, im_feat.shape, input_dict_extra['return_dict_matseg']['embedding'].shape)
+    # mask_resized = F.interpolate(input_dict_extra['brdf_loss_mask'].unsqueeze(1), scale_factor=1./4., mode='nearest').squeeze(1) # torch.Size([1, 256, 320]) torch.Size([1, 1344, 64, 80]) torch.Size([1, 4, 256, 320])
+    mask_resized = input_dict_extra['brdf_loss_mask']
+    # print(input_dict_extra['brdf_loss_mask'].unsqueeze(1).shape, mask_resized.shape)
+
     # tic = time.time()
     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from == 'matseg':
-        ssn_return_dict = ssn_op(tensor_to_transform=im_feat, feats_in=input_dict_extra['return_dict_matseg']['embedding'], if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
+        ssn_return_dict = ssn_op(tensor_to_transform=im_feat, feats_in=input_dict_extra['return_dict_matseg']['embedding'], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
     else:
-        ssn_return_dict = ssn_op(tensor_to_transform=im_feat, feats_in=pretrained_activations['feat_stage_2'].detach(), if_return_codebook_only=True, scale_down_gamma_tensor=(1./2., 1)) # Q: [im_height/4, im_width/4]
+        ssn_return_dict = ssn_op(tensor_to_transform=im_feat, feats_in=pretrained_activations['feat_stage_2'].detach(), mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1./2., 1)) # Q: [im_height/4, im_width/4]
     # print(time.time() - tic, '------------ ssn_op')
     
     # tic = time.time()

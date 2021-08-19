@@ -70,6 +70,7 @@ def get_hard_abs_labels(affinity_matrix, init_label_map, num_spixels_width):
 
 def ssn_iter(pixel_features,  n_iter,
              num_spixels_width, num_spixels_height, 
+             mask=None, 
              index_add=True):
     """
     computing assignment iterations
@@ -85,17 +86,18 @@ def ssn_iter(pixel_features,  n_iter,
 
     """
     height, width = pixel_features.shape[-2:]
+    batch_size = pixel_features.shape[0]
     # num_spixels_width  = int(math.sqrt(num_spixels * width / height))
     # num_spixels_height = int(math.sqrt(num_spixels * height / width))
     num_spixels = num_spixels_width * num_spixels_height
 
     spixel_features, init_label_map = calc_init_centroid(pixel_features, num_spixels_width, num_spixels_height)
 
-    if not index_add:
-        abs_indices = get_abs_indices(init_label_map, num_spixels_width) 
-        mask = (abs_indices[1] >= 0) * (abs_indices[1] < num_spixels)
-    else:
-        abs_indices = get_abs_indices(init_label_map[0].unsqueeze(0), num_spixels_width) 
+    # if not index_add:
+    #     abs_indices = get_abs_indices(init_label_map, num_spixels_width) 
+    #     mask = (abs_indices[1] >= 0) * (abs_indices[1] < num_spixels)
+    # else:
+    #     abs_indices = get_abs_indices(init_label_map[0].unsqueeze(0), num_spixels_width) 
 
     pixel_features = pixel_features.reshape(*pixel_features.shape[:2], -1)
     permuted_pixel_features = pixel_features.permute(0, 2, 1).contiguous()
@@ -128,8 +130,15 @@ def ssn_iter(pixel_features,  n_iter,
         #     init_label_map, 
         #     num_spixels_width, num_spixels_height) 
 
+        if mask is None:
+            mask = torch.ones((batch_size, height, width), dtype=torch.float32, device=spixel_features.device)
+        mask_flattened = mask.reshape(batch_size, 1, -1)
+        # print(spixel_features.shape, pixel_features.shape) # torch.Size([1, 4, 192]) torch.Size([1, 4, 81920])
         dist_matrix_full = torch.cdist(spixel_features.transpose(-1, -2), pixel_features.transpose(-1, -2), p=2) # torch.Size([1, 48, 76800])
+
         dist_matrix_full = torch.square(dist_matrix_full)
+        # print(dist_matrix_full.shape, mask_flattened.shape)
+        dist_matrix_full = dist_matrix_full * mask_flattened
         # dist_matrix_full = torch.exp(-torch.square(dist_matrix_full)) # Equ 4 in Algorithm 1 in the SSN paper
 
         abs_affinity = (-dist_matrix_full).softmax(1) # torch.Size([1, 48, 76800])
