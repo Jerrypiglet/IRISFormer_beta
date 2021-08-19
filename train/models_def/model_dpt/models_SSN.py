@@ -68,7 +68,7 @@ class DPT_SSN(BaseModel):
             opt, 
             backbone,
             features,
-            use_pretrained=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.use_pretrained_backbone,  # Set to true of you want to train from scratch, uses ImageNet weights
+            use_pretrained=opt.cfg.MODEL_BRDF.DPT_baseline.if_imagenet_backbone,  # Set to true of you want to train from scratch, uses ImageNet weights
             groups=1,
             expand=False,
             exportable=False,
@@ -118,10 +118,13 @@ class DPTAlbedoDepthModel_SSN(DPT_SSN):
         self.scale = scale
         self.shift = shift
 
+        self.if_batch_norm = opt.cfg.MODEL_BRDF.DPT_baseline.if_batch_norm
+
         head = nn.Sequential(
             nn.Conv2d(features, features // 2, kernel_size=3, stride=1, padding=1),
             Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
             nn.Conv2d(features // 2, 32, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(32) if self.if_batch_norm else nn.Identity(),
             nn.ReLU(True),
             nn.Conv2d(32, self.out_channels, kernel_size=1, stride=1, padding=0),
             nn.ReLU(True) if non_negative else nn.Identity(),
@@ -138,8 +141,10 @@ class DPTAlbedoDepthModel_SSN(DPT_SSN):
 
     def forward(self, x, input_dict_extra={}):
         x_out, ssn_return_dict = super().forward(x, input_dict_extra=input_dict_extra)
+        print('[DPTAlbedoDepthModel_SSN - x_out 1]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
         if self.modality == 'al':
             x_out = torch.clamp(1.01 * torch.tanh(x_out ), -1, 1)
+            print('[DPTAlbedoDepthModel_SSN - x_out 2]', self.if_batch_norm, x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
         # elif self.modality == 'de':
             # x_out = torch.clamp(x_out, 1e-8, 100)
 

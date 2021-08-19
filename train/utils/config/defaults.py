@@ -255,7 +255,6 @@ _C.MODEL_BRDF.DPT_baseline.if_skip_patch_embed_proj = False
 _C.MODEL_BRDF.DPT_baseline.if_only_restore_backbone = False
 
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid = CN()
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.use_pretrained_backbone = True
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN = CN() # dpt_hybrid_SSN (V1)
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from = 'matseg' # ['backbone', 'matseg']
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims = 1344 # resnet: stem + stage 0,1,2
