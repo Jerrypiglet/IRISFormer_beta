@@ -303,6 +303,7 @@ class openrooms(data.Dataset):
             im_SDR_RGB = self.extra_op(im_SDR_RGB, name='im_SDR_RGB')
 
         im_trainval = im_trainval_RGB # [3, 240, 320], tensor, not in [0., 1.]
+        # print(torch.max(im_trainval), torch.min(im_trainval))
 
         batch_dict.update({'image_path': str(png_image_path), 'brdf_loss_mask': torch.from_numpy(brdf_loss_mask)})
 

@@ -65,12 +65,14 @@ class Normalize(object):
         self.std = std
 
     def __call__(self, image, label=None):
+        # print(torch.max(image), torch.min(image), '--')
         if self.std is None:
             for t, m in zip(image, self.mean):
                 t.sub_(m)
         else:
             for t, m, s in zip(image, self.mean, self.std):
                 t.sub_(m).div_(s)
+        # print(torch.max(image), torch.min(image), '<--', self.mean, self.std)
         if label is not None:
             return image, label
         else:

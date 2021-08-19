@@ -18,6 +18,7 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
     # im_cpu = (data_batch['im_trainval'].permute(0, 3, 1, 2) )
     im_cpu = data_batch['im_trainval']
     input_dict['imBatch'] = im_cpu.cuda(non_blocking=True).contiguous()
+    # print(torch.max(input_dict['imBatch']), torch.min(input_dict['imBatch']), '+++')
 
     input_dict['brdf_loss_mask'] = data_batch['brdf_loss_mask'].cuda(non_blocking=True).contiguous()
 

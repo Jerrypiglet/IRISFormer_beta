@@ -66,8 +66,12 @@ def get_transform_resize(split, opt):
     assert split in ['train', 'val', 'test']
     value_scale = 255
     mean = [0.485, 0.456, 0.406]
-    mean = [item * value_scale for item in mean]
     std = [0.229, 0.224, 0.225]
+    if opt.cfg.MODEL_BRDF.DPT_baseline.enable:
+        # following DPT's normalization for depth, at https://github.com/isl-org/DPT/blob/main/run_monodepth.py#L43
+        mean = [0.5] * 3
+        std = [0.5] * 3
+    mean = [item * value_scale for item in mean]
     std = [item * value_scale for item in std]
 
     # if_pad = False
