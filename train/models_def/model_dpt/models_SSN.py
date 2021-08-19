@@ -136,8 +136,8 @@ class DPTAlbedoDepthModel_SSN(DPT_SSN):
         if path is not None:
             print(magenta('===== [DPTAlbedoDepthModel_SSN] Loading %s'%path))
             self.load(path, skip_keys=skip_keys, keep_keys=keep_keys)
-        else:
-            assert False, str(path)
+        # else:
+        #     assert False, str(path)
 
     def forward(self, x, input_dict_extra={}):
         x_out, ssn_return_dict = super().forward(x, input_dict_extra=input_dict_extra)
