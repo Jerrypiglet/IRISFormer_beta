@@ -154,7 +154,37 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
                 layer_4 = QtC(layer_4, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
             else:
                 assert False, 'invalid ssn_from!'
-    elif recon_method == 'qkc':
+    elif recon_method == 'qkv':
+        if layer_1.ndim == 3:
+            if ssn_from == 'matseg':
+                layer_1 = QtC(layer_1, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
+            elif ssn_from == 'backbone':
+                layer_1 = QtC(layer_1, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
+            else:
+                assert False, 'invalid ssn_from!'
+        if layer_2.ndim == 3:
+            if ssn_from == 'matseg':
+                layer_2 = QtC(layer_2, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
+            elif ssn_from == 'backbone':
+                layer_2 = QtC(layer_2, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
+            else:
+                assert False, 'invalid ssn_from!'
+        if layer_3.ndim == 3:
+            print(layer_3.shape, ssn_return_dict['im_feat'].shape)
+            # if ssn_from == 'matseg':
+            #     layer_3 = QtC(layer_3, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
+            # elif ssn_from == 'backbone':
+            #     layer_3 = QtC(layer_3, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
+            # else:
+            #     assert False, 'invalid ssn_from!'
+        if layer_4.ndim == 3:
+            if ssn_from == 'matseg':
+                layer_4 = QtC(layer_4, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
+            elif ssn_from == 'backbone':
+                layer_4 = QtC(layer_4, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
+            else:
+                assert False, 'invalid ssn_from!'
+    else:
         assert False
 
         
@@ -275,7 +305,7 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
 
     x = self.norm(x)
 
-    extra_return_dict = {'Q': ssn_return_dict['Q'], 'matseg_affinity': ssn_return_dict['Q_2D']}
+    extra_return_dict = {'Q': ssn_return_dict['Q'], 'matseg_affinity': ssn_return_dict['Q_2D'], 'im_feat': im_feat}
     # print(time.time() - tic, '------------ the rest')
 
     return x, extra_return_dict

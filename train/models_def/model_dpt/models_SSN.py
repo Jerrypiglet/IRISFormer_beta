@@ -21,6 +21,8 @@ from .blocks_SSN import (
     forward_vit_SSN,
 )
 
+from models_def.model_dpt.utils_yogo import CrossAttention
+
 def _make_fusion_block(features, use_bn):
     return FeatureFusionBlock_custom(
         features,
@@ -84,6 +86,15 @@ class DPT_SSN(BaseModel):
         self.scratch.refinenet4 = _make_fusion_block(features, use_bn)
 
         self.scratch.output_conv = head
+
+        self.recon_method = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method
+        module_dict = {}
+        if self.recon_method == 'qkv':
+            module_dict['layer_3_ca'] = CrossAttention
+            # self.ca_modules = nn.ModuleDict(
+
+
+
 
     def forward(self, x, input_dict_extra={}):
         if self.channels_last == True:
