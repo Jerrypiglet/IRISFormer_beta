@@ -95,22 +95,9 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     layer_3 = pretrained.act_postprocess3[0:2](layer_3)
     layer_4 = pretrained.act_postprocess4[0:2](layer_4)
 
-    # print('->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+    print('->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # hybrid-SSN: -> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 320]) torch.Size([2, 768, 320])
 
-    # unflatten = nn.Sequential( # 'Re-assemble' in DPT paper
-    #     nn.Unflatten(
-    #         2,
-    #         torch.Size(
-    #             [
-    #                 h // pretrained.model.patch_size[1],
-    #                 w // pretrained.model.patch_size[0],
-    #             ]
-    #         ),
-    #     )
-    # )
-
-    gamma = ssn_return_dict['Q'] # [b, J, N] for dpt_hybrid.ssn_from = 'matseg'; # [b, J, N/4/4] for dpt_hybrid.ssn_from = 'backbone'
 
     assert pretrained.model.patch_size[0]==pretrained.model.patch_size[1]
 
@@ -118,6 +105,7 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     recon_method = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method
     
     if recon_method == 'qtc':
+        gamma = ssn_return_dict['Q'] # [b, J, N] for dpt_hybrid.ssn_from = 'matseg'; # [b, J, N/4/4] for dpt_hybrid.ssn_from = 'backbone'
         if layer_1.ndim == 3:
             # layer_1 = unflatten(layer_1)
             if ssn_from == 'matseg':
@@ -155,42 +143,23 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
             else:
                 assert False, 'invalid ssn_from!'
     elif recon_method == 'qkv':
+        ca_modules = input_dict_extra['ca_modules']
         if layer_1.ndim == 3:
-            if ssn_from == 'matseg':
-                layer_1 = QtC(layer_1, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
-            elif ssn_from == 'backbone':
-                layer_1 = QtC(layer_1, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
-            else:
-                assert False, 'invalid ssn_from!'
+            # print(layer_1.shape, ssn_return_dict['im_feat'].shape) # torch.Size([1, 768, 320]) torch.Size([1, 1344, 64, 80])
+            layer_1 = ca_modules['layer_1_ca'](ssn_return_dict['im_feat'], layer_1, im_feat_scale_factor=1.) # torch.Size([1, 768, 320])
         if layer_2.ndim == 3:
-            if ssn_from == 'matseg':
-                layer_2 = QtC(layer_2, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
-            elif ssn_from == 'backbone':
-                layer_2 = QtC(layer_2, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
-            else:
-                assert False, 'invalid ssn_from!'
+            layer_2 = ca_modules['layer_2_ca'](ssn_return_dict['im_feat'], layer_2, im_feat_scale_factor=1./2.) # torch.Size([1, 768, 320])
         if layer_3.ndim == 3:
-            print(layer_3.shape, ssn_return_dict['im_feat'].shape) # torch.Size([1, 768, 320]) torch.Size([1, 1344, 64, 80])
-            im_feat_16x = F.interpolate(ssn_return_dict['im_feat'], 1./4., mode='bilinear')
-            # if ssn_from == 'matseg':
-            #     layer_3 = QtC(layer_3, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
-            # elif ssn_from == 'backbone':
-            #     layer_3 = QtC(layer_3, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
-            # else:
-            #     assert False, 'invalid ssn_from!'
+            # print(layer_3.shape, ssn_return_dict['im_feat'].shape) # torch.Size([1, 768, 320]) torch.Size([1, 1344, 64, 80])
+            layer_3 = ca_modules['layer_3_ca'](ssn_return_dict['im_feat'], layer_3, im_feat_scale_factor=1./4.) # torch.Size([1, 768, 320])
         if layer_4.ndim == 3:
-            if ssn_from == 'matseg':
-                layer_4 = QtC(layer_4, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
-            elif ssn_from == 'backbone':
-                layer_4 = QtC(layer_4, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
-            else:
-                assert False, 'invalid ssn_from!'
+            layer_4 = ca_modules['layer_4_ca'](ssn_return_dict['im_feat'], layer_4, im_feat_scale_factor=1./8.) # torch.Size([1, 768, 320])
     else:
         assert False
 
         
 
-    # print('-->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+    print('-->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # hybrid-SSN: --> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 16, 20])
 
     layer_1 = pretrained.act_postprocess1[3 : len(pretrained.act_postprocess1)](layer_1)
@@ -367,8 +336,10 @@ def _make_vit_b_rn50_backbone_SSN_unet(
 
     readout_oper = get_readout_oper(vit_features, features, use_readout, start_index)
 
+    recon_method = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method
+        
     if use_vit_only == True:
-        pretrained.act_postprocess1 = nn.Sequential(
+        act_postprocess1_list = [
             readout_oper[0],
             Transpose(1, 2),
             nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
@@ -388,10 +359,13 @@ def _make_vit_b_rn50_backbone_SSN_unet(
                 bias=True,
                 dilation=1,
                 groups=1,
-            ),
-        )
+            )
+        ]
+        if recon_method == 'qkv':
+            act_postprocess1_list.pop()
+        pretrained.act_postprocess1 = nn.Sequential(*act_postprocess1_list)
 
-        pretrained.act_postprocess2 = nn.Sequential(
+        act_postprocess2_list = [
             readout_oper[1],
             Transpose(1, 2),
             nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
@@ -412,7 +386,10 @@ def _make_vit_b_rn50_backbone_SSN_unet(
                 dilation=1,
                 groups=1,
             ),
-        )
+        ]
+        if recon_method == 'qkv':
+            act_postprocess2_list.pop()
+        pretrained.act_postprocess2 = nn.Sequential(*act_postprocess2_list)
     else:
         pretrained.act_postprocess1 = nn.Sequential(
             nn.Identity(), nn.Identity(), nn.Identity()
@@ -434,7 +411,7 @@ def _make_vit_b_rn50_backbone_SSN_unet(
         ),
     )
 
-    pretrained.act_postprocess4 = nn.Sequential(
+    act_postprocess4_list = [
         readout_oper[3],
         Transpose(1, 2),
         nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
@@ -452,7 +429,10 @@ def _make_vit_b_rn50_backbone_SSN_unet(
             stride=2,
             padding=1,
         ),
-    )
+    ]
+    if recon_method == 'qkv':
+        act_postprocess4_list.pop()
+    pretrained.act_postprocess4 = nn.Sequential(*act_postprocess4_list)
 
     pretrained.model.start_index = start_index
     pretrained.model.patch_size = [opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.patch_size]*2

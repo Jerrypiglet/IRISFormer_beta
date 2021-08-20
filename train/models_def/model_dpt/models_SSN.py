@@ -65,6 +65,14 @@ class DPT_SSN(BaseModel):
             "vitl16_384": [5, 11, 17, 23],
         }
 
+        vit_dims = {
+            # "vitb_rn50_384": [0, 1, 8, 11],
+            "vitl_unet_384": [5, 11, 17, 23],
+            "vitb_unet_384": 768,
+            # "vitb16_384": [2, 5, 8, 11],
+            # "vitl16_384": [5, 11, 17, 23],
+        }
+
         # Instantiate backbone and reassemble blocks
         self.pretrained, self.scratch = _make_encoder_SSN(
             opt, 
@@ -88,18 +96,23 @@ class DPT_SSN(BaseModel):
         self.scratch.output_conv = head
 
         self.recon_method = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method
-        module_dict = {}
+        
         if self.recon_method == 'qkv':
-            module_dict['layer_3_ca'] = CrossAttention
-            # self.ca_modules = nn.ModuleDict(
-
-
-
+            module_dict = {}
+            im_c = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims
+            token_c = vit_dims[backbone]
+            module_dict['layer_1_ca'] = CrossAttention(token_c, im_c, token_c)
+            module_dict['layer_2_ca'] = CrossAttention(token_c, im_c, token_c)
+            module_dict['layer_3_ca'] = CrossAttention(token_c, im_c, token_c)
+            module_dict['layer_4_ca'] = CrossAttention(token_c, im_c, token_c)
+            self.ca_modules = nn.ModuleDict(module_dict)
 
     def forward(self, x, input_dict_extra={}):
         if self.channels_last == True:
             x.contiguous(memory_format=torch.channels_last)
 
+        if self.recon_method == 'qkv':
+            input_dict_extra.update({'ca_modules': self.ca_modules})
         layer_1, layer_2, layer_3, layer_4, ssn_return_dict = forward_vit_SSN(self.opt, self.pretrained, x, input_dict_extra=input_dict_extra)
 
         layer_1_rn = self.scratch.layer1_rn(layer_1)
