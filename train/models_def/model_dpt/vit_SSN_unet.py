@@ -109,8 +109,8 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
         if layer_1.ndim == 3:
             # layer_1 = unflatten(layer_1)
             if ssn_from == 'matseg':
-                # layer_1 = QtC(layer_1, gamma, h, w, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
-                layer_1 = QtC(layer_1, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
+                layer_1 = QtC(layer_1, gamma, h, w, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
+                # layer_1 = QtC(layer_1, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
             elif ssn_from == 'backbone':
                 # layer_1 = QtC(layer_1, gamma, h//4, w//4, Q_downsample_rate=1) # reassemble to [b, D, spixel_h, spixel_w]
                 layer_1 = QtC(layer_1, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
@@ -119,8 +119,8 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
         if layer_2.ndim == 3:
             # layer_2 = unflatten(layer_2)
             if ssn_from == 'matseg':
-                # layer_2 = QtC(layer_2, gamma, h, w, Q_downsample_rate=8) # reassemble to [b, D, spixel_h, spixel_w]
-                layer_2 = QtC(layer_2, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
+                layer_2 = QtC(layer_2, gamma, h, w, Q_downsample_rate=8) # reassemble to [b, D, spixel_h, spixel_w]
+                # layer_2 = QtC(layer_2, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
             elif ssn_from == 'backbone':
                 # layer_2 = QtC(layer_2, gamma, h//4, w//4, Q_downsample_rate=2) # reassemble to [b, D, spixel_h, spixel_w]
                 layer_2 = QtC(layer_2, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
@@ -137,12 +137,13 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
         if layer_4.ndim == 3:
             # layer_4 = unflatten(layer_4)
             if ssn_from == 'matseg':
-                layer_4 = QtC(layer_4, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
+                layer_4 = QtC(layer_4, gamma, h, w, Q_downsample_rate=32) # reassemble to [b, D, spixel_h, spixel_w]
+                # layer_4 = QtC(layer_4, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
             elif ssn_from == 'backbone':
                 layer_4 = QtC(layer_4, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
             else:
                 assert False, 'invalid ssn_from!'
-    elif recon_method == 'qkv':
+    elif recon_method in ['qkv', 'qtc']:
         ca_modules = input_dict_extra['ca_modules']
         if layer_1.ndim == 3:
             # print(layer_1.shape, ssn_return_dict['im_feat'].shape) # torch.Size([1, 768, 320]) torch.Size([1, 1344, 64, 80])
@@ -361,7 +362,7 @@ def _make_vit_b_rn50_backbone_SSN_unet(
                 groups=1,
             )
         ]
-        if recon_method == 'qkv':
+        if recon_method in ['qkv', 'qtc']:
             act_postprocess1_list.pop()
         pretrained.act_postprocess1 = nn.Sequential(*act_postprocess1_list)
 
@@ -387,7 +388,7 @@ def _make_vit_b_rn50_backbone_SSN_unet(
                 groups=1,
             ),
         ]
-        if recon_method == 'qkv':
+        if recon_method in ['qkv', 'qtc']:
             act_postprocess2_list.pop()
         pretrained.act_postprocess2 = nn.Sequential(*act_postprocess2_list)
     else:
@@ -430,7 +431,7 @@ def _make_vit_b_rn50_backbone_SSN_unet(
             padding=1,
         ),
     ]
-    if recon_method == 'qkv':
+    if recon_method in ['qkv', 'qtc']:
         act_postprocess4_list.pop()
     pretrained.act_postprocess4 = nn.Sequential(*act_postprocess4_list)
 
