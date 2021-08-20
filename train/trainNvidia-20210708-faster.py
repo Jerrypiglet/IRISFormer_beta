@@ -101,7 +101,7 @@ parser.add_argument('--test_real', action='store_true', help='')
 
 parser.add_argument('--skip_keys', nargs='+', help='Skip those keys in the model', required=False)
 parser.add_argument('--replaced_keys', nargs='+', help='Replace those keys in the model', required=False)
-parser.add_argument('--replacedby', nargs='+', help='... with those keys from ckpt. Must be in the same length as ``replace_leys``', required=False)
+parser.add_argument('--replacedby', nargs='+', help='... to match those keys from ckpt. Must be in the same length as ``replace_leys``', required=False)
 parser.add_argument("--if_save_pickles", type=str2bool, nargs='?', const=True, default=False)
 
 parser.add_argument('--meta_splits_skip', nargs='+', help='Skip those keys in the model', required=False)
@@ -437,10 +437,11 @@ num_mat_masks_MAX = 0
 model.train(not opt.cfg.MODEL_SEMSEG.fix_bn)
 synchronize()
 
-if opt.distributed and 'hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.DPT_baseline.enable:
-    print(model.module.BRDF_Net.pretrained.model.patch_embed.backbone.stem.norm.bias)
-else:
-    print(model.BRDF_Net.pretrained.model.patch_embed.backbone.stem.norm.bias)
+if opt.cfg.MODEL_BRDF.DPT_baseline.enable:
+    if opt.distributed and 'hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model:
+        print(model.module.BRDF_Net.pretrained.model.patch_embed.backbone.stem.norm.bias)
+    else:
+        print(model.BRDF_Net.pretrained.model.patch_embed.backbone.stem.norm.bias)
 '''
 tensor([ 7.6822e-02,  1.3747e-01,  1.7786e-01,  1.2228e-01,  1.3169e-01,
         -1.9725e-05,  1.8636e-01,  1.1685e-01,  1.2985e-01,  1.1506e-01,

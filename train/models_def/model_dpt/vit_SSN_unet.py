@@ -5,6 +5,7 @@ import types
 import math
 import torch.nn.functional as F
 import time
+import models_def.models_brdf as models_brdf # basic model
 
 # from models_def.model_matseg import Baseline
 
@@ -95,9 +96,9 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     layer_3 = pretrained.act_postprocess3[0:2](layer_3)
     layer_4 = pretrained.act_postprocess4[0:2](layer_4)
 
-    print('->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+    # print('->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # hybrid-SSN: -> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 320]) torch.Size([2, 768, 320])
-
+    # hybrid-SSN-qkv: -> torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 768, 320]) torch.Size([1, 768, 320])
 
     assert pretrained.model.patch_size[0]==pretrained.model.patch_size[1]
 
@@ -145,23 +146,27 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
                 assert False, 'invalid ssn_from!'
     elif recon_method in ['qkv', 'qtc']:
         ca_modules = input_dict_extra['ca_modules']
+        extra_im_scales = 1.
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone:
+            extra_im_scales = 0.25
         if layer_1.ndim == 3:
             # print(layer_1.shape, ssn_return_dict['im_feat'].shape) # torch.Size([1, 768, 320]) torch.Size([1, 1344, 64, 80])
-            layer_1 = ca_modules['layer_1_ca'](ssn_return_dict['im_feat'], layer_1, im_feat_scale_factor=1.) # torch.Size([1, 768, 320])
+            layer_1 = ca_modules['layer_1_ca'](ssn_return_dict['im_feat'], layer_1, im_feat_scale_factor=extra_im_scales * 1.) # torch.Size([1, 768, 320])
         if layer_2.ndim == 3:
-            layer_2 = ca_modules['layer_2_ca'](ssn_return_dict['im_feat'], layer_2, im_feat_scale_factor=1./2.) # torch.Size([1, 768, 320])
+            layer_2 = ca_modules['layer_2_ca'](ssn_return_dict['im_feat'], layer_2, im_feat_scale_factor=extra_im_scales * 1./2.) # torch.Size([1, 768, 320])
         if layer_3.ndim == 3:
             # print(layer_3.shape, ssn_return_dict['im_feat'].shape) # torch.Size([1, 768, 320]) torch.Size([1, 1344, 64, 80])
-            layer_3 = ca_modules['layer_3_ca'](ssn_return_dict['im_feat'], layer_3, im_feat_scale_factor=1./4.) # torch.Size([1, 768, 320])
+            layer_3 = ca_modules['layer_3_ca'](ssn_return_dict['im_feat'], layer_3, im_feat_scale_factor=extra_im_scales * 1./4.) # torch.Size([1, 768, 320])
         if layer_4.ndim == 3:
-            layer_4 = ca_modules['layer_4_ca'](ssn_return_dict['im_feat'], layer_4, im_feat_scale_factor=1./8.) # torch.Size([1, 768, 320])
+            layer_4 = ca_modules['layer_4_ca'](ssn_return_dict['im_feat'], layer_4, im_feat_scale_factor=extra_im_scales * 1./8.) # torch.Size([1, 768, 320])
     else:
         assert False
 
         
 
-    print('-->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+    # print('-->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # hybrid-SSN: --> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 16, 20])
+    # hybrid-SSN-qkv: --> torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 768, 16, 20]) torch.Size([1, 768, 8, 10])
 
     layer_1 = pretrained.act_postprocess1[3 : len(pretrained.act_postprocess1)](layer_1)
     layer_2 = pretrained.act_postprocess2[3 : len(pretrained.act_postprocess2)](layer_2)
@@ -216,16 +221,42 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
         # stage_1 torch.Size([8, 512, 32, 40])
         # stage_2 torch.Size([8, 512, 32, 40])
     
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone:
+        x_renormalzied = x
+
+        # mean_1 = torch.tensor([0.485, 0.456, 0.406], dtype=torch.float32).reshape(1, 3, 1, 1).cuda()
+        # std_1 = torch.tensor([0.229, 0.224, 0.225], dtype=torch.float32).reshape(1, 3, 1, 1).cuda()
+        # mean_2 = torch.tensor([0.5, 0.5, 0.5], dtype=torch.float32).reshape(1, 3, 1, 1).cuda()
+        # std_2 = torch.tensor([0.5, 0.5, 0.5], dtype=torch.float32).reshape(1, 3, 1, 1).cuda()
+
+        # x_renormalzied = ((x * std_1 + mean_1) - mean_2) / std_2
+        x1, x2, x3, x4, x5, x6, _ = self.patch_embed.unet_backbone.encoder(x_renormalzied, input_dict_extra={})
+        unet_output_dict = self.patch_embed.unet_backbone.albedoDecoder(x_renormalzied, x1, x2, x3, x4, x5, x6, input_dict_extra={})
+        albedo_dx6 = unet_output_dict['dx6']
+
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_debug_unet:
+            albedo_pred_unet = 0.5 * (unet_output_dict['x_out'] + 1)
+            albedo_pred_unet = input_dict_extra['input_dict']['segBRDFBatch'] * albedo_pred_unet
+            # albedo_pred_unet = models_brdf.LSregress(albedo_pred_unet * input_dict_extra['input_dict']['segBRDFBatch'].expand_as(albedo_pred_unet),
+            #         input_dict_extra['input_dict']['albedoBatch'] * input_dict_extra['input_dict']['segBRDFBatch'].expand_as(input_dict_extra['input_dict']['albedoBatch']), albedo_pred_unet)
+            albedo_pred_unet = torch.clamp(albedo_pred_unet ** (1.0/2.2), 0, 1)
+
+            print(albedo_pred_unet.shape, torch.max(albedo_pred_unet),torch.min(albedo_pred_unet), torch.median(albedo_pred_unet))
+
     # print(h, w, self.patch_size)
     assert all([x!=1 for x in self.patch_size])
     assert im_height%self.patch_size[0]==0 and im_width%self.patch_size[1]==0
-    im_feat = torch.cat(
-        [
-            F.interpolate(pretrained_activations['feat_stem'], scale_factor=1, mode='bilinear'), # torch.Size([4, 64, 64, 80])
-            F.interpolate(pretrained_activations['feat_stage_0'], scale_factor=1, mode='bilinear'), # torch.Size([4, 256, 64, 80])
-            F.interpolate(pretrained_activations['feat_stage_1'], scale_factor=2, mode='bilinear'), # torch.Size([4, 512, 32, 40])
-            F.interpolate(pretrained_activations['feat_stage_2'], scale_factor=2, mode='bilinear'), # torch.Size([4, 512, 32, 40])
-        ], dim=1)
+
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone:
+        im_feat = albedo_dx6
+    else:
+        im_feat = torch.cat(
+            [
+                F.interpolate(pretrained_activations['feat_stem'], scale_factor=1, mode='bilinear'), # torch.Size([4, 64, 64, 80])
+                F.interpolate(pretrained_activations['feat_stage_0'], scale_factor=1, mode='bilinear'), # torch.Size([4, 256, 64, 80])
+                F.interpolate(pretrained_activations['feat_stage_1'], scale_factor=2, mode='bilinear'), # torch.Size([4, 512, 32, 40])
+                F.interpolate(pretrained_activations['feat_stage_2'], scale_factor=2, mode='bilinear'), # torch.Size([4, 512, 32, 40])
+            ], dim=1)
     # print(im_feat.shape, input_dict_extra['return_dict_matseg']['embedding'].shape) #  # torch.Size([4, D, 64, 80])
     
     # if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from == 'matseg':
@@ -241,10 +272,13 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
     # print(input_dict_extra['brdf_loss_mask'].unsqueeze(1).shape, mask_resized.shape)
 
     # tic = time.time()
-    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from == 'matseg':
-        ssn_return_dict = ssn_op(tensor_to_transform=im_feat, feats_in=input_dict_extra['return_dict_matseg']['embedding'], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone:
+        ssn_return_dict = ssn_op(tensor_to_transform=im_feat, feats_in=input_dict_extra['return_dict_matseg']['embedding'], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1.)) # Q: [im_height, im_width]
     else:
-        ssn_return_dict = ssn_op(tensor_to_transform=im_feat, feats_in=pretrained_activations['feat_stage_2'].detach(), mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1./2., 1)) # Q: [im_height/4, im_width/4]
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from == 'matseg':
+            ssn_return_dict = ssn_op(tensor_to_transform=im_feat, feats_in=input_dict_extra['return_dict_matseg']['embedding'], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
+        else:
+            ssn_return_dict = ssn_op(tensor_to_transform=im_feat, feats_in=pretrained_activations['feat_stage_2'].detach(), mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1./2., 1)) # Q: [im_height/4, im_width/4]
     # print(time.time() - tic, '------------ ssn_op')
     
     # tic = time.time()
@@ -277,6 +311,10 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
     x = self.norm(x)
 
     extra_return_dict = {'Q': ssn_return_dict['Q'], 'matseg_affinity': ssn_return_dict['Q_2D'], 'im_feat': im_feat}
+
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_debug_unet:
+        extra_return_dict.update({'albedo_pred_unet': albedo_pred_unet})
+
     # print(time.time() - tic, '------------ the rest')
 
     return x, extra_return_dict
@@ -608,13 +646,26 @@ def _make_pretrained_vitb_unet_384_SSN(
 ):
     # [DPT-SSN model] (v1) https://i.imgur.com/iSmi5wt.png
     print('========= [_make_pretrained_vitb_unet_384_SSN] pretrained', pretrained)
-    
+
     model = timm.create_model("vit_base_resnet50_384", pretrained=pretrained)
     # model = create_model_patch_embed_unet(opt)
     # model.patch_embed = create_model_patch_embed_unet(opt).patch_embed
     # model.patch_embed = HybridEmbed(
         # img_size=(opt.cfg.DATA.im_height, opt.cfg.DATA.im_width), patch_size=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.patch_size, in_chans=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims, embed_dim=768)
     # patch_size = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.patch_size
+
+
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone:
+        import models_def.models_brdf as models_brdf # basic model
+        encoder_to_use = models_brdf.encoder0
+        decoder_to_use = models_brdf.decoder0
+        unet_backbone = nn.ModuleDict(
+            {
+                'encoder': encoder_to_use(opt, cascadeLevel = 0, in_channels = 3), 
+                'albedoDecoder': decoder_to_use(opt, mode=0, modality='al')
+            }
+        )
+        model.patch_embed.unet_backbone = unet_backbone
 
     # print(model)
 
@@ -646,6 +697,7 @@ def _make_pretrained_vitl_unet_384_SSN(
     use_vit_only=False,
     enable_attention_hooks=False,
 ):
+    assert False, 'for DPT-large but not ready'
     # [DPT-SSN model] (v1) https://i.imgur.com/iSmi5wt.png
     print('========= [_make_pretrained_vitl_unet_384_SSN] pretrained', pretrained)
     model_1 = timm.create_model("vit_base_resnet50_384", pretrained=pretrained)

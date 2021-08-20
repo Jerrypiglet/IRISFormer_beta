@@ -189,7 +189,7 @@ def forward_flex(self, opt, x):
         if isinstance(x, (list, tuple)):
             x = x[-1]  # last feature if backbone outputs list/tuple of features; 1/16
 
-    # print(x.shape)
+    # print(x.shape) # torch.Size([1, 1024, 16, 20])
     x = self.patch_embed.proj(x).flatten(2).transpose(1, 2)
 
     if getattr(self, "dist_token", None) is not None:

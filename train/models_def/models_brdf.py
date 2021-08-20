@@ -572,13 +572,13 @@ class decoder0(nn.Module):
         if self.if_PPM:
             # ic(dx6.shape)
             dx6 = self.ppm(dx6)
-            # ic(dx6.shape)
 
         # if self.if_appearance_recon:
         #     dx6 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], dx6, scale_feat_map=1)
 
+        # ic(dx6.shape) # ic| dx6.shape: torch.Size([1, 64, 256, 320])
         x_orig = self.dconvFinal(self.dpadFinal(dx6 ) )
-        # ic(x_orig.shape)
+        # ic(x_orig.shape) # ic| x_orig.shape: torch.Size([1, 3, 256, 320])
         # print(x1, x2, x3, x4, x5, x6)
         
         # print(x6.shape, dx1.shape, dx2.shape, dx3.shape, dx4.shape, dx5.shape, dx6.shape, x_orig.shape) 
@@ -608,7 +608,7 @@ class decoder0(nn.Module):
         else:
             x_out = x_orig
 
-        return_dict = {'x_out': x_out, 'extra_output_dict': extra_output_dict}
+        return_dict = {'x_out': x_out, 'extra_output_dict': extra_output_dict, 'dx6': dx6}
         # if self.if_albedo_pooling:
         return_dict.update({'im_trainval_RGB_mask_pooled_mean': im_trainval_RGB_mask_pooled_mean})
 

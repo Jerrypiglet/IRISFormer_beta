@@ -209,6 +209,11 @@ class Model_Joint(nn.Module):
                     self.turn_off_names(['BRDF_Net.pretrained'])
                     freeze_bn_in_module(self.BRDF_Net.pretrained)
 
+                if self.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_freeze_unet:
+                    self.turn_off_names(['BRDF_Net.pretrained.model.patch_embed.unet_backbone']) # patchembed backbone in DPT_hybrid (resnet)
+                    freeze_bn_in_module(self.BRDF_Net.pretrained.model.patch_embed.unet_backbone)
+
+
                 # dpt_normalization = dpt_NormalizeImage(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
                 # self.dpt_transform = Compose(
                 #     [
@@ -580,7 +585,7 @@ class Model_Joint(nn.Module):
     def forward_brdf_DPT_baseline(self, input_dict, input_dict_extra={}):
         return_dict = {}
         img_batch = input_dict['imBatch']
-        input_dict_extra.update({'brdf_loss_mask': input_dict['brdf_loss_mask']})
+        input_dict_extra.update({'brdf_loss_mask': input_dict['brdf_loss_mask'], 'input_dict': input_dict})
         # print(img_batch.shape)
         # img_batch = input_dict['imBatch'].half()
         # img_input = dpt_transform({"image": img_batch})["image"]
@@ -610,8 +615,13 @@ class Model_Joint(nn.Module):
             assert False, 'Unsupported modality: %s'%self.cfg.MODEL_BRDF.DPT_baseline.modality
 
         # print(extra_DPT_return_dict.keys())
+        return_dict.update({'albedo_extra_output_dict': {}})
         if 'matseg_affinity' in extra_DPT_return_dict:
-            return_dict.update({'albedo_extra_output_dict': {'matseg_affinity': extra_DPT_return_dict['matseg_affinity']}})
+            return_dict['albedo_extra_output_dict'].update({'matseg_affinity': extra_DPT_return_dict['matseg_affinity']})
+        if self.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and self.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_debug_unet:
+            return_dict['albedo_extra_output_dict'].update({'albedo_pred_unet': extra_DPT_return_dict['albedo_pred_unet']})
+
+
 
         return return_dict
 
