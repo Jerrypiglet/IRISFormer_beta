@@ -59,7 +59,7 @@ def QtC(codebook, gamma, Q_height, Q_width, Q_downsample_rate=1):
 
     if Q_downsample_rate != 1:
         gamma_resampled = gamma.view(batch_size, J, Q_height, Q_width)
-        gamma_resampled = F.interpolate(gamma_resampled, scale_factor=1./float(Q_downsample_rate))
+        gamma_resampled = F.interpolate(gamma_resampled, scale_factor=1./float(Q_downsample_rate), mode='bilinear')
         gamma_resampled = gamma_resampled / (torch.sum(gamma_resampled, 1, keepdims=True)+1e-6)
         gamma_resampled = gamma_resampled.view(batch_size, J, -1)
     else:
@@ -170,7 +170,8 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
             else:
                 assert False, 'invalid ssn_from!'
         if layer_3.ndim == 3:
-            print(layer_3.shape, ssn_return_dict['im_feat'].shape)
+            print(layer_3.shape, ssn_return_dict['im_feat'].shape) # torch.Size([1, 768, 320]) torch.Size([1, 1344, 64, 80])
+            im_feat_16x = F.interpolate(ssn_return_dict['im_feat'], 1./4., mode='bilinear')
             # if ssn_from == 'matseg':
             #     layer_3 = QtC(layer_3, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
             # elif ssn_from == 'backbone':
@@ -250,10 +251,10 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
     assert im_height%self.patch_size[0]==0 and im_width%self.patch_size[1]==0
     im_feat = torch.cat(
         [
-            F.interpolate(pretrained_activations['feat_stem'], scale_factor=1), # torch.Size([4, 64, 64, 80])
-            F.interpolate(pretrained_activations['feat_stage_0'], scale_factor=1), # torch.Size([4, 256, 64, 80])
-            F.interpolate(pretrained_activations['feat_stage_1'], scale_factor=2), # torch.Size([4, 512, 32, 40])
-            F.interpolate(pretrained_activations['feat_stage_2'], scale_factor=2), # torch.Size([4, 512, 32, 40])
+            F.interpolate(pretrained_activations['feat_stem'], scale_factor=1, mode='bilinear'), # torch.Size([4, 64, 64, 80])
+            F.interpolate(pretrained_activations['feat_stage_0'], scale_factor=1, mode='bilinear'), # torch.Size([4, 256, 64, 80])
+            F.interpolate(pretrained_activations['feat_stage_1'], scale_factor=2, mode='bilinear'), # torch.Size([4, 512, 32, 40])
+            F.interpolate(pretrained_activations['feat_stage_2'], scale_factor=2, mode='bilinear'), # torch.Size([4, 512, 32, 40])
         ], dim=1)
     # print(im_feat.shape, input_dict_extra['return_dict_matseg']['embedding'].shape) #  # torch.Size([4, D, 64, 80])
     

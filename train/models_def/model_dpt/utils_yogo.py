@@ -6,9 +6,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-from modules.functional.backend import _backend
-from modules.functional.sampling import gather, furthest_point_sample
-import modules.functional as mf
+# from modules.functional.backend import _backend
+# from modules.functional.sampling import gather, furthest_point_sample
+# import modules.functional as mf
 
 def conv1x1_1d(inplanes, out_planes, stride=1, groups=1):
     """1x1 convolution"""

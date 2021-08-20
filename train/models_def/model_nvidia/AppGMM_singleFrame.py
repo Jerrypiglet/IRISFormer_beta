@@ -287,7 +287,7 @@ class AppGMM(torch.nn.Module):
         '''
         if scale_feat_map != 1:
             # print(gamma.shape, feat_map.shape, scale_feat_map)
-            gamma_resized = F.interpolate(gamma, scale_factor=1./float(scale_feat_map))
+            gamma_resized = F.interpolate(gamma, scale_factor=1./float(scale_feat_map), mode='bilinear')
             gamma_resized = gamma_resized / (torch.sum(gamma_resized, 1, keepdims=True)+1e-6)
             # print('---', torch.sum(gamma_resized, 1), torch.sum(gamma, 1))
             # print('--->', gamma_resized.shape, gamma.shape)

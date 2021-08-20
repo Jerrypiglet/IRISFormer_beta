@@ -59,7 +59,7 @@ def QtC(codebook, gamma, Q_height, Q_width, Q_downsample_rate=1):
 
     if Q_downsample_rate != 1:
         gamma_resampled = gamma.view(batch_size, J, Q_height, Q_width)
-        gamma_resampled = F.interpolate(gamma_resampled, scale_factor=1./float(Q_downsample_rate))
+        gamma_resampled = F.interpolate(gamma_resampled, scale_factor=1./float(Q_downsample_rate), mode='bilinear')
         gamma_resampled = gamma_resampled / (torch.sum(gamma_resampled, 1, keepdims=True)+1e-6)
         gamma_resampled = gamma_resampled.view(batch_size, J, -1)
     else:
