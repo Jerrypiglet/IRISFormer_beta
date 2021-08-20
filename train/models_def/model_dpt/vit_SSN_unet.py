@@ -115,43 +115,48 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     assert pretrained.model.patch_size[0]==pretrained.model.patch_size[1]
 
     ssn_from = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from
+    recon_method = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method
+    
+    if recon_method == 'qtc':
+        if layer_1.ndim == 3:
+            # layer_1 = unflatten(layer_1)
+            if ssn_from == 'matseg':
+                # layer_1 = QtC(layer_1, gamma, h, w, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
+                layer_1 = QtC(layer_1, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
+            elif ssn_from == 'backbone':
+                # layer_1 = QtC(layer_1, gamma, h//4, w//4, Q_downsample_rate=1) # reassemble to [b, D, spixel_h, spixel_w]
+                layer_1 = QtC(layer_1, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
+            else:
+                assert False, 'invalid ssn_from!'
+        if layer_2.ndim == 3:
+            # layer_2 = unflatten(layer_2)
+            if ssn_from == 'matseg':
+                # layer_2 = QtC(layer_2, gamma, h, w, Q_downsample_rate=8) # reassemble to [b, D, spixel_h, spixel_w]
+                layer_2 = QtC(layer_2, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
+            elif ssn_from == 'backbone':
+                # layer_2 = QtC(layer_2, gamma, h//4, w//4, Q_downsample_rate=2) # reassemble to [b, D, spixel_h, spixel_w]
+                layer_2 = QtC(layer_2, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
+            else:
+                assert False, 'invalid ssn_from!'
+        if layer_3.ndim == 3:
+            # layer_3 = unflatten(layer_3)
+            if ssn_from == 'matseg':
+                layer_3 = QtC(layer_3, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
+            elif ssn_from == 'backbone':
+                layer_3 = QtC(layer_3, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
+            else:
+                assert False, 'invalid ssn_from!'
+        if layer_4.ndim == 3:
+            # layer_4 = unflatten(layer_4)
+            if ssn_from == 'matseg':
+                layer_4 = QtC(layer_4, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
+            elif ssn_from == 'backbone':
+                layer_4 = QtC(layer_4, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
+            else:
+                assert False, 'invalid ssn_from!'
+    elif recon_method == 'qkc':
+        assert False
 
-    if layer_1.ndim == 3:
-        # layer_1 = unflatten(layer_1)
-        if ssn_from == 'matseg':
-            # layer_1 = QtC(layer_1, gamma, h, w, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
-            layer_1 = QtC(layer_1, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
-        elif ssn_from == 'backbone':
-            # layer_1 = QtC(layer_1, gamma, h//4, w//4, Q_downsample_rate=1) # reassemble to [b, D, spixel_h, spixel_w]
-            layer_1 = QtC(layer_1, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
-        else:
-            assert False, 'invalid ssn_from!'
-    if layer_2.ndim == 3:
-        # layer_2 = unflatten(layer_2)
-        if ssn_from == 'matseg':
-            # layer_2 = QtC(layer_2, gamma, h, w, Q_downsample_rate=8) # reassemble to [b, D, spixel_h, spixel_w]
-            layer_2 = QtC(layer_2, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
-        elif ssn_from == 'backbone':
-            # layer_2 = QtC(layer_2, gamma, h//4, w//4, Q_downsample_rate=2) # reassemble to [b, D, spixel_h, spixel_w]
-            layer_2 = QtC(layer_2, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
-        else:
-            assert False, 'invalid ssn_from!'
-    if layer_3.ndim == 3:
-        # layer_3 = unflatten(layer_3)
-        if ssn_from == 'matseg':
-            layer_3 = QtC(layer_3, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
-        elif ssn_from == 'backbone':
-            layer_3 = QtC(layer_3, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
-        else:
-            assert False, 'invalid ssn_from!'
-    if layer_4.ndim == 3:
-        # layer_4 = unflatten(layer_4)
-        if ssn_from == 'matseg':
-            layer_4 = QtC(layer_4, gamma, h, w, Q_downsample_rate=16) # reassemble to [b, D, spixel_h, spixel_w]
-        elif ssn_from == 'backbone':
-            layer_4 = QtC(layer_4, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
-        else:
-            assert False, 'invalid ssn_from!'
         
 
     # print('-->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)

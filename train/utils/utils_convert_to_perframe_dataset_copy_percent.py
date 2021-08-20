@@ -26,11 +26,15 @@ def return_percent(list_in, percent=1.):
 # DEST_path = Path('/newfoundland2/ruizhu/ORfull-perFramePickles-240x320')
 # DEST_percent_path = Path('/newfoundland2/ruizhu/ORfull-perFramePickles-240x320-quarter')
 
-LIST_path = Path('/viscompfs/users/ruizhu/semanticInverse/train/train/data/openrooms/list_OR_V4full/list')
-DEST_path = Path('/ruidata/ORfull-perFramePickles-240x320')
-DEST_percent_path = Path('/ruidata/ORfull-perFramePickles-240x320-quarter')
+# LIST_path = Path('/viscompfs/users/ruizhu/semanticInverse/train/train/data/openrooms/list_OR_V4full/list')
+# DEST_path = Path('/ruidata/ORfull-perFramePickles-240x320')
+# DEST_percent_path = Path('/ruidata/ORfull-perFramePickles-240x320-quarter')
+# PERCENT = 0.25
 
-PERCENT = 0.25
+LIST_path = Path('/viscompfs/users/ruizhu/semanticInverse/train/train/data/openrooms/list_ORmini/list')
+DEST_path = Path('/ruidata/ORfull-perFramePickles-240x320')
+DEST_percent_path = Path('/ruidata/ORmini-perFramePickles-240x320')
+PERCENT = 1.
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--meta_split', type=str, default='NA', help='')

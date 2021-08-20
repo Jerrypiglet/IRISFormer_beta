@@ -29,10 +29,12 @@ valid_instances = {
 }
 
 dump_source = {'binary': 's3mm1:buffer-or/ORfull-seq-240x320-smaller-RE-quarter4', \
-    'pickle': 's3mm1:buffer-or/ORfull-perFramePickles-240x320-quarter'}
+    'pickle': 's3mm1:buffer-or/ORfull-perFramePickles-240x320-quarter', \
+    'mini': 's3mm1:buffer-or/ORmini-perFramePickles-240x320'}
 
 dump_dest = {'binary': '/dev/shm/ORfull-seq-240x320-smaller-RE-quarter', \
-    'pickle': '/dev/shm/ORfull-perFramePickles-240x320-quarter'}
+    'pickle': '/dev/shm/ORfull-perFramePickles-240x320-quarter', \
+    'mini': '/dev/shm/ORmini-perFramePickles-240x320'}
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Kubectl Helper')
@@ -247,11 +249,15 @@ def create(args):
         if 'DATASET.if_to_memory True' in command_str:
             if_binary = 'DATASET.if_binary True' in command_str
             if_pickle = 'DATASET.if_pickle True' in command_str
+            if_mini = 'DATASET.mini True' in command_str
             assert if_binary or if_pickle
             assert not(if_binary and if_pickle)
             if if_binary:
                 dump_source_str = dump_source['binary']
                 dump_dest_str = dump_dest['binary']
+            elif if_mini:
+                dump_source_str = dump_source['mini']
+                dump_dest_str = dump_dest['mini']
             elif if_pickle:
                 dump_source_str = dump_source['pickle']
                 dump_dest_str = dump_dest['pickle']

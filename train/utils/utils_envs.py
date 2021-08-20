@@ -44,25 +44,12 @@ def set_up_envs(opt):
 
     if opt.data_root is not None:
         opt.cfg.DATASET.dataset_path = opt.data_root
-    if opt.if_cluster and opt.cluster=='ngc':
-        opt.cfg.flush_secs = 120
-        # opt.cfg.DATASET.binary = True
-        if opt.cfg.DATASET.if_to_memory:
-            if opt.cfg.DATASET.if_quarter:
-                opt.cfg.DATASET.dataset_path_binary += '-quarter'
-                opt.cfg.DATASET.dataset_path_pickle += '-quarter'
-            if opt.cfg.DATASET.if_binary:
-                opt.cfg.DATASET.dataset_path_binary = opt.cfg.DATASET.dataset_path_binary.replace('/datasets_mount', opt.cfg.DATASET.memory_path)
-            if opt.cfg.DATASET.if_pickle:
-                opt.cfg.DATASET.dataset_path_pickle = opt.cfg.DATASET.dataset_path_pickle.replace('/datasets_mount', opt.cfg.DATASET.memory_path)
-
-        print('=======', opt.cfg.DATASET.dataset_path_binary)
-        print('=======', opt.cfg.DATASET.dataset_path_pickle)
 
     if opt.cfg.PATH.total3D_lists_path_if_zhengqinCVPR:
         assert False, 'paths not correctly configured! (we use Zhengqins test set as val set, but they are in a different path (/eccv20dataset/DatasetNew_test) than the main dataset'
         opt.cfg.PATH.total3D_lists_path = opt.cfg.PATH.total3D_lists_path_zhengqinCVPR
     opt.cfg.DATASET.dataset_list = os.path.join(opt.cfg.PATH.total3D_lists_path, 'list')
+
     if opt.cfg.DATASET.mini:
         # else:
         opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_mini
@@ -79,6 +66,20 @@ def set_up_envs(opt):
 
     print('======= DATASET.dataset_path ', opt.cfg.DATASET.dataset_path)
 
+    if opt.if_cluster and opt.cluster=='ngc':
+        opt.cfg.flush_secs = 120
+        # opt.cfg.DATASET.binary = True
+        if opt.cfg.DATASET.if_to_memory:
+            if opt.cfg.DATASET.if_quarter:
+                opt.cfg.DATASET.dataset_path_binary += '-quarter'
+                opt.cfg.DATASET.dataset_path_pickle += '-quarter'
+            if opt.cfg.DATASET.if_binary:
+                opt.cfg.DATASET.dataset_path_binary = opt.cfg.DATASET.dataset_path_binary.replace('/datasets_mount', opt.cfg.DATASET.memory_path)
+            if opt.cfg.DATASET.if_pickle:
+                opt.cfg.DATASET.dataset_path_pickle = opt.cfg.DATASET.dataset_path_pickle.replace('/datasets_mount', opt.cfg.DATASET.memory_path)
+
+        print('=======', opt.cfg.DATASET.dataset_path_binary)
+        print('=======', opt.cfg.DATASET.dataset_path_pickle)
 
 
     opt.cfg.MODEL_SEMSEG.semseg_path = opt.cfg.MODEL_SEMSEG.semseg_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.MODEL_SEMSEG.semseg_path_local
@@ -146,6 +147,8 @@ def set_up_envs(opt):
                 opt.cfg.MODEL_MATSEG.enable = True
                 if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_freeze_matseg:
                     opt.cfg.MODEL_MATSEG.if_freeze = True
+
+        assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method in ['qtc', 'qkv']
 
     # ====== detectron (objects & masks) =====
     if opt.cfg.MODEL_DETECTRON.enable:
