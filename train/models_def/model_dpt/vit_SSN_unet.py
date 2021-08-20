@@ -608,6 +608,7 @@ def _make_pretrained_vitb_unet_384_SSN(
 ):
     # [DPT-SSN model] (v1) https://i.imgur.com/iSmi5wt.png
     print('========= [_make_pretrained_vitb_unet_384_SSN] pretrained', pretrained)
+    
     model = timm.create_model("vit_base_resnet50_384", pretrained=pretrained)
     # model = create_model_patch_embed_unet(opt)
     # model.patch_embed = create_model_patch_embed_unet(opt).patch_embed

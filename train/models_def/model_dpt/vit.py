@@ -513,6 +513,8 @@ def _make_pretrained_vitb_rn50_384(
     use_vit_only=False,
     enable_attention_hooks=False,
 ):
+    print('========= [_make_pretrained_vitb_rn50_384] pretrained', pretrained)
+
     model = timm.create_model("vit_base_resnet50_384", pretrained=pretrained)
 
     hooks = [0, 1, 8, 11] if hooks == None else hooks

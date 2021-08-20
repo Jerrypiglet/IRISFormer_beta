@@ -125,8 +125,10 @@ def _make_vit_b16_backbone(
 
     readout_oper = get_readout_oper(vit_features, features, use_readout, start_index)
 
+    recon_method = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method
+
     # 32, 48, 136, 384
-    pretrained.act_postprocess1 = nn.Sequential(
+    act_postprocess1_list = [
         readout_oper[0],
         Transpose(1, 2),
         nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
@@ -147,9 +149,13 @@ def _make_vit_b16_backbone(
             dilation=1,
             groups=1,
         ),
-    )
+    ]
+    if recon_method in ['qkv', 'qtc']:
+        act_postprocess1_list.pop()
+    pretrained.act_postprocess1 = nn.Sequential(*act_postprocess1_list)
 
-    pretrained.act_postprocess2 = nn.Sequential(
+    
+    act_postprocess2_list = [
         readout_oper[1],
         Transpose(1, 2),
         nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
@@ -170,7 +176,10 @@ def _make_vit_b16_backbone(
             dilation=1,
             groups=1,
         ),
-    )
+    ]
+    if recon_method in ['qkv', 'qtc']:
+        act_postprocess2_list.pop()
+    pretrained.act_postprocess2 = nn.Sequential(*act_postprocess2_list)
 
     pretrained.act_postprocess3 = nn.Sequential(
         readout_oper[2],
@@ -185,7 +194,7 @@ def _make_vit_b16_backbone(
         ),
     )
 
-    pretrained.act_postprocess4 = nn.Sequential(
+    act_postprocess4_list = [
         readout_oper[3],
         Transpose(1, 2),
         nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
@@ -203,7 +212,10 @@ def _make_vit_b16_backbone(
             stride=2,
             padding=1,
         ),
-    )
+    ]
+    if recon_method in ['qkv', 'qtc']:
+        act_postprocess4_list.pop()
+    pretrained.act_postprocess4 = nn.Sequential(*act_postprocess4_list)
 
     pretrained.model.start_index = start_index
     pretrained.model.patch_size = [16, 16]
