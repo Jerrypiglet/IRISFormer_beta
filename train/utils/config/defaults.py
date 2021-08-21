@@ -264,9 +264,10 @@ _C.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims = 1344 # resnet: stem + stage 0
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.patch_size = 16
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_freeze_matseg = True
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_dense = True
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone = False # use unet instead of resnet as backbone, for DPT-ssn models
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_freeze_unet = False
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_debug_unet = False
+_C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone = False # use unet instead of resnet as backbone, for DPT-ssn models
+_C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_feat_in_transformer = False # use unet instead of resnet as backbone, for DPT-ssn models
 # _C.MODEL_BRDF.DPT_baseline.dpt_SSN.spixel_h = 12
 # _C.MODEL_BRDF.DPT_baseline.dpt_SSN.spixel_w = 16
 

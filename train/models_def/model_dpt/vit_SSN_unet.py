@@ -77,8 +77,12 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
 
     glob, ssn_return_dict = pretrained.model.forward_flex_SSN(opt, x, pretrained.activations, input_dict_extra=input_dict_extra)
 
-    layer_1 = pretrained.activations["1"]
-    layer_2 = pretrained.activations["2"]
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_feat_in_transformer:
+        layer_1 = ssn_return_dict['unet_output_dict']['dx4']
+        layer_2 = ssn_return_dict['unet_output_dict']['dx3']
+    else:
+        layer_1 = pretrained.activations["1"]
+        layer_2 = pretrained.activations["2"]
     layer_3 = pretrained.activations["3"]
     layer_4 = pretrained.activations["4"]
 
@@ -88,6 +92,7 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     # print(x.shape)
     # print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # hybrid-SSN: torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 321, 768]) torch.Size([1, 321, 768])
+    # hybrid-SSN-qkv-unet: torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 321, 768]) torch.Size([1, 321, 768])
 
     # print(pretrained.act_postprocess1[0:2])
     
@@ -99,6 +104,7 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     # print('->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # hybrid-SSN: -> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 320]) torch.Size([2, 768, 320])
     # hybrid-SSN-qkv: -> torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 768, 320]) torch.Size([1, 768, 320])
+    # hybrid-SSN-qkv-unet: -> torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 768, 320]) torch.Size([1, 768, 320])
 
     assert pretrained.model.patch_size[0]==pretrained.model.patch_size[1]
 
@@ -162,11 +168,10 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     else:
         assert False
 
-        
-
     # print('-->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # hybrid-SSN: --> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 16, 20])
     # hybrid-SSN-qkv: --> torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 768, 16, 20]) torch.Size([1, 768, 8, 10])
+    # hybrid-SSN-qkv-unet: --> torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 768, 16, 20]) torch.Size([1, 768, 8, 10])
 
     layer_1 = pretrained.act_postprocess1[3 : len(pretrained.act_postprocess1)](layer_1)
     layer_2 = pretrained.act_postprocess2[3 : len(pretrained.act_postprocess2)](layer_2)
@@ -175,6 +180,7 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     
     # print('---->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # hybrid-SSN: ----> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 8, 10])
+    # hybrid-SSN-qkv-unet: ----> torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 768, 16, 20]) torch.Size([1, 768, 8, 10])
 
     return layer_1, layer_2, layer_3, layer_4, ssn_return_dict
 
@@ -233,6 +239,16 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
         x1, x2, x3, x4, x5, x6, _ = self.patch_embed.unet_backbone.encoder(x_renormalzied, input_dict_extra={})
         unet_output_dict = self.patch_embed.unet_backbone.albedoDecoder(x_renormalzied, x1, x2, x3, x4, x5, x6, input_dict_extra={})
         albedo_dx6 = unet_output_dict['dx6']
+        '''
+        dx1 torch.Size([1, 512, 8, 10])
+        dx2 torch.Size([1, 256, 16, 20])
+        dx3 torch.Size([1, 256, 32, 40])
+        dx4 torch.Size([1, 128, 64, 80])
+        dx5 torch.Size([1, 64, 128, 160])
+        dx6 torch.Size([1, 64, 256, 320])
+        '''
+        # for key in ['dx1', 'dx2', 'dx3', 'dx4', 'dx5', 'dx6']:
+        #     print(key, unet_output_dict[key].shape)
 
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_debug_unet:
             albedo_pred_unet = 0.5 * (unet_output_dict['x_out'] + 1)
@@ -312,8 +328,10 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
 
     extra_return_dict = {'Q': ssn_return_dict['Q'], 'matseg_affinity': ssn_return_dict['Q_2D'], 'im_feat': im_feat}
 
-    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_debug_unet:
-        extra_return_dict.update({'albedo_pred_unet': albedo_pred_unet})
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone:
+        extra_return_dict.update({'unet_output_dict': unet_output_dict})
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_debug_unet:
+            extra_return_dict.update({'albedo_pred_unet': albedo_pred_unet})
 
     # print(time.time() - tic, '------------ the rest')
 
@@ -335,7 +353,8 @@ def _make_vit_b_rn50_backbone_SSN_unet(
 
     pretrained.model = model
 
-    if not(opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.use_vit_only):
+    if not(opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_feat_in_transformer):
+        # in this case, no need for resnet backbones
         pretrained.model.patch_embed.backbone.stem.register_forward_hook(
             get_activation("feat_stem")
         )
@@ -353,14 +372,14 @@ def _make_vit_b_rn50_backbone_SSN_unet(
         pretrained.model.blocks[hooks[0]].register_forward_hook(get_activation("1"))
         pretrained.model.blocks[hooks[1]].register_forward_hook(get_activation("2"))
     else:
-
-        pretrained.model.patch_embed.backbone.stages[0].register_forward_hook(
-            get_activation("1")
-        )
-        pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
-            get_activation("2")
-        )
-        # pass
+        if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_feat_in_transformer:
+            pretrained.model.patch_embed.backbone.stages[0].register_forward_hook(
+                get_activation("1")
+            )
+            pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
+                get_activation("2")
+            )
+            # pass
 
     pretrained.model.blocks[hooks[2]].register_forward_hook(get_activation("3"))
     pretrained.model.blocks[hooks[3]].register_forward_hook(get_activation("4"))
@@ -668,7 +687,8 @@ def _make_pretrained_vitb_unet_384_SSN(
         )
         model.patch_embed.unet_backbone = unet_backbone
 
-        if opt.cfg.MODEL_BRDF.DPT_baseline.use_vit_only:
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_feat_in_transformer:
+            # no need to keep the resnet backbone then
             model.patch_embed.backbone = nn.Identity()
 
 
@@ -682,10 +702,12 @@ def _make_pretrained_vitb_unet_384_SSN(
     # [resnetv2'] https://github.com/rwightman/pytorch-image-models/blob/766b4d32627fc4d1d9d188de81736504215127a0/timm/models/resnetv2.py#L338
 
     hooks = [0, 1, 8, 11] if hooks == None else hooks
+    if_unet_feat_in_transformer = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_feat_in_transformer
+
     return _make_vit_b_rn50_backbone_SSN_unet(
         opt, 
         model,
-        features=[256, 512, 768, 768],
+        features=[256, 512, 768, 768] if not if_unet_feat_in_transformer else [128, 256, 768, 768],
         size=[384, 384],
         hooks=hooks,
         use_vit_only=use_vit_only,

@@ -69,6 +69,8 @@ def _make_encoder_SSN(
     #         [256, 512, 1024, 2048], features, groups=groups, expand=expand
     #     )  # efficientnet_lite3
     elif backbone == "vitb_unet_384":
+        if_unet_feat_in_transformer = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_feat_in_transformer
+
         pretrained = _make_pretrained_vitb_unet_384_SSN(
             opt, 
             use_pretrained,
@@ -77,8 +79,9 @@ def _make_encoder_SSN(
             use_readout=use_readout,
             enable_attention_hooks=enable_attention_hooks,
         )
+        channels = [256, 512, 768, 768] if not if_unet_feat_in_transformer else [128, 256, 768, 768]
         scratch = _make_scratch_SSN(
-            [256, 512, 768, 768], features, groups=groups, expand=expand
+            channels, features, groups=groups, expand=expand
         )
     # elif backbone == "vitl_unet_384":
     #     pretrained = _make_pretrained_vitl_unet_384_SSN(

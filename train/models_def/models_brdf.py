@@ -577,7 +577,7 @@ class decoder0(nn.Module):
             # ic(dx6.shape)
             dx6 = self.ppm(dx6)
 
-        return_dict = {'extra_output_dict': extra_output_dict, 'dx6': dx6}
+        return_dict = {'extra_output_dict': extra_output_dict, 'dx1': dx1, 'dx2': dx2, 'dx3': dx3, 'dx4': dx4, 'dx5': dx5, 'dx6': dx6}
         # if self.if_albedo_pooling:
         return_dict.update({'im_trainval_RGB_mask_pooled_mean': im_trainval_RGB_mask_pooled_mean})
 

@@ -439,7 +439,7 @@ num_mat_masks_MAX = 0
 model.train(not opt.cfg.MODEL_SEMSEG.fix_bn)
 synchronize()
 
-if opt.cfg.MODEL_BRDF.DPT_baseline.enable and not(opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.use_vit_only):
+if opt.cfg.MODEL_BRDF.DPT_baseline.enable and not(opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_feat_in_transformer):
     if opt.distributed and 'hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model:
         print(model.module.BRDF_Net.pretrained.model.patch_embed.backbone.stem.norm.bias)
     else:
