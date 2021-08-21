@@ -77,7 +77,7 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
 
     glob, ssn_return_dict = pretrained.model.forward_flex_SSN(opt, x, pretrained.activations, input_dict_extra=input_dict_extra)
 
-    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_feat_in_transformer:
+    if (opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_feat_in_transformer) and not opt.cfg.MODEL_BRDF.DPT_baseline.use_vit_only:
         layer_1 = ssn_return_dict['unet_output_dict']['dx4']
         layer_2 = ssn_return_dict['unet_output_dict']['dx3']
     else:
@@ -86,11 +86,14 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     layer_3 = pretrained.activations["3"]
     layer_4 = pretrained.activations["4"]
 
+    if_print = False
+
     # print(pretrained.activations["stem"].shape) # torch.Size([8, 64, 64, 80])
 
     # [layer_3 and layer_4 are from transformer layers]
     # print(x.shape)
-    # print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+    if if_print:
+        print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # hybrid-SSN: torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 321, 768]) torch.Size([1, 321, 768])
     # hybrid-SSN-qkv-unet: torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 321, 768]) torch.Size([1, 321, 768])
 
@@ -101,7 +104,8 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     layer_3 = pretrained.act_postprocess3[0:2](layer_3)
     layer_4 = pretrained.act_postprocess4[0:2](layer_4)
 
-    # print('->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+    if if_print:
+        print('->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # hybrid-SSN: -> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 320]) torch.Size([2, 768, 320])
     # hybrid-SSN-qkv: -> torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 768, 320]) torch.Size([1, 768, 320])
     # hybrid-SSN-qkv-unet: -> torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 768, 320]) torch.Size([1, 768, 320])
@@ -168,7 +172,8 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     else:
         assert False
 
-    # print('-->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+    if if_print:
+        print('-->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # hybrid-SSN: --> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 16, 20])
     # hybrid-SSN-qkv: --> torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 768, 16, 20]) torch.Size([1, 768, 8, 10])
     # hybrid-SSN-qkv-unet: --> torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 768, 16, 20]) torch.Size([1, 768, 8, 10])
@@ -177,8 +182,9 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     layer_2 = pretrained.act_postprocess2[3 : len(pretrained.act_postprocess2)](layer_2)
     layer_3 = pretrained.act_postprocess3[3 : len(pretrained.act_postprocess3)](layer_3)
     layer_4 = pretrained.act_postprocess4[3 : len(pretrained.act_postprocess4)](layer_4)
-    
-    # print('---->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+
+    if if_print:
+        print('---->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # hybrid-SSN: ----> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 8, 10])
     # hybrid-SSN-qkv-unet: ----> torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 768, 16, 20]) torch.Size([1, 768, 8, 10])
 
@@ -517,8 +523,8 @@ def _make_vit_b16_backbone_SSN_unet(
     vit_features=768,
     use_readout="ignore",
     start_index=1,
-    enable_attention_hooks=False,
-):
+    enable_attention_hooks=False,):
+
     pretrained = nn.Module()
 
     pretrained.model = model
