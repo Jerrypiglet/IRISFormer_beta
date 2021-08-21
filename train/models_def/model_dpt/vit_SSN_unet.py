@@ -662,7 +662,7 @@ def _make_pretrained_vitb_unet_384_SSN(
         unet_backbone = nn.ModuleDict(
             {
                 'encoder': encoder_to_use(opt, cascadeLevel = 0, in_channels = 3), 
-                'albedoDecoder': decoder_to_use(opt, mode=0, modality='al')
+                'albedoDecoder': decoder_to_use(opt, mode=0, modality='al', if_not_final_fc=not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_debug_unet)
             }
         )
         model.patch_embed.unet_backbone = unet_backbone

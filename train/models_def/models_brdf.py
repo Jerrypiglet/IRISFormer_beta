@@ -339,7 +339,7 @@ class decoder0_guide(nn.Module):
         return x_out
 
 class decoder0(nn.Module):
-    def __init__(self, opt, mode=-1, modality='', out_channel=3, input_dict_guide=None,  if_PPM=False):
+    def __init__(self, opt, mode=-1, modality='', out_channel=3, input_dict_guide=None,  if_PPM=False, if_not_final_fc=False):
         super(decoder0, self).__init__()
         self.opt = opt
         self.mode = mode
@@ -422,9 +422,9 @@ class decoder0(nn.Module):
             # self.acco_pool_mean = pac.PacPool2d(kernel_size=5, stride=1, padding=20, dilation=10, normalize_kernel=True)
             # self.acco_pool_mean = pac.PacPool2d(kernel_size=5, stride=1, padding=10, dilation=5, normalize_kernel=True)
 
-
-
-        self.dpadFinal = nn.ReplicationPad2d(1)
+        self.if_not_final_fc = if_not_final_fc
+        if not self.if_not_final_fc:
+            self.dpadFinal = nn.ReplicationPad2d(1)
 
         dconv_final_in_channels = 64
         if self.if_PPM:
@@ -573,6 +573,14 @@ class decoder0(nn.Module):
             # ic(dx6.shape)
             dx6 = self.ppm(dx6)
 
+        return_dict = {'extra_output_dict': extra_output_dict, 'dx6': dx6}
+        # if self.if_albedo_pooling:
+        return_dict.update({'im_trainval_RGB_mask_pooled_mean': im_trainval_RGB_mask_pooled_mean})
+
+        if self.if_not_final_fc:
+            return return_dict
+
+
         # if self.if_appearance_recon:
         #     dx6 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], dx6, scale_feat_map=1)
 
@@ -608,8 +616,6 @@ class decoder0(nn.Module):
         else:
             x_out = x_orig
 
-        return_dict = {'x_out': x_out, 'extra_output_dict': extra_output_dict, 'dx6': dx6}
-        # if self.if_albedo_pooling:
-        return_dict.update({'im_trainval_RGB_mask_pooled_mean': im_trainval_RGB_mask_pooled_mean})
+        return_dict.update({'x_out': x_out})
 
         return return_dict

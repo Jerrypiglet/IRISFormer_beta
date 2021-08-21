@@ -803,7 +803,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     albedo_pred_unet = output_dict['albedo_extra_output_dict']['albedo_pred_unet'].cpu().numpy().transpose(0, 2, 3, 1)
                     for sample_idx_batch, albedo_pred_unet_single in enumerate(albedo_pred_unet):
                         sample_idx = sample_idx_batch+batch_size*batch_id
-                        writer.add_image('VAL_DPT-SSN_albedo_PRED/%d'%sample_idx, albedo_pred_unet_single, tid, dataformats='HWC')
+                        if opt.is_master:
+                            writer.add_image('VAL_DPT-SSN_albedo_PRED/%d'%sample_idx, albedo_pred_unet_single, tid, dataformats='HWC')
 
 
             # ======= Vis BRDFsemseg / semseg
