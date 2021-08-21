@@ -211,6 +211,7 @@ _C.MODEL_BRDF.enable_list = '' # `al_no_de_ro`
 _C.MODEL_BRDF.enable_list_allowed = ['al', 'no', 'de', 'ro']
 _C.MODEL_BRDF.load_pretrained_pth = False
 _C.MODEL_BRDF.loss_list = ''
+_C.MODEL_BRDF.channel_multi = 1
 _C.MODEL_BRDF.albedoWeight = 1.5
 _C.MODEL_BRDF.normalWeight = 1.0
 _C.MODEL_BRDF.roughWeight = 0.5

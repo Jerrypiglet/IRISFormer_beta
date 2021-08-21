@@ -226,15 +226,17 @@ if 'dpt_hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.
     backbone_params = []
     other_params = []
     for k, v in model.named_parameters():
-        if 'BRDF_Net.pretrained.model.patch_embed.backbone' in k:
+        if 'backbone' in k:
             backbone_params.append(v)
+            if opt.is_master:
+                print(k)
         else:
             other_params.append(v)
     # my_list = ['BRDF_Net.pretrained.model.patch_embed.backbone']
     # backbone_params = list(filter(lambda kv: kv[0] in my_list, model.named_parameters()))
     # other_params = list(filter(lambda kv: kv[0] not in my_list, model.named_parameters()))
     optimizer_backbone = optim.Adam(backbone_params, lr=1e-5, betas=(0.5, 0.999) )
-    optimizer_others = optim.Adam(other_params, lr=1e-5, betas=(0.5, 0.999) )
+    optimizer_others = optim.Adam(other_params, lr=1e-4, betas=(0.5, 0.999) )
 
 if opt.cfg.MODEL_BRDF.DPT_baseline.enable and opt.cfg.MODEL_BRDF.DPT_baseline.if_SGD:
     assert False, 'SGD disabled.'
@@ -437,7 +439,7 @@ num_mat_masks_MAX = 0
 model.train(not opt.cfg.MODEL_SEMSEG.fix_bn)
 synchronize()
 
-if opt.cfg.MODEL_BRDF.DPT_baseline.enable:
+if opt.cfg.MODEL_BRDF.DPT_baseline.enable and not(opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.use_vit_only):
     if opt.distributed and 'hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model:
         print(model.module.BRDF_Net.pretrained.model.patch_embed.backbone.stem.norm.bias)
     else:

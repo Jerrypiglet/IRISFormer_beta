@@ -119,35 +119,37 @@ class encoder0(nn.Module):
 
         self.encoder_exclude = encoder_exclude + self.opt.cfg.MODEL_BRDF.encoder_exclude
 
+        self.channel_multi = opt.cfg.MODEL_BRDF.channel_multi
+
         self.pad1 = nn.ReplicationPad2d(1)
         if self.cascadeLevel == 0:
-            self.conv1 = nn.Conv2d(in_channels=in_channels, out_channels=64, kernel_size=4, stride=2, bias =True)
+            self.conv1 = nn.Conv2d(in_channels = in_channels, out_channels = 64*self.channel_multi, kernel_size=4, stride=2, bias =True)
         else:
-            self.conv1 = nn.Conv2d(in_channels=17, out_channels = 64, kernel_size =4, stride =2, bias = True)
+            self.conv1 = nn.Conv2d(in_channels = 17, out_channels = 64*self.channel_multi, kernel_size =4, stride =2, bias = True)
 
-        self.gn1 = nn.GroupNorm(num_groups=4, num_channels=64)
+        self.gn1 = nn.GroupNorm(num_groups = 4*self.channel_multi, num_channels = 64*self.channel_multi)
 
         self.pad2 = nn.ZeroPad2d(1)
-        self.conv2 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=4, stride=2, bias=True)
-        self.gn2 = nn.GroupNorm(num_groups=8, num_channels=128)
+        self.conv2 = nn.Conv2d(in_channels = 64*self.channel_multi, out_channels = 128*self.channel_multi, kernel_size=4, stride=2, bias=True)
+        self.gn2 = nn.GroupNorm(num_groups = 8*self.channel_multi, num_channels = 128*self.channel_multi)
 
         self.pad3 = nn.ZeroPad2d(1)
-        self.conv3 = nn.Conv2d(in_channels = 128, out_channels=256, kernel_size=4, stride=2, bias=True)
-        self.gn3 = nn.GroupNorm(num_groups=16, num_channels=256)
+        self.conv3 = nn.Conv2d(in_channels = 128*self.channel_multi, out_channels = 256*self.channel_multi, kernel_size=4, stride=2, bias=True)
+        self.gn3 = nn.GroupNorm(num_groups = 16*self.channel_multi, num_channels = 256*self.channel_multi)
 
         self.pad4 = nn.ZeroPad2d(1)
-        self.conv4 = nn.Conv2d(in_channels=256, out_channels=256, kernel_size=4, stride=2, bias=True)
-        self.gn4 = nn.GroupNorm(num_groups=16, num_channels=256)
+        self.conv4 = nn.Conv2d(in_channels = 256*self.channel_multi, out_channels = 256*self.channel_multi, kernel_size=4, stride=2, bias=True)
+        self.gn4 = nn.GroupNorm(num_groups = 16*self.channel_multi, num_channels = 256*self.channel_multi)
 
         if 'x5' not in self.encoder_exclude:
             self.pad5 = nn.ZeroPad2d(1)
-            self.conv5 = nn.Conv2d(in_channels=256, out_channels=512, kernel_size=4, stride=2, bias=True)
-            self.gn5 = nn.GroupNorm(num_groups=32, num_channels=512)
+            self.conv5 = nn.Conv2d(in_channels = 256*self.channel_multi, out_channels = 512*self.channel_multi, kernel_size=4, stride=2, bias=True)
+            self.gn5 = nn.GroupNorm(num_groups = 32*self.channel_multi, num_channels = 512*self.channel_multi)
 
         if 'x6' not in self.encoder_exclude:
             self.pad6 = nn.ZeroPad2d(1)
-            self.conv6 = nn.Conv2d(in_channels=512, out_channels=1024, kernel_size=3, stride=1, bias=True)
-            self.gn6 = nn.GroupNorm(num_groups=64, num_channels=1024)
+            self.conv6 = nn.Conv2d(in_channels = 512*self.channel_multi, out_channels = 1024*self.channel_multi, kernel_size=3, stride=1, bias=True)
+            self.gn6 = nn.GroupNorm(num_groups = 64*self.channel_multi, num_channels = 1024*self.channel_multi)
 
     def forward(self, x, input_dict_extra=None):
         x1 = F.relu(self.gn1(self.conv1(self.pad1(x))), True)
@@ -344,6 +346,8 @@ class decoder0(nn.Module):
         self.opt = opt
         self.mode = mode
         self.modality = modality
+
+        self.channel_multi = opt.cfg.MODEL_BRDF.channel_multi
         
         self.if_PPM = if_PPM
 
@@ -355,27 +359,27 @@ class decoder0(nn.Module):
         self.if_albedo_asso_pool_conv = self.opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv
         self.if_albedo_pac_pool = self.opt.cfg.MODEL_MATSEG.if_albedo_pac_pool
         
-        self.dconv1 = nn.Conv2d(in_channels=1024, out_channels=512, kernel_size=3, stride=1, padding = 1, bias=True)
-        self.dgn1 = nn.GroupNorm(num_groups=32, num_channels=512 )
+        self.dconv1 = nn.Conv2d(in_channels=1024*self.channel_multi, out_channels=512*self.channel_multi, kernel_size=3, stride=1, padding = 1, bias=True)
+        self.dgn1 = nn.GroupNorm(num_groups=32*self.channel_multi, num_channels=512*self.channel_multi )
 
-        self.dconv2 = nn.Conv2d(in_channels=1024, out_channels=256, kernel_size=3, stride=1, padding = 1, bias=True)
-        self.dgn2 = nn.GroupNorm(num_groups=16, num_channels=256 )
+        self.dconv2 = nn.Conv2d(in_channels=1024*self.channel_multi, out_channels=256*self.channel_multi, kernel_size=3, stride=1, padding = 1, bias=True)
+        self.dgn2 = nn.GroupNorm(num_groups=16*self.channel_multi, num_channels=256*self.channel_multi )
 
-        self.dconv3 = nn.Conv2d(in_channels=512, out_channels=256, kernel_size=3, stride=1, padding=1, bias=True)
-        self.dgn3 = nn.GroupNorm(num_groups=16, num_channels=256 )
+        self.dconv3 = nn.Conv2d(in_channels=512*self.channel_multi, out_channels=256*self.channel_multi, kernel_size=3, stride=1, padding=1, bias=True)
+        self.dgn3 = nn.GroupNorm(num_groups=16*self.channel_multi, num_channels=256*self.channel_multi )
 
-        self.dconv4 = nn.Conv2d(in_channels=512, out_channels=128, kernel_size=3, stride=1, padding = 1, bias=True)
-        self.dgn4 = nn.GroupNorm(num_groups=8, num_channels=128 )
+        self.dconv4 = nn.Conv2d(in_channels=512*self.channel_multi, out_channels=128*self.channel_multi, kernel_size=3, stride=1, padding = 1, bias=True)
+        self.dgn4 = nn.GroupNorm(num_groups=8*self.channel_multi, num_channels=128*self.channel_multi )
 
-        self.dconv5 = nn.Conv2d(in_channels=256, out_channels=64, kernel_size=3, stride=1, padding = 1, bias=True)
-        self.dgn5 = nn.GroupNorm(num_groups=4, num_channels=64 )
+        self.dconv5 = nn.Conv2d(in_channels=256*self.channel_multi, out_channels=64*self.channel_multi, kernel_size=3, stride=1, padding = 1, bias=True)
+        self.dgn5 = nn.GroupNorm(num_groups=4*self.channel_multi, num_channels=64*self.channel_multi )
 
-        self.dconv6 = nn.Conv2d(in_channels=128, out_channels=64, kernel_size=3, stride=1, padding = 1, bias=True)
-        self.dgn6 = nn.GroupNorm(num_groups=4, num_channels=64 )
+        self.dconv6 = nn.Conv2d(in_channels=128*self.channel_multi, out_channels=64*self.channel_multi, kernel_size=3, stride=1, padding = 1, bias=True)
+        self.dgn6 = nn.GroupNorm(num_groups=4*self.channel_multi, num_channels=64*self.channel_multi )
 
         self.relu = nn.ReLU(inplace = True )
 
-        fea_dim = 64
+        fea_dim = 64*self.channel_multi
         if self.if_PPM:
             bins=(1, 2, 3, 6)
             self.ppm = PPM(fea_dim, int(fea_dim/len(bins)), bins)
@@ -440,7 +444,7 @@ class decoder0(nn.Module):
                 dconv_final_in_channels = 64 * (1 + len(self.acco_pool_mean_list)) if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_pool_keep_input else 64 * len(self.acco_pool_mean_list)
         assert not(self.if_albedo_pooling and self.if_albedo_asso_pool_conv), 'self.if_albedo_pooling and self.if_albedo_asso_pool_conv cannot be True at the same time!'
 
-        self.dconvFinal = nn.Conv2d(in_channels=dconv_final_in_channels, out_channels=out_channel, kernel_size = 3, stride=1, bias=True)
+        self.dconvFinal = nn.Conv2d(in_channels=dconv_final_in_channels*self.channel_multi, out_channels=out_channel, kernel_size = 3, stride=1, bias=True)
 
         self.flag = True
 

@@ -335,18 +335,19 @@ def _make_vit_b_rn50_backbone_SSN_unet(
 
     pretrained.model = model
 
-    pretrained.model.patch_embed.backbone.stem.register_forward_hook(
-        get_activation("feat_stem")
-    )
-    pretrained.model.patch_embed.backbone.stages[0].register_forward_hook(
-        get_activation("feat_stage_0")
-    )
-    pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
-        get_activation("feat_stage_1")
-    )
-    pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
-        get_activation("feat_stage_2")
-    )
+    if not(opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.use_vit_only):
+        pretrained.model.patch_embed.backbone.stem.register_forward_hook(
+            get_activation("feat_stem")
+        )
+        pretrained.model.patch_embed.backbone.stages[0].register_forward_hook(
+            get_activation("feat_stage_0")
+        )
+        pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
+            get_activation("feat_stage_1")
+        )
+        pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
+            get_activation("feat_stage_2")
+        )
 
     if use_vit_only == True:
         pretrained.model.blocks[hooks[0]].register_forward_hook(get_activation("1"))
@@ -666,6 +667,10 @@ def _make_pretrained_vitb_unet_384_SSN(
             }
         )
         model.patch_embed.unet_backbone = unet_backbone
+
+        if opt.cfg.MODEL_BRDF.DPT_baseline.use_vit_only:
+            model.patch_embed.backbone = nn.Identity()
+
 
     # print(model)
 
