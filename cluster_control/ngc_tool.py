@@ -36,6 +36,16 @@ dump_dest = {'binary': '/dev/shm/ORfull-seq-240x320-smaller-RE-quarter', \
     'pickle': '/dev/shm/ORfull-perFramePickles-240x320-quarter', \
     'mini': '/dev/shm/ORmini-perFramePickles-240x320'}
 
+def str2bool(v):
+    if isinstance(v, bool):
+       return v
+    if v.lower() in ('True', 'yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('False', 'no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expectedl; got: %s'%v)
+
 def parse_args():
     parser = argparse.ArgumentParser(description='Kubectl Helper')
     subparsers = parser.add_subparsers(dest='command', help='commands')
@@ -52,6 +62,7 @@ def parse_args():
     create_parser.add_argument('--deploy_src', type=str, help='deploy to target path', default='~/Documents/Projects/semanticInverse/train/')
     create_parser.add_argument('--deploy_s3', type=str, help='deploy s3 container', default='s3mm1:train_ngc')
     create_parser.add_argument('--deploy_tar', type=str, help='deploy to target path', default='/newfoundland/semanticInverse/job_list/train')
+    create_parser.add_argument("--if_rclone_to_deploy", type=str2bool, nargs='?', const=True, default=True)
     # create_parser.add_argument('--python_path', type=str, help='python path in pod', default='/newfoundland/envs/semanticInverse/bin/python')
     # create_parser.add_argument('--pip_path', type=str, help='python path in pod', default='/newfoundland/envs/semanticInverse/bin/pip')
     create_parser.add_argument('--python_path', type=str, help='python path in pod', default='/newfoundland/envs/py38/bin/python') # torch 1.8.0
@@ -237,8 +248,11 @@ def create(args):
         command_str = command_str.replace('python', args.python_path)
         command_str = command_str.replace('--if_cluster', '--if_cluster --cluster ngc')
         if args.deploy:
-            args.deploy_tar += '-%s'%args.datetime_str
-            command_str = 'rclone copy %s/%s %s && cd %s && '%(args.deploy_s3, args.datetime_str, args.deploy_tar, args.deploy_tar) + command_str
+            if args.if_rclone_to_deploy:
+                args.deploy_tar += '-%s'%args.datetime_str
+                command_str = 'rclone copy %s/%s %s && cd %s && '%(args.deploy_s3, args.datetime_str, args.deploy_tar, args.deploy_tar) + command_str
+            else:
+                command_str = 'cd %s && '%(args.deploy_tar) + command_str
 
         splits = command_str.split(' ')
         task_name = [splits[x+1] for x in range(len(splits)) if splits[x].startswith('--task_name')][0]
