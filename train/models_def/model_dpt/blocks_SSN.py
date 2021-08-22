@@ -53,7 +53,7 @@ def _make_encoder_SSN(
     #         [256, 512, 768, 768], features, groups=groups, expand=expand
     #     )  # ViT-H/16 - 85.0% Top1 (backbone)
 
-    if backbone == "vitb16_384": # # DPT-hybrid-SSN
+    if backbone == "vitb16_384":
         pretrained = _make_pretrained_vitb16_384_SSN(
             use_pretrained,
             hooks=hooks,
@@ -68,7 +68,7 @@ def _make_encoder_SSN(
     #     scratch = _make_scratch_SSN(
     #         [256, 512, 1024, 2048], features, groups=groups, expand=expand
     #     )  # efficientnet_lite3
-    elif backbone == "vitb_unet_384":
+    elif backbone == "vitb_unet_384": # DPT-hybrid-SSN
         if_unet_feat_in_transformer = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_feat_in_transformer
 
         pretrained = _make_pretrained_vitb_unet_384_SSN(
@@ -83,18 +83,18 @@ def _make_encoder_SSN(
         scratch = _make_scratch_SSN(
             channels, features, groups=groups, expand=expand
         )
-    # elif backbone == "vitl_unet_384":
-    #     pretrained = _make_pretrained_vitl_unet_384_SSN(
-    #         opt, 
-    #         use_pretrained,
-    #         hooks=hooks,
-    #         use_vit_only=use_vit_only,
-    #         use_readout=use_readout,
-    #         enable_attention_hooks=enable_attention_hooks,
-    #     )
-    #     scratch = _make_scratch_SSN(
-    #         [256, 512, 1024, 1024], features, groups=groups, expand=expand
-    #     )
+    elif backbone == "vitl_unet_384": # DPT-large-SSN
+        pretrained = _make_pretrained_vitl_unet_384_SSN(
+            opt, 
+            use_pretrained,
+            hooks=hooks,
+            use_vit_only=use_vit_only,
+            use_readout=use_readout,
+            enable_attention_hooks=enable_attention_hooks,
+        )
+        scratch = _make_scratch_SSN(
+            [256, 512, 1024, 1024], features, groups=groups, expand=expand
+        )
     else:
         print(f"Backbone '{backbone}' not implemented")
         assert False

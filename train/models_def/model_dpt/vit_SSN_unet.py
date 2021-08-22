@@ -220,9 +220,7 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
     if hasattr(self.patch_embed, "backbone"):
         # print(self.patch_embed.backbone.forward_features(x).shape, '====')
 
-        # tic = time.time()
         _ = self.patch_embed.backbone(x) # [patch_embed] https://github.com/rwightman/pytorch-image-models/blob/72b227dcf57c0c62291673b96bdc06576bb90457/timm/models/layers/patch_embed.py#L15
-        # print(time.time() - tic, '------------ backbone')
         # if isinstance(x, (list, tuple)):
         #     x = x[-1]  # last feature if backbone outputs list/tuple of features
 
@@ -271,6 +269,8 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
 
     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone:
         im_feat = albedo_dx6
+    elif opt.cfg.MODEL_BRDF.DPT_baseline.model=='dpt_large_SSN':
+        im_feat = pretrained_activations['feat_stage_0']
     else:
         im_feat = torch.cat(
             [
@@ -293,7 +293,6 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
     mask_resized = input_dict_extra['brdf_loss_mask']
     # print(input_dict_extra['brdf_loss_mask'].unsqueeze(1).shape, mask_resized.shape)
 
-    # tic = time.time()
     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone:
         ssn_return_dict = ssn_op(tensor_to_transform=im_feat, feats_in=input_dict_extra['return_dict_matseg']['embedding'], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1.)) # Q: [im_height, im_width]
     else:
@@ -301,9 +300,7 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
             ssn_return_dict = ssn_op(tensor_to_transform=im_feat, feats_in=input_dict_extra['return_dict_matseg']['embedding'], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
         else:
             ssn_return_dict = ssn_op(tensor_to_transform=im_feat, feats_in=pretrained_activations['feat_stage_2'].detach(), mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1./2., 1)) # Q: [im_height/4, im_width/4]
-    # print(time.time() - tic, '------------ ssn_op')
     
-    # tic = time.time()
     c = ssn_return_dict['C'] # codebook
     c = c.view([batch_size, d, spixel_dims[0], spixel_dims[1]])
 
@@ -326,9 +323,7 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
     # print(x.shape, pos_embed.shape) # torch.Size([8, 321, 768]) torch.Size([1, 321, 768])
     x = self.pos_drop(x)
     for idx, blk in enumerate(self.blocks):
-        # tic = time.time()
         x = blk(x) # always [8, 321, 768]
-        # print(time.time() - tic, '------------ block %d'%idx)
 
     x = self.norm(x)
 
@@ -338,8 +333,6 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
         extra_return_dict.update({'unet_output_dict': unet_output_dict})
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_debug_unet:
             extra_return_dict.update({'albedo_pred_unet': albedo_pred_unet})
-
-    # print(time.time() - tic, '------------ the rest')
 
     return x, extra_return_dict
 
@@ -367,12 +360,13 @@ def _make_vit_b_rn50_backbone_SSN_unet(
         pretrained.model.patch_embed.backbone.stages[0].register_forward_hook(
             get_activation("feat_stage_0")
         )
-        pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
-            get_activation("feat_stage_1")
-        )
-        pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
-            get_activation("feat_stage_2")
-        )
+        if not opt.cfg.MODEL_BRDF.DPT_baseline.model=='dpt_large_SSN':
+            pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
+                get_activation("feat_stage_1")
+            )
+            pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
+                get_activation("feat_stage_2")
+            )
 
     if use_vit_only == True:
         pretrained.model.blocks[hooks[0]].register_forward_hook(get_activation("1"))
@@ -671,7 +665,7 @@ def _make_pretrained_vitb_unet_384_SSN(
     enable_attention_hooks=False,
 ):
     # [DPT-SSN model] (v1) https://i.imgur.com/iSmi5wt.png
-    print('========= [_make_pretrained_vitb_unet_384_SSN] pretrained', pretrained)
+    print('========= [hybrid-SSN] [_make_pretrained_vitb_unet_384_SSN] pretrained', pretrained)
 
     model = timm.create_model("vit_base_resnet50_384", pretrained=pretrained)
     # model = create_model_patch_embed_unet(opt)
@@ -727,12 +721,13 @@ def _make_pretrained_vitl_unet_384_SSN(
     pretrained,
     use_readout="ignore",
     hooks=None,
-    use_vit_only=False,
-    enable_attention_hooks=False,
-):
-    assert False, 'for DPT-large but not ready'
+    use_vit_only=True,
+    enable_attention_hooks=False):
+
+    assert use_vit_only
+    # assert False, 'for DPT-large but not ready'
     # [DPT-SSN model] (v1) https://i.imgur.com/iSmi5wt.png
-    print('========= [_make_pretrained_vitl_unet_384_SSN] pretrained', pretrained)
+    print('========= [large-SSN] [_make_pretrained_vitl_unet_384_SSN] pretrained', pretrained)
     model_1 = timm.create_model("vit_base_resnet50_384", pretrained=pretrained)
     resnet_backbone = model_1.patch_embed
     model = timm.create_model("vit_large_patch16_384", pretrained=pretrained)
@@ -747,19 +742,25 @@ def _make_pretrained_vitl_unet_384_SSN(
     # patch_size = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.patch_size
     model.patch_embed.proj = nn.Conv2d(opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims, 1024, kernel_size=1, stride=1)
 
+    # print(model.patch_embed.backbone.stages)
+    model.patch_embed.backbone.stages[1] = nn.Identity()
+    model.patch_embed.backbone.stages[2] = nn.Identity()
+
+
     # [def vit_base_r50_s16_384()] https://github.com/rwightman/pytorch-image-models/blob/79927baaecb6cdd1a25eed7f0f8c122b99712c72/timm/models/vision_transformer_hybrid.py#L232
     # [def _create_vision_transformer()] https://github.com/rwightman/pytorch-image-models/blob/79927baaecb6cdd1a25eed7f0f8c122b99712c72/timm/models/vision_transformer.py#L513
     # [class HybridEmbed(nn.Module)] (Extract feature map from CNN, flatten, project to embedding dim.）https://github.com/rwightman/pytorch-image-models/blob/79927baaecb6cdd1a25eed7f0f8c122b99712c72/timm/models/vision_transformer_hybrid.py#L100
     # [resnetv2'] https://github.com/rwightman/pytorch-image-models/blob/766b4d32627fc4d1d9d188de81736504215127a0/timm/models/resnetv2.py#L338
 
     hooks = [5, 11, 17, 23] if hooks == None else hooks
-    return _make_vit_b16_backbone_SSN_unet(
+    return _make_vit_b_rn50_backbone_SSN_unet(
         opt, 
         model,
         features=[256, 512, 1024, 1024],
         size=[384, 384],
         hooks=hooks,
         vit_features=1024, 
+        use_vit_only=use_vit_only,
         use_readout=use_readout,
         enable_attention_hooks=enable_attention_hooks,
     )
