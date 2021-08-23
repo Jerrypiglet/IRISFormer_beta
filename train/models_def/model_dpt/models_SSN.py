@@ -99,8 +99,9 @@ class DPT_SSN(BaseModel):
         
         if self.recon_method == 'qkv':
             module_dict = {}
-            im_c = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims
+            im_c = opt.cfg.MODEL_BRDF.DPT_baseline.feat_proj_channels
             token_c = vit_dims[backbone]
+            assert im_c == token_c
             module_dict['layer_1_ca'] = CrossAttention(token_c, im_c, token_c)
             module_dict['layer_2_ca'] = CrossAttention(token_c, im_c, token_c)
             module_dict['layer_3_ca'] = CrossAttention(token_c, im_c, token_c)

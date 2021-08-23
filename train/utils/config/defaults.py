@@ -255,8 +255,13 @@ _C.MODEL_BRDF.DPT_baseline.if_skip_last_conv = True
 _C.MODEL_BRDF.DPT_baseline.if_skip_patch_embed_proj = False
 _C.MODEL_BRDF.DPT_baseline.if_only_restore_backbone = False
 
+_C.MODEL_BRDF.DPT_baseline.feat_proj_channels = -1
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid = CN()
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr = False # faster: 1e-4, backbone: 1e-5
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels = 768
+_C.MODEL_BRDF.DPT_baseline.dpt_large = CN()
+_C.MODEL_BRDF.DPT_baseline.dpt_large.feat_proj_channels = 1024
+
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN = CN() # dpt_hybrid_SSN (V1)
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from = 'matseg' # ['backbone', 'matseg']
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method = 'qtc' # ['qtc', 'qkv']

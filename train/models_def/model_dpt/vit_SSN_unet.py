@@ -86,6 +86,8 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     layer_3 = pretrained.activations["3"]
     layer_4 = pretrained.activations["4"]
 
+    backbone_feat_proj = pretrained.activations['feat_proj']
+
     if_print = True
 
     # print(pretrained.activations["stem"].shape) # torch.Size([8, 64, 64, 80])
@@ -161,14 +163,14 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
             extra_im_scales = 0.25
         if layer_1.ndim == 3:
             # print(layer_1.shape, ssn_return_dict['im_feat'].shape) # torch.Size([1, 768, 320]) torch.Size([1, 1344, 64, 80])
-            layer_1 = ca_modules['layer_1_ca'](ssn_return_dict['im_feat'], layer_1, im_feat_scale_factor=extra_im_scales * 1.) # torch.Size([1, 768, 320])
+            layer_1 = ca_modules['layer_1_ca'](backbone_feat_proj, layer_1, im_feat_scale_factor=extra_im_scales * 1.) # torch.Size([1, 768, 320])
         if layer_2.ndim == 3:
-            layer_2 = ca_modules['layer_2_ca'](ssn_return_dict['im_feat'], layer_2, im_feat_scale_factor=extra_im_scales * 1./2.) # torch.Size([1, 768, 320])
+            layer_2 = ca_modules['layer_2_ca'](backbone_feat_proj, layer_2, im_feat_scale_factor=extra_im_scales * 1./2.) # torch.Size([1, 768, 320])
         if layer_3.ndim == 3:
-            # print(layer_3.shape, ssn_return_dict['im_feat'].shape) # torch.Size([1, 768, 320]) torch.Size([1, 1344, 64, 80])
-            layer_3 = ca_modules['layer_3_ca'](ssn_return_dict['im_feat'], layer_3, im_feat_scale_factor=extra_im_scales * 1./4.) # torch.Size([1, 768, 320])
+            # print(layer_3.shape, backbone_feat_proj.shape) # torch.Size([1, 768, 320]) torch.Size([1, 1344, 64, 80])
+            layer_3 = ca_modules['layer_3_ca'](backbone_feat_proj, layer_3, im_feat_scale_factor=extra_im_scales * 1./4.) # torch.Size([1, 768, 320])
         if layer_4.ndim == 3:
-            layer_4 = ca_modules['layer_4_ca'](ssn_return_dict['im_feat'], layer_4, im_feat_scale_factor=extra_im_scales * 1./8.) # torch.Size([1, 768, 320])
+            layer_4 = ca_modules['layer_4_ca'](backbone_feat_proj, layer_4, im_feat_scale_factor=extra_im_scales * 1./8.) # torch.Size([1, 768, 320])
     else:
         assert False
 
@@ -221,6 +223,7 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
         # print(self.patch_embed.backbone.forward_features(x).shape, '====')
 
         _ = self.patch_embed.backbone(x) # [patch_embed] https://github.com/rwightman/pytorch-image-models/blob/72b227dcf57c0c62291673b96bdc06576bb90457/timm/models/layers/patch_embed.py#L15
+        # print(_.shape) # hybrid: torch.Size([-1, 1024, 16, 20])
         # if isinstance(x, (list, tuple)):
         #     x = x[-1]  # last feature if backbone outputs list/tuple of features
 
@@ -367,6 +370,10 @@ def _make_vit_b_rn50_backbone_SSN_unet(
             pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
                 get_activation("feat_stage_2")
             )
+        
+    pretrained.model.patch_embed.proj.register_forward_hook(
+        get_activation("feat_proj")
+    )
 
     if use_vit_only == True:
         pretrained.model.blocks[hooks[0]].register_forward_hook(get_activation("1"))
@@ -519,6 +526,8 @@ def _make_vit_b16_backbone_SSN_unet(
     start_index=1,
     enable_attention_hooks=False,):
 
+    assert False
+
     pretrained = nn.Module()
 
     pretrained.model = model
@@ -536,6 +545,7 @@ def _make_vit_b16_backbone_SSN_unet(
     pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
         get_activation("feat_stage_2")
     )
+
 
     pretrained.model.blocks[hooks[0]].register_forward_hook(get_activation("1"))
     pretrained.model.blocks[hooks[1]].register_forward_hook(get_activation("2"))
@@ -694,7 +704,7 @@ def _make_pretrained_vitb_unet_384_SSN(
 
     # print(model)
 
-    model.patch_embed.proj = nn.Conv2d(opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims, 768, kernel_size=1, stride=1)
+    model.patch_embed.proj = nn.Conv2d(opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims, opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels, kernel_size=1, stride=1)
 
     # [def vit_base_r50_s16_384()] https://github.com/rwightman/pytorch-image-models/blob/79927baaecb6cdd1a25eed7f0f8c122b99712c72/timm/models/vision_transformer_hybrid.py#L232
     # [def _create_vision_transformer()] https://github.com/rwightman/pytorch-image-models/blob/79927baaecb6cdd1a25eed7f0f8c122b99712c72/timm/models/vision_transformer.py#L513
@@ -740,7 +750,7 @@ def _make_pretrained_vitl_unet_384_SSN(
     # model.patch_embed = HybridEmbed(
         # img_size=(opt.cfg.DATA.im_height, opt.cfg.DATA.im_width), patch_size=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.patch_size, in_chans=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims, embed_dim=768)
     # patch_size = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.patch_size
-    model.patch_embed.proj = nn.Conv2d(opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims, 1024, kernel_size=1, stride=1)
+    model.patch_embed.proj = nn.Conv2d(opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims, opt.cfg.MODEL_BRDF.DPT_baseline.dpt_large.feat_proj_channels, kernel_size=1, stride=1)
 
     # print(model.patch_embed.backbone.stages)
     model.patch_embed.backbone.stages[1] = nn.Identity()

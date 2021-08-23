@@ -110,17 +110,23 @@ def forward_vit(opt, pretrained, x):
     layer_2 = pretrained.activations["2"]
     layer_3 = pretrained.activations["3"]
     layer_4 = pretrained.activations["4"]
+    
+    if_print = True
 
-    # print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+    if if_print:
+        print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # DPT-hybrid: torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 321, 768]) torch.Size([2, 321, 768])
+    # DPT-large: torch.Size([1, 321, 1024]) torch.Size([1, 321, 1024]) torch.Size([1, 321, 1024]) torch.Size([1, 321, 1024])
 
     layer_1 = pretrained.act_postprocess1[0:2](layer_1)
     layer_2 = pretrained.act_postprocess2[0:2](layer_2)
     layer_3 = pretrained.act_postprocess3[0:2](layer_3)
     layer_4 = pretrained.act_postprocess4[0:2](layer_4)
 
-    # print('->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+    if if_print:
+        print('->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # DPT-hybrid: -> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 320]) torch.Size([2, 768, 320])
+    # DPT-large: -> torch.Size([1, 1024, 320]) torch.Size([1, 1024, 320]) torch.Size([1, 1024, 320]) torch.Size([1, 1024, 320])
     
     unflatten = nn.Sequential(
         nn.Unflatten(
@@ -143,16 +149,20 @@ def forward_vit(opt, pretrained, x):
     if layer_4.ndim == 3:
         layer_4 = unflatten(layer_4)
 
-    # print('-->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+    if if_print:
+        print('-->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # DPT-hybrid: --> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 16, 20])
+    # DPT-large: --> torch.Size([1, 1024, 16, 20]) torch.Size([1, 1024, 16, 20]) torch.Size([1, 1024, 16, 20]) torch.Size([1, 1024, 16, 20])
 
     layer_1 = pretrained.act_postprocess1[3 : len(pretrained.act_postprocess1)](layer_1)
     layer_2 = pretrained.act_postprocess2[3 : len(pretrained.act_postprocess2)](layer_2)
     layer_3 = pretrained.act_postprocess3[3 : len(pretrained.act_postprocess3)](layer_3)
     layer_4 = pretrained.act_postprocess4[3 : len(pretrained.act_postprocess4)](layer_4)
 
-    # print('---->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+    if if_print:
+        print('---->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # DPT-hybrid: ----> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 8, 10])
+    # DPT-large: ----> torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 1024, 16, 20]) torch.Size([1, 1024, 8, 10])
 
 
     return layer_1, layer_2, layer_3, layer_4
