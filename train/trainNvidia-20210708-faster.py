@@ -438,12 +438,12 @@ num_mat_masks_MAX = 0
 
 model.train(not opt.cfg.MODEL_SEMSEG.fix_bn)
 synchronize()
-
-if opt.cfg.MODEL_BRDF.DPT_baseline.enable and not(opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_feat_in_transformer):
-    if opt.distributed and 'hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model:
-        print(model.module.BRDF_Net.pretrained.model.patch_embed.backbone.stem.norm.bias)
-    else:
-        print(model.BRDF_Net.pretrained.model.patch_embed.backbone.stem.norm.bias)
+if opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_large_SSN', 'dpt_hybrid', 'dpt_hybrid_SSN']:
+    if opt.cfg.MODEL_BRDF.DPT_baseline.enable and not(opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_feat_in_transformer):
+        if opt.distributed:
+            print(model.module.BRDF_Net.pretrained.model.patch_embed.backbone.stem.norm.bias)
+        else:
+            print(model.BRDF_Net.pretrained.model.patch_embed.backbone.stem.norm.bias)
 '''
 tensor([ 7.6822e-02,  1.3747e-01,  1.7786e-01,  1.2228e-01,  1.3169e-01,
         -1.9725e-05,  1.8636e-01,  1.1685e-01,  1.2985e-01,  1.1506e-01,
