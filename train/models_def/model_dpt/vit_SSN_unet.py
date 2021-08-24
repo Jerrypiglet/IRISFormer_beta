@@ -161,16 +161,17 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
         extra_im_scales = 1.
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone:
             extra_im_scales = 0.25
+        # print(backbone_feat_proj.shape, ssn_return_dict['im_feat'].shape, '++++++')
         if layer_1.ndim == 3:
             # print(layer_1.shape, ssn_return_dict['im_feat'].shape) # torch.Size([1, 768, 320]) torch.Size([1, 1344, 64, 80])
-            layer_1 = ca_modules['layer_1_ca'](backbone_feat_proj, layer_1, im_feat_scale_factor=extra_im_scales * 1.) # torch.Size([1, 768, 320])
+            layer_1 = ca_modules['layer_1_ca'](ssn_return_dict['im_feat'], layer_1, im_feat_scale_factor=extra_im_scales * 1.) # torch.Size([1, 768, 320])
         if layer_2.ndim == 3:
-            layer_2 = ca_modules['layer_2_ca'](backbone_feat_proj, layer_2, im_feat_scale_factor=extra_im_scales * 1./2.) # torch.Size([1, 768, 320])
+            layer_2 = ca_modules['layer_2_ca'](ssn_return_dict['im_feat'], layer_2, im_feat_scale_factor=extra_im_scales * 1./2.) # torch.Size([1, 768, 320])
         if layer_3.ndim == 3:
-            # print(layer_3.shape, backbone_feat_proj.shape) # torch.Size([1, 768, 320]) torch.Size([1, 1344, 64, 80])
-            layer_3 = ca_modules['layer_3_ca'](backbone_feat_proj, layer_3, im_feat_scale_factor=extra_im_scales * 1./4.) # torch.Size([1, 768, 320])
+            # print(layer_3.shape, ssn_return_dict['im_feat'].shape) # torch.Size([1, 768, 320]) torch.Size([1, 1344, 64, 80])
+            layer_3 = ca_modules['layer_3_ca'](ssn_return_dict['im_feat'], layer_3, im_feat_scale_factor=extra_im_scales * 1./4.) # torch.Size([1, 768, 320])
         if layer_4.ndim == 3:
-            layer_4 = ca_modules['layer_4_ca'](backbone_feat_proj, layer_4, im_feat_scale_factor=extra_im_scales * 1./8.) # torch.Size([1, 768, 320])
+            layer_4 = ca_modules['layer_4_ca'](ssn_return_dict['im_feat'], layer_4, im_feat_scale_factor=extra_im_scales * 1./8.) # torch.Size([1, 768, 320])
     else:
         assert False
 
@@ -222,7 +223,7 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
     if hasattr(self.patch_embed, "backbone"):
         # print(self.patch_embed.backbone.forward_features(x).shape, '====')
 
-        _ = self.patch_embed.backbone(x) # [patch_embed] https://github.com/rwightman/pytorch-image-models/blob/72b227dcf57c0c62291673b96bdc06576bb90457/timm/models/layers/patch_embed.py#L15
+        output_resnet = self.patch_embed.backbone(x) # [patch_embed] https://github.com/rwightman/pytorch-image-models/blob/72b227dcf57c0c62291673b96bdc06576bb90457/timm/models/layers/patch_embed.py#L15
         # print(_.shape) # hybrid: torch.Size([-1, 1024, 16, 20])
         # if isinstance(x, (list, tuple)):
         #     x = x[-1]  # last feature if backbone outputs list/tuple of features
@@ -281,7 +282,10 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
                 F.interpolate(pretrained_activations['feat_stage_0'], scale_factor=1, mode='bilinear'), # torch.Size([4, 256, 64, 80])
                 F.interpolate(pretrained_activations['feat_stage_1'], scale_factor=2, mode='bilinear'), # torch.Size([4, 512, 32, 40])
                 F.interpolate(pretrained_activations['feat_stage_2'], scale_factor=2, mode='bilinear'), # torch.Size([4, 512, 32, 40])
+                F.interpolate(output_resnet, scale_factor=4, mode='bilinear'), # torch.Size([4, 1024, 16, 20])
             ], dim=1)
+        im_feat = self.patch_embed.proj_extra(im_feat)
+        # print(im_feat.shape, '+++++++++++++') # torch.Size([1, 768, 64, 80])
     # print(im_feat.shape, input_dict_extra['return_dict_matseg']['embedding'].shape) #  # torch.Size([4, D, 64, 80])
     
     # if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from == 'matseg':
@@ -704,7 +708,19 @@ def _make_pretrained_vitb_unet_384_SSN(
 
     # print(model)
 
-    model.patch_embed.proj = nn.Conv2d(opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims, opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels, kernel_size=1, stride=1)
+    # model.patch_embed.proj = nn.Conv2d(opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims, opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels, kernel_size=1, stride=1)
+    model.patch_embed.proj = nn.Identity()
+
+    backbone_dims = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims
+    feat_proj_channels = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels
+    model.patch_embed.proj_extra = nn.Sequential(
+        nn.Conv2d(backbone_dims, backbone_dims//2, kernel_size=1, stride=1), 
+        nn.ReLU(True),
+        nn.Conv2d(backbone_dims//2, feat_proj_channels, kernel_size=1, stride=1), 
+        nn.ReLU(True),
+        nn.Conv2d(feat_proj_channels, feat_proj_channels, kernel_size=1, stride=1)
+    )
+
 
     # [def vit_base_r50_s16_384()] https://github.com/rwightman/pytorch-image-models/blob/79927baaecb6cdd1a25eed7f0f8c122b99712c72/timm/models/vision_transformer_hybrid.py#L232
     # [def _create_vision_transformer()] https://github.com/rwightman/pytorch-image-models/blob/79927baaecb6cdd1a25eed7f0f8c122b99712c72/timm/models/vision_transformer.py#L513

@@ -106,6 +106,36 @@ parser.add_argument("--if_save_pickles", type=str2bool, nargs='?', const=True, d
 
 parser.add_argument('--meta_splits_skip', nargs='+', help='Skip those keys in the model', required=False)
 
+# for warm-up lr scheduler
+parser.add_argument('--epochs', default=150, type=int)
+ # Learning rate schedule parameters
+parser.add_argument('--sched', default='cosine', type=str, metavar='SCHEDULER',
+                    help='LR scheduler (default: "cosine"')
+parser.add_argument('--lr', type=float, default=1e-5, metavar='LR',
+                    help='learning rate (default: 5e-4)')
+parser.add_argument('--lr-noise', type=float, nargs='+', default=None, metavar='pct, pct',
+                    help='learning rate noise on/off epoch percentages')
+parser.add_argument('--lr-noise-pct', type=float, default=0.67, metavar='PERCENT',
+                    help='learning rate noise limit percent (default: 0.67)')
+parser.add_argument('--lr-noise-std', type=float, default=1.0, metavar='STDDEV',
+                    help='learning rate noise std-dev (default: 1.0)')
+parser.add_argument('--warmup-lr', type=float, default=1e-6, metavar='LR',
+                    help='warmup learning rate (default: 1e-6)')
+parser.add_argument('--min-lr', type=float, default=1e-5, metavar='LR',
+                    help='lower lr bound for cyclic schedulers that hit 0 (1e-5)')
+
+# parser.add_argument('--decay-epochs', type=float, default=30, metavar='N',
+#                     help='epoch interval to decay LR')
+parser.add_argument('--warmup-epochs', type=int, default=5, metavar='N',
+                    help='epochs to warmup LR, if scheduler supports')
+parser.add_argument('--cooldown-epochs', type=int, default=10, metavar='N',
+                    help='epochs to cooldown LR at min_lr, after cyclic schedule ends')
+# parser.add_argument('--patience-epochs', type=int, default=10, metavar='N',
+#                     help='patience epochs for Plateau LR scheduler (default: 10')
+parser.add_argument('--decay-rate', '--dr', type=float, default=0.1, metavar='RATE',
+                    help='LR decay rate (default: 0.1)')
+
+
 parser.add_argument(
     "--config-file",
     default=os.path.join(pwdpath, "configs/config.yaml"),
@@ -248,6 +278,12 @@ if opt.distributed:
 
 logger.info(red('Optimizer: '+type(optimizer).__name__))
 scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=50, cooldown=0, verbose=True, threshold_mode='rel', threshold=0.01)
+if opt.cfg.MODEL_BRDF.DPT_baseline.if_warm_up:
+    # https://github.com/microsoft/Cream/blob/2fb020852cb6ea77bb3409da5319891a132ac47f/iRPE/DeiT-with-iRPE/main.py
+    from timm.scheduler import create_scheduler
+    scheduler, _ = create_scheduler(opt, optimizer)
+
+
 # <<<<<<<<<<<<< MODEL AND OPTIMIZER
 
 ENABLE_MATSEG = opt.cfg.MODEL_MATSEG.enable
@@ -772,7 +808,11 @@ else:
                     writer.add_scalar('training/GPU_usage_ratio', usage_ratio, tid)
                     writer.add_scalar('training/batch_size_per_gpu', len(data_batch['image_path']), tid)
                     writer.add_scalar('training/gpus', opt.num_gpus, tid)
-                    writer.add_scalar('training/lr', optimizer.param_groups[0]['lr'], tid)
+                    if opt.cfg.MODEL_BRDF.DPT_baseline.if_warm_up:
+                        current_lr = scheduler._get_lr(epoch)[0]
+                    else:
+                        current_lr = optimizer.param_groups[0]['lr']
+                    writer.add_scalar('training/lr', current_lr, tid)
             # if opt.is_master:
 
             # if tid % opt.debug_every_iter == 0:       
@@ -830,6 +870,9 @@ else:
             tid += 1
             if tid >= opt.max_iter and opt.max_iter != -1:
                 break
+    
+        if opt.cfg.MODEL_BRDF.DPT_baseline.if_warm_up:
+            scheduler.step(epoch)
 
 
 if opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs:
