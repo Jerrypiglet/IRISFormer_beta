@@ -123,13 +123,14 @@ class Projector(nn.Module):
         # zero-init
         #nn.init.constant_(self.proj_bn.weight, 1)
 
-        self.ff_conv = nn.Sequential(
-            conv1x1_1d(planes, 2 * planes),
-            norm_layer_1d(2 * planes),
-            nn.ReLU(inplace=True),
-            conv1x1_1d(2 * planes, planes),
-            norm_layer_1d(planes)
-            )
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method != 'none':
+            self.ff_conv = nn.Sequential(
+                conv1x1_1d(planes, 2 * planes),
+                norm_layer_1d(2 * planes),
+                nn.ReLU(inplace=True),
+                conv1x1_1d(2 * planes, planes),
+                norm_layer_1d(planes)
+                )
 
         self.head = head
 
@@ -139,7 +140,7 @@ class Projector(nn.Module):
         # -> N, h, C/h, L
         proj_v = self.proj_value_conv(x_t).view(N, h, -1, L)
         # -> N, h, C/h, L
-        print(x_t.shape, self.proj_key_conv(x_t).shape)
+        # print(x_t.shape, self.proj_key_conv(x_t).shape)
         proj_k = self.proj_key_conv(x_t).view(N, h, -1, L)
         proj_q = self.proj_query_conv(x)
         N, C, _ = proj_q.shape
@@ -154,6 +155,7 @@ class Projector(nn.Module):
         # -> N, C, H, W
         _, _, S = x.shape
         x_p = self.proj_bn(x_p.view(N, -1, S))
+        # print('-=-=', x.shape, x_p.shape) # -=-= torch.Size([1, 768, 5120]) torch.Size([1, 768, 5120])
 
         if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method == 'residual':
             x = x + self.ff_conv(x + x_p)

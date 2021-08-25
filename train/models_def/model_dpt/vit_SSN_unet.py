@@ -721,7 +721,7 @@ def _make_pretrained_vitb_unet_384_SSN(
         nn.BatchNorm2d(backbone_dims//2) if if_batch_norm else nn.Identity(),
         nn.ReLU(True),
         nn.Conv2d(backbone_dims//2, feat_proj_channels, kernel_size=1, stride=1), 
-        nn.BatchNorm2d(backbone_dims//2) if if_batch_norm else nn.Identity(),
+        nn.BatchNorm2d(feat_proj_channels) if if_batch_norm else nn.Identity(),
         nn.ReLU(True),
         nn.Conv2d(feat_proj_channels, feat_proj_channels, kernel_size=1, stride=1)
     )
