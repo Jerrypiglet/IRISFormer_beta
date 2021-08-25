@@ -312,7 +312,7 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
     c = c.view([batch_size, d, spixel_dims[0], spixel_dims[1]])
 
     # print(ssn_return_dict['C'].shape, ssn_return_dict['Q_2D'].shape) # torch.Size([2, 1344, 320]) torch.Size([2, 320, 256, 320])
-    x = self.patch_embed.proj(c).flatten(2).transpose(1, 2) # torch.Size([8, 320, 768])
+    x = self.patch_embed.proj(c).flatten(2).transpose(1, 2) # torch.Size([8, 320, 768]); will be Identity op in qkv recon
 
     if getattr(self, "dist_token", None) is not None:
         cls_tokens = self.cls_token.expand(
@@ -713,10 +713,15 @@ def _make_pretrained_vitb_unet_384_SSN(
 
     backbone_dims = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims
     feat_proj_channels = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels
+
+    if_batch_norm = opt.cfg.MODEL_BRDF.DPT_baseline.if_batch_norm_in_proj_extra
+
     model.patch_embed.proj_extra = nn.Sequential(
         nn.Conv2d(backbone_dims, backbone_dims//2, kernel_size=1, stride=1), 
+        nn.BatchNorm2d(backbone_dims//2) if if_batch_norm else nn.Identity(),
         nn.ReLU(True),
         nn.Conv2d(backbone_dims//2, feat_proj_channels, kernel_size=1, stride=1), 
+        nn.BatchNorm2d(backbone_dims//2) if if_batch_norm else nn.Identity(),
         nn.ReLU(True),
         nn.Conv2d(feat_proj_channels, feat_proj_channels, kernel_size=1, stride=1)
     )

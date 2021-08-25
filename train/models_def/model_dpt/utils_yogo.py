@@ -139,6 +139,7 @@ class Projector(nn.Module):
         # -> N, h, C/h, L
         proj_v = self.proj_value_conv(x_t).view(N, h, -1, L)
         # -> N, h, C/h, L
+        print(x_t.shape, self.proj_key_conv(x_t).shape)
         proj_k = self.proj_key_conv(x_t).view(N, h, -1, L)
         proj_q = self.proj_query_conv(x)
         N, C, _ = proj_q.shape
