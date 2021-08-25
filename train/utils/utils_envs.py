@@ -149,6 +149,7 @@ def set_up_envs(opt):
                     opt.cfg.MODEL_MATSEG.if_freeze = True
 
         assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method in ['qtc', 'qkv']
+        assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method in ['residual', 'concat', 'none']
 
         if 'dpt_hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model:
             opt.cfg.MODEL_BRDF.DPT_baseline.feat_proj_channels = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels

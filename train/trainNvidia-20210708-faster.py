@@ -272,8 +272,8 @@ if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
     optimizer_backbone = optim.Adam(backbone_params, lr=1e-5, betas=(0.5, 0.999) )
     optimizer_others = optim.Adam(other_params, lr=1e-4, betas=(0.5, 0.999) )
     if opt.cfg.SOLVER.method == 'adamw':
-        optimizer_backbone = optim.AdamW(backbone_params, lr=1e-5, , weight_decay=0.05)
-        optimizer_others = optim.AdamW(other_params, lr=1e-4, , weight_decay=0.05)
+        optimizer_backbone = optim.AdamW(backbone_params, lr=1e-5, weight_decay=0.05)
+        optimizer_others = optim.AdamW(other_params, lr=1e-4, weight_decay=0.05)
 
 if opt.cfg.MODEL_BRDF.DPT_baseline.enable and opt.cfg.MODEL_BRDF.DPT_baseline.if_SGD:
     assert False, 'SGD disabled.'

@@ -96,9 +96,11 @@ class Transformer(nn.Module):
         return x
 
 class Projector(nn.Module):
-    def __init__(self, token_c, planes, head=2, min_group_planes=64,
+    def __init__(self, opt, token_c, planes, head=2, min_group_planes=64,
                  norm_layer_1d=nn.Identity):
         super(Projector, self).__init__()
+
+        self.opt = opt
 
         if token_c != planes:
             self.proj_value_conv = nn.Sequential(
@@ -152,15 +154,22 @@ class Projector(nn.Module):
         _, _, S = x.shape
         x_p = self.proj_bn(x_p.view(N, -1, S))
 
-        x = x + self.ff_conv(x + x_p)
-
-        return x
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method == 'residual':
+            x = x + self.ff_conv(x + x_p)
+            return x
+        elif self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method == 'concat':
+            x = torch.cat([x, self.ff_conv(x + x_p)], 1)
+            return x
+        elif self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method == 'none':
+            return x_p
 
 class CrossAttention(nn.Module):
-    def __init__(self, token_c, input_dims, output_dims,
+    def __init__(self, opt, token_c, input_dims, output_dims,
                  head=2, min_group_planes=1, norm_layer_1d=nn.Identity,
                  **kwargs):
         super(CrossAttention, self).__init__()
+
+        self.opt = opt
 
         self.token_c = token_c
         self.input_dims = input_dims
@@ -171,6 +180,7 @@ class CrossAttention(nn.Module):
             )
 
         self.projectors = Projector(
+                    self.opt, 
                     token_c, output_dims, head=head,
                     min_group_planes=min_group_planes,
                     norm_layer_1d=norm_layer_1d)

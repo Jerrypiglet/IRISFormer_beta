@@ -266,6 +266,7 @@ _C.MODEL_BRDF.DPT_baseline.dpt_large.feat_proj_channels = 1024
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN = CN() # dpt_hybrid_SSN (V1)
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from = 'matseg' # ['backbone', 'matseg']
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method = 'qtc' # ['qtc', 'qkv']
+_C.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method = 'residual' # if using residual/concat/none in projector in CrossAttention module
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims = 1344 # resnet: stem + stage 0,1,2
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.patch_size = 16
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_freeze_matseg = True
