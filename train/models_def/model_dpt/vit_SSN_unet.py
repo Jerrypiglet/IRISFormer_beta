@@ -86,9 +86,9 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
     layer_3 = pretrained.activations["3"]
     layer_4 = pretrained.activations["4"]
 
-    backbone_feat_proj = pretrained.activations['feat_proj']
+    # backbone_feat_proj = pretrained.activations['feat_proj']
 
-    if_print = True
+    if_print = False
 
     # print(pretrained.activations["stem"].shape) # torch.Size([8, 64, 64, 80])
 

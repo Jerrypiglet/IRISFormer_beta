@@ -23,7 +23,7 @@ def set_up_envs(opt):
 
     opt.cfg.PATH.root = opt.cfg.PATH.root_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.PATH.root_local
     if opt.if_cluster:
-        opt.cfg.TRAINING.MAX_CKPT_KEEP = -1
+        # opt.cfg.TRAINING.MAX_CKPT_KEEP = -1
         opt.if_save_pickles = True
 
     opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.dataset_path_local

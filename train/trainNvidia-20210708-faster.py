@@ -111,8 +111,8 @@ parser.add_argument('--epochs', default=150, type=int)
  # Learning rate schedule parameters
 parser.add_argument('--sched', default='cosine', type=str, metavar='SCHEDULER',
                     help='LR scheduler (default: "cosine"')
-parser.add_argument('--lr', type=float, default=1e-5, metavar='LR',
-                    help='learning rate (default: 5e-4)')
+# parser.add_argument('--lr', type=float, default=1e-5, metavar='LR',
+#                     help='learning rate (default: 5e-4)')
 parser.add_argument('--lr-noise', type=float, nargs='+', default=None, metavar='pct, pct',
                     help='learning rate noise on/off epoch percentages')
 parser.add_argument('--lr-noise-pct', type=float, default=0.67, metavar='PERCENT',
@@ -252,7 +252,11 @@ model.print_net()
 # set up optimizers
 # optimizer = get_optimizer(model.parameters(), cfg.SOLVER)
 optimizer = optim.Adam(model.parameters(), lr=cfg.SOLVER.lr, betas=(0.5, 0.999) )
-if 'dpt_hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
+if opt.cfg.SOLVER.method == 'adamw':
+    optimizer = optim.AdamW(model.parameters(), lr=cfg.SOLVER.lr, weight_decay=0.05)
+
+optimizer = optim.Adam(model.parameters(), lr=cfg.SOLVER.lr, betas=(0.5, 0.999) )
+if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
     backbone_params = []
     other_params = []
     for k, v in model.named_parameters():
@@ -267,6 +271,9 @@ if 'dpt_hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.
     # other_params = list(filter(lambda kv: kv[0] not in my_list, model.named_parameters()))
     optimizer_backbone = optim.Adam(backbone_params, lr=1e-5, betas=(0.5, 0.999) )
     optimizer_others = optim.Adam(other_params, lr=1e-4, betas=(0.5, 0.999) )
+    if opt.cfg.SOLVER.method == 'adamw':
+        optimizer_backbone = optim.AdamW(backbone_params, lr=1e-5, , weight_decay=0.05)
+        optimizer_others = optim.AdamW(other_params, lr=1e-4, , weight_decay=0.05)
 
 if opt.cfg.MODEL_BRDF.DPT_baseline.enable and opt.cfg.MODEL_BRDF.DPT_baseline.if_SGD:
     assert False, 'SGD disabled.'
@@ -282,6 +289,9 @@ if opt.cfg.MODEL_BRDF.DPT_baseline.if_warm_up:
     # https://github.com/microsoft/Cream/blob/2fb020852cb6ea77bb3409da5319891a132ac47f/iRPE/DeiT-with-iRPE/main.py
     from timm.scheduler import create_scheduler
     scheduler, _ = create_scheduler(opt, optimizer)
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
+        scheduler_backbone, _ = create_scheduler(opt, optimizer_backbone)
+        scheduler_others, _ = create_scheduler(opt, optimizer_others)
 
 
 # <<<<<<<<<<<<< MODEL AND OPTIMIZER
@@ -808,10 +818,12 @@ else:
                     writer.add_scalar('training/GPU_usage_ratio', usage_ratio, tid)
                     writer.add_scalar('training/batch_size_per_gpu', len(data_batch['image_path']), tid)
                     writer.add_scalar('training/gpus', opt.num_gpus, tid)
+                    current_lr = optimizer.param_groups[0]['lr']
                     if opt.cfg.MODEL_BRDF.DPT_baseline.if_warm_up:
-                        current_lr = scheduler._get_lr(epoch)[0]
-                    else:
-                        current_lr = optimizer.param_groups[0]['lr']
+                        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
+                            current_lr = scheduler_backbone._get_lr(epoch)[0]
+                        else:
+                            current_lr = scheduler._get_lr(epoch)[0]
                     writer.add_scalar('training/lr', current_lr, tid)
             # if opt.is_master:
 
@@ -872,7 +884,11 @@ else:
                 break
     
         if opt.cfg.MODEL_BRDF.DPT_baseline.if_warm_up:
-            scheduler.step(epoch)
+            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
+                scheduler_backbone.step(epoch)
+                scheduler_others.step(epoch)
+            else:
+                scheduler.step(epoch)
 
 
 if opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs:

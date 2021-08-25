@@ -111,7 +111,7 @@ def forward_vit(opt, pretrained, x):
     layer_3 = pretrained.activations["3"]
     layer_4 = pretrained.activations["4"]
     
-    if_print = True
+    if_print = False
 
     if if_print:
         print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)

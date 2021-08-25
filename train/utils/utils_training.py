@@ -81,35 +81,6 @@ def save_checkpoint(state, is_best, task_name, filename='checkpoint.pth.tar', sa
 
     shutil.copyfile(save_path, latest_path)  
 
-def clean_up_checkpoints(checkpoint_folder, leave_N, start_with='checkpoint_', logger=None):
-    # checkpoint_folder = '/home/ruizhu/Documents/Projects/adobe_rui_camera-calibration-redux/checkpoint/test'
-    # list_checkpoints = glob.glob(checkpoint_folder+'/checkpoint*.pth.tar')
-    list_checkpoints = list(filter(os.path.isfile, glob.glob(checkpoint_folder+'/%s*.*'%start_with)))
-    list_checkpoints.sort(key=lambda x: os.path.getmtime(x), reverse=True)
-    # print([ntpath.basename(filename) for filename in list_checkpoints])
-
-
-    last_checkpoint_file = os.path.join(checkpoint_folder, "last_checkpoint")
-    try:
-        with open(last_checkpoint_file, "r") as f:
-            last_saved = f.read()
-            last_saved = last_saved.strip()
-    except IOError:
-        last_saved = None
-        pass
-
-    if logger is None:
-        logger = logging.getLogger('clean_up_checkpoints')
-
-    if len(list_checkpoints) > leave_N:
-        for checkpoint_path in list_checkpoints[leave_N:]:
-            # last_saved = '/home/ruizhu/Documents/Projects/adobe_rui_camera-calibration-redux/checkpoint/tmp2/checkpointer_epoch0010_iter0000100.pth'
-            # print(ntpath.basename(last_saved), ntpath.basename(checkpoint_path), last_saved)
-            if last_saved is not None and ntpath.basename(last_saved) == ntpath.basename(checkpoint_path):
-                logger.info(magenta('Skipping latest at '+last_saved))
-                continue
-            os.system('rm %s'%checkpoint_path)
-            logger.info(white_blue('removed checkpoint at '+checkpoint_path))
 
 def printensor(msg):
     def printer(tensor):
