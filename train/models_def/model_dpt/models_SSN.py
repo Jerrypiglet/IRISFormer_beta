@@ -106,9 +106,8 @@ class DPT_SSN(BaseModel):
             assert im_c == token_c
             if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv:
                 for layer_idx in range(12):
-                    module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c)
-                    module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c)
-                    module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c)
+                    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_slim and layer_idx not in self.hooks_backbone:
+                        continue
                     module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c)
             else:
                 module_dict['layer_1_ca'] = CrossAttention(opt, token_c, im_c, token_c)
