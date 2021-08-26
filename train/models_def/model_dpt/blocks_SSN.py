@@ -9,6 +9,9 @@ from .vit_SSN_unet import (
     _make_pretrained_vitl_unet_384_SSN,
     forward_vit_SSN
 )
+from .vit_SSN_unet_qkv import (
+    forward_vit_SSN_qkv_yogo
+)
 from .vit_SSN_bl import (
     _make_pretrained_vitb16_384_SSN,
 )

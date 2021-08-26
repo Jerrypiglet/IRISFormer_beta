@@ -54,6 +54,8 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
         abs_affinity -      nbatch x J x H x W
         tensor_recon -      nbatch x D1 x H x W
         '''
+        
+        J = self.spixel_nums[0] * self.spixel_nums[1]
 
         if feats_in is None:
             feats_in = tensor_to_transform
@@ -63,16 +65,14 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
 
         # feats_in = batch['feats_in']
 
-        batch_size, D, H, W = feats_in.shape
-        assert self.spixel_nums[0] <= H
-        assert self.spixel_nums[1] <= W
-        if mask is not None:
-            assert mask.shape==(batch_size, H, W)
-        J = self.spixel_nums[0] * self.spixel_nums[1]
-
-        ssn.ssn_iter_to_use = ssn_fullJ.ssn_iter if self.if_dense else ssn.ssn_iter
 
         if affinity_in is None:
+            batch_size, D, H, W = feats_in.shape
+            assert self.spixel_nums[0] <= H
+            assert self.spixel_nums[1] <= W
+            if mask is not None:
+                assert mask.shape==(batch_size, H, W)
+            ssn.ssn_iter_to_use = ssn_fullJ.ssn_iter if self.if_dense else ssn.ssn_iter
             abs_affinity, dist_matrix, spixel_features = \
                 ssn.ssn_iter_to_use(
                     feats_in, n_iter=self.n_iter, 

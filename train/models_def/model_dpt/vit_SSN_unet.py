@@ -7,6 +7,10 @@ import torch.nn.functional as F
 import time
 import models_def.models_brdf as models_brdf # basic model
 
+from .vit_SSN_unet_qkv import (
+    forward_flex_SSN_unet_qkv_yogo
+)
+
 # from models_def.model_matseg import Baseline
 
 from models_def.model_nvidia.AppGMM_adaptive import SSNFeatsTransformAdaptive
@@ -156,7 +160,7 @@ def forward_vit_SSN(opt, pretrained, x, input_dict_extra={}):
                 layer_4 = QtC(layer_4, gamma, h//4, w//4, Q_downsample_rate=4) # reassemble to [b, D, spixel_h, spixel_w]
             else:
                 assert False, 'invalid ssn_from!'
-    elif recon_method in ['qkv', 'qtc']:
+    elif recon_method in ['qkv']:
         ca_modules = input_dict_extra['ca_modules']
         extra_im_scales = 1.
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone:
@@ -343,7 +347,6 @@ def forward_flex_SSN_unet(self, opt, x, pretrained_activations=[], input_dict_ex
 
     return x, extra_return_dict
 
-
 def _make_vit_b_rn50_backbone_SSN_unet(
     opt, 
     model,
@@ -509,7 +512,10 @@ def _make_vit_b_rn50_backbone_SSN_unet(
 
     # We inject this function into the VisionTransformer instances so that
     # we can use it with interpolated position embeddings without modifying the library source.
-    pretrained.model.forward_flex_SSN = types.MethodType(forward_flex_SSN_unet, pretrained.model)
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv and (recon_method == 'qkv'):
+        pretrained.model.forward_flex_SSN = types.MethodType(forward_flex_SSN_unet_qkv_yogo, pretrained.model)
+    else:
+        pretrained.model.forward_flex_SSN = types.MethodType(forward_flex_SSN_unet, pretrained.model)
 
     # We inject this function into the VisionTransformer instances so that
     # we can use it with interpolated position embeddings without modifying the library source.

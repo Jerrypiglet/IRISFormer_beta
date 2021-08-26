@@ -227,8 +227,10 @@ def forward_flex(self, opt, x):
 
 
 def get_readout_oper(vit_features, features, use_readout, start_index=1):
+    # print('++++===', vit_features, features, use_readout, start_index) # ++++=== 768 [256, 512, 768, 768] project 1
     if use_readout == "ignore":
         readout_oper = [Slice(start_index)] * len(features)
+        # print('ignorrrrrrr')
     elif use_readout == "add":
         readout_oper = [AddReadout(start_index)] * len(features)
     elif use_readout == "project":

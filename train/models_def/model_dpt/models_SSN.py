@@ -19,6 +19,7 @@ from .blocks_SSN import (
     # Interpolate,
     _make_encoder_SSN,
     forward_vit_SSN,
+    forward_vit_SSN_qkv_yogo
 )
 
 from models_def.model_dpt.utils_yogo import CrossAttention
@@ -64,6 +65,7 @@ class DPT_SSN(BaseModel):
             "vitb16_384": [2, 5, 8, 11],
             "vitl16_384": [5, 11, 17, 23],
         }
+        self.hooks_backbone = hooks[backbone]
 
         vit_dims = {
             # "vitb_rn50_384": [0, 1, 8, 11],
@@ -102,10 +104,17 @@ class DPT_SSN(BaseModel):
             im_c = opt.cfg.MODEL_BRDF.DPT_baseline.feat_proj_channels
             token_c = vit_dims[backbone]
             assert im_c == token_c
-            module_dict['layer_1_ca'] = CrossAttention(opt, token_c, im_c, token_c)
-            module_dict['layer_2_ca'] = CrossAttention(opt, token_c, im_c, token_c)
-            module_dict['layer_3_ca'] = CrossAttention(opt, token_c, im_c, token_c)
-            module_dict['layer_4_ca'] = CrossAttention(opt, token_c, im_c, token_c)
+            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv:
+                for layer_idx in range(12):
+                    module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c)
+                    module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c)
+                    module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c)
+                    module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c)
+            else:
+                module_dict['layer_1_ca'] = CrossAttention(opt, token_c, im_c, token_c)
+                module_dict['layer_2_ca'] = CrossAttention(opt, token_c, im_c, token_c)
+                module_dict['layer_3_ca'] = CrossAttention(opt, token_c, im_c, token_c)
+                module_dict['layer_4_ca'] = CrossAttention(opt, token_c, im_c, token_c)
             self.ca_modules = nn.ModuleDict(module_dict)
 
     def forward(self, x, input_dict_extra={}):
@@ -114,7 +123,10 @@ class DPT_SSN(BaseModel):
 
         if self.recon_method == 'qkv':
             input_dict_extra.update({'ca_modules': self.ca_modules})
-        layer_1, layer_2, layer_3, layer_4, ssn_return_dict = forward_vit_SSN(self.opt, self.pretrained, x, input_dict_extra=input_dict_extra)
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv:
+            layer_1, layer_2, layer_3, layer_4, ssn_return_dict = forward_vit_SSN_qkv_yogo(self.opt, self.pretrained, x, input_dict_extra=input_dict_extra, hooks=self.hooks_backbone)
+        else:
+            layer_1, layer_2, layer_3, layer_4, ssn_return_dict = forward_vit_SSN(self.opt, self.pretrained, x, input_dict_extra=input_dict_extra)
 
         layer_1_rn = self.scratch.layer1_rn(layer_1)
         layer_2_rn = self.scratch.layer2_rn(layer_2)
