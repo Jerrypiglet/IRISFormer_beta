@@ -18,6 +18,7 @@ Summary_vis_cluster/
 Checkpoint
 Checkpoint_cluster
 vis/
+job_list/
 logs_cluster
 cluster_control/tb_job.yaml
 cluster_control/yamls/

@@ -732,6 +732,11 @@ def _make_pretrained_vitb_unet_384_SSN(
         nn.Conv2d(feat_proj_channels, feat_proj_channels, kernel_size=1, stride=1)
     )
 
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_perpixel_abs_pos_embed:
+        # similar to https://github.com/rwightman/pytorch-image-models/blob/72b227dcf57c0c62291673b96bdc06576bb90457/timm/models/vision_transformer.py#L271
+        model.pos_embed_per_pixel = nn.Parameter(torch.zeros(1, feat_proj_channels, 256//4, 320//4))
+        from timm.models.layers import trunc_normal_
+        trunc_normal_(model.pos_embed_per_pixel, std=.02)
 
     # [def vit_base_r50_s16_384()] https://github.com/rwightman/pytorch-image-models/blob/79927baaecb6cdd1a25eed7f0f8c122b99712c72/timm/models/vision_transformer_hybrid.py#L232
     # [def _create_vision_transformer()] https://github.com/rwightman/pytorch-image-models/blob/79927baaecb6cdd1a25eed7f0f8c122b99712c72/timm/models/vision_transformer.py#L513

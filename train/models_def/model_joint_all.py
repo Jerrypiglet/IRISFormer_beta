@@ -129,7 +129,7 @@ class Model_Joint(nn.Module):
                         path=model_path,
                         backbone="vitb_rn50_384",
                         non_negative=if_non_negative,
-                        enable_attention_hooks=False,
+                        enable_attention_hooks=self.opt.cfg.MODEL_BRDF.DPT_baseline.if_enable_attention_hooks,
                         readout=self.opt.cfg.MODEL_BRDF.DPT_baseline.readout, 
                         skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
                         keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []

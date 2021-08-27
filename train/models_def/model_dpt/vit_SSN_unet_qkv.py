@@ -156,6 +156,11 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
             F.interpolate(output_resnet, scale_factor=4, mode='bilinear'), # torch.Size([4, 1024, 16, 20])
         ], dim=1)
     im_feat_init = self.patch_embed.proj_extra(im_feat_init)
+
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_perpixel_abs_pos_embed:
+        # print(im_feat_init.shape, self.pos_embed_per_pixel.unsqueeze(0).shape)
+        im_feat_init += self.pos_embed_per_pixel
+
     
     batch_size, d = im_feat_init.shape[0], im_feat_init.shape[1]
     spixel_dims = [im_height//self.patch_size[0], im_width//self.patch_size[1]]

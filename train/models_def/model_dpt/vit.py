@@ -20,6 +20,8 @@ attention = {}
 
 
 def get_attention(name):
+    '''
+    relative pos embed: https://github.com/rwightman/pytorch-image-models/blob/072155951104230c2b5f3bbfb31acc694ee2fa0a/timm/models/layers/bottleneck_attn.py#L55'''
     def hook(module, input, output):
         x = input[0]
         B, N, C = x.shape
@@ -34,10 +36,14 @@ def get_attention(name):
             qkv[2],
         )  # make torchscript happy (cannot use tensor as tuple)
 
+        # print(q.shape, module.num_heads, k.shape, v.shape) # torch.Size([2, 12, 321, 64]) 12 torch.Size([2, 12, 321, 64]) torch.Size([2, 12, 321, 64])  
+
         attn = (q @ k.transpose(-2, -1)) * module.scale
 
         attn = attn.softmax(dim=-1)  # [:,:,1,1:]
         attention[name] = attn
+
+        # print(module.)
 
     return hook
 

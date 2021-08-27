@@ -23,6 +23,7 @@
 			"**/pretrained/**": true,
 			"**/Summary_vis/**": true,
 			"**/logs/**": true,
+			"**/job_list/**": true,
 			"**/Checkpoint/**": true,
 			"**/.vscode/**": true,
 			"**/__pycache__/**": true,
