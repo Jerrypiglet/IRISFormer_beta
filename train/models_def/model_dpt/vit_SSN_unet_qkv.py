@@ -236,13 +236,16 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
         im_feat_dict['im_feat_%d'%idx] = im_feat_idx
         im_feat_idx_recent = im_feat_idx
 
-        assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from == 'matseg', 'only supporting this now'
-        # print(im_feat_idx.shape, abs_affinity_list[abs_affinity_idx].shape, mask_resized.shape) # torch.Size([1, 768, 64, 80]) torch.Size([1, 320, 256, 320]) torch.Size([1, 256, 320])
-        ssn_return_dict_idx = ssn_op(tensor_to_transform=im_feat_idx, affinity_in=abs_affinity_list[abs_affinity_idx], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1.), if_assert_no_scale=True) # Q: [im_height, im_width]
-        c_idx = ssn_return_dict_idx['C']
-        x_prime = c_idx.flatten(2).transpose(1, 2) # torch.Size([8, 320, 768]); will be Identity op in qkv recon
-        x_prime = torch.cat((x_cls_token, x_prime), dim=1)
-        x = x_prime
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_recompute_C:
+            pass
+        else:
+            assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from == 'matseg', 'only supporting this now'
+            # print(im_feat_idx.shape, abs_affinity_list[abs_affinity_idx].shape, mask_resized.shape) # torch.Size([1, 768, 64, 80]) torch.Size([1, 320, 256, 320]) torch.Size([1, 256, 320])
+            ssn_return_dict_idx = ssn_op(tensor_to_transform=im_feat_idx, affinity_in=abs_affinity_list[abs_affinity_idx], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1.), if_assert_no_scale=True) # Q: [im_height, im_width]
+            c_idx = ssn_return_dict_idx['C']
+            x_prime = c_idx.flatten(2).transpose(1, 2) # torch.Size([8, 320, 768]); will be Identity op in qkv recon
+            x_prime = torch.cat((x_cls_token, x_prime), dim=1)
+            x = x_prime
 
         # print(c_idx.shape, x_prime.shape) # torch.Size([1, 768, 320]) torch.Size([1, 320, 768])
 

@@ -720,14 +720,14 @@ def _make_pretrained_vitb_unet_384_SSN(
     backbone_dims = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims
     feat_proj_channels = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels
 
-    # if_batch_norm = opt.cfg.MODEL_BRDF.DPT_baseline.if_batch_norm_in_proj_extra
+    if_batch_norm_in_proj_extra = opt.cfg.MODEL_BRDF.DPT_baseline.if_batch_norm_in_proj_extra_in_proj_extra
 
     model.patch_embed.proj_extra = nn.Sequential(
         nn.Conv2d(backbone_dims, backbone_dims//2, kernel_size=1, stride=1), 
-        # nn.BatchNorm2d(backbone_dims//2) if if_batch_norm else nn.Identity(),
+        nn.BatchNorm2d(backbone_dims//2) if if_batch_norm_in_proj_extra else nn.Identity(),
         nn.ReLU(True),
         nn.Conv2d(backbone_dims//2, feat_proj_channels, kernel_size=1, stride=1), 
-        # nn.BatchNorm2d(feat_proj_channels) if if_batch_norm else nn.Identity(),
+        nn.BatchNorm2d(feat_proj_channels) if if_batch_norm_in_proj_extra else nn.Identity(),
         nn.ReLU(True),
         nn.Conv2d(feat_proj_channels, feat_proj_channels, kernel_size=1, stride=1)
     )
