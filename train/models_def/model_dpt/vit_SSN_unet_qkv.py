@@ -63,7 +63,7 @@ def forward_vit_SSN_qkv_yogo(opt, pretrained, x, input_dict_extra={}, hooks=[]):
     layer_3 = pretrained.activations["3"]
     layer_4 = pretrained.activations["4"]
 
-    if_print = True
+    if_print = False
 
     # [layer_3 and layer_4 are from transformer layers]
     # print(x.shape)
@@ -230,7 +230,6 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
                 abs_affinity_idx += 1
         else:
             extra_im_scale = 1.
-
 
         im_feat_idx = ca_modules['layer_%d_ca'%idx](im_feat_dict['im_feat_%d'%(idx-1)], x_tokens, im_feat_scale_factor=extra_im_scale) # torch.Size([1, 768, 320])
         # print(idx, extra_im_scale_accu, im_feat_dict['im_feat_%d'%(idx-1)].shape, extra_im_scale, im_feat_idx.shape)
