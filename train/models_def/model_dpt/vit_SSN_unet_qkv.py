@@ -202,11 +202,12 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
 
     im_feat_dict = {'im_feat_-1': im_feat_init}
     extra_im_scales = [1., 1./2., 1./2., 1./2.]
-    abs_affinity_list = []
-    for scale in [1./4., 1./8., 1./16., 1./32.]:
-        abs_affinity_resized = F.interpolate(abs_affinity, scale_factor=scale, mode='bilinear')
-        abs_affinity_resized = abs_affinity_resized / (torch.sum(abs_affinity_resized, 1, keepdims=True)+1e-6)
-        abs_affinity_list.append(abs_affinity_resized)
+    if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_recompute_C:
+        abs_affinity_list = []
+        for scale in [1./4., 1./8., 1./16., 1./32.]:
+            abs_affinity_resized = F.interpolate(abs_affinity, scale_factor=scale, mode='bilinear')
+            abs_affinity_resized = abs_affinity_resized / (torch.sum(abs_affinity_resized, 1, keepdims=True)+1e-6)
+            abs_affinity_list.append(abs_affinity_resized)
 
     extra_im_scale_accu = 1.
     abs_affinity_idx = 0
