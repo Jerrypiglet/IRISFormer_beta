@@ -320,12 +320,14 @@ class FeatureFusionBlock_custom(nn.Module):
 
     def __init__(
         self,
+        opt, 
         features,
         activation,
         deconv=False,
         bn=False,
         expand=False,
         align_corners=True,
+        if_up_resize_override=None
     ):
         """Init.
 
@@ -333,6 +335,9 @@ class FeatureFusionBlock_custom(nn.Module):
             features (int): number of features
         """
         super(FeatureFusionBlock_custom, self).__init__()
+
+        self.opt = opt
+        self.if_up_resize_override = if_up_resize_override
 
         self.deconv = deconv
         self.align_corners = align_corners
@@ -367,16 +372,22 @@ class FeatureFusionBlock_custom(nn.Module):
         """
         output = xs[0]
 
-        if len(xs) == 2:
-            res = self.resConfUnit1(xs[1])
-            output = self.skip_add.add(output, res)
-            # output += res
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
+            pass
+        else:
+            if len(xs) == 2:
+                res = self.resConfUnit1(xs[1])
+                # print(xs[0].shape, xs[1].shape, res.shape)
+                output = self.skip_add.add(output, res)
+                # print(output.shape)
+                # output += res
 
         output = self.resConfUnit2(output)
 
-        output = nn.functional.interpolate(
-            output, scale_factor=2, mode="bilinear", align_corners=self.align_corners
-        )
+        if (not self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_reduce_res) or self.if_up_resize_override==True:
+            output = nn.functional.interpolate(
+                output, scale_factor=2, mode="bilinear", align_corners=self.align_corners
+            )
 
         output = self.out_conv(output)
 

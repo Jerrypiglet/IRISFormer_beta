@@ -124,6 +124,13 @@ def forward_vit_SSN_qkv_yogo(opt, pretrained, x, input_dict_extra={}, hooks=[]):
     layer_3 = flex_return_dict['im_feat_dict']['im_feat_%d'%hooks[2]]
     layer_4 = flex_return_dict['im_feat_dict']['im_feat_%d'%hooks[3]]
 
+    if if_print:
+        print('--->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+        print(pretrained.act_postprocess1[3:])
+        print(pretrained.act_postprocess2[3:])
+        print(pretrained.act_postprocess3[3:])
+        print(pretrained.act_postprocess4[3:])
+
     layer_1 = pretrained.act_postprocess1[3 : len(pretrained.act_postprocess1)](layer_1)
     layer_2 = pretrained.act_postprocess2[3 : len(pretrained.act_postprocess2)](layer_2)
     layer_3 = pretrained.act_postprocess3[3 : len(pretrained.act_postprocess3)](layer_3)
@@ -183,7 +190,6 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
     # x = self.patch_embed.proj(c).flatten(2).transpose(1, 2) # torch.Size([8, 320, 768]); will be Identity op in qkv recon
     x = c.flatten(2).transpose(1, 2) # torch.Size([8, 320, 768]); will be Identity op in qkv recon
 
-
     if getattr(self, "dist_token", None) is not None:
         cls_tokens = self.cls_token.expand(
             B, -1, -1
@@ -203,7 +209,10 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
 
     im_feat_dict = {'im_feat_-1': im_feat_init}
     proj_coef_dict = {}
-    extra_im_scales = [1., 1./2., 1./2., 1./2.]
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_reduce_res:
+        extra_im_scales = [1., 1., 1., 1.]
+    else:
+        extra_im_scales = [1., 1./2., 1./2., 1./2.]
     if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_recompute_C:
         abs_affinity_list = []
         for scale in [1./4., 1./8., 1./16., 1./32.]:
@@ -227,13 +236,16 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
         if idx in hooks:
             idx_within_hooks = hooks.index(idx)
             extra_im_scale = extra_im_scales[idx_within_hooks]
-            extra_im_scale_accu *= extra_im_scale
+            if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_reduce_res:
+                extra_im_scale_accu *= extra_im_scale
             if idx != 0:
                 abs_affinity_idx += 1
         else:
             extra_im_scale = 1.
+            # continue
 
         im_feat_idx, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_dict['im_feat_%d'%(idx-1)], x_tokens, im_feat_scale_factor=extra_im_scale) # torch.Size([1, 768, 320])
+        # im_feat_idx, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_dict['im_feat_-1'], x_tokens, im_feat_scale_factor=extra_im_scale) # torch.Size([1, 768, 320])
         # print(idx, extra_im_scale_accu, im_feat_dict['im_feat_%d'%(idx-1)].shape, extra_im_scale, im_feat_idx.shape)
         im_feat_dict['im_feat_%d'%idx] = im_feat_idx
         proj_coef_dict['proj_coef_%d'%idx] = proj_coef_idx

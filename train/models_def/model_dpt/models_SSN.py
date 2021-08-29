@@ -24,14 +24,16 @@ from .blocks_SSN import (
 
 from models_def.model_dpt.utils_yogo import CrossAttention
 
-def _make_fusion_block(features, use_bn):
+def _make_fusion_block(opt, features, use_bn, if_up_resize_override=None):
     return FeatureFusionBlock_custom(
+        opt, 
         features,
         nn.ReLU(False),
         deconv=False,
         bn=use_bn,
         expand=False,
         align_corners=True,
+        if_up_resize_override=if_up_resize_override
     )
 
 
@@ -90,10 +92,10 @@ class DPT_SSN(BaseModel):
             enable_attention_hooks=enable_attention_hooks,
         )
 
-        self.scratch.refinenet1 = _make_fusion_block(features, use_bn)
-        self.scratch.refinenet2 = _make_fusion_block(features, use_bn)
-        self.scratch.refinenet3 = _make_fusion_block(features, use_bn)
-        self.scratch.refinenet4 = _make_fusion_block(features, use_bn)
+        self.scratch.refinenet1 = _make_fusion_block(opt, features, use_bn, if_up_resize_override=True)
+        self.scratch.refinenet2 = _make_fusion_block(opt, features, use_bn)
+        self.scratch.refinenet3 = _make_fusion_block(opt, features, use_bn)
+        self.scratch.refinenet4 = _make_fusion_block(opt, features, use_bn)
 
         self.scratch.output_conv = head
 
@@ -137,11 +139,22 @@ class DPT_SSN(BaseModel):
         layer_2_rn = self.scratch.layer2_rn(layer_2)
         layer_3_rn = self.scratch.layer3_rn(layer_3)
         layer_4_rn = self.scratch.layer4_rn(layer_4)
+        # print(layer_1_rn.shape, layer_2_rn.shape, layer_3_rn.shape, layer_4_rn.shape)
+        # print(self.scratch.refinenet4)
+        # print(self.scratch.refinenet3)
+        # print(self.scratch.refinenet2)
+        # print(self.scratch.refinenet1)
 
         path_4 = self.scratch.refinenet4(layer_4_rn)
         path_3 = self.scratch.refinenet3(path_4, layer_3_rn)
         path_2 = self.scratch.refinenet2(path_3, layer_2_rn)
         path_1 = self.scratch.refinenet1(path_2, layer_1_rn)
+        # MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_reduce_res:
+        # print(path_4.shape, path_3.shape, path_2.shape, path_1.shape,)
+        # else: (original)
+        # torch.Size([2, 256, 16, 20]) torch.Size([2, 256, 32, 40]) torch.Size([2, 256, 64, 80]) torch.Size([2, 256, 128, 160])
+
+
 
         out = self.scratch.output_conv(path_1)
 

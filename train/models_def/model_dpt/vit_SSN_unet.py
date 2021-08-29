@@ -436,6 +436,8 @@ def _make_vit_b_rn50_backbone_SSN_unet(
         ]
         if recon_method in ['qkv', 'qtc']:
             act_postprocess1_list.pop()
+            # if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_reduce_res:
+                # act_postprocess1_list.pop() # not sizing up
         pretrained.act_postprocess1 = nn.Sequential(*act_postprocess1_list)
 
         act_postprocess2_list = [
@@ -462,6 +464,9 @@ def _make_vit_b_rn50_backbone_SSN_unet(
         ]
         if recon_method in ['qkv', 'qtc']:
             act_postprocess2_list.pop()
+            # if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_reduce_res:
+                # act_postprocess2_list.pop() # not sizing up
+
         pretrained.act_postprocess2 = nn.Sequential(*act_postprocess2_list)
     else:
         pretrained.act_postprocess1 = nn.Sequential(
@@ -505,6 +510,9 @@ def _make_vit_b_rn50_backbone_SSN_unet(
     ]
     if recon_method in ['qkv', 'qtc']:
         act_postprocess4_list.pop()
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_reduce_res:
+            act_postprocess4_list.pop() # not sizing up
+
     pretrained.act_postprocess4 = nn.Sequential(*act_postprocess4_list)
 
     pretrained.model.start_index = start_index

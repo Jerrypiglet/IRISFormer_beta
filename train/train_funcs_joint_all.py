@@ -836,7 +836,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                                         writer.add_image('VAL_DPT-SSN_proj_coef_sample%d/head%d_spixel%d-%d_PRED/%d'%(sample_idx, head, spixel_h*patch_size, spixel_w*patch_size, hook), \
                                             proj_coef_matrix_single_token_vis, tid, dataformats='HW')
 
-                        start_im_hw = start_im_hw[0]//2, start_im_hw[1]//2
+                        if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_reduce_res:
+                            start_im_hw = start_im_hw[0]//2, start_im_hw[1]//2
 
 
 
