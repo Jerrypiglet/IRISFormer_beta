@@ -48,7 +48,6 @@ from .vit import (
     get_readout_oper
 )
 
-
 def forward_vit_SSN_qkv_yogo(opt, pretrained, x, input_dict_extra={}, hooks=[]):
     b, c, h, w = x.shape
 
@@ -73,71 +72,43 @@ def forward_vit_SSN_qkv_yogo(opt, pretrained, x, input_dict_extra={}, hooks=[]):
     # hybrid-SSN-qkv-unet: torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 321, 768]) torch.Size([1, 321, 768])
     # hybrid(-SSN)-ViT: torch.Size([1, 321, 768]) torch.Size([1, 321, 768]) torch.Size([1, 321, 768]) torch.Size([1, 321, 768])
 
-    # print(pretrained.act_postprocess1[0:2])
-    # print(pretrained.act_postprocess2[0:2])
-    
-    # layer_1 = pretrained.act_postprocess1[0:2](layer_1)
-    # layer_2 = pretrained.act_postprocess2[0:2](layer_2)
-    # layer_3 = pretrained.act_postprocess3[0:2](layer_3)
-    # layer_4 = pretrained.act_postprocess4[0:2](layer_4)
-
-    # if if_print:
-    #     print('->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
-    # hybrid-SSN: -> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 320]) torch.Size([2, 768, 320])
-    # hybrid-SSN-qkv: -> torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 768, 320]) torch.Size([1, 768, 320])
-    # hybrid-SSN-qkv-unet: -> torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 768, 320]) torch.Size([1, 768, 320])
-    # hybrid(-SSN)-ViT: -> torch.Size([1, 768, 320]) torch.Size([1, 768, 320]) torch.Size([1, 768, 320]) torch.Size([1, 768, 320])
-
     assert pretrained.model.patch_size[0]==pretrained.model.patch_size[1]
 
-    # ssn_from = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from
-    # recon_method = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method
-    
-    # if recon_method in ['qkv']:
-    #     ca_modules = input_dict_extra['ca_modules']
-    #     extra_im_scales = 1.
-    #     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone:
-    #         extra_im_scales = 0.25
-    #     # print(backbone_feat_proj.shape, ssn_return_dict['im_feat'].shape, '++++++')
-    #     if layer_1.ndim == 3:
-    #         # print(layer_1.shape, ssn_return_dict['im_feat'].shape) # torch.Size([1, 768, 320]) torch.Size([1, 1344, 64, 80])
-    #         layer_1 = ca_modules['layer_1_ca'](ssn_return_dict['im_feat'], layer_1, im_feat_scale_factor=extra_im_scales * 1.) # torch.Size([1, 768, 320])
-    #     if layer_2.ndim == 3:
-    #         layer_2 = ca_modules['layer_2_ca'](ssn_return_dict['im_feat'], layer_2, im_feat_scale_factor=extra_im_scales * 1./2.) # torch.Size([1, 768, 320])
-    #     if layer_3.ndim == 3:
-    #         # print(layer_3.shape, ssn_return_dict['im_feat'].shape) # torch.Size([1, 768, 320]) torch.Size([1, 1344, 64, 80])
-    #         layer_3 = ca_modules['layer_3_ca'](ssn_return_dict['im_feat'], layer_3, im_feat_scale_factor=extra_im_scales * 1./4.) # torch.Size([1, 768, 320])
-    #     if layer_4.ndim == 3:
-    #         layer_4 = ca_modules['layer_4_ca'](ssn_return_dict['im_feat'], layer_4, im_feat_scale_factor=extra_im_scales * 1./8.) # torch.Size([1, 768, 320])
-    # else:
-    #     assert False
-
-    # if if_print:
-    #     print('-->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
-    # hybrid-SSN: --> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 16, 20])
-    # hybrid-SSN-qkv: --> torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 768, 16, 20]) torch.Size([1, 768, 8, 10])
-    # hybrid-SSN-qkv-unet: --> torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 768, 16, 20]) torch.Size([1, 768, 8, 10])
-
     # print(flex_return_dict['im_feat_dict'].keys())
-    layer_1 = flex_return_dict['im_feat_dict']['im_feat_%d'%hooks[0]]
-    layer_2 = flex_return_dict['im_feat_dict']['im_feat_%d'%hooks[1]]
-    layer_3 = flex_return_dict['im_feat_dict']['im_feat_%d'%hooks[2]]
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
+        pass
+    else:
+        layer_1 = flex_return_dict['im_feat_dict']['im_feat_%d'%hooks[0]]
+        layer_2 = flex_return_dict['im_feat_dict']['im_feat_%d'%hooks[1]]
+        layer_3 = flex_return_dict['im_feat_dict']['im_feat_%d'%hooks[2]]
     layer_4 = flex_return_dict['im_feat_dict']['im_feat_%d'%hooks[3]]
 
     if if_print:
-        print('--->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
-        print(pretrained.act_postprocess1[3:])
-        print(pretrained.act_postprocess2[3:])
-        print(pretrained.act_postprocess3[3:])
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
+            print('--->', layer_4.shape)
+        else:
+            print('--->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
+            pass
+        else:
+            print(pretrained.act_postprocess1[3:])
+            print(pretrained.act_postprocess2[3:])
+            print(pretrained.act_postprocess3[3:])
         print(pretrained.act_postprocess4[3:])
 
-    layer_1 = pretrained.act_postprocess1[3 : len(pretrained.act_postprocess1)](layer_1)
-    layer_2 = pretrained.act_postprocess2[3 : len(pretrained.act_postprocess2)](layer_2)
-    layer_3 = pretrained.act_postprocess3[3 : len(pretrained.act_postprocess3)](layer_3)
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
+        layer_1, layer_2, layer_3 = None, None, None
+    else:
+        layer_1 = pretrained.act_postprocess1[3 : len(pretrained.act_postprocess1)](layer_1)
+        layer_2 = pretrained.act_postprocess2[3 : len(pretrained.act_postprocess2)](layer_2)
+        layer_3 = pretrained.act_postprocess3[3 : len(pretrained.act_postprocess3)](layer_3)
     layer_4 = pretrained.act_postprocess4[3 : len(pretrained.act_postprocess4)](layer_4)
 
     if if_print:
-        print('---->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
+            print('---->', layer_4.shape)
+        else:
+            print('---->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # hybrid-SSN: ----> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 8, 10])
     # hybrid-SSN-qkv-unet: ----> torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 768, 16, 20]) torch.Size([1, 768, 8, 10])
 
@@ -215,7 +186,8 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
         extra_im_scales = [1., 1./2., 1./2., 1./2.]
     if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_recompute_C:
         abs_affinity_list = []
-        for scale in [1./4., 1./8., 1./16., 1./32.]:
+        affinity_scales = [1./4., 1./8., 1./16., 1./32.] if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_reduce_res else [1./4., 1./4., 1./4., 1./4.]
+        for scale in affinity_scales:
             abs_affinity_resized = F.interpolate(abs_affinity, scale_factor=scale, mode='bilinear')
             abs_affinity_resized = abs_affinity_resized / (torch.sum(abs_affinity_resized, 1, keepdims=True)+1e-6)
             abs_affinity_list.append(abs_affinity_resized)

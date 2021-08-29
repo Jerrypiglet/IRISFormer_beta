@@ -531,6 +531,11 @@ def _make_vit_b_rn50_backbone_SSN_unet(
     #     _resize_pos_embed_SSN, pretrained.model
     # )
 
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
+        pretrained.act_postprocess1  = nn.Identity()
+        pretrained.act_postprocess2  = nn.Identity()
+        pretrained.act_postprocess3  = nn.Identity()
+
     return pretrained
 
 def _make_vit_b16_backbone_SSN_unet(
@@ -795,6 +800,9 @@ def _make_pretrained_vitl_unet_384_SSN(
     # print(model.patch_embed.backbone.stages)
     model.patch_embed.backbone.stages[1] = nn.Identity()
     model.patch_embed.backbone.stages[2] = nn.Identity()
+
+    # if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
+    #     model.patch_embed.backbone.stages[2] = nn.Identity()
 
 
     # [def vit_base_r50_s16_384()] https://github.com/rwightman/pytorch-image-models/blob/79927baaecb6cdd1a25eed7f0f8c122b99712c72/timm/models/vision_transformer_hybrid.py#L232

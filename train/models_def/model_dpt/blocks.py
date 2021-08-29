@@ -372,12 +372,12 @@ class FeatureFusionBlock_custom(nn.Module):
         """
         output = xs[0]
 
-        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
-            pass
-        else:
-            if len(xs) == 2:
-                res = self.resConfUnit1(xs[1])
-                # print(xs[0].shape, xs[1].shape, res.shape)
+        if len(xs) == 2:
+            res = self.resConfUnit1(xs[1])
+            # print(xs[0].shape, xs[1].shape, res.shape)
+            if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
+                output = self.skip_add.add(output, res*0.)
+            else:
                 output = self.skip_add.add(output, res)
                 # print(output.shape)
                 # output += res
