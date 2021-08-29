@@ -149,6 +149,7 @@ class Projector(nn.Module):
         # N, h, HW, C/h * N, h, C/h, L -> N, h, HW, L
         proj_coef = F.softmax(
             self.proj_kq_matmul(proj_q, proj_k) / np.sqrt(C / h), dim=3)
+        # print(proj_coef.shape) # torch.Size([-1, 2 (head num), 5120, 320]), torch.Size([-1, 2 (head num), 1280, 320]), torch.Size([-1, 2 (head num), 320, 320]), torch.Size([-1, 2 (head num), 80, 320]), 
 
         # N, h, C/h, L * N, h, L, HW -> N, h, C/h, HW
         x_p = self.proj_matmul(proj_v, proj_coef.permute(0, 1, 3, 2))
@@ -157,14 +158,17 @@ class Projector(nn.Module):
         x_p = self.proj_bn(x_p.view(N, -1, S))
         # print('-=-=', x.shape, x_p.shape) # -=-= torch.Size([1, 768, 5120]) torch.Size([1, 768, 5120])
 
+        output_dict = {'proj_coef': proj_coef}
         if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method == 'residual':
             x = x + self.ff_conv(x + x_p)
-            return x
+            output_dict['x'] = x
         elif self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method == 'concat':
             x = torch.cat([x, self.ff_conv(x + x_p)], 1)
-            return x
+            output_dict['x'] = x
         elif self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method == 'none':
-            return x_p
+            output_dict['x'] = x_p
+
+        return output_dict
 
 class CrossAttention(nn.Module):
     def __init__(self, opt, token_c, input_dims, output_dims,
@@ -201,13 +205,15 @@ class CrossAttention(nn.Module):
 
         im_feat_flattened = im_feat_resized.view(batch_size, im_feat_dim, -1)
 
-        out_feature = self.projectors(
+        output_dict = self.projectors(
             self.feature_block(im_feat_flattened), in_tokens
             ) 
+        out_feature = output_dict['x']
+        proj_coef = output_dict['proj_coef']
 
         out_feature = out_feature.view(batch_size, self.token_c, int(im_h*im_feat_scale_factor), int(im_w*im_feat_scale_factor))
 
-        return out_feature
+        return out_feature, proj_coef
 
     
 

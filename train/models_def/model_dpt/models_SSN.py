@@ -100,6 +100,12 @@ class DPT_SSN(BaseModel):
         self.recon_method = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method
         
         if self.recon_method == 'qkv':
+            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer == 'instanceNorm':
+                norm_layer_1d = nn.InstanceNorm1d
+            elif opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer == 'identity':
+                norm_layer_1d = nn.Identity
+            else:
+                assert False, 'Invalid MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer'
             module_dict = {}
             im_c = opt.cfg.MODEL_BRDF.DPT_baseline.feat_proj_channels
             token_c = vit_dims[backbone]
@@ -108,12 +114,12 @@ class DPT_SSN(BaseModel):
                 for layer_idx in range(12):
                     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_slim and layer_idx not in self.hooks_backbone:
                         continue
-                    module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c)
+                    module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
             else:
-                module_dict['layer_1_ca'] = CrossAttention(opt, token_c, im_c, token_c)
-                module_dict['layer_2_ca'] = CrossAttention(opt, token_c, im_c, token_c)
-                module_dict['layer_3_ca'] = CrossAttention(opt, token_c, im_c, token_c)
-                module_dict['layer_4_ca'] = CrossAttention(opt, token_c, im_c, token_c)
+                module_dict['layer_1_ca'] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
+                module_dict['layer_2_ca'] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
+                module_dict['layer_3_ca'] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
+                module_dict['layer_4_ca'] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
             self.ca_modules = nn.ModuleDict(module_dict)
 
     def forward(self, x, input_dict_extra={}):

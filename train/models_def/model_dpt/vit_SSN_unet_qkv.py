@@ -166,6 +166,7 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
     spixel_dims = [im_height//self.patch_size[0], im_width//self.patch_size[1]]
 
     ssn_op = SSNFeatsTransformAdaptive(None, spixel_dims=spixel_dims, if_dense=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_dense)
+    # print(spixel_dims)
 
     mask_resized = input_dict_extra['brdf_loss_mask']
 
@@ -201,6 +202,7 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
     ca_modules = input_dict_extra['ca_modules']
 
     im_feat_dict = {'im_feat_-1': im_feat_init}
+    proj_coef_dict = {}
     extra_im_scales = [1., 1./2., 1./2., 1./2.]
     if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_recompute_C:
         abs_affinity_list = []
@@ -231,9 +233,10 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
         else:
             extra_im_scale = 1.
 
-        im_feat_idx = ca_modules['layer_%d_ca'%idx](im_feat_dict['im_feat_%d'%(idx-1)], x_tokens, im_feat_scale_factor=extra_im_scale) # torch.Size([1, 768, 320])
+        im_feat_idx, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_dict['im_feat_%d'%(idx-1)], x_tokens, im_feat_scale_factor=extra_im_scale) # torch.Size([1, 768, 320])
         # print(idx, extra_im_scale_accu, im_feat_dict['im_feat_%d'%(idx-1)].shape, extra_im_scale, im_feat_idx.shape)
         im_feat_dict['im_feat_%d'%idx] = im_feat_idx
+        proj_coef_dict['proj_coef_%d'%idx] = proj_coef_idx
         im_feat_idx_recent = im_feat_idx
 
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_recompute_C:
@@ -252,6 +255,6 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
     # print('++++', self.norm)
     x = self.norm(x) # LayerNorm
 
-    extra_return_dict = {'Q': ssn_return_dict['Q'], 'matseg_affinity': ssn_return_dict['Q_2D'], 'im_feat': im_feat_init, 'im_feat_dict': im_feat_dict}
+    extra_return_dict = {'Q': ssn_return_dict['Q'], 'matseg_affinity': ssn_return_dict['Q_2D'], 'im_feat': im_feat_init, 'im_feat_dict': im_feat_dict, 'hooks': hooks, 'proj_coef_dict': proj_coef_dict}
 
     return x, extra_return_dict

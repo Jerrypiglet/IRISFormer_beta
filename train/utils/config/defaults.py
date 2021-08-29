@@ -275,6 +275,7 @@ _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_slim = False # if
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_recompute_C = False # if not recompute C by QI_new
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_perpixel_abs_pos_embed = False
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method = 'residual' # if using residual/concat/none in projector in CrossAttention module
+_C.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer = 'identity' # [instanceNorm, identity]
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims = 1344 # resnet: stem + stage 0,1,2
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.patch_size = 16
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_freeze_matseg = True

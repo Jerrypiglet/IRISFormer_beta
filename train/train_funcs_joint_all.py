@@ -806,6 +806,39 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                         if opt.is_master:
                             writer.add_image('VAL_DPT-SSN_albedo_PRED/%d'%sample_idx, albedo_pred_unet_single, tid, dataformats='HWC')
 
+                if 'SSN' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method == 'qkv' and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv:
+                    assert 'proj_coef_dict' in output_dict['albedo_extra_output_dict']
+                    assert 'hooks' in output_dict['albedo_extra_output_dict']
+                    proj_coef_dict = output_dict['albedo_extra_output_dict']['proj_coef_dict']
+                    hooks = output_dict['albedo_extra_output_dict']['hooks']
+                    # print(hooks)
+                    # print(proj_coef_dict.keys())
+                    start_im_hw = [256//4, 320//4]
+                    patch_size = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.patch_size
+                    spixel_hw = [256//patch_size, 320//patch_size]
+                    head = 0
+                    for idx, hook in enumerate(hooks):
+                        proj_coef_matrix = proj_coef_dict['proj_coef_%d'%hook]
+                        for sample_idx_batch, proj_coef_matrix_single in enumerate(proj_coef_matrix):
+                            sample_idx = sample_idx_batch+batch_size*batch_id
+                            if opt.is_master:
+                                proj_coef_matrix_single_vis = proj_coef_matrix_single[head].view(start_im_hw[0], start_im_hw[1], spixel_hw[0], spixel_hw[1]).detach().cpu().numpy()
+                                # print(proj_coef_matrix_single_vis.shape)
+                                for spixel_h in [spixel_hw[0]//3, spixel_hw[0]//3*2]:
+                                    for spixel_w in [spixel_hw[1]//3, spixel_hw[1]//3*2]:
+                                        proj_coef_matrix_single_token_vis = proj_coef_matrix_single_vis[:, :, spixel_h, spixel_w]
+                                        # print(proj_coef_matrix_single_token_vis.shape, np.sum(proj_coef_matrix_single_token_vis))
+                                        print(np.min(proj_coef_matrix_single_token_vis), np.max(proj_coef_matrix_single_token_vis), np.median(proj_coef_matrix_single_token_vis))
+                                        proj_coef_matrix_single_token_vis = proj_coef_matrix_single_token_vis - np.amin(proj_coef_matrix_single_token_vis)
+                                        proj_coef_matrix_single_token_vis = proj_coef_matrix_single_token_vis / (np.amax(proj_coef_matrix_single_token_vis)+1e-6)
+                                        proj_coef_matrix_single_token_vis = cv2.resize(proj_coef_matrix_single_token_vis, dsize=(320, 256), interpolation=cv2.INTER_NEAREST)
+
+                                        writer.add_image('VAL_DPT-SSN_proj_coef_sample%d/head%d_spixel%d-%d_PRED/%d'%(sample_idx, head, spixel_h*patch_size, spixel_w*patch_size, hook), \
+                                            proj_coef_matrix_single_token_vis, tid, dataformats='HW')
+
+                        start_im_hw = start_im_hw[0]//2, start_im_hw[1]//2
+
+
 
             # ======= Vis BRDFsemseg / semseg
             if opt.cfg.DATA.load_semseg_gt:

@@ -622,7 +622,8 @@ class Model_Joint(nn.Module):
         if self.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and self.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_debug_unet:
             return_dict['albedo_extra_output_dict'].update({'albedo_pred_unet': extra_DPT_return_dict['albedo_pred_unet']})
 
-
+        if 'SSN' in self.cfg.MODEL_BRDF.DPT_baseline.model and self.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method == 'qkv' and self.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv:
+            return_dict['albedo_extra_output_dict'].update({'proj_coef_dict': extra_DPT_return_dict['proj_coef_dict'], 'hooks': extra_DPT_return_dict['hooks']})
 
         return return_dict
 
