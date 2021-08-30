@@ -198,7 +198,7 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
     im_feat_idx_recent = im_feat_init
 
     # [if use im_feat_-1]
-    if_use_init_img_feat = True
+    if_use_init_img_feat = 
 
     for idx, blk in enumerate(self.blocks):
         x = blk(x) # [-1, 768, 321]
