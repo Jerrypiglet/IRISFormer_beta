@@ -198,7 +198,7 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
     im_feat_idx_recent = im_feat_init
 
     # [if use im_feat_-1]
-    if_use_init_img_feat = 
+    if_use_init_img_feat = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_use_init_img_feat
 
     for idx, blk in enumerate(self.blocks):
         x = blk(x) # [-1, 768, 321]
@@ -230,6 +230,8 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
             im_feat_idx, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_dict['im_feat_%d'%(idx-1)], x_tokens, im_feat_scale_factor=extra_im_scale) # torch.Size([1, 768, 320])
         # print(idx, extra_im_scale_accu, im_feat_dict['im_feat_%d'%(idx-1)].shape, extra_im_scale, im_feat_idx.shape)
         im_feat_dict['im_feat_%d'%idx] = im_feat_idx
+        # if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used and idx!=hooks[-1]:
+        #     im_feat_idx = im_feat_idx.detach
         proj_coef_dict['proj_coef_%d'%idx] = proj_coef_idx
         im_feat_idx_recent = im_feat_idx
 

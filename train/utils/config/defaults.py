@@ -276,6 +276,7 @@ _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_slim = False # if
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_recompute_C = False # if not recompute C by QI_new
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_reduce_res = False # if not reducing resolution in vit_SSN_unet_qkv.py
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used = False # [debug] if only using the last transformer outoput in unet, instead of using 4 intermediate outputs
+_C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_use_init_img_feat = False
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_perpixel_abs_pos_embed = False
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method = 'residual' # if using residual/concat/none in projector in CrossAttention module
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.feat_fusion_method = 'sum' # fusion method in class FeatureFusionBlock_custom

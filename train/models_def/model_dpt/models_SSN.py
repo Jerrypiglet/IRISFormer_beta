@@ -94,9 +94,13 @@ class DPT_SSN(BaseModel):
         )
 
         self.scratch.refinenet1 = _make_fusion_block(opt, features, use_bn, if_up_resize_override=True)
-        self.scratch.refinenet2 = _make_fusion_block(opt, features, use_bn)
-        self.scratch.refinenet3 = _make_fusion_block(opt, features, use_bn)
-        self.scratch.refinenet4 = _make_fusion_block(opt, features, use_bn, if_one_input=True)
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
+            pass
+        else:
+            self.scratch.refinenet2 = _make_fusion_block(opt, features, use_bn)
+            self.scratch.refinenet3 = _make_fusion_block(opt, features, use_bn)
+            self.scratch.refinenet4 = _make_fusion_block(opt, features, use_bn, if_one_input=True)
+        
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
             # pass
             self.scratch.layer1_rn = nn.Identity()
@@ -124,8 +128,13 @@ class DPT_SSN(BaseModel):
                     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_slim and layer_idx not in self.hooks_backbone:
                         continue
                     # if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used and layer_idx!=self.hooks_backbone[-1]:
+                    #     # print(module_dict['layer_%d_ca'%layer_idx].requires_grad, '-=--=-==')
+                    #     with torch.no_grad():    
+                    #         module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
                     #     continue
+                        
                     module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
+
             else:
                 module_dict['layer_1_ca'] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
                 module_dict['layer_2_ca'] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
@@ -157,12 +166,13 @@ class DPT_SSN(BaseModel):
         # print(self.scratch.refinenet2)
         # print(self.scratch.refinenet1)
 
-        path_4 = self.scratch.refinenet4(layer_4_rn)
         if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
-            path_3 = self.scratch.refinenet3(path_4)
-            path_2 = self.scratch.refinenet2(path_3)
-            path_1 = self.scratch.refinenet1(path_2)
+            # path_3 = self.scratch.refinenet3(path_4)
+            # path_2 = self.scratch.refinenet2(path_3)
+            # path_1 = self.scratch.refinenet1(path_2)
+            path_1 = self.scratch.refinenet1(layer_4_rn)
         else:
+            path_4 = self.scratch.refinenet4(layer_4_rn)
             path_3 = self.scratch.refinenet3(path_4, layer_3_rn)
             path_2 = self.scratch.refinenet2(path_3, layer_2_rn)
             path_1 = self.scratch.refinenet1(path_2, layer_1_rn)
