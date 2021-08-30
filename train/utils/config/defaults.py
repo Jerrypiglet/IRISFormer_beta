@@ -259,6 +259,7 @@ _C.MODEL_BRDF.DPT_baseline.if_skip_last_conv = True
 _C.MODEL_BRDF.DPT_baseline.if_skip_patch_embed_proj = False
 _C.MODEL_BRDF.DPT_baseline.if_only_restore_backbone = False
 _C.MODEL_BRDF.DPT_baseline.if_batch_norm_in_proj_extra_in_proj_extra = False
+_C.MODEL_BRDF.DPT_baseline.if_simple_proj_extra = False
 
 _C.MODEL_BRDF.DPT_baseline.feat_proj_channels = -1
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid = CN()
@@ -277,6 +278,7 @@ _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_reduce_res = 
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used = False # [debug] if only using the last transformer outoput in unet, instead of using 4 intermediate outputs
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_perpixel_abs_pos_embed = False
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method = 'residual' # if using residual/concat/none in projector in CrossAttention module
+_C.MODEL_BRDF.DPT_baseline.dpt_SSN.feat_fusion_method = 'sum' # fusion method in class FeatureFusionBlock_custom
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer = 'instanceNorm' # [instanceNorm, identity]
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims = 1344 # resnet: stem + stage 0,1,2
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.patch_size = 16

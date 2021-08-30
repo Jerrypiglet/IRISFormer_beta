@@ -153,6 +153,8 @@ def set_up_envs(opt):
         assert opt.cfg.MODEL_BRDF.DPT_baseline.readout in ['ignore', 'add', 'project']
         assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer in ['instanceNorm', 'identity']
 
+        assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.feat_fusion_method in ['sum', 'concat']
+
         if 'dpt_hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model:
             opt.cfg.MODEL_BRDF.DPT_baseline.feat_proj_channels = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels
         elif 'dpt_large' in opt.cfg.MODEL_BRDF.DPT_baseline.model:

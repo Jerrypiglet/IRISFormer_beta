@@ -327,17 +327,20 @@ class FeatureFusionBlock_custom(nn.Module):
         bn=False,
         expand=False,
         align_corners=True,
-        if_up_resize_override=None
+        if_up_resize_override=None, 
+        if_one_input=False
     ):
         """Init.
 
         Args:
             features (int): number of features
         """
+        # print(activation, bn, '====--=-=-=-=') # ReLU() False
         super(FeatureFusionBlock_custom, self).__init__()
 
         self.opt = opt
         self.if_up_resize_override = if_up_resize_override
+        self.if_one_input = if_one_input
 
         self.deconv = deconv
         self.align_corners = align_corners
@@ -349,8 +352,15 @@ class FeatureFusionBlock_custom(nn.Module):
         if self.expand == True:
             out_features = features // 2
 
+        feat_fusion_method = self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.feat_fusion_method
+        
+        if not self.if_one_input and feat_fusion_method=='concat':
+            self.features_in = features * 2
+        else:
+            self.features_in = features
+
         self.out_conv = nn.Conv2d(
-            features,
+            self.features_in,
             out_features,
             kernel_size=1,
             stride=1,
@@ -360,7 +370,10 @@ class FeatureFusionBlock_custom(nn.Module):
         )
 
         self.resConfUnit1 = ResidualConvUnit_custom(features, activation, bn)
-        self.resConfUnit2 = ResidualConvUnit_custom(features, activation, bn)
+
+
+
+        self.resConfUnit2 = ResidualConvUnit_custom(self.features_in, activation, bn)
 
         self.skip_add = nn.quantized.FloatFunctional()
 
@@ -375,10 +388,17 @@ class FeatureFusionBlock_custom(nn.Module):
         if len(xs) == 2:
             res = self.resConfUnit1(xs[1])
             # print(xs[0].shape, xs[1].shape, res.shape)
-            if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
-                output = self.skip_add.add(output, res*0.)
-            else:
+            # if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
+            #     output = self.skip_add.add(output, res*0.)
+            # else:
+            # print(self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.feat_fusion_method, '=a=fadfsd')
+            # print(output.shape, res.shape, self.features_in)
+            if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.feat_fusion_method == 'sum':
                 output = self.skip_add.add(output, res)
+            elif self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.feat_fusion_method == 'concat':
+                output = torch.cat([output, res], 1)
+            else:
+                assert False
                 # print(output.shape)
                 # output += res
 

@@ -187,6 +187,7 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
     if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_recompute_C:
         abs_affinity_list = []
         affinity_scales = [1./4., 1./8., 1./16., 1./32.] if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_reduce_res else [1./4., 1./4., 1./4., 1./4.]
+        # affinity_scales = [1./4., 1./4., 1./4., 1./4.]
         for scale in affinity_scales:
             abs_affinity_resized = F.interpolate(abs_affinity, scale_factor=scale, mode='bilinear')
             abs_affinity_resized = abs_affinity_resized / (torch.sum(abs_affinity_resized, 1, keepdims=True)+1e-6)
@@ -195,6 +196,9 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
     extra_im_scale_accu = 1.
     abs_affinity_idx = 0
     im_feat_idx_recent = im_feat_init
+
+    # [if use im_feat_-1]
+    if_use_init_img_feat = True
 
     for idx, blk in enumerate(self.blocks):
         x = blk(x) # [-1, 768, 321]
@@ -214,10 +218,16 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
                 abs_affinity_idx += 1
         else:
             extra_im_scale = 1.
-            # continue
+            # [if use im_feat_-1]
+            if if_use_init_img_feat:
+                continue
 
-        im_feat_idx, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_dict['im_feat_%d'%(idx-1)], x_tokens, im_feat_scale_factor=extra_im_scale) # torch.Size([1, 768, 320])
-        # im_feat_idx, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_dict['im_feat_-1'], x_tokens, im_feat_scale_factor=extra_im_scale) # torch.Size([1, 768, 320])
+    
+        # [if use im_feat_-1]
+        if if_use_init_img_feat:
+            im_feat_idx, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_dict['im_feat_-1'], x_tokens, im_feat_scale_factor=extra_im_scale_accu) # torch.Size([1, 768, 320])
+        else:
+            im_feat_idx, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_dict['im_feat_%d'%(idx-1)], x_tokens, im_feat_scale_factor=extra_im_scale) # torch.Size([1, 768, 320])
         # print(idx, extra_im_scale_accu, im_feat_dict['im_feat_%d'%(idx-1)].shape, extra_im_scale, im_feat_idx.shape)
         im_feat_dict['im_feat_%d'%idx] = im_feat_idx
         proj_coef_dict['proj_coef_%d'%idx] = proj_coef_idx
@@ -227,7 +237,9 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
             pass
         else:
             assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from == 'matseg', 'only supporting this now'
-            # print(im_feat_idx.shape, abs_affinity_list[abs_affinity_idx].shape, mask_resized.shape) # torch.Size([1, 768, 64, 80]) torch.Size([1, 320, 256, 320]) torch.Size([1, 256, 320])
+            # print(idx, im_feat_idx.shape, abs_affinity_list[abs_affinity_idx].shape, mask_resized.shape) # torch.Size([1, 768, 64, 80]) torch.Size([1, 320, 256, 320]) torch.Size([1, 256, 320])
+            ssn_return_dict_idx = ssn_op(tensor_to_transform=im_feat_idx, affinity_in=abs_affinity_list[abs_affinity_idx], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1.), if_assert_no_scale=True) # Q: [im_height, im_width]
+            # [if use im_feat_-1]
             ssn_return_dict_idx = ssn_op(tensor_to_transform=im_feat_idx, affinity_in=abs_affinity_list[abs_affinity_idx], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1.), if_assert_no_scale=True) # Q: [im_height, im_width]
             c_idx = ssn_return_dict_idx['C']
             x_prime = c_idx.flatten(2).transpose(1, 2) # torch.Size([8, 320, 768]); will be Identity op in qkv recon

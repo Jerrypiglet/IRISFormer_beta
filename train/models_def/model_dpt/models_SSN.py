@@ -24,7 +24,7 @@ from .blocks_SSN import (
 
 from models_def.model_dpt.utils_yogo import CrossAttention
 
-def _make_fusion_block(opt, features, use_bn, if_up_resize_override=None):
+def _make_fusion_block(opt, features, use_bn, if_up_resize_override=None, if_one_input=False):
     return FeatureFusionBlock_custom(
         opt, 
         features,
@@ -33,7 +33,8 @@ def _make_fusion_block(opt, features, use_bn, if_up_resize_override=None):
         bn=use_bn,
         expand=False,
         align_corners=True,
-        if_up_resize_override=if_up_resize_override
+        if_up_resize_override=if_up_resize_override, 
+        if_one_input=if_one_input
     )
 
 
@@ -95,7 +96,7 @@ class DPT_SSN(BaseModel):
         self.scratch.refinenet1 = _make_fusion_block(opt, features, use_bn, if_up_resize_override=True)
         self.scratch.refinenet2 = _make_fusion_block(opt, features, use_bn)
         self.scratch.refinenet3 = _make_fusion_block(opt, features, use_bn)
-        self.scratch.refinenet4 = _make_fusion_block(opt, features, use_bn)
+        self.scratch.refinenet4 = _make_fusion_block(opt, features, use_bn, if_one_input=True)
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
             # pass
             self.scratch.layer1_rn = nn.Identity()

@@ -286,7 +286,7 @@ def create(args):
         json_content['command'] += command_str
         # if args.copy:
         #     json_content['command'] += ' DATASET.binary_if_to_memory True'
-        json_content['name'] += '.%s.%s'%(model_name_ngc, task_name_ngc)
+        json_content['name'] += '.%s.%s.%s'%(args.datetime_str, model_name_ngc, task_name_ngc)
         if len(json_content['name'])>=128:
             json_content['name'] = json_content['name'][:128]
         json_content['aceInstance'] = args.instance
