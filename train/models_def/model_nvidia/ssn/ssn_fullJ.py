@@ -135,6 +135,7 @@ def ssn_iter(pixel_features,  n_iter,
         mask_flattened = mask.reshape(batch_size, 1, -1)
         # print(spixel_features.shape, pixel_features.shape) # torch.Size([1, 4, 192]) torch.Size([1, 4, 81920])
         dist_matrix_full = torch.cdist(spixel_features.transpose(-1, -2), pixel_features.transpose(-1, -2), p=2) # torch.Size([1, 48, 76800])
+        spixel_pixel_mul = torch.matmul(spixel_features.transpose(-1, -2), pixel_features) # torch.Size([1, 48, 76800])
 
         dist_matrix_full = torch.square(dist_matrix_full)
         # print(dist_matrix_full.shape, mask_flattened.shape)
@@ -193,7 +194,7 @@ def ssn_iter(pixel_features,  n_iter,
     # import ipdb; ipdb.set_trace()
     # if not index_add:
     #abs_affinity: B x J x N
-    return abs_affinity, dist_matrix_full, spixel_features
+    return abs_affinity, dist_matrix_full, spixel_features, spixel_pixel_mul
     # else:
     #     #abs_affinity:    B x J x N
     #     #affinity_matrix: B x 9 x N

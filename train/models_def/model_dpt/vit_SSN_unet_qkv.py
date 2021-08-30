@@ -154,6 +154,8 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
         ssn_return_dict = ssn_op(tensor_to_transform=im_feat_init, feats_in=pretrained_activations['feat_stage_2'], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1./2., 1)) # Q: [im_height/4, im_width/4]
 
     abs_affinity = ssn_return_dict['abs_affinity'] # fixed for now
+    dist_matrix = ssn_return_dict['dist_matrix'] # fixed for now
+    spixel_pixel_mul = ssn_return_dict['spixel_pixel_mul'] # fixed for now
     
     c = ssn_return_dict['C'] # codebook
     c = c.view([batch_size, d, spixel_dims[0], spixel_dims[1]])
@@ -224,10 +226,19 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
 
     
         # [if use im_feat_-1]
+        # proj_coef_in = abs_affinity_list[abs_affinity_idx]
+        # print(spixel_pixel_mul.shape)
+
+        batch_size, sspixels = dist_matrix.shape[:2]
+        proj_coef_in = F.interpolate(-dist_matrix.reshape(batch_size, sspixels, abs_affinity.shape[2], abs_affinity.shape[3]), scale_factor=1./4., mode='bilinear')
+
+        # batch_size, sspixels = spixel_pixel_mul.shape[:2]
+        # proj_coef_in = F.interpolate(spixel_pixel_mul.reshape(batch_size, sspixels, abs_affinity.shape[2], abs_affinity.shape[3]), scale_factor=1./4., mode='bilinear')
+
         if if_use_init_img_feat:
-            im_feat_idx, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_dict['im_feat_-1'], x_tokens, im_feat_scale_factor=extra_im_scale_accu) # torch.Size([1, 768, 320])
+            im_feat_idx, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_dict['im_feat_-1'], x_tokens, im_feat_scale_factor=extra_im_scale_accu, proj_coef_in=proj_coef_in) # torch.Size([1, 768, 320])
         else:
-            im_feat_idx, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_dict['im_feat_%d'%(idx-1)], x_tokens, im_feat_scale_factor=extra_im_scale) # torch.Size([1, 768, 320])
+            im_feat_idx, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_dict['im_feat_%d'%(idx-1)], x_tokens, im_feat_scale_factor=extra_im_scale, proj_coef_in=proj_coef_in) # torch.Size([1, 768, 320])
         # print(idx, extra_im_scale_accu, im_feat_dict['im_feat_%d'%(idx-1)].shape, extra_im_scale, im_feat_idx.shape)
         im_feat_dict['im_feat_%d'%idx] = im_feat_idx
         # if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used and idx!=hooks[-1]:

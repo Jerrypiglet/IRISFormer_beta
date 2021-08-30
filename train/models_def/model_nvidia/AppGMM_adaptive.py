@@ -73,7 +73,7 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
             if mask is not None:
                 assert mask.shape==(batch_size, H, W)
             ssn.ssn_iter_to_use = ssn_fullJ.ssn_iter if self.if_dense else ssn.ssn_iter
-            abs_affinity, dist_matrix, spixel_features = \
+            abs_affinity, dist_matrix, spixel_features, spixel_pixel_mul = \
                 ssn.ssn_iter_to_use(
                     feats_in, n_iter=self.n_iter, 
                     num_spixels_width=self.num_spixels_width, 
@@ -98,6 +98,12 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
             'C': recon_return_dict['C'], 
             'Q_2D': recon_return_dict['Q_2D'], 
         })
+        if affinity_in is None:
+            res.update({
+                'dist_matrix': dist_matrix, 
+                'spixel_pixel_mul': spixel_pixel_mul, })
+
+
 
 
         return  res

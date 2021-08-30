@@ -828,8 +828,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                                     for spixel_w in [spixel_hw[1]//3, spixel_hw[1]//3*2]:
                                         proj_coef_matrix_single_token_vis = proj_coef_matrix_single_vis[:, :, spixel_h, spixel_w]
                                         # print(proj_coef_matrix_single_token_vis.shape, np.sum(proj_coef_matrix_single_token_vis))
-                                        print(np.min(proj_coef_matrix_single_token_vis), np.max(proj_coef_matrix_single_token_vis), np.median(proj_coef_matrix_single_token_vis))
-                                        proj_coef_matrix_single_token_vis = proj_coef_matrix_single_token_vis - np.amin(proj_coef_matrix_single_token_vis)
+                                        # print(np.min(proj_coef_matrix_single_token_vis), np.max(proj_coef_matrix_single_token_vis), np.median(proj_coef_matrix_single_token_vis))
+                                        # proj_coef_matrix_single_token_vis = proj_coef_matrix_single_token_vis - np.amin(proj_coef_matrix_single_token_vis)
                                         proj_coef_matrix_single_token_vis = proj_coef_matrix_single_token_vis / (np.amax(proj_coef_matrix_single_token_vis)+1e-6)
                                         proj_coef_matrix_single_token_vis = cv2.resize(proj_coef_matrix_single_token_vis, dsize=(320, 256), interpolation=cv2.INTER_NEAREST)
 

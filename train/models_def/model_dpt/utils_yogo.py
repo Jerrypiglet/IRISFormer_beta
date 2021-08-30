@@ -134,7 +134,7 @@ class Projector(nn.Module):
 
         self.head = head
 
-    def forward(self, x, x_t):
+    def forward(self, x, x_t, proj_coef_in=None):
         N, _, L = x_t.shape
         h = self.head
         # -> N, h, C/h, L
@@ -150,6 +150,19 @@ class Projector(nn.Module):
         proj_coef = F.softmax(
             self.proj_kq_matmul(proj_q, proj_k) / np.sqrt(C / h), dim=3)
         # print(proj_coef.shape) # torch.Size([-1, 2 (head num), 5120, 320]), torch.Size([-1, 2 (head num), 1280, 320]), torch.Size([-1, 2 (head num), 320, 320]), torch.Size([-1, 2 (head num), 80, 320]), 
+        # print('---proj_coef', proj_coef.shape)
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_use_Q_as_proj_coef:
+            assert proj_coef_in is not None
+            # print('---proj_coef_in', proj_coef_in.shape)
+
+            proj_coef_in = proj_coef_in.flatten(2).transpose(-1, -2).unsqueeze(1).repeat(1, self.head, 1, 1)
+            # proj_coef_in = F.softmax(proj_coef_in / np.sqrt(C / h), dim=3)
+            proj_coef_in = F.softmax(proj_coef_in, dim=3)
+            
+            # print('---proj_coef_in', proj_coef_in.shape)
+            assert proj_coef_in.shape==proj_coef.shape
+            proj_coef = proj_coef * 0. + proj_coef_in
+            # proj_coef_in
 
         # N, h, C/h, L * N, h, L, HW -> N, h, C/h, HW
         x_p = self.proj_matmul(proj_v, proj_coef.permute(0, 1, 3, 2))
@@ -193,7 +206,7 @@ class CrossAttention(nn.Module):
                     norm_layer_1d=norm_layer_1d)
 
 
-    def forward(self, in_feature, in_tokens, im_feat_scale_factor=1.):
+    def forward(self, in_feature, in_tokens, im_feat_scale_factor=1., proj_coef_in=None):
         # pass
         batch_size, im_feat_dim, im_h, im_w = in_feature.shape[:4]
         assert self.token_c == in_tokens.shape[1]
@@ -206,10 +219,11 @@ class CrossAttention(nn.Module):
         im_feat_flattened = im_feat_resized.view(batch_size, im_feat_dim, -1)
 
         output_dict = self.projectors(
-            self.feature_block(im_feat_flattened), in_tokens
+            self.feature_block(im_feat_flattened), in_tokens, proj_coef_in=proj_coef_in
             ) 
         out_feature = output_dict['x']
         proj_coef = output_dict['proj_coef']
+        # print(proj_coef.shape) # torch.Size([1, 2, 5120, 320])
 
         out_feature = out_feature.view(batch_size, self.token_c, int(im_h*im_feat_scale_factor), int(im_w*im_feat_scale_factor))
 
