@@ -133,6 +133,8 @@ class Projector(nn.Module):
                 )
 
         self.head = head
+        self.norm_out = norm_layer_1d(planes)
+
 
     def forward(self, x, x_t, proj_coef_in=None):
         N, _, L = x_t.shape
@@ -140,7 +142,7 @@ class Projector(nn.Module):
         # -> N, h, C/h, L
         proj_v = self.proj_value_conv(x_t).view(N, h, -1, L)
         # -> N, h, C/h, L
-        # print(x_t.shape, self.proj_key_conv(x_t).shape)
+        # print(x_t.shape)
         proj_k = self.proj_key_conv(x_t).view(N, h, -1, L)
         proj_q = self.proj_query_conv(x)
         N, C, _ = proj_q.shape
@@ -161,8 +163,8 @@ class Projector(nn.Module):
             
             # print('---proj_coef_in', proj_coef_in.shape)
             assert proj_coef_in.shape==proj_coef.shape
-            proj_coef = proj_coef * 0. + proj_coef_in
-            # proj_coef_in
+            # proj_coef = proj_coef * 0. + proj_coef_in
+            proj_coef = proj_coef * proj_coef_in
 
         # N, h, C/h, L * N, h, L, HW -> N, h, C/h, HW
         x_p = self.proj_matmul(proj_v, proj_coef.permute(0, 1, 3, 2))
@@ -173,7 +175,17 @@ class Projector(nn.Module):
 
         output_dict = {'proj_coef': proj_coef}
         if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method == 'residual':
+            # print('---',torch.mean(x), torch.median(x), torch.max(x), torch.min(x))
+            # print('---+',torch.mean(x_p), torch.median(x_p), torch.max(x_p), torch.min(x_p))
+            # print(self.ff_conv)
+            # a = self.ff_conv[0](x + x_p)
+            # b = self.ff_conv[1](a)
+            # print('---+a',torch.mean(a), torch.median(a), torch.max(a), torch.min(a))
+            # print('---+b',torch.mean(b), torch.median(b), torch.max(b), torch.min(b))
             x = x + self.ff_conv(x + x_p)
+            # print('--->',torch.mean(x), torch.median(x), torch.max(x), torch.min(x))
+            x = self.norm_out(x)
+            # print('--->>>>>',torch.mean(x), torch.median(x), torch.max(x), torch.min(x))
             output_dict['x'] = x
         elif self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method == 'concat':
             x = torch.cat([x, self.ff_conv(x + x_p)], 1)
@@ -194,10 +206,10 @@ class CrossAttention(nn.Module):
         self.token_c = token_c
         self.input_dims = input_dims
 
-        self.feature_block = nn.Sequential(
-            conv1x1_1d(input_dims, output_dims),
-            norm_layer_1d(output_dims)
-            )
+        # self.feature_block = nn.Sequential(
+        #     conv1x1_1d(input_dims, output_dims),
+        #     norm_layer_1d(output_dims)
+        #     )
 
         self.projectors = Projector(
                     self.opt, 
@@ -219,7 +231,8 @@ class CrossAttention(nn.Module):
         im_feat_flattened = im_feat_resized.view(batch_size, im_feat_dim, -1)
 
         output_dict = self.projectors(
-            self.feature_block(im_feat_flattened), in_tokens, proj_coef_in=proj_coef_in
+            # self.feature_block(im_feat_flattened), in_tokens, proj_coef_in=proj_coef_in
+            im_feat_flattened, in_tokens, proj_coef_in=proj_coef_in
             ) 
         out_feature = output_dict['x']
         proj_coef = output_dict['proj_coef']

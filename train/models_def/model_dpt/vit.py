@@ -224,8 +224,12 @@ def forward_flex(self, opt, x):
         x = x + pos_embed
     x = self.pos_drop(x)
 
-    for blk in self.blocks:
+    for idx, blk in enumerate(self.blocks):
         x = blk(x)
+        # print('====', idx, torch.mean(x), torch.median(x), torch.max(x), torch.min(x), torch.var(x, unbiased=False))
+
+        # print(x.shape)
+        # print(blk)
 
     x = self.norm(x)
 

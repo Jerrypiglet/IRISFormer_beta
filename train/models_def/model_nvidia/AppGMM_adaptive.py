@@ -124,7 +124,7 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
             assert not if_assert_no_scale # asserting gamma has been pre-resized
             # print(gamma.shape, tensor_to_transform.shape, scale_down_gamma_tensor)
             gamma_resized = F.interpolate(gamma, scale_factor=1./float(scale_down_gamma), mode='bilinear')
-            gamma_resized = gamma_resized / (torch.sum(gamma_resized, 1, keepdims=True)+1e-6)
+            gamma_resized = gamma_resized / (torch.sum(gamma_resized, 1, keepdims=True)+1e-6) # **keep normalized by spixel dim**
             gamma = gamma_resized
         if scale_down_tensor != 1: # scale tensor
             assert not if_assert_no_scale
@@ -142,10 +142,11 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
         N = H * W
         assert batch_size_==batch_size
 
-        if if_assert_no_scale:
-            Q_M_Jnormalized = gamma
-        else:
-            Q_M_Jnormalized = gamma / (gamma.sum(-1, keepdims=True).sum(-2, keepdims=True)+1e-6) # [B, J, H, W]
+        # if if_assert_no_scale:
+        #     Q_M_Jnormalized = gamma
+        #     print('=ad=f=asdfsda=f')
+        # else:
+        Q_M_Jnormalized = gamma / (gamma.sum(-1, keepdims=True).sum(-2, keepdims=True)+1e-6) # [B, J, H, W]  # **normalize by pixels HW**
         tensor_to_transform_flattened = tensor_to_transform.permute(0, 2, 3, 1).view(batch_size, -1, D)
         tensor_to_transform_J = Q_M_Jnormalized.view(batch_size, J, -1) @ tensor_to_transform_flattened # [B, J, D], the code book
         tensor_to_transform_J = tensor_to_transform_J.permute(0, 2, 1) # [B, D, J], the code book

@@ -13,8 +13,9 @@ from .blocks import (
 )
 
 
-def _make_fusion_block(features, use_bn):
+def _make_fusion_block(opt, features, use_bn):
     return FeatureFusionBlock_custom(
+        opt, 
         features,
         nn.ReLU(False),
         deconv=False,
@@ -63,10 +64,10 @@ class DPT(BaseModel):
             enable_attention_hooks=enable_attention_hooks,
         )
 
-        self.scratch.refinenet1 = _make_fusion_block(features, use_bn)
-        self.scratch.refinenet2 = _make_fusion_block(features, use_bn)
-        self.scratch.refinenet3 = _make_fusion_block(features, use_bn)
-        self.scratch.refinenet4 = _make_fusion_block(features, use_bn)
+        self.scratch.refinenet1 = _make_fusion_block(opt, features, use_bn)
+        self.scratch.refinenet2 = _make_fusion_block(opt, features, use_bn)
+        self.scratch.refinenet3 = _make_fusion_block(opt, features, use_bn)
+        self.scratch.refinenet4 = _make_fusion_block(opt, features, use_bn)
 
         self.scratch.output_conv = head
 

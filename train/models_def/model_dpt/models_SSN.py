@@ -24,6 +24,15 @@ from .blocks_SSN import (
 
 from models_def.model_dpt.utils_yogo import CrossAttention
 
+class LayerNormLastTwo(nn.Module):
+    def __init__(self, dim):
+        super(LayerNormLastTwo, self).__init__()
+        self.ln = nn.LayerNorm(dim)
+
+    def forward(self, A):
+        return torch.transpose(self.ln(torch.transpose(A, -1, -2)), -1, -2)
+
+
 def _make_fusion_block(opt, features, use_bn, if_up_resize_override=None, if_one_input=False):
     return FeatureFusionBlock_custom(
         opt, 
@@ -115,6 +124,9 @@ class DPT_SSN(BaseModel):
         if self.recon_method == 'qkv':
             if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer == 'instanceNorm':
                 norm_layer_1d = nn.InstanceNorm1d
+            elif opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer == 'layerNorm':
+                norm_layer_1d = LayerNormLastTwo
+                # assert False
             elif opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer == 'identity':
                 norm_layer_1d = nn.Identity
             else:

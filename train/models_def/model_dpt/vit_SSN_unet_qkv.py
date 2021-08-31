@@ -154,6 +154,7 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
         ssn_return_dict = ssn_op(tensor_to_transform=im_feat_init, feats_in=pretrained_activations['feat_stage_2'], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1./2., 1)) # Q: [im_height/4, im_width/4]
 
     abs_affinity = ssn_return_dict['abs_affinity'] # fixed for now
+    # print(abs_affinity.shape, abs_affinity[0].sum(-1).sum(-1), abs_affinity[0].sum(0)) # torch.Size([1, 320, 256, 320]); normalized by **spixel dim (1)**
     dist_matrix = ssn_return_dict['dist_matrix'] # fixed for now
     spixel_pixel_mul = ssn_return_dict['spixel_pixel_mul'] # fixed for now
     
@@ -181,6 +182,7 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
     ca_modules = input_dict_extra['ca_modules']
 
     im_feat_dict = {'im_feat_-1': im_feat_init}
+    print('====', 'init', torch.mean(im_feat_init), torch.median(im_feat_init), torch.max(im_feat_init), torch.min(im_feat_init))
     proj_coef_dict = {}
     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_reduce_res:
         extra_im_scales = [1., 1., 1., 1.]
@@ -203,7 +205,9 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
     if_use_init_img_feat = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_use_init_img_feat
 
     for idx, blk in enumerate(self.blocks):
-        x = blk(x) # [-1, 768, 321]
+        # print('=asdfasdfsdfasd', x.shape)
+        # print(blk[0], blk[0](x).shape)
+        x = blk(x) # [-1, 321, 768]
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_slim and idx not in hooks:
             im_feat_dict['im_feat_%d'%idx] = im_feat_idx_recent
             continue
@@ -252,16 +256,47 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
             assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from == 'matseg', 'only supporting this now'
             # print(idx, im_feat_idx.shape, abs_affinity_list[abs_affinity_idx].shape, mask_resized.shape) # torch.Size([1, 768, 64, 80]) torch.Size([1, 320, 256, 320]) torch.Size([1, 256, 320])
             ssn_return_dict_idx = ssn_op(tensor_to_transform=im_feat_idx, affinity_in=abs_affinity_list[abs_affinity_idx], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1.), if_assert_no_scale=True) # Q: [im_height, im_width]
+            # a = abs_affinity_list[abs_affinity_idx]
+            # print(a.shape, a.sum(-1).sum(-1)) # torch.Size([1, 320, 64, 80])
             # [if use im_feat_-1]
-            ssn_return_dict_idx = ssn_op(tensor_to_transform=im_feat_idx, affinity_in=abs_affinity_list[abs_affinity_idx], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1.), if_assert_no_scale=True) # Q: [im_height, im_width]
+            # ssn_return_dict_idx = ssn_op(tensor_to_transform=im_feat_idx, affinity_in=abs_affinity_list[abs_affinity_idx], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1.), if_assert_no_scale=True) # Q: [im_height, im_width]
             c_idx = ssn_return_dict_idx['C']
             x_prime = c_idx.flatten(2).transpose(1, 2) # torch.Size([8, 320, 768]); will be Identity op in qkv recon
             x_prime = torch.cat((x_cls_token, x_prime), dim=1)
+            # print('---',torch.mean(x), torch.median(x), torch.max(x), torch.min(x))
             x = x_prime
+            if idx == 0 or idx == len(self.blocks)-1:
+                print(idx)
+                print('====', idx, torch.mean(im_feat_idx), torch.median(im_feat_idx), torch.max(im_feat_idx), torch.min(im_feat_idx), torch.var(im_feat_idx, unbiased=False))
+                print('--->',torch.mean(x), torch.median(x), torch.max(x), torch.min(x))
+            # print('--->>>',torch.mean(self.norm(x)), torch.median(self.norm(x)), torch.max(self.norm(x)), torch.min(self.norm(x)))
+            # x = self.norm(x)
+            
 
         # print(c_idx.shape, x_prime.shape) # torch.Size([1, 768, 320]) torch.Size([1, 320, 768])
 
-    # print('++++', self.norm)
+    # print('++++', self.norm, self.blocks)
+    '''
+    # LayerNorm((768,), eps=1e-06, elementwise_affine=True) 
+    # Sequential(
+      (0): Block(
+        (norm1): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
+        (attn): Attention(
+        (qkv): Linear(in_features=768, out_features=2304, bias=True)
+        (attn_drop): Dropout(p=0.0, inplace=False)
+        (proj): Linear(in_features=768, out_features=768, bias=True)
+        (proj_drop): Dropout(p=0.0, inplace=False)
+        )
+        (drop_path): Identity()
+        (norm2): LayerNorm((768,), eps=1e-06, elementwise_affine=True)
+        (mlp): Mlp(
+        (fc1): Linear(in_features=768, out_features=3072, bias=True)
+        (act): GELU()
+        (fc2): Linear(in_features=3072, out_features=768, bias=True)
+        (drop): Dropout(p=0.0, inplace=False)
+        )
+    )
+    '''
     x = self.norm(x) # LayerNorm
 
     extra_return_dict = {'Q': ssn_return_dict['Q'], 'matseg_affinity': ssn_return_dict['Q_2D'], 'im_feat': im_feat_init, 'im_feat_dict': im_feat_dict, 'hooks': hooks, 'proj_coef_dict': proj_coef_dict}

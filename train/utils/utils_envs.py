@@ -151,7 +151,7 @@ def set_up_envs(opt):
         assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method in ['qtc', 'qkv']
         assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method in ['residual', 'concat', 'none']
         assert opt.cfg.MODEL_BRDF.DPT_baseline.readout in ['ignore', 'add', 'project']
-        assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer in ['instanceNorm', 'identity']
+        assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer in ['instanceNorm', 'layerNorm', 'identity']
 
         assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.feat_fusion_method in ['sum', 'concat']
 
