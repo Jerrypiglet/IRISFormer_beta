@@ -133,7 +133,8 @@ class Projector(nn.Module):
                 )
 
         self.head = head
-        self.norm_out = norm_layer_1d(planes)
+
+        # self.norm_out = norm_layer_1d(planes)
 
 
     def forward(self, x, x_t, proj_coef_in=None):
@@ -169,6 +170,7 @@ class Projector(nn.Module):
         # N, h, C/h, L * N, h, L, HW -> N, h, C/h, HW
         x_p = self.proj_matmul(proj_v, proj_coef.permute(0, 1, 3, 2))
         # -> N, C, H, W
+        print()
         _, _, S = x.shape
         x_p = self.proj_bn(x_p.view(N, -1, S))
         # print('-=-=', x.shape, x_p.shape) # -=-= torch.Size([1, 768, 5120]) torch.Size([1, 768, 5120])
@@ -183,8 +185,9 @@ class Projector(nn.Module):
             # print('---+a',torch.mean(a), torch.median(a), torch.max(a), torch.min(a))
             # print('---+b',torch.mean(b), torch.median(b), torch.max(b), torch.min(b))
             x = x + self.ff_conv(x + x_p)
+            # print(x.shape, proj_coef.shape) # torch.Size([1, 768, 5120]) torch.Size([1, 2, 5120, 320])
             # print('--->',torch.mean(x), torch.median(x), torch.max(x), torch.min(x))
-            x = self.norm_out(x)
+            # x = self.norm_out(x)
             # print('--->>>>>',torch.mean(x), torch.median(x), torch.max(x), torch.min(x))
             output_dict['x'] = x
         elif self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method == 'concat':

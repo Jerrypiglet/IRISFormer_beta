@@ -5,6 +5,7 @@ from .pair_wise_distance import PairwiseDistFunction
 from matplotlib.pyplot import * 
 # from mutils.misc import mimshow, msavefig 
 import torch.nn.functional as F
+import numpy as np
 
 def calc_init_centroid(images, num_spixels_width, num_spixels_height):
     """
@@ -133,16 +134,20 @@ def ssn_iter(pixel_features,  n_iter,
         if mask is None:
             mask = torch.ones((batch_size, height, width), dtype=torch.float32, device=spixel_features.device)
         mask_flattened = mask.reshape(batch_size, 1, -1)
+        # print(torch.unique(mask_flattened))
         # print(spixel_features.shape, pixel_features.shape) # torch.Size([1, 4, 192]) torch.Size([1, 4, 81920])
         dist_matrix_full = torch.cdist(spixel_features.transpose(-1, -2), pixel_features.transpose(-1, -2), p=2) # torch.Size([1, 48, 76800])
         spixel_pixel_mul = torch.matmul(spixel_features.transpose(-1, -2), pixel_features) # torch.Size([1, 48, 76800])
 
         dist_matrix_full = torch.square(dist_matrix_full)
         # print(dist_matrix_full.shape, mask_flattened.shape)
-        dist_matrix_full = dist_matrix_full * mask_flattened
+        dist_matrix_full = dist_matrix_full * mask_flattened + torch.ones_like(dist_matrix_full) * 1e6 * (1. - mask_flattened)
+        # print(torch.max(dist_matrix_full), torch.min(dist_matrix_full), torch.max(mask_flattened), torch.min(mask_flattened))
         # dist_matrix_full = torch.exp(-torch.square(dist_matrix_full)) # Equ 4 in Algorithm 1 in the SSN paper
 
         abs_affinity = (-dist_matrix_full).softmax(1) # torch.Size([1, 48, 76800])
+        # print(torch.max(abs_affinity), torch.min(abs_affinity))/
+        abs_affinity_normalized_by_pixels = (-dist_matrix_full).softmax(2) * mask_flattened # torch.Size([1, 48, 76800])
         # print(abs_affinity[0, :, 0])
         spixel_features = torch.bmm(abs_affinity, permuted_pixel_features) / (abs_affinity.sum(2, keepdim=True) + 1e-16) #BxJxC
         spixel_features = spixel_features.permute(0, 2, 1).contiguous()#BxCxJ
@@ -194,7 +199,7 @@ def ssn_iter(pixel_features,  n_iter,
     # import ipdb; ipdb.set_trace()
     # if not index_add:
     #abs_affinity: B x J x N
-    return abs_affinity, dist_matrix_full, spixel_features, spixel_pixel_mul
+    return abs_affinity, abs_affinity_normalized_by_pixels, dist_matrix_full, spixel_features, spixel_pixel_mul
     # else:
     #     #abs_affinity:    B x J x N
     #     #affinity_matrix: B x 9 x N

@@ -44,7 +44,7 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
 
         self.if_dense = if_dense
 
-    def forward(self, tensor_to_transform, feats_in=None, affinity_in=None, mask=None, scale_down_gamma_tensor=1, index_add=True, if_return_codebook_only=False, if_assert_no_scale=False):
+    def forward(self, tensor_to_transform, feats_in=None, affinity_in=None, if_affinity_normalized_by_pixels=False, mask=None, scale_down_gamma_tensor=1, index_add=True, if_return_codebook_only=False, if_assert_no_scale=False):
         '''
         INPUTS:
         tensor_to_transform -      nbatch x D1 x H x W
@@ -73,7 +73,7 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
             if mask is not None:
                 assert mask.shape==(batch_size, H, W)
             ssn.ssn_iter_to_use = ssn_fullJ.ssn_iter if self.if_dense else ssn.ssn_iter
-            abs_affinity, dist_matrix, spixel_features, spixel_pixel_mul = \
+            abs_affinity, abs_affinity_normalized_by_pixels, dist_matrix, spixel_features, spixel_pixel_mul = \
                 ssn.ssn_iter_to_use(
                     feats_in, n_iter=self.n_iter, 
                     num_spixels_width=self.num_spixels_width, 
@@ -81,6 +81,7 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
                     mask=mask, 
                     index_add=index_add)
             abs_affinity = abs_affinity.view(batch_size, J, H, W)
+            abs_affinity_normalized_by_pixels = abs_affinity_normalized_by_pixels.view(batch_size, J, H, W)
         else:
             abs_affinity = affinity_in
         assert abs_affinity.shape[1]==J
@@ -89,7 +90,8 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
         # print(abs_affinity.shape, dist_matrix.shape, spixel_features.shape) # torch.Size([1, J, H, W]) torch.Size([1, 9, HW]) torch.Size([1, D, J]); h, w being the dimensions of spixels, j=h*w
         
 
-        recon_return_dict = self.recon_tensor(abs_affinity, tensor_to_transform, scale_down_gamma_tensor=scale_down_gamma_tensor, if_return_codebook_only=if_return_codebook_only, if_assert_no_scale=if_assert_no_scale)
+        recon_return_dict = self.recon_tensor(abs_affinity, tensor_to_transform, scale_down_gamma_tensor=scale_down_gamma_tensor, if_return_codebook_only=if_return_codebook_only, \
+            if_assert_no_scale=if_assert_no_scale, if_affinity_normalized_by_pixels=if_affinity_normalized_by_pixels)
 
         res = dict({
             'abs_affinity': abs_affinity, 
@@ -100,6 +102,7 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
         })
         if affinity_in is None:
             res.update({
+                'abs_affinity_normalized_by_pixels': abs_affinity_normalized_by_pixels, 
                 'dist_matrix': dist_matrix, 
                 'spixel_pixel_mul': spixel_pixel_mul, })
 
@@ -108,7 +111,7 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
 
         return  res
 
-    def recon_tensor(self, gamma, tensor_to_transform, scale_down_gamma_tensor=1, if_return_codebook_only=False, if_assert_no_scale=False):
+    def recon_tensor(self, gamma, tensor_to_transform, scale_down_gamma_tensor=1, if_return_codebook_only=False, if_assert_no_scale=False, if_affinity_normalized_by_pixels=False):
         '''
         gamma: Q, BxJxHxW
         tensor_to_transform: BxDxHxW, where N*scale_down_gamma_tensor=HW
@@ -146,7 +149,11 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
         #     Q_M_Jnormalized = gamma
         #     print('=ad=f=asdfsda=f')
         # else:
-        Q_M_Jnormalized = gamma / (gamma.sum(-1, keepdims=True).sum(-2, keepdims=True)+1e-6) # [B, J, H, W]  # **normalize by pixels HW**
+        if not if_affinity_normalized_by_pixels:
+            Q_M_Jnormalized = gamma / (gamma.sum(-1, keepdims=True).sum(-2, keepdims=True)+1e-6) # [B, J, H, W]  # **normalize by pixels HW**
+        else:
+            Q_M_Jnormalized = gamma
+            # print(gamma.sum(-1).sum(-1))
         tensor_to_transform_flattened = tensor_to_transform.permute(0, 2, 3, 1).view(batch_size, -1, D)
         tensor_to_transform_J = Q_M_Jnormalized.view(batch_size, J, -1) @ tensor_to_transform_flattened # [B, J, D], the code book
         tensor_to_transform_J = tensor_to_transform_J.permute(0, 2, 1) # [B, D, J], the code book

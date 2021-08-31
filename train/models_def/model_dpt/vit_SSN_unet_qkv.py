@@ -156,7 +156,7 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
     abs_affinity = ssn_return_dict['abs_affinity'] # fixed for now
     # print(abs_affinity.shape, abs_affinity[0].sum(-1).sum(-1), abs_affinity[0].sum(0)) # torch.Size([1, 320, 256, 320]); normalized by **spixel dim (1)**
     dist_matrix = ssn_return_dict['dist_matrix'] # fixed for now
-    spixel_pixel_mul = ssn_return_dict['spixel_pixel_mul'] # fixed for now
+    abs_affinity_normalized_by_pixels = ssn_return_dict['abs_affinity_normalized_by_pixels'] # fixed for now
     
     c = ssn_return_dict['C'] # codebook
     c = c.view([batch_size, d, spixel_dims[0], spixel_dims[1]])
@@ -193,9 +193,10 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
         affinity_scales = [1./4., 1./8., 1./16., 1./32.] if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_reduce_res else [1./4., 1./4., 1./4., 1./4.]
         # affinity_scales = [1./4., 1./4., 1./4., 1./4.]
         for scale in affinity_scales:
-            abs_affinity_resized = F.interpolate(abs_affinity, scale_factor=scale, mode='bilinear')
+            abs_affinity_resized = F.interpolate(abs_affinity, scale_factor=scale, mode='bilinear') / scale / scale
             abs_affinity_resized = abs_affinity_resized / (torch.sum(abs_affinity_resized, 1, keepdims=True)+1e-6)
             abs_affinity_list.append(abs_affinity_resized)
+    abs_affinity_normalized_by_pixels_input = F.interpolate(abs_affinity_normalized_by_pixels, scale_factor=1./4., mode='bilinear') * 4. * 4.
 
     extra_im_scale_accu = 1.
     abs_affinity_idx = 0
@@ -254,8 +255,14 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
             pass
         else:
             assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from == 'matseg', 'only supporting this now'
-            # print(idx, im_feat_idx.shape, abs_affinity_list[abs_affinity_idx].shape, mask_resized.shape) # torch.Size([1, 768, 64, 80]) torch.Size([1, 320, 256, 320]) torch.Size([1, 256, 320])
-            ssn_return_dict_idx = ssn_op(tensor_to_transform=im_feat_idx, affinity_in=abs_affinity_list[abs_affinity_idx], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1.), if_assert_no_scale=True) # Q: [im_height, im_width]
+            assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_reduce_res
+            # ssn_return_dict_idx = ssn_op(tensor_to_transform=im_feat_idx, affinity_in=abs_affinity_list[abs_affinity_idx], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1.), if_assert_no_scale=True) # Q: [im_height, im_width]
+            # print(abs_affinity_normalized_by_pixels_input.shape, torch.max(abs_affinity_normalized_by_pixels_input), torch.min(abs_affinity_normalized_by_pixels_input), abs_affinity_normalized_by_pixels_input.sum(-1).sum(-1))
+            # print(abs_affinity_normalized_by_pixels.shape, torch.max(abs_affinity_normalized_by_pixels), torch.min(abs_affinity_normalized_by_pixels), abs_affinity_normalized_by_pixels.sum(-1).sum(-1))
+            ssn_return_dict_idx = ssn_op(tensor_to_transform=im_feat_idx, affinity_in=abs_affinity_normalized_by_pixels_input, mask=mask_resized, if_return_codebook_only=True, \
+                scale_down_gamma_tensor=(1, 1.), if_assert_no_scale=True, if_affinity_normalized_by_pixels=True) # Q: [im_height, im_width]
+
+            # print(abs_affinity_list[abs_affinity_idx].shape, proj_coef_idx.shape) # torch.Size([1, 320, 64, 80]) torch.Size([1, 2, 5120, 320])
             # a = abs_affinity_list[abs_affinity_idx]
             # print(a.shape, a.sum(-1).sum(-1)) # torch.Size([1, 320, 64, 80])
             # [if use im_feat_-1]
