@@ -395,8 +395,10 @@ def _make_vit_b_rn50_backbone_SSN_unet(
             )
             # pass
 
-    pretrained.model.blocks[hooks[2]].register_forward_hook(get_activation("3"))
-    pretrained.model.blocks[hooks[3]].register_forward_hook(get_activation("4"))
+    if len(hooks[2]) >= 3:
+        pretrained.model.blocks[hooks[2]].register_forward_hook(get_activation("3"))
+        if len(hooks[2]) >= 4:
+            pretrained.model.blocks[hooks[3]].register_forward_hook(get_activation("4"))
 
     if enable_attention_hooks:
         pretrained.model.blocks[2].attn.register_forward_hook(get_attention("attn_1"))
@@ -538,154 +540,104 @@ def _make_vit_b_rn50_backbone_SSN_unet(
 
     return pretrained
 
-def _make_vit_b16_backbone_SSN_unet(
+def _make_vit_b_rn50_backbone_SSN_unet_N_layers(
     opt, 
     model,
-    features=[96, 192, 384, 768],
+    features=[256, 512, 768, 768],
     size=[384, 384],
-    hooks=[2, 5, 8, 11],
+    hooks=[0, 1, 8, 11],
     vit_features=768,
+    use_vit_only=False,
     use_readout="ignore",
     start_index=1,
-    enable_attention_hooks=False,):
-
-    assert False
+    enable_attention_hooks=False):
 
     pretrained = nn.Module()
 
     pretrained.model = model
-    
 
-    pretrained.model.patch_embed.backbone.stem.register_forward_hook(
-        get_activation("feat_stem")
-    )
-    pretrained.model.patch_embed.backbone.stages[0].register_forward_hook(
-        get_activation("feat_stage_0")
-    )
-    pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
-        get_activation("feat_stage_1")
-    )
-    pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
-        get_activation("feat_stage_2")
+    if not(opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_feat_in_transformer):
+        # in this case, no need for resnet backbones
+        pretrained.model.patch_embed.backbone.stem.register_forward_hook(
+            get_activation("feat_stem")
+        )
+        pretrained.model.patch_embed.backbone.stages[0].register_forward_hook(
+            get_activation("feat_stage_0")
+        )
+        if not opt.cfg.MODEL_BRDF.DPT_baseline.model=='dpt_large_SSN':
+            pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
+                get_activation("feat_stage_1")
+            )
+            pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
+                get_activation("feat_stage_2")
+            )
+        
+    pretrained.model.patch_embed.proj.register_forward_hook(
+        get_activation("feat_proj")
     )
 
+    if use_vit_only == True:
+        if len(hooks) >= 1:
+            pretrained.model.blocks[hooks[0]].register_forward_hook(get_activation("1"))
+            if len(hooks) >= 2:
+                pretrained.model.blocks[hooks[1]].register_forward_hook(get_activation("2"))
+    else:
+        assert False
+        if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_feat_in_transformer:
+            pretrained.model.patch_embed.backbone.stages[0].register_forward_hook(
+                get_activation("1")
+            )
+            pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
+                get_activation("2")
+            )
+            # pass
 
-    pretrained.model.blocks[hooks[0]].register_forward_hook(get_activation("1"))
-    pretrained.model.blocks[hooks[1]].register_forward_hook(get_activation("2"))
-    pretrained.model.blocks[hooks[2]].register_forward_hook(get_activation("3"))
-    pretrained.model.blocks[hooks[3]].register_forward_hook(get_activation("4"))
+    if len(hooks) >= 3:
+        pretrained.model.blocks[hooks[2]].register_forward_hook(get_activation("3"))
+        if len(hooks) >= 4:
+            pretrained.model.blocks[hooks[3]].register_forward_hook(get_activation("4"))
+
+    if enable_attention_hooks:
+        pretrained.model.blocks[2].attn.register_forward_hook(get_attention("attn_1"))
+        pretrained.model.blocks[5].attn.register_forward_hook(get_attention("attn_2"))
+        pretrained.model.blocks[8].attn.register_forward_hook(get_attention("attn_3"))
+        pretrained.model.blocks[11].attn.register_forward_hook(get_attention("attn_4"))
+        pretrained.attention = attention
 
     pretrained.activations = activations
 
-    if enable_attention_hooks:
-        pretrained.model.blocks[hooks[0]].attn.register_forward_hook(
-            get_attention("attn_1")
-        )
-        pretrained.model.blocks[hooks[1]].attn.register_forward_hook(
-            get_attention("attn_2")
-        )
-        pretrained.model.blocks[hooks[2]].attn.register_forward_hook(
-            get_attention("attn_3")
-        )
-        pretrained.model.blocks[hooks[3]].attn.register_forward_hook(
-            get_attention("attn_4")
-        )
-        pretrained.attention = attention
-
     readout_oper = get_readout_oper(vit_features, features, use_readout, start_index)
 
-    # 32, 48, 136, 384
-    pretrained.act_postprocess1 = nn.Sequential(
-        readout_oper[0],
-        Transpose(1, 2),
-        nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
-        nn.Conv2d(
-            in_channels=vit_features,
-            out_channels=features[0],
-            kernel_size=1,
-            stride=1,
-            padding=0,
-        ),
-        nn.ConvTranspose2d(
-            in_channels=features[0],
-            out_channels=features[0],
-            kernel_size=4,
-            stride=4,
-            padding=0,
-            bias=True,
-            dilation=1,
-            groups=1,
-        ),
-    )
-
-    pretrained.act_postprocess2 = nn.Sequential(
-        readout_oper[1],
-        Transpose(1, 2),
-        nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
-        nn.Conv2d(
-            in_channels=vit_features,
-            out_channels=features[1],
-            kernel_size=1,
-            stride=1,
-            padding=0,
-        ),
-        nn.ConvTranspose2d(
-            in_channels=features[1],
-            out_channels=features[1],
-            kernel_size=2,
-            stride=2,
-            padding=0,
-            bias=True,
-            dilation=1,
-            groups=1,
-        ),
-    )
-
-    pretrained.act_postprocess3 = nn.Sequential(
-        readout_oper[2],
-        Transpose(1, 2),
-        nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
-        nn.Conv2d(
-            in_channels=vit_features,
-            out_channels=features[2],
-            kernel_size=1,
-            stride=1,
-            padding=0,
-        ),
-    )
-
-    pretrained.act_postprocess4 = nn.Sequential(
-        readout_oper[3],
-        Transpose(1, 2),
-        nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
-        nn.Conv2d(
-            in_channels=vit_features,
-            out_channels=features[3],
-            kernel_size=1,
-            stride=1,
-            padding=0,
-        ),
-        nn.Conv2d(
-            in_channels=features[3],
-            out_channels=features[3],
-            kernel_size=3,
-            stride=2,
-            padding=1,
-        ),
-    )
+    recon_method = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method
+    assert recon_method in ['qkv']
+    assert use_vit_only
+    
+    readout_oper = readout_oper[-len(hooks):]
+    act_postprocess_dict = {}
+    for idx, layer_idx in enumerate(hooks):
+        act_postprocess_dict['%d'%layer_idx] = nn.Sequential(
+            readout_oper[idx],
+            Transpose(1, 2),
+            nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
+            nn.Conv2d(
+                in_channels=vit_features,
+                out_channels=features[idx],
+                kernel_size=1,
+                stride=1,
+                padding=0,
+            ),
+        )
+    pretrained.act_postprocess_dict = nn.ModuleDict(act_postprocess_dict)
 
     pretrained.model.start_index = start_index
     pretrained.model.patch_size = [opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.patch_size]*2
 
     # We inject this function into the VisionTransformer instances so that
     # we can use it with interpolated position embeddings without modifying the library source.
-    pretrained.model.forward_flex_SSN = types.MethodType(forward_flex_SSN_unet, pretrained.model)
-
-    # We inject this function into the VisionTransformer instances so that
-    # we can use it with interpolated position embeddings without modifying the library source.
-    # pretrained.model._resize_pos_embed_SSN = types.MethodType(
-    #     _resize_pos_embed_SSN, pretrained.model
-    # )
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv and (recon_method == 'qkv'):
+        pretrained.model.forward_flex_SSN = types.MethodType(forward_flex_SSN_unet_qkv_yogo, pretrained.model)
+    else:
+        pretrained.model.forward_flex_SSN = types.MethodType(forward_flex_SSN_unet, pretrained.model)
 
     return pretrained
 
@@ -696,6 +648,7 @@ def _make_pretrained_vitb_unet_384_SSN(
     hooks=None,
     use_vit_only=False,
     enable_attention_hooks=False,
+    if_N_layers=False
 ):
     # [DPT-SSN model] (v1) https://i.imgur.com/iSmi5wt.png
     print('========= [hybrid-SSN] [_make_pretrained_vitb_unet_384_SSN] pretrained', pretrained)
@@ -762,16 +715,29 @@ def _make_pretrained_vitb_unet_384_SSN(
     hooks = [0, 1, 8, 11] if hooks == None else hooks
     if_unet_feat_in_transformer = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_feat_in_transformer
 
-    return _make_vit_b_rn50_backbone_SSN_unet(
-        opt, 
-        model,
-        features=[256, 512, 768, 768] if not if_unet_feat_in_transformer else [128, 256, 768, 768],
-        size=[384, 384],
-        hooks=hooks,
-        use_vit_only=use_vit_only,
-        use_readout=use_readout,
-        enable_attention_hooks=enable_attention_hooks,
-    )
+    if not if_N_layers:
+        return _make_vit_b_rn50_backbone_SSN_unet(
+            opt, 
+            model,
+            features=[256, 512, 768, 768] if not if_unet_feat_in_transformer else [128, 256, 768, 768],
+            size=[384, 384],
+            hooks=hooks,
+            use_vit_only=use_vit_only,
+            use_readout=use_readout,
+            enable_attention_hooks=enable_attention_hooks,
+        )
+    else:
+        assert not if_unet_feat_in_transformer, 'not supported'
+        return _make_vit_b_rn50_backbone_SSN_unet_N_layers(
+            opt, 
+            model,
+            features=[256, 512, 768, 768][-len(hooks):],
+            size=[384, 384],
+            hooks=hooks,
+            use_vit_only=use_vit_only,
+            use_readout=use_readout,
+            enable_attention_hooks=enable_attention_hooks,
+        )
 
 
 def _make_pretrained_vitl_unet_384_SSN(

@@ -12,6 +12,9 @@ from .vit_SSN_unet import (
 from .vit_SSN_unet_qkv import (
     forward_vit_SSN_qkv_yogo
 )
+from .vit_SSN_unet_qkv_N_layers import (
+    forward_vit_SSN_qkv_yogo_N_layers
+)
 from .vit_SSN_bl import (
     _make_pretrained_vitb16_384_SSN,
 )
@@ -71,7 +74,7 @@ def _make_encoder_SSN(
     #     scratch = _make_scratch_SSN(
     #         [256, 512, 1024, 2048], features, groups=groups, expand=expand
     #     )  # efficientnet_lite3
-    elif backbone in ["vitb_unet_384", "vitb_unet_384_N_layer"]: # DPT-hybrid-SSN
+    elif backbone in ["vitb_unet_384"]: # DPT-hybrid-SSN
         if_unet_feat_in_transformer = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_feat_in_transformer
 
         pretrained = _make_pretrained_vitb_unet_384_SSN(
@@ -85,6 +88,20 @@ def _make_encoder_SSN(
         channels = [256, 512, 768, 768] if not if_unet_feat_in_transformer else [128, 256, 768, 768]
         scratch = _make_scratch_SSN(
             channels, features, groups=groups, expand=expand
+        )
+    elif backbone in ["vitb_unet_384_N_layer"]: # DPT-hybrid-SSN
+        pretrained = _make_pretrained_vitb_unet_384_SSN(
+            opt, 
+            use_pretrained,
+            hooks=hooks,
+            use_vit_only=use_vit_only,
+            use_readout=use_readout,
+            enable_attention_hooks=enable_attention_hooks,
+            if_N_layers=True
+        )
+        channels = [256, 512, 768, 768][-len(hooks):]
+        scratch = _make_scratch_SSN_N_layers(
+            channels, features, groups=groups, expand=expand,hooks=hooks
         )
     elif backbone == "vitl_unet_384": # DPT-large-SSN
         pretrained = _make_pretrained_vitl_unet_384_SSN(
@@ -154,5 +171,30 @@ def _make_scratch_SSN(in_shape, out_shape, groups=1, expand=False):
         bias=False,
         groups=groups,
     )
+
+    return scratch
+
+def _make_scratch_SSN_N_layers(in_shape_list, out_shape, groups=1, expand=False, hooks=[]):
+    scratch = nn.Module()
+
+    out_shape_list = [out_shape] * 4
+    if expand == True:
+        out_shape_list = [out_shape, out_shape * 2, out_shape * 4, out_shape * 8]
+    
+    out_shape_list = out_shape_list[-len(hooks):]
+
+    layer_rn_dict = {}
+    assert len(out_shape_list)==len(in_shape_list)==len(hooks)
+    for in_shape, out_shape, layer_idx in zip(in_shape_list, out_shape_list, hooks):
+            layer_rn_dict['%d'%layer_idx] = nn.Conv2d(
+                in_shape,
+                out_shape,
+                kernel_size=3,
+                stride=1,
+                padding=1,
+                bias=False,
+                groups=groups,
+            )
+    scratch.layer_rn_dict = nn.ModuleDict(layer_rn_dict)
 
     return scratch

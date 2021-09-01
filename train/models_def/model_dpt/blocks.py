@@ -328,7 +328,7 @@ class FeatureFusionBlock_custom(nn.Module):
         expand=False,
         align_corners=True,
         if_up_resize_override=None, 
-        if_one_input=False
+        if_assert_one_input=False
     ):
         """Init.
 
@@ -340,7 +340,7 @@ class FeatureFusionBlock_custom(nn.Module):
 
         self.opt = opt
         self.if_up_resize_override = if_up_resize_override
-        self.if_one_input = if_one_input
+        self.if_assert_one_input = if_assert_one_input
 
         self.deconv = deconv
         self.align_corners = align_corners
@@ -354,7 +354,7 @@ class FeatureFusionBlock_custom(nn.Module):
 
         feat_fusion_method = self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.feat_fusion_method
         
-        if not self.if_one_input and feat_fusion_method=='concat':
+        if not self.if_assert_one_input and feat_fusion_method=='concat':
             self.features_in = features * 2
         else:
             self.features_in = features
@@ -386,6 +386,7 @@ class FeatureFusionBlock_custom(nn.Module):
         output = xs[0]
 
         if len(xs) == 2:
+            assert not self.if_assert_one_input
             res = self.resConfUnit1(xs[1])
             # print(xs[0].shape, xs[1].shape, res.shape)
             # if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:

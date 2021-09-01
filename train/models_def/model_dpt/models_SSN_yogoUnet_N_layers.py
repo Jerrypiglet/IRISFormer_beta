@@ -18,8 +18,10 @@ from .blocks_SSN import (
     # FeatureFusionBlock_custom,
     # Interpolate,
     _make_encoder_SSN,
+    _make_scratch_SSN_N_layers, 
     forward_vit_SSN,
-    forward_vit_SSN_qkv_yogo
+    forward_vit_SSN_qkv_yogo, 
+    forward_vit_SSN_qkv_yogo_N_layers
 )
 
 from models_def.model_dpt.utils_yogo import CrossAttention
@@ -47,47 +49,42 @@ def _make_fusion_block(opt, features, use_bn, if_up_resize_override=None, if_ass
     )
 
 
-class DPT_SSN(BaseModel):
+class DPT_SSN_yogoUnet_N_layers(BaseModel):
     def __init__(
         self,
         opt, 
         head,
         features=256,
-        backbone="vitb_rn50_384",
+        backbone="vitb_unet_384_N_layer",
         readout="project",
         channels_last=False,
         use_bn=False,
         enable_attention_hooks=False,
     ):
 
-        super(DPT_SSN, self).__init__()
+        super(DPT_SSN_yogoUnet_N_layers, self).__init__()
 
         self.opt = opt
 
         # assert backbone in ['vitb_rn50_384', 'vitb_unet_384'], 'Backbone %s unsupported in DPT_SSN!'%backbone
         # assert backbone in ['vitb_unet_384', 'vitb16_384'], 'Backbone %s unsupported in DPT_SSN!'%backbone
-        assert backbone in ['vitb_unet_384', 'vitb_unet_384_N_layer', 'vitl_unet_384'], 'Backbone %s unsupported in DPT_SSN!'%backbone
+        assert backbone in ['vitb_unet_384_N_layer'], 'Backbone %s unsupported in DPT_SSN!'%backbone
 
         self.channels_last = channels_last
-
-        hooks = {
-            "vitb_rn50_384": [0, 1, 8, 11],
-            "vitl_unet_384": [5, 11, 17, 23],
-            "vitb_unet_384": [0, 1, 8, 11],
-            "vitb_unet_384_N_layer": [opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers-1]*4 if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers!=-1 else [0, 0, 0, 0],
-            "vitb16_384": [2, 5, 8, 11],
-            "vitl16_384": [5, 11, 17, 23],
+        N_layer_hooks_dict = {
+            1: [0], 
+            2: [0, 1], 
+            4: [0, 1, 2, 3], 
+            8: [0, 1, 4, 7], 
+            12: [0, 1, 8, 11]
         }
-        self.hooks_backbone = hooks[backbone]
 
-        vit_dims = {
-            # "vitb_rn50_384": [0, 1, 8, 11],
-            "vitl_unet_384": 1024,
-            "vitb_unet_384": 768,
-            "vitb_unet_384_N_layer": 768,
-            # "vitb16_384": [2, 5, 8, 11],
-            # "vitl16_384": [5, 11, 17, 23],
-        }
+        self.num_layers = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers
+        self.output_layers = N_layer_hooks_dict[self.num_layers] if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used else [0]
+
+        self.hooks_backbone = N_layer_hooks_dict[self.num_layers]
+
+        vit_dims = 768
 
         # Instantiate backbone and reassemble blocks
         self.pretrained, self.scratch = _make_encoder_SSN(
@@ -98,30 +95,25 @@ class DPT_SSN(BaseModel):
             groups=1,
             expand=False,
             exportable=False,
-            hooks=hooks[backbone],
+            hooks=self.output_layers,
             use_vit_only=opt.cfg.MODEL_BRDF.DPT_baseline.use_vit_only, 
             use_readout=readout,
             enable_attention_hooks=enable_attention_hooks,
         )
 
-        self.scratch.refinenet1 = _make_fusion_block(opt, features, use_bn, if_up_resize_override=True)
-        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
-            pass
-        else:
-            self.scratch.refinenet2 = _make_fusion_block(opt, features, use_bn)
-            self.scratch.refinenet3 = _make_fusion_block(opt, features, use_bn)
-            self.scratch.refinenet4 = _make_fusion_block(opt, features, use_bn, if_assert_one_input=True)
-        
-        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
-            # pass
-            self.scratch.layer1_rn = nn.Identity()
-            self.scratch.layer2_rn = nn.Identity()
-            self.scratch.layer3_rn = nn.Identity()
+        refinenet_dict = {} # layer with smaller index is earlier
+        for layer_idx in self.output_layers:
+            # layer_idx = self.num_layers - 1 - i
+            if_last_layer = layer_idx==self.output_layers[-1]
+            if_first_layer = layer_idx==self.output_layers[0]
+            refinenet_dict['%d'%layer_idx] = _make_fusion_block(opt, features, use_bn, if_up_resize_override=if_last_layer, if_assert_one_input=if_first_layer) # output layer: upsizex2 no matter if_not_reduce_res or not
 
-        if backbone=='vitb_unet_384_N_layer':
-            for layer_idx in range(len(self.pretrained.model.blocks)):
-                if layer_idx >= opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers:
-                    self.pretrained.model.blocks[layer_idx] = nn.Identity()
+        self.scratch.refinenet_dict = nn.ModuleDict(refinenet_dict)
+            
+
+        for layer_idx in range(len(self.pretrained.model.blocks)):
+            if layer_idx >= self.num_layers:
+                self.pretrained.model.blocks[layer_idx] = nn.Identity()
 
         self.scratch.output_conv = head
 
@@ -139,28 +131,31 @@ class DPT_SSN(BaseModel):
                 assert False, 'Invalid MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer'
             module_dict = {}
             im_c = opt.cfg.MODEL_BRDF.DPT_baseline.feat_proj_channels
-            token_c = vit_dims[backbone]
+            token_c = vit_dims
             assert im_c == token_c
+
             if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv:
-                for layer_idx in range(12):
+                for layer_idx in range(self.num_layers):
                     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_slim and layer_idx not in self.hooks_backbone:
+                        assert False, 'not support'
                         continue
 
-                    if backbone=='vitb_unet_384_N_layer' and layer_idx >= opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers:
-                        continue
-                    # if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used and layer_idx!=self.hooks_backbone[-1]:
-                    #     # print(module_dict['layer_%d_ca'%layer_idx].requires_grad, '-=--=-==')
-                    #     with torch.no_grad():    
-                    #         module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
-                    #     continue
+                    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
+                        if layer_idx >= self.num_layers:
+                            continue
+                    # else:
+                    #     if layer_idx not in self.output_layers:
+                    #         continue
                         
                     module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
+                    # print('+++++++++', 'layer_%d_ca'%layer_idx)
 
             else:
-                module_dict['layer_1_ca'] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
-                module_dict['layer_2_ca'] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
-                module_dict['layer_3_ca'] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
-                module_dict['layer_4_ca'] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
+                assert False, 'unsupported for now'
+                # module_dict['layer_1_ca'] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
+                # module_dict['layer_2_ca'] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
+                # module_dict['layer_3_ca'] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
+                # module_dict['layer_4_ca'] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
             self.ca_modules = nn.ModuleDict(module_dict)
 
     def forward(self, x, input_dict_extra={}):
@@ -170,45 +165,46 @@ class DPT_SSN(BaseModel):
         if self.recon_method == 'qkv':
             input_dict_extra.update({'ca_modules': self.ca_modules})
         if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv:
-            layer_1, layer_2, layer_3, layer_4, ssn_return_dict = forward_vit_SSN_qkv_yogo(self.opt, self.pretrained, x, input_dict_extra=input_dict_extra, hooks=self.hooks_backbone)
+            layer_dict, ssn_return_dict = forward_vit_SSN_qkv_yogo_N_layers(self.opt, self.pretrained, x, input_dict_extra=input_dict_extra, hooks=self.output_layers)
         else:
-            layer_1, layer_2, layer_3, layer_4, ssn_return_dict = forward_vit_SSN(self.opt, self.pretrained, x, input_dict_extra=input_dict_extra)
+            assert False
+            # layer_1, layer_2, layer_3, layer_4, ssn_return_dict = forward_vit_SSN(self.opt, self.pretrained, x, input_dict_extra=input_dict_extra)
 
-        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
-            pass
-        else:
-            layer_1_rn = self.scratch.layer1_rn(layer_1)
-            layer_2_rn = self.scratch.layer2_rn(layer_2)
-            layer_3_rn = self.scratch.layer3_rn(layer_3)
-        layer_4_rn = self.scratch.layer4_rn(layer_4)
-        # print(layer_1_rn.shape, layer_2_rn.shape, layer_3_rn.shape, layer_4_rn.shape)
-        # print(self.scratch.refinenet4)
-        # print(self.scratch.refinenet3)
-        # print(self.scratch.refinenet2)
-        # print(self.scratch.refinenet1)
+        # if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
+        #     pass
+        # else:
+        #     if self.num_layers < 4:
+        #         layer_2_rn = self.scratch.layer2_rn(layer_2)
+        #         if self.num_layers < 3:
+        #             layer_3_rn = self.scratch.layer3_rn(layer_3)
+        #             if self.num_layers < 2:
+        #                 layer_1_rn = self.scratch.layer1_rn(layer_1)
 
-        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
-            # path_3 = self.scratch.refinenet3(path_4)
-            # path_2 = self.scratch.refinenet2(path_3)
-            # path_1 = self.scratch.refinenet1(path_2)
-            path_1 = self.scratch.refinenet1(layer_4_rn)
-        else:
-            path_4 = self.scratch.refinenet4(layer_4_rn)
-            path_3 = self.scratch.refinenet3(path_4, layer_3_rn)
-            path_2 = self.scratch.refinenet2(path_3, layer_2_rn)
-            path_1 = self.scratch.refinenet1(path_2, layer_1_rn)
-        # MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_reduce_res:
-        # print(path_4.shape, path_3.shape, path_2.shape, path_1.shape,)
-        # else: (original)
-        # torch.Size([2, 256, 16, 20]) torch.Size([2, 256, 32, 40]) torch.Size([2, 256, 64, 80]) torch.Size([2, 256, 128, 160])
+        # layer_4_rn = self.scratch.layer4_rn(layer_4)
+        # # print(layer_1_rn.shape, layer_2_rn.shape, layer_3_rn.shape, layer_4_rn.shape)
+        # # print(self.scratch.refinenet4)
+        # # print(self.scratch.refinenet3)
+        # # print(self.scratch.refinenet2)
+        # # print(self.scratch.refinenet1)
+        for layer_idx in self.output_layers:
+            # print(layer_idx, self.scratch.layer_rn_dict['%d'%layer_idx])
+            layer_dict['%d'%layer_idx] = self.scratch.layer_rn_dict['%d'%layer_idx](layer_dict['%d'%layer_idx])
 
+        for layer_idx in self.output_layers:
+            if layer_idx in [self.output_layers[0], self.output_layers[-1]]:
+                path_out = self.scratch.refinenet_dict['%d'%layer_idx](layer_dict['%d'%layer_idx])
+            else:
+                path_out = self.scratch.refinenet_dict['%d'%layer_idx](path_out, layer_dict['%d'%layer_idx])
 
-
-        out = self.scratch.output_conv(path_1)
+        out = self.scratch.output_conv(path_out)
 
         return out, ssn_return_dict
 
-class DPTAlbedoDepthModel_SSN(DPT_SSN):
+class DPTAlbedoDepthModel_SSN_yogoUnet_N_layers(DPT_SSN_yogoUnet_N_layers):
+    '''
+    N layers, 
+    of which up to 4 layers are connected to outputs
+    '''
     def __init__(
         self, opt, modality='al', path=None, non_negative=False, scale=1.0, shift=0.0, skip_keys=[], keep_keys=[], **kwargs
     ):

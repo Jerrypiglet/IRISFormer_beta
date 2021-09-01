@@ -34,6 +34,7 @@ from utils.utils_total3D.utils_OR_cam import get_rotation_matix_result
 
 from models_def.model_dpt.models import DPTAlbedoDepthModel
 from models_def.model_dpt.models_SSN import DPTAlbedoDepthModel_SSN
+from models_def.model_dpt.models_SSN_yogoUnet_N_layers import DPTAlbedoDepthModel_SSN_yogoUnet_N_layers
 from models_def.model_dpt.transforms import Resize as dpt_Resize
 from models_def.model_dpt.transforms import NormalizeImage as dpt_NormalizeImage
 from models_def.model_dpt.transforms import PrepareForNet as dpt_PrepareForNet
@@ -142,17 +143,30 @@ class Model_Joint(nn.Module):
                         skip_keys += ['scratch.output_conv']
                     if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_patch_embed_proj:
                         skip_keys += ['pretrained.model.patch_embed.proj']
-                    self.BRDF_Net = DPTAlbedoDepthModel_SSN(
-                        opt=opt, 
-                        modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
-                        path=model_path,
-                        # backbone="vitb_rn50_384",
-                        backbone="vitb_unet_384" if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers==-1 else "vitb_unet_384_N_layer",
-                        non_negative=if_non_negative,
-                        enable_attention_hooks=False,
-                        skip_keys=skip_keys, 
-                        keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
-                    )
+                    if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers==-1:
+                        self.BRDF_Net = DPTAlbedoDepthModel_SSN(
+                            opt=opt, 
+                            modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
+                            path=model_path,
+                            # backbone="vitb_rn50_384",
+                            backbone="vitb_unet_384",
+                            non_negative=if_non_negative,
+                            enable_attention_hooks=False,
+                            skip_keys=skip_keys, 
+                            keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
+                        )
+                    else:
+                        self.BRDF_Net = DPTAlbedoDepthModel_SSN_yogoUnet_N_layers(
+                            opt=opt, 
+                            modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
+                            path=model_path,
+                            # backbone="vitb_rn50_384",
+                            backbone="vitb_unet_384_N_layer",
+                            non_negative=if_non_negative,
+                            enable_attention_hooks=False,
+                            skip_keys=skip_keys, 
+                            keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
+                        )
                 elif model_type=='dpt_large_SSN':
                     self.BRDF_Net = DPTAlbedoDepthModel_SSN(
                         opt=opt, 
