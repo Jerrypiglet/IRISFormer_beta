@@ -53,21 +53,24 @@ def forward_vit_SSN_qkv_yogo(opt, pretrained, x, input_dict_extra={}, hooks=[]):
 
     glob, flex_return_dict = pretrained.model.forward_flex_SSN(opt, x, pretrained.activations, input_dict_extra=input_dict_extra, hooks=hooks)
 
-    if (opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_feat_in_transformer) and not opt.cfg.MODEL_BRDF.DPT_baseline.use_vit_only:
-        layer_1 = flex_return_dict['unet_output_dict']['dx4']
-        layer_2 = flex_return_dict['unet_output_dict']['dx3']
-    else:
-        layer_1 = pretrained.activations["1"]
-        layer_2 = pretrained.activations["2"]
-    layer_3 = pretrained.activations["3"]
-    layer_4 = pretrained.activations["4"]
+    # if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers:
+    #     if (opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_feat_in_transformer) and not opt.cfg.MODEL_BRDF.DPT_baseline.use_vit_only:
+    #         layer_1 = flex_return_dict['unet_output_dict']['dx4']
+    #         layer_2 = flex_return_dict['unet_output_dict']['dx3']
+    #     else:
+    #         layer_1 = pretrained.activations["1"]
+    #         layer_2 = pretrained.activations["2"]
+    #     layer_3 = pretrained.activations["3"]
+    #     layer_4 = pretrained.activations["4"]
+    # else:
+    #     layer_4 = pretrained.activations["1"]
 
     if_print = False
 
     # [layer_3 and layer_4 are from transformer layers]
     # print(x.shape)
-    if if_print:
-        print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+    # if if_print:
+    #     print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # hybrid-SSN: torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 321, 768]) torch.Size([1, 321, 768])
     # hybrid-SSN-qkv-unet: torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 321, 768]) torch.Size([1, 321, 768])
     # hybrid(-SSN)-ViT: torch.Size([1, 321, 768]) torch.Size([1, 321, 768]) torch.Size([1, 321, 768]) torch.Size([1, 321, 768])
@@ -206,9 +209,12 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
     if_use_init_img_feat = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_use_init_img_feat
 
     for idx, blk in enumerate(self.blocks):
-        # print('=asdfasdfsdfasd', x.shape)
-        # print(blk[0], blk[0](x).shape)
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers!=-1 and idx >= opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers:
+            continue
+        
         x = blk(x) # [-1, 321, 768]
+        # x = blk(x)*0. + x # [-1, 321, 768]
+
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_slim and idx not in hooks:
             im_feat_dict['im_feat_%d'%idx] = im_feat_idx_recent
             continue
@@ -237,17 +243,12 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
         batch_size, sspixels = dist_matrix.shape[:2]
         proj_coef_in = F.interpolate(-dist_matrix.reshape(batch_size, sspixels, abs_affinity.shape[2], abs_affinity.shape[3]), scale_factor=1./4., mode='bilinear')
 
-        # batch_size, sspixels = spixel_pixel_mul.shape[:2]
-        # proj_coef_in = F.interpolate(spixel_pixel_mul.reshape(batch_size, sspixels, abs_affinity.shape[2], abs_affinity.shape[3]), scale_factor=1./4., mode='bilinear')
-
         if if_use_init_img_feat:
             im_feat_idx, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_dict['im_feat_-1'], x_tokens, im_feat_scale_factor=extra_im_scale_accu, proj_coef_in=proj_coef_in) # torch.Size([1, 768, 320])
         else:
             im_feat_idx, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_dict['im_feat_%d'%(idx-1)], x_tokens, im_feat_scale_factor=extra_im_scale, proj_coef_in=proj_coef_in) # torch.Size([1, 768, 320])
         # print(idx, extra_im_scale_accu, im_feat_dict['im_feat_%d'%(idx-1)].shape, extra_im_scale, im_feat_idx.shape)
         im_feat_dict['im_feat_%d'%idx] = im_feat_idx
-        # if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used and idx!=hooks[-1]:
-        #     im_feat_idx = im_feat_idx.detach
         proj_coef_dict['proj_coef_%d'%idx] = proj_coef_idx
         im_feat_idx_recent = im_feat_idx
 
@@ -261,21 +262,17 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
             # print(abs_affinity_normalized_by_pixels.shape, torch.max(abs_affinity_normalized_by_pixels), torch.min(abs_affinity_normalized_by_pixels), abs_affinity_normalized_by_pixels.sum(-1).sum(-1))
             ssn_return_dict_idx = ssn_op(tensor_to_transform=im_feat_idx, affinity_in=abs_affinity_normalized_by_pixels_input, mask=mask_resized, if_return_codebook_only=True, \
                 scale_down_gamma_tensor=(1, 1.), if_assert_no_scale=True, if_affinity_normalized_by_pixels=True) # Q: [im_height, im_width]
-
-            # print(abs_affinity_list[abs_affinity_idx].shape, proj_coef_idx.shape) # torch.Size([1, 320, 64, 80]) torch.Size([1, 2, 5120, 320])
-            # a = abs_affinity_list[abs_affinity_idx]
-            # print(a.shape, a.sum(-1).sum(-1)) # torch.Size([1, 320, 64, 80])
-            # [if use im_feat_-1]
-            # ssn_return_dict_idx = ssn_op(tensor_to_transform=im_feat_idx, affinity_in=abs_affinity_list[abs_affinity_idx], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1.), if_assert_no_scale=True) # Q: [im_height, im_width]
+            
             c_idx = ssn_return_dict_idx['C']
             x_prime = c_idx.flatten(2).transpose(1, 2) # torch.Size([8, 320, 768]); will be Identity op in qkv recon
-            x_prime = torch.cat((x_cls_token, x_prime), dim=1)
+            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_res_add_after_QI:
+                x_prime = x[:, 1:, :] + x_prime
+            
+            x = torch.cat((x_cls_token, x_prime), dim=1)
             # print('---',torch.mean(x), torch.median(x), torch.max(x), torch.min(x))
-            x = x_prime
             if idx == 0 or idx == len(self.blocks)-1:
-                print(idx)
                 print('====', idx, torch.mean(im_feat_idx), torch.median(im_feat_idx), torch.max(im_feat_idx), torch.min(im_feat_idx), torch.var(im_feat_idx, unbiased=False))
-                print('--->',torch.mean(x), torch.median(x), torch.max(x), torch.min(x))
+                print('--->', idx, torch.mean(x), torch.median(x), torch.max(x), torch.min(x))
             # print('--->>>',torch.mean(self.norm(x)), torch.median(self.norm(x)), torch.max(self.norm(x)), torch.min(self.norm(x)))
             # x = self.norm(x)
             
@@ -306,6 +303,6 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
     '''
     x = self.norm(x) # LayerNorm
 
-    extra_return_dict = {'Q': ssn_return_dict['Q'], 'matseg_affinity': ssn_return_dict['Q_2D'], 'im_feat': im_feat_init, 'im_feat_dict': im_feat_dict, 'hooks': hooks, 'proj_coef_dict': proj_coef_dict}
+    extra_return_dict = {'Q': ssn_return_dict['Q'], 'matseg_affinity': ssn_return_dict['Q_2D'], 'im_feat': im_feat_init, 'im_feat_dict': im_feat_dict, 'hooks': hooks, 'proj_coef_dict': proj_coef_dict, 'abs_affinity_normalized_by_pixels_input': abs_affinity_normalized_by_pixels_input}
 
     return x, extra_return_dict

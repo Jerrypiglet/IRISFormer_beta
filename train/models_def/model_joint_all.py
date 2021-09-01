@@ -147,7 +147,7 @@ class Model_Joint(nn.Module):
                         modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
                         path=model_path,
                         # backbone="vitb_rn50_384",
-                        backbone="vitb_unet_384",
+                        backbone="vitb_unet_384" if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers==-1 else "vitb_unet_384_N_layer",
                         non_negative=if_non_negative,
                         enable_attention_hooks=False,
                         skip_keys=skip_keys, 
@@ -623,7 +623,7 @@ class Model_Joint(nn.Module):
             return_dict['albedo_extra_output_dict'].update({'albedo_pred_unet': extra_DPT_return_dict['albedo_pred_unet']})
 
         if 'SSN' in self.cfg.MODEL_BRDF.DPT_baseline.model and self.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method == 'qkv' and self.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv:
-            return_dict['albedo_extra_output_dict'].update({'proj_coef_dict': extra_DPT_return_dict['proj_coef_dict'], 'hooks': extra_DPT_return_dict['hooks']})
+            return_dict['albedo_extra_output_dict'].update({'proj_coef_dict': extra_DPT_return_dict['proj_coef_dict'], 'hooks': extra_DPT_return_dict['hooks'], 'abs_affinity_normalized_by_pixels_input': extra_DPT_return_dict['abs_affinity_normalized_by_pixels_input']})
 
         return return_dict
 

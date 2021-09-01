@@ -809,13 +809,17 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                 if 'SSN' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method == 'qkv' and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv:
                     assert 'proj_coef_dict' in output_dict['albedo_extra_output_dict']
                     assert 'hooks' in output_dict['albedo_extra_output_dict']
+                    assert 'abs_affinity_normalized_by_pixels_input' in output_dict['albedo_extra_output_dict']
                     proj_coef_dict = output_dict['albedo_extra_output_dict']['proj_coef_dict']
-                    hooks = output_dict['albedo_extra_output_dict']['hooks']
+                    hooks = output_dict['albedo_extra_output_dict']['hooks'] if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers == -1 else range(opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers)
+                    abs_affinity_normalized_by_pixels_input = output_dict['albedo_extra_output_dict']['abs_affinity_normalized_by_pixels_input'] # torch.Size([1, 320, 64, 80])
+                    # print(abs_affinity_normalized_by_pixels_input.shape)
                     # print(hooks)
                     # print(proj_coef_dict.keys())
                     start_im_hw = [256//4, 320//4]
                     patch_size = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.patch_size
                     spixel_hw = [256//patch_size, 320//patch_size]
+                    abs_affinity_normalized_by_pixels_input = abs_affinity_normalized_by_pixels_input.reshape(-1, spixel_hw[0], spixel_hw[1], start_im_hw[0], start_im_hw[1])
                     head = 0
                     for idx, hook in enumerate(hooks):
                         proj_coef_matrix = proj_coef_dict['proj_coef_%d'%hook]
@@ -835,6 +839,12 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
 
                                         writer.add_image('VAL_DPT-SSN_proj_coef_sample%d/head%d_spixel%d-%d_PRED/%d'%(sample_idx, head, spixel_h*patch_size, spixel_w*patch_size, hook), \
                                             proj_coef_matrix_single_token_vis, tid, dataformats='HW')
+
+                                        abs_affinity_normalized_by_pixels_input_vis = abs_affinity_normalized_by_pixels_input[sample_idx_batch, spixel_h, spixel_w, :, :].detach().cpu().numpy()
+                                        # print(abs_affinity_normalized_by_pixels_input.shape, abs_affinity_normalized_by_pixels_input_vis.shape)
+                                        abs_affinity_normalized_by_pixels_input_vis = abs_affinity_normalized_by_pixels_input_vis / (np.amax(abs_affinity_normalized_by_pixels_input_vis)+1e-6)
+                                        writer.add_image('VAL_DPT-SSN_abs_affinity_normalized_by_pixels_sample%d/head%d_spixel%d-%d_PRED/%d'%(sample_idx, head, spixel_h*patch_size, spixel_w*patch_size, hook), \
+                                            abs_affinity_normalized_by_pixels_input_vis, tid, dataformats='HW')
 
                         if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_reduce_res:
                             start_im_hw = start_im_hw[0]//2, start_im_hw[1]//2

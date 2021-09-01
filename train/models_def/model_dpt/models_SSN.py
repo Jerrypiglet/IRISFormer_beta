@@ -66,7 +66,7 @@ class DPT_SSN(BaseModel):
 
         # assert backbone in ['vitb_rn50_384', 'vitb_unet_384'], 'Backbone %s unsupported in DPT_SSN!'%backbone
         # assert backbone in ['vitb_unet_384', 'vitb16_384'], 'Backbone %s unsupported in DPT_SSN!'%backbone
-        assert backbone in ['vitb_unet_384', 'vitl_unet_384'], 'Backbone %s unsupported in DPT_SSN!'%backbone
+        assert backbone in ['vitb_unet_384', 'vitb_unet_384_N_layer', 'vitl_unet_384'], 'Backbone %s unsupported in DPT_SSN!'%backbone
 
         self.channels_last = channels_last
 
@@ -74,6 +74,7 @@ class DPT_SSN(BaseModel):
             "vitb_rn50_384": [0, 1, 8, 11],
             "vitl_unet_384": [5, 11, 17, 23],
             "vitb_unet_384": [0, 1, 8, 11],
+            "vitb_unet_384_N_layer": [opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers-1]*4 if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers!=-1 else [0, 0, 0, 0],
             "vitb16_384": [2, 5, 8, 11],
             "vitl16_384": [5, 11, 17, 23],
         }
@@ -83,6 +84,7 @@ class DPT_SSN(BaseModel):
             # "vitb_rn50_384": [0, 1, 8, 11],
             "vitl_unet_384": 1024,
             "vitb_unet_384": 768,
+            "vitb_unet_384_N_layer": 768,
             # "vitb16_384": [2, 5, 8, 11],
             # "vitl16_384": [5, 11, 17, 23],
         }
@@ -115,7 +117,11 @@ class DPT_SSN(BaseModel):
             self.scratch.layer1_rn = nn.Identity()
             self.scratch.layer2_rn = nn.Identity()
             self.scratch.layer3_rn = nn.Identity()
-        # else:
+
+        if backbone=='vitb_unet_384_N_layer':
+            for layer_idx in range(len(self.pretrained.model.blocks)):
+                if layer_idx >= opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers:
+                    self.pretrained.model.blocks[layer_idx] = nn.Identity()
 
         self.scratch.output_conv = head
 
@@ -138,6 +144,9 @@ class DPT_SSN(BaseModel):
             if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv:
                 for layer_idx in range(12):
                     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_slim and layer_idx not in self.hooks_backbone:
+                        continue
+
+                    if backbone=='vitb_unet_384_N_layer' and layer_idx >= opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers:
                         continue
                     # if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used and layer_idx!=self.hooks_backbone[-1]:
                     #     # print(module_dict['layer_%d_ca'%layer_idx].requires_grad, '-=--=-==')

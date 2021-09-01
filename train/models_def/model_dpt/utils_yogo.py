@@ -123,14 +123,14 @@ class Projector(nn.Module):
         # zero-init
         #nn.init.constant_(self.proj_bn.weight, 1)
 
-        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method != 'none':
-            self.ff_conv = nn.Sequential(
-                conv1x1_1d(planes, 2 * planes),
-                norm_layer_1d(2 * planes),
-                nn.ReLU(inplace=True),
-                conv1x1_1d(2 * planes, planes),
-                norm_layer_1d(planes)
-                )
+        # if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method != 'none':
+        self.ff_conv = nn.Sequential(
+            conv1x1_1d(planes, 2 * planes),
+            norm_layer_1d(2 * planes),
+            nn.ReLU(inplace=True),
+            conv1x1_1d(2 * planes, planes),
+            norm_layer_1d(planes)
+            )
 
         self.head = head
 
@@ -170,7 +170,6 @@ class Projector(nn.Module):
         # N, h, C/h, L * N, h, L, HW -> N, h, C/h, HW
         x_p = self.proj_matmul(proj_v, proj_coef.permute(0, 1, 3, 2))
         # -> N, C, H, W
-        print()
         _, _, S = x.shape
         x_p = self.proj_bn(x_p.view(N, -1, S))
         # print('-=-=', x.shape, x_p.shape) # -=-= torch.Size([1, 768, 5120]) torch.Size([1, 768, 5120])
@@ -194,7 +193,7 @@ class Projector(nn.Module):
             x = torch.cat([x, self.ff_conv(x + x_p)], 1)
             output_dict['x'] = x
         elif self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method == 'none':
-            output_dict['x'] = x_p
+            output_dict['x'] = self.ff_conv(x_p)
 
         return output_dict
 
