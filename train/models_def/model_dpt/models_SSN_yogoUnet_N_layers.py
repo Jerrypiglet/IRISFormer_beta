@@ -80,8 +80,7 @@ class DPT_SSN_yogoUnet_N_layers(BaseModel):
         }
 
         self.num_layers = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers
-        self.output_layers = N_layer_hooks_dict[self.num_layers] if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used else [0]
-
+        self.output_layers = N_layer_hooks_dict[self.num_layers] if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used else [N_layer_hooks_dict[self.num_layers][-1]]
         self.hooks_backbone = N_layer_hooks_dict[self.num_layers]
 
         vit_dims = 768
@@ -114,6 +113,10 @@ class DPT_SSN_yogoUnet_N_layers(BaseModel):
         for layer_idx in range(len(self.pretrained.model.blocks)):
             if layer_idx >= self.num_layers:
                 self.pretrained.model.blocks[layer_idx] = nn.Identity()
+
+        if not opt.cfg.MODEL_BRDF.DPT_baseline.if_pos_embed:
+            self.pretrained.model.pos_embed = nn.Identity()
+
 
         self.scratch.output_conv = head
 
@@ -190,11 +193,15 @@ class DPT_SSN_yogoUnet_N_layers(BaseModel):
             # print(layer_idx, self.scratch.layer_rn_dict['%d'%layer_idx])
             layer_dict['%d'%layer_idx] = self.scratch.layer_rn_dict['%d'%layer_idx](layer_dict['%d'%layer_idx])
 
-        for layer_idx in self.output_layers:
-            if layer_idx in [self.output_layers[0], self.output_layers[-1]]:
-                path_out = self.scratch.refinenet_dict['%d'%layer_idx](layer_dict['%d'%layer_idx])
-            else:
-                path_out = self.scratch.refinenet_dict['%d'%layer_idx](path_out, layer_dict['%d'%layer_idx])
+        if len(self.output_layers)==1:
+            layer_idx = self.output_layers[0]
+            path_out = self.scratch.refinenet_dict['%d'%layer_idx](layer_dict['%d'%layer_idx])
+        else:
+            for layer_idx in self.output_layers:
+                if layer_idx in [self.output_layers[0]]:
+                    path_out = self.scratch.refinenet_dict['%d'%layer_idx](layer_dict['%d'%layer_idx])
+                else:
+                    path_out = self.scratch.refinenet_dict['%d'%layer_idx](path_out, layer_dict['%d'%layer_idx])
 
         out = self.scratch.output_conv(path_out)
 

@@ -92,7 +92,7 @@ def forward_vit_SSN_qkv_yogo_N_layers(opt, pretrained, x, input_dict_extra={}, h
 
     return layer_dict, flex_return_dict
 
-def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], input_dict_extra={}, hooks=[]):
+def forward_flex_SSN_unet_qkv_yogo_N_layers(self, opt, x, pretrained_activations=[], input_dict_extra={}, hooks=[]):
     b, c, im_height, im_width = x.shape # image pixel space
 
     B = x.shape[0]
@@ -181,12 +181,14 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
     im_feat_idx_recent = im_feat_init
 
     # [if use im_feat_-1]
+    # print('-----------------------+')
     if_use_init_img_feat = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_use_init_img_feat
 
     for idx, blk in enumerate(self.blocks):
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers!=-1 and idx >= opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers:
             continue
         
+        # print('--------', idx)
         x = blk(x) # [-1, 321, 768]
         # x = blk(x)*0. + x # [-1, 321, 768]
 
@@ -276,7 +278,9 @@ def forward_flex_SSN_unet_qkv_yogo(self, opt, x, pretrained_activations=[], inpu
         )
     )
     '''
+    # print('-------', self.norm)
     x = self.norm(x) # LayerNorm
+    # print('-------')
 
     extra_return_dict = {'Q': ssn_return_dict['Q'], 'matseg_affinity': ssn_return_dict['Q_2D'], 'im_feat': im_feat_init, 'im_feat_dict': im_feat_dict, 'hooks': hooks, 'proj_coef_dict': proj_coef_dict, 'abs_affinity_normalized_by_pixels_input': abs_affinity_normalized_by_pixels_input}
 

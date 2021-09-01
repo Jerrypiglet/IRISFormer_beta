@@ -10,6 +10,9 @@ import models_def.models_brdf as models_brdf # basic model
 from .vit_SSN_unet_qkv import (
     forward_flex_SSN_unet_qkv_yogo
 )
+from .vit_SSN_unet_qkv_N_layers import (
+    forward_flex_SSN_unet_qkv_yogo_N_layers
+)
 
 # from models_def.model_matseg import Baseline
 
@@ -395,9 +398,9 @@ def _make_vit_b_rn50_backbone_SSN_unet(
             )
             # pass
 
-    if len(hooks[2]) >= 3:
+    if len(hooks) >= 3:
         pretrained.model.blocks[hooks[2]].register_forward_hook(get_activation("3"))
-        if len(hooks[2]) >= 4:
+        if len(hooks) >= 4:
             pretrained.model.blocks[hooks[3]].register_forward_hook(get_activation("4"))
 
     if enable_attention_hooks:
@@ -635,7 +638,7 @@ def _make_vit_b_rn50_backbone_SSN_unet_N_layers(
     # We inject this function into the VisionTransformer instances so that
     # we can use it with interpolated position embeddings without modifying the library source.
     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv and (recon_method == 'qkv'):
-        pretrained.model.forward_flex_SSN = types.MethodType(forward_flex_SSN_unet_qkv_yogo, pretrained.model)
+        pretrained.model.forward_flex_SSN = types.MethodType(forward_flex_SSN_unet_qkv_yogo_N_layers, pretrained.model)
     else:
         pretrained.model.forward_flex_SSN = types.MethodType(forward_flex_SSN_unet, pretrained.model)
 

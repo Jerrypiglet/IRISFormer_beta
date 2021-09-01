@@ -369,9 +369,8 @@ class FeatureFusionBlock_custom(nn.Module):
             groups=1,
         )
 
-        self.resConfUnit1 = ResidualConvUnit_custom(features, activation, bn)
-
-
+        if not self.if_assert_one_input:
+            self.resConfUnit1 = ResidualConvUnit_custom(features, activation, bn)
 
         self.resConfUnit2 = ResidualConvUnit_custom(self.features_in, activation, bn)
 

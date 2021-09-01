@@ -123,6 +123,9 @@ class DPT_SSN(BaseModel):
                 if layer_idx >= opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers:
                     self.pretrained.model.blocks[layer_idx] = nn.Identity()
 
+        if not opt.cfg.MODEL_BRDF.DPT_baseline.if_pos_embed:
+            self.pretrained.model.pos_embed = nn.Identity()
+
         self.scratch.output_conv = head
 
         self.recon_method = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method

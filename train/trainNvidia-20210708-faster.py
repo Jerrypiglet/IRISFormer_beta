@@ -777,7 +777,16 @@ else:
                 print('----loss_dict', loss_dict.keys())
                 print('----loss_keys_backward', loss_keys_backward)
 
+
             loss.backward()
+
+            if opt.is_master and tid % 100 == 0:
+                for name, param in model.named_parameters():
+                    if param.grad is None:
+                        if param.requires_grad==True:
+                            print(name, '------!!!!!!!!!!!!')
+                    else:
+                        print(name, '☑')
 
             # clip_to = 1.
             # torch.nn.utils.clip_grad_norm_(model.LAYOUT_EMITTER_NET_fc.parameters(), clip_to)
