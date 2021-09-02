@@ -107,10 +107,10 @@ class Transpose(nn.Module):
         return x
 
 
-def forward_vit(opt, pretrained, x):
+def forward_vit(opt, pretrained, x, extra_input_dict={}):
     b, c, h, w = x.shape
 
-    glob = pretrained.model.forward_flex(opt, x)
+    glob = pretrained.model.forward_flex(opt, x, extra_input_dict=extra_input_dict)
 
     layer_1 = pretrained.activations["1"]
     layer_2 = pretrained.activations["2"]
@@ -191,7 +191,7 @@ def _resize_pos_embed(self, posemb, gs_h, gs_w): # original at https://github.co
     return posemb
 
 
-def forward_flex(self, opt, x):
+def forward_flex(self, opt, x, extra_input_dict={}):
     b, c, h, w = x.shape
 
     pos_embed = self._resize_pos_embed(
@@ -206,7 +206,13 @@ def forward_flex(self, opt, x):
             x = x[-1]  # last feature if backbone outputs list/tuple of features; 1/16
 
     # print(x.shape) # torch.Size([1, 1024, 16, 20])
-    x = self.patch_embed.proj(x).flatten(2).transpose(1, 2)
+    im_feat_init = self.patch_embed.proj(x)
+    x = im_feat_init.flatten(2).transpose(1, 2)
+
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
+        im_feat_dict = {}
+        im_feat_dict['im_feat_-1'] = im_feat_init
+        ca_modules = extra_input_dict['ca_modules']
 
     if getattr(self, "dist_token", None) is not None:
         cls_tokens = self.cls_token.expand(
@@ -226,6 +232,11 @@ def forward_flex(self, opt, x):
 
     for idx, blk in enumerate(self.blocks):
         x = blk(x)
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
+            print(x.shape, im_feat_init.shape)
+            im_feat_idx, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_dict['im_feat_%d'%(idx-1)], x_tokens, im_feat_scale_factor=extra_im_scale, proj_coef_in=proj_coef_in) # torch.Size([1, 768, 320])
+
+
         # print('====', idx, torch.mean(x), torch.median(x), torch.max(x), torch.min(x), torch.var(x, unbiased=False))
 
         # print(x.shape)

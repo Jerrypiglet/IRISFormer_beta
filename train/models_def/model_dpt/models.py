@@ -49,6 +49,11 @@ class DPT(BaseModel):
             "vitb16_384": [2, 5, 8, 11],
             "vitl16_384": [5, 11, 17, 23],
         }
+        num_layers = {
+            "vitb_rn50_384": 12,
+            "vitb16_384": 12,
+            "vitl16_384": 24,
+        }
 
         # Instantiate backbone and reassemble blocks
         self.pretrained, self.scratch = _make_encoder(
@@ -71,11 +76,33 @@ class DPT(BaseModel):
 
         self.scratch.output_conv = head
 
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
+            from models_def.model_dpt.utils_yogo import CrossAttention, LayerNormLastTwo
+
+            module_dict = {}
+            im_c = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels
+            token_c = im_c
+            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer == 'instanceNorm':
+                norm_layer_1d = nn.InstanceNorm1d
+            elif opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer == 'layerNorm':
+                norm_layer_1d = LayerNormLastTwo
+                # assert False
+            elif opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer == 'identity':
+                norm_layer_1d = nn.Identity
+            else:
+                assert False, 'Invalid MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer'
+
+            for layer_idx in range(num_layers[backbone]):
+                module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
+
+            self.ca_modules = nn.ModuleDict(module_dict)
+            self.extra_input_dict = {'ca_modules': self.ca_modules}
+
     def forward(self, x):
         if self.channels_last == True:
             x.contiguous(memory_format=torch.channels_last)
 
-        layer_1, layer_2, layer_3, layer_4 = forward_vit(self.opt, self.pretrained, x)
+        layer_1, layer_2, layer_3, layer_4 = forward_vit(self.opt, self.pretrained, x, extra_input_dict=self.extra_input_dict)
 
         layer_1_rn = self.scratch.layer1_rn(layer_1)
         # print(self.scratch.layer1_rn, layer_1.shape, layer_1_rn.shape) # [hybrid] Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False) torch.Size([2, 256, 64, 80]) torch.Size([2, 256, 64, 80])

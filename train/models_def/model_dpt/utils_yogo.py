@@ -10,6 +10,14 @@ import numpy as np
 # from modules.functional.sampling import gather, furthest_point_sample
 # import modules.functional as mf
 
+class LayerNormLastTwo(nn.Module):
+    def __init__(self, dim):
+        super(LayerNormLastTwo, self).__init__()
+        self.ln = nn.LayerNorm(dim)
+
+    def forward(self, A):
+        return torch.transpose(self.ln(torch.transpose(A, -1, -2)), -1, -2)
+
 def conv1x1_1d(inplanes, out_planes, stride=1, groups=1):
     """1x1 convolution"""
     return nn.Conv1d(inplanes, out_planes, kernel_size=1, stride=stride,

@@ -24,16 +24,7 @@ from .blocks_SSN import (
     forward_vit_SSN_qkv_yogo_N_layers
 )
 
-from models_def.model_dpt.utils_yogo import CrossAttention
-
-class LayerNormLastTwo(nn.Module):
-    def __init__(self, dim):
-        super(LayerNormLastTwo, self).__init__()
-        self.ln = nn.LayerNorm(dim)
-
-    def forward(self, A):
-        return torch.transpose(self.ln(torch.transpose(A, -1, -2)), -1, -2)
-
+from models_def.model_dpt.utils_yogo import CrossAttention, LayerNormLastTwo
 
 def _make_fusion_block(opt, features, use_bn, if_up_resize_override=None, if_assert_one_input=False):
     return FeatureFusionBlock_custom(
