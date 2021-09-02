@@ -110,12 +110,17 @@ class Projector(nn.Module):
 
         self.opt = opt
 
-        if token_c != planes:
-            self.proj_value_conv = nn.Sequential(
-                conv1x1_1d(token_c, planes),
-                norm_layer_1d(planes))
-        else:
-            self.proj_value_conv = nn.Identity()
+        # if token_c != planes:
+        #     self.proj_value_conv = nn.Sequential(
+        #         conv1x1_1d(token_c, planes),
+        #         norm_layer_1d(planes))
+        # else:
+        #     self.proj_value_conv = nn.Identity()
+
+        self.proj_value_conv = nn.Sequential(
+            conv1x1_1d(token_c, planes),
+            norm_layer_1d(planes)
+        )
 
         self.proj_key_conv = nn.Sequential(
             conv1x1_1d(token_c, planes),

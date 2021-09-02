@@ -44,18 +44,28 @@ class DPT(BaseModel):
 
         self.opt = opt
 
-        hooks = {
+        hooks_dict = {
             "vitb_rn50_384": [0, 1, 8, 11],
             "vitb16_384": [2, 5, 8, 11],
             "vitl16_384": [5, 11, 17, 23],
         }
-        num_layers = {
+        num_layers_dict = {
             "vitb_rn50_384": 12,
             "vitb16_384": 12,
             "vitl16_384": 24,
         }
 
-        self.output_hooks = hooks[backbone]
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers == -1:
+            self.output_hooks = hooks_dict[backbone]
+            self.num_layers = num_layers_dict[backbone]
+        else:
+            assert self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers in [4, 8, 12]
+            self.output_hooks = {
+                "4": [0, 1, 2, 3],
+                "8": [0, 1, 4, 7],
+                "12": [0, 1, 8, 11],
+            }[str(self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers)]
+            self.num_layers = self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers
 
         # Instantiate backbone and reassemble blocks
         self.pretrained, self.scratch = _make_encoder(
@@ -96,11 +106,20 @@ class DPT(BaseModel):
             else:
                 assert False, 'Invalid MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer'
 
-            for layer_idx in range(num_layers[backbone]):
+            for layer_idx in range(len(self.pretrained.model.blocks)):
                 module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
 
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers != -1:
+            for layer_idx in range(len(self.pretrained.model.blocks)):
+                if layer_idx >= self.num_layers:
+                    self.pretrained.model.blocks[layer_idx] = nn.Identity()
+                    if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
+                        del module_dict['layer_%d_ca'%layer_idx]
+
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
             self.ca_modules = nn.ModuleDict(module_dict)
             self.extra_input_dict.update({'ca_modules': self.ca_modules, 'output_hooks': self.output_hooks})
+
 
     def forward(self, x):
         if self.channels_last == True:
