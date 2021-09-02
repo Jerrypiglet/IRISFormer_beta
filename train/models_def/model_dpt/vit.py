@@ -110,7 +110,7 @@ class Transpose(nn.Module):
 def forward_vit(opt, pretrained, x, extra_input_dict={}):
     b, c, h, w = x.shape
 
-    glob = pretrained.model.forward_flex(opt, x, extra_input_dict=extra_input_dict)
+    glob, extra_output_dict = pretrained.model.forward_flex(opt, x, extra_input_dict=extra_input_dict)
 
     layer_1 = pretrained.activations["1"]
     layer_2 = pretrained.activations["2"]
@@ -146,19 +146,45 @@ def forward_vit(opt, pretrained, x, extra_input_dict={}):
         )
     )
 
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
+        im_feat_dict, output_hooks = extra_output_dict['im_feat_dict'], extra_input_dict['output_hooks']
+        if if_print:
+            print(im_feat_dict.keys(), output_hooks)
+
     if layer_1.ndim == 3:
-        layer_1 = unflatten(layer_1)
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
+            layer_1 = im_feat_dict['im_feat_%d'%output_hooks[0]]
+            # print('+++')
+        else:
+            layer_1 = unflatten(layer_1)
+
     if layer_2.ndim == 3:
-        layer_2 = unflatten(layer_2)
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
+            layer_2 = im_feat_dict['im_feat_%d'%output_hooks[1]]
+            # print('+++')
+        else:
+            layer_2 = unflatten(layer_2)
+
     if layer_3.ndim == 3:
-        layer_3 = unflatten(layer_3)
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
+            layer_3 = im_feat_dict['im_feat_%d'%output_hooks[2]]
+            # print('+++')
+        else:
+            layer_3 = unflatten(layer_3)
+
     if layer_4.ndim == 3:
-        layer_4 = unflatten(layer_4)
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
+            layer_4 = im_feat_dict['im_feat_%d'%output_hooks[3]]
+            # print('+++')
+        else:
+            layer_4 = unflatten(layer_4)
 
     if if_print:
         print('-->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
     # DPT-hybrid: --> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 16, 20])
     # DPT-large: --> torch.Size([1, 1024, 16, 20]) torch.Size([1, 1024, 16, 20]) torch.Size([1, 1024, 16, 20]) torch.Size([1, 1024, 16, 20])
+
+
 
     layer_1 = pretrained.act_postprocess1[3 : len(pretrained.act_postprocess1)](layer_1)
     layer_2 = pretrained.act_postprocess2[3 : len(pretrained.act_postprocess2)](layer_2)
@@ -233,8 +259,20 @@ def forward_flex(self, opt, x, extra_input_dict={}):
     for idx, blk in enumerate(self.blocks):
         x = blk(x)
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
-            print(x.shape, im_feat_init.shape)
-            im_feat_idx, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_dict['im_feat_%d'%(idx-1)], x_tokens, im_feat_scale_factor=extra_im_scale, proj_coef_in=proj_coef_in) # torch.Size([1, 768, 320])
+            assert opt.cfg.MODEL_BRDF.DPT_baseline.readout == 'ignore'
+            # print(x.shape, im_feat_init.shape) # torch.Size([1, 321, 768]) torch.Size([1, 768, 16, 20])
+            x_cls_token = x[:, 0:1, :] # [-1, 1, 768]
+            x_tokens = x[:, 1:, :].transpose(1, 2) # [-1, 768, 320]
+
+            assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method == 'full'
+            im_feat_idx, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_dict['im_feat_%d'%(idx-1)], x_tokens, im_feat_scale_factor=1., proj_coef_in=None) # torch.Size([1, 768, 320])
+            # print(im_feat_idx.shape) # torch.Size([1, 768, 16, 20])
+            im_feat_dict['im_feat_%d'%idx] = im_feat_idx
+
+
+            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA_if_recompute_C:
+                x_prime = im_feat_idx.flatten(2).transpose(-1, -2)
+                x = torch.cat((x_cls_token, x_prime), dim=1)
 
 
         # print('====', idx, torch.mean(x), torch.median(x), torch.max(x), torch.min(x), torch.var(x, unbiased=False))
@@ -244,7 +282,11 @@ def forward_flex(self, opt, x, extra_input_dict={}):
 
     x = self.norm(x)
 
-    return x
+    extra_output_dict = {}
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
+        extra_output_dict['im_feat_dict'] = im_feat_dict
+
+    return x, extra_output_dict
 
 
 def get_readout_oper(vit_features, features, use_readout, start_index=1):

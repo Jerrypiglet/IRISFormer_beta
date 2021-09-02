@@ -149,7 +149,7 @@ def set_up_envs(opt):
                     opt.cfg.MODEL_MATSEG.if_freeze = True
 
         assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method in ['qtc', 'qkv']
-        assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method in ['residual', 'concat', 'none']
+        assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method in ['residual', 'concat', 'none', 'full']
         assert opt.cfg.MODEL_BRDF.DPT_baseline.readout in ['ignore', 'add', 'project']
         assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer in ['instanceNorm', 'layerNorm', 'identity']
 

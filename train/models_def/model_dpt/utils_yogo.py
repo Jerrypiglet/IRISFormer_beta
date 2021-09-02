@@ -191,11 +191,14 @@ class Projector(nn.Module):
             # b = self.ff_conv[1](a)
             # print('---+a',torch.mean(a), torch.median(a), torch.max(a), torch.min(a))
             # print('---+b',torch.mean(b), torch.median(b), torch.max(b), torch.min(b))
-            x = x + self.ff_conv(x + x_p)
+            x = self.ff_conv(x + x_p)
             # print(x.shape, proj_coef.shape) # torch.Size([1, 768, 5120]) torch.Size([1, 2, 5120, 320])
             # print('--->',torch.mean(x), torch.median(x), torch.max(x), torch.min(x))
             # x = self.norm_out(x)
             # print('--->>>>>',torch.mean(x), torch.median(x), torch.max(x), torch.min(x))
+            output_dict['x'] = x
+        elif self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method == 'full':
+            x = x + self.ff_conv(x + x_p)
             output_dict['x'] = x
         elif self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method == 'concat':
             x = torch.cat([x, self.ff_conv(x + x_p)], 1)

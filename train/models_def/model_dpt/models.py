@@ -55,6 +55,8 @@ class DPT(BaseModel):
             "vitl16_384": 24,
         }
 
+        self.output_hooks = hooks[backbone]
+
         # Instantiate backbone and reassemble blocks
         self.pretrained, self.scratch = _make_encoder(
             backbone,
@@ -63,7 +65,7 @@ class DPT(BaseModel):
             groups=1,
             expand=False,
             exportable=False,
-            hooks=hooks[backbone],
+            hooks=self.output_hooks,
             use_vit_only=opt.cfg.MODEL_BRDF.DPT_baseline.use_vit_only, 
             use_readout=readout,
             enable_attention_hooks=enable_attention_hooks,
@@ -75,6 +77,8 @@ class DPT(BaseModel):
         self.scratch.refinenet4 = _make_fusion_block(opt, features, use_bn)
 
         self.scratch.output_conv = head
+
+        self.extra_input_dict = {}
 
         if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
             from models_def.model_dpt.utils_yogo import CrossAttention, LayerNormLastTwo
@@ -96,7 +100,7 @@ class DPT(BaseModel):
                 module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
 
             self.ca_modules = nn.ModuleDict(module_dict)
-            self.extra_input_dict = {'ca_modules': self.ca_modules}
+            self.extra_input_dict.update({'ca_modules': self.ca_modules, 'output_hooks': self.output_hooks})
 
     def forward(self, x):
         if self.channels_last == True:

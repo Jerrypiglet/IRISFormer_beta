@@ -266,6 +266,7 @@ _C.MODEL_BRDF.DPT_baseline.dpt_hybrid = CN()
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr = False # faster: 1e-4, backbone: 1e-5
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels = 768
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA = False # use Cross Attention instead of assembling
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA_if_recompute_C = False # recompute tokens from im_feat then feed to next transformer
 _C.MODEL_BRDF.DPT_baseline.dpt_large = CN()
 _C.MODEL_BRDF.DPT_baseline.dpt_large.feat_proj_channels = 1024
 
@@ -284,7 +285,7 @@ _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_res_add_after_QI 
 # _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_vis_affinity_in_layers = False # if compute affinity between tokens and im
 # _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_reconQ_from = 'proj_coef' # ['proj_coef', 'affinity']
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_perpixel_abs_pos_embed = False
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method = 'residual' # if using residual/concat/none in projector in CrossAttention module
+_C.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method = 'full' # if using residual/concat/none in projector in CrossAttention module
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.feat_fusion_method = 'sum' # fusion method in class FeatureFusionBlock_custom
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer = 'instanceNorm' # [instanceNorm, identity, layerNorm]
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims = 1344 # resnet: stem + stage 0,1,2
