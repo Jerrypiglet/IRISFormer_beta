@@ -725,3 +725,9 @@ zz-torch-job-gpu20210901-180700-86jss
 zz-torch-job-gpu20210901-185603-sqjtw
 zz-torch-job-gpu20210901-190721-vhvsj
 zz-torch-job-gpu20210901-185443-2sjmq
+zz-torch-job-gpu20210901-211703-rw55m
+zz-torch-job-gpu20210901-211716-xx8t7
+zz-torch-job-gpu20210901-204813-vpg4b
+zz-torch-job-gpu20210901-204848-5nwfd
+zz-torch-job-gpu20210902-015310-x2npf
+zz-torch-job-gpu20210902-015726-vcb5z

@@ -106,17 +106,19 @@ class DPT(BaseModel):
             else:
                 assert False, 'Invalid MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer'
 
-            for layer_idx in range():
+            for layer_idx in range(len(self.pretrained.model.blocks)):
                 module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
 
-            self.ca_modules = nn.ModuleDict(module_dict)
-            self.extra_input_dict.update({'ca_modules': self.ca_modules, 'output_hooks': self.output_hooks})
-
-        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers == -1:
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers != -1:
             for layer_idx in range(len(self.pretrained.model.blocks)):
                 if layer_idx >= self.num_layers:
                     self.pretrained.model.blocks[layer_idx] = nn.Identity()
+                    if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
+                        del module_dict['layer_%d_ca'%layer_idx]
 
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
+            self.ca_modules = nn.ModuleDict(module_dict)
+            self.extra_input_dict.update({'ca_modules': self.ca_modules, 'output_hooks': self.output_hooks})
 
 
     def forward(self, x):

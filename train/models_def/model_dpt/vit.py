@@ -257,7 +257,11 @@ def forward_flex(self, opt, x, extra_input_dict={}):
     x = self.pos_drop(x)
 
     for idx, blk in enumerate(self.blocks):
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers!=-1 and idx >= opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers:
+            continue
+
         x = blk(x)
+        
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
             assert opt.cfg.MODEL_BRDF.DPT_baseline.readout == 'ignore'
             # print(x.shape, im_feat_init.shape) # torch.Size([1, 321, 768]) torch.Size([1, 768, 16, 20])
