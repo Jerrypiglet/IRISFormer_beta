@@ -128,7 +128,7 @@ class Model_Joint(nn.Module):
                         opt=opt, 
                         modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
                         path=model_path,
-                        backbone="vitb_rn50_384",
+                        backbone="vitb_rn50_384" if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers == -1 else "vitb_rn50_384_N_layers", 
                         non_negative=if_non_negative,
                         enable_attention_hooks=self.opt.cfg.MODEL_BRDF.DPT_baseline.if_enable_attention_hooks,
                         readout=self.opt.cfg.MODEL_BRDF.DPT_baseline.readout, 
