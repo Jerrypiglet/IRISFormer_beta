@@ -104,50 +104,50 @@ class Transformer(nn.Module):
         return x
 
 class Projector(nn.Module):
-    def __init__(self, opt, token_c, planes, head=2, min_group_planes=64,
+    def __init__(self, opt, token_c, output_c, head=2, min_group_planes=64,
                  norm_layer_1d=nn.Identity):
         super(Projector, self).__init__()
 
         self.opt = opt
 
-        # if token_c != planes:
-        #     self.proj_value_conv = nn.Sequential(
-        #         conv1x1_1d(token_c, planes),
-        #         norm_layer_1d(planes))
-        # else:
-        #     self.proj_value_conv = nn.Identity()
+        if token_c != output_c:
+            self.proj_value_conv = nn.Sequential(
+                conv1x1_1d(token_c, output_c),
+                norm_layer_1d(output_c))
+        else:
+            self.proj_value_conv = nn.Identity()
 
-        self.proj_value_conv = nn.Sequential(
-            conv1x1_1d(token_c, planes),
-            norm_layer_1d(planes)
-        )
+        # self.proj_value_conv = nn.Sequential(
+        #     conv1x1_1d(token_c, output_c),
+        #     norm_layer_1d(output_c)
+        # )
 
         self.proj_key_conv = nn.Sequential(
-            conv1x1_1d(token_c, planes),
-            norm_layer_1d(planes)
+            conv1x1_1d(token_c, output_c),
+            norm_layer_1d(output_c)
         )
         self.proj_query_conv = nn.Sequential(
-            conv1x1_1d(planes, planes),
-            norm_layer_1d(planes)
+            conv1x1_1d(output_c, output_c),
+            norm_layer_1d(output_c)
         )
         self.proj_kq_matmul = MatMul()
         self.proj_matmul = MatMul()
-        self.proj_bn = norm_layer_1d(planes)
+        self.proj_bn = norm_layer_1d(output_c)
         # zero-init
         #nn.init.constant_(self.proj_bn.weight, 1)
 
         # if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method != 'none':
         self.ff_conv = nn.Sequential(
-            conv1x1_1d(planes, 2 * planes),
-            norm_layer_1d(2 * planes),
+            conv1x1_1d(output_c, 2 * output_c),
+            norm_layer_1d(2 * output_c),
             nn.ReLU(inplace=True),
-            conv1x1_1d(2 * planes, planes),
-            norm_layer_1d(planes)
+            conv1x1_1d(2 * output_c, output_c),
+            norm_layer_1d(output_c)
             )
 
         self.head = head
 
-        # self.norm_out = norm_layer_1d(planes)
+        # self.norm_out = norm_layer_1d(output_c)
 
 
     def forward(self, x, x_t, proj_coef_in=None):
@@ -224,6 +224,14 @@ class CrossAttention(nn.Module):
         self.token_c = token_c
         self.input_dims = input_dims
 
+        # if input_dims == output_dims:
+        #     self.feature_block = nn.Identity()  
+        # else:
+        #     self.feature_block = nn.Sequential(
+        #             conv1x1_1d(input_dims, output_dims),
+        #             norm_layer_1d(output_dims)
+        #             )
+
         # self.feature_block = nn.Sequential(
         #     conv1x1_1d(input_dims, output_dims),
         #     norm_layer_1d(output_dims)
@@ -257,6 +265,60 @@ class CrossAttention(nn.Module):
         # print(proj_coef.shape) # torch.Size([1, 2, 5120, 320])
 
         out_feature = out_feature.view(batch_size, self.token_c, int(im_h*im_feat_scale_factor), int(im_w*im_feat_scale_factor))
+
+        return out_feature, proj_coef
+
+
+class CrossAttention_CAv2(nn.Module):
+    def __init__(self, opt, token_c, input_dims, output_dims,
+                 head=2, min_group_planes=1, norm_layer_1d=nn.Identity,
+                 **kwargs):
+        super(CrossAttention_CAv2, self).__init__()
+
+        self.opt = opt
+
+        self.token_c = token_c
+        self.input_dims = input_dims
+        self.output_dims = output_dims
+
+        if input_dims == output_dims:
+            self.feature_block = nn.Identity()  
+        else:
+            self.feature_block = nn.Sequential(
+                conv1x1_1d(input_dims, output_dims),
+                norm_layer_1d(output_dims)
+                )
+
+        self.projectors = Projector(
+                    self.opt, 
+                    token_c, output_dims, head=head,
+                    min_group_planes=min_group_planes,
+                    norm_layer_1d=norm_layer_1d)
+
+
+    def forward(self, in_feature, in_tokens, im_feat_scale_factor=1., proj_coef_in=None):
+        # pass
+        batch_size, im_feat_dim, im_h, im_w = in_feature.shape[:4]
+        assert self.token_c == in_tokens.shape[1]
+        assert self.input_dims==im_feat_dim
+        if im_feat_scale_factor != 1.:
+            im_feat_resized = F.interpolate(in_feature, scale_factor=im_feat_scale_factor, mode='bilinear') # torch.Size([1, 1344, 16, 20])
+        else:
+            im_feat_resized = in_feature
+
+        im_feat_flattened = im_feat_resized.view(batch_size, im_feat_dim, -1)
+
+        output_dict = self.projectors(
+            self.feature_block(im_feat_flattened), 
+            in_tokens, 
+            proj_coef_in=proj_coef_in
+        ) 
+        out_feature = output_dict['x']
+        proj_coef = output_dict['proj_coef']
+        # print(proj_coef.shape) # torch.Size([1, 2, 5120, 320])
+
+        # print(in_feature.shape, out_feature.shape)
+        out_feature = out_feature.view(batch_size, self.output_dims, int(im_h*im_feat_scale_factor), int(im_w*im_feat_scale_factor))
 
         return out_feature, proj_coef
 

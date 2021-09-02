@@ -817,7 +817,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     # print(hooks)
                     # print(proj_coef_dict.keys())
                     start_im_hw = [256//4, 320//4]
-                    patch_size = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.patch_size
+                    patch_size = opt.cfg.MODEL_BRDF.DPT_baseline.patch_size
                     spixel_hw = [256//patch_size, 320//patch_size]
                     abs_affinity_normalized_by_pixels_input = abs_affinity_normalized_by_pixels_input.reshape(-1, spixel_hw[0], spixel_hw[1], start_im_hw[0], start_im_hw[1])
                     head = 0

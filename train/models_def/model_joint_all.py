@@ -114,6 +114,7 @@ class Model_Joint(nn.Module):
                     "dpt_large_SSN": 'NA',
                     "dpt_hybrid": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_path,
                     "dpt_hybrid_SSN": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_path,
+                    "dpt_hybrid_CAv2": 'NA',
                     "dpt_base_SSN": 'NA',
                     
                     # "dpt_hybrid_kitti": "dpt_weights/dpt_hybrid_kitti-cb926ef4.pt",
@@ -137,11 +138,12 @@ class Model_Joint(nn.Module):
                         keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
                     )
                 elif model_type=='dpt_hybrid_CAv2':
+                    assert self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers != -1
                     self.BRDF_Net = DPTAlbedoDepthModel_CAv2(
                         opt=opt, 
                         modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
                         path=model_path,
-                        backbone="vitb_rn50_384",
+                        backbone="vitb_rn50_384" if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers == -1 else "vitb_rn50_384_N_layers", 
                         non_negative=if_non_negative,
                         enable_attention_hooks=self.opt.cfg.MODEL_BRDF.DPT_baseline.if_enable_attention_hooks,
                         readout=self.opt.cfg.MODEL_BRDF.DPT_baseline.readout, 

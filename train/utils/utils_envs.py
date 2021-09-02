@@ -134,7 +134,7 @@ def set_up_envs(opt):
     # ====== DPT =====
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.DPT_baseline.enable:
         opt.cfg.DATA.if_load_png_not_hdr = True
-        assert opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_large', 'dpt_base', 'dpt_hybrid', 'dpt_hybrid_SSN', 'dpt_base_SSN', 'dpt_large_SSN']
+        assert opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_large', 'dpt_base', 'dpt_hybrid', 'dpt_hybrid_SSN', 'dpt_base_SSN', 'dpt_large_SSN', 'dpt_hybrid_CAv2']
         
         assert opt.cfg.MODEL_BRDF.DPT_baseline.modality in ['al', 'de']
 
@@ -161,6 +161,14 @@ def set_up_envs(opt):
             opt.cfg.MODEL_BRDF.DPT_baseline.feat_proj_channels = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_large.feat_proj_channels
         else:
             assert False, 'not supported yet'
+
+        if 'CAv2' in opt.cfg.MODEL_BRDF.DPT_baseline.model:
+            opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA = True
+            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers == -1:
+                opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers = 12
+            
+            assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type in ['double', 'single', 'full'] # [single, double, full] of resnet
+            opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.im_feat_init_c = {'double': 256, 'single': 64, 'full': 768}[opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type]
 
     # ====== detectron (objects & masks) =====
     if opt.cfg.MODEL_DETECTRON.enable:

@@ -521,7 +521,7 @@ def _make_vit_b_rn50_backbone_SSN_unet(
     pretrained.act_postprocess4 = nn.Sequential(*act_postprocess4_list)
 
     pretrained.model.start_index = start_index
-    pretrained.model.patch_size = [opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.patch_size]*2
+    pretrained.model.patch_size = [opt.cfg.MODEL_BRDF.DPT_baseline.patch_size]*2
 
     # We inject this function into the VisionTransformer instances so that
     # we can use it with interpolated position embeddings without modifying the library source.
@@ -571,7 +571,7 @@ def _make_vit_b_rn50_backbone_SSN_unet_N_layers(
             pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
                 get_activation("feat_stage_1")
             )
-            pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
+            pretrained.model.patch_embed.backbone.stages[2].register_forward_hook(
                 get_activation("feat_stage_2")
             )
         
@@ -633,7 +633,7 @@ def _make_vit_b_rn50_backbone_SSN_unet_N_layers(
     pretrained.act_postprocess_dict = nn.ModuleDict(act_postprocess_dict)
 
     pretrained.model.start_index = start_index
-    pretrained.model.patch_size = [opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.patch_size]*2
+    pretrained.model.patch_size = [opt.cfg.MODEL_BRDF.DPT_baseline.patch_size]*2
 
     # We inject this function into the VisionTransformer instances so that
     # we can use it with interpolated position embeddings without modifying the library source.
@@ -660,8 +660,8 @@ def _make_pretrained_vitb_unet_384_SSN(
     # model = create_model_patch_embed_unet(opt)
     # model.patch_embed = create_model_patch_embed_unet(opt).patch_embed
     # model.patch_embed = HybridEmbed(
-        # img_size=(opt.cfg.DATA.im_height, opt.cfg.DATA.im_width), patch_size=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.patch_size, in_chans=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims, embed_dim=768)
-    # patch_size = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.patch_size
+        # img_size=(opt.cfg.DATA.im_height, opt.cfg.DATA.im_width), patch_size=opt.cfg.MODEL_BRDF.DPT_baseline.patch_size, in_chans=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims, embed_dim=768)
+    # patch_size = opt.cfg.MODEL_BRDF.DPT_baseline.patch_size
 
 
     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone:
@@ -765,8 +765,8 @@ def _make_pretrained_vitl_unet_384_SSN(
     # model = create_model_patch_embed_unet(opt)
     # model.patch_embed = create_model_patch_embed_unet(opt).patch_embed
     # model.patch_embed = HybridEmbed(
-        # img_size=(opt.cfg.DATA.im_height, opt.cfg.DATA.im_width), patch_size=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.patch_size, in_chans=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims, embed_dim=768)
-    # patch_size = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.patch_size
+        # img_size=(opt.cfg.DATA.im_height, opt.cfg.DATA.im_width), patch_size=opt.cfg.MODEL_BRDF.DPT_baseline.patch_size, in_chans=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims, embed_dim=768)
+    # patch_size = opt.cfg.MODEL_BRDF.DPT_baseline.patch_size
     model.patch_embed.proj = nn.Conv2d(opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims, opt.cfg.MODEL_BRDF.DPT_baseline.dpt_large.feat_proj_channels, kernel_size=1, stride=1)
 
     # print(model.patch_embed.backbone.stages)

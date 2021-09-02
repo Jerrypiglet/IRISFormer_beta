@@ -90,7 +90,7 @@ class DPT(BaseModel):
 
         self.extra_input_dict = {}
 
-        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
             from models_def.model_dpt.utils_yogo import CrossAttention, LayerNormLastTwo
 
             module_dict = {}
@@ -113,10 +113,10 @@ class DPT(BaseModel):
             for layer_idx in range(len(self.pretrained.model.blocks)):
                 if layer_idx >= self.num_layers:
                     self.pretrained.model.blocks[layer_idx] = nn.Identity()
-                    if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
+                    if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
                         del module_dict['layer_%d_ca'%layer_idx]
 
-        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
             self.ca_modules = nn.ModuleDict(module_dict)
             self.extra_input_dict.update({'ca_modules': self.ca_modules, 'output_hooks': self.output_hooks})
 

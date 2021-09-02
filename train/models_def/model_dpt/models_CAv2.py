@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from models_def.model_dpt.utils_yogo import CrossAttention_CAv2
 from utils.utils_misc import *
 
 from .base_model import BaseModel
@@ -8,8 +9,10 @@ from .blocks import (
     FeatureFusionBlock,
     FeatureFusionBlock_custom,
     Interpolate,
-    _make_encoder,
-    forward_vit,
+)
+from .blocks_CAv2 import (
+    _make_encoder_CAv2,
+    forward_vit_CAv2,
 )
 
 
@@ -68,7 +71,8 @@ class DPT_CAv2(BaseModel):
             self.num_layers = self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers
 
         # Instantiate backbone and reassemble blocks
-        self.pretrained, self.scratch = _make_encoder(
+        self.pretrained, self.scratch = _make_encoder_CAv2(
+            opt, 
             backbone,
             features,
             opt.cfg.MODEL_BRDF.DPT_baseline.if_imagenet_backbone,  # Set to true of you want to train from scratch, uses ImageNet weights
@@ -90,12 +94,10 @@ class DPT_CAv2(BaseModel):
 
         self.extra_input_dict = {}
 
-        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
             from models_def.model_dpt.utils_yogo import CrossAttention, LayerNormLastTwo
 
             module_dict = {}
-            im_c = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels
-            token_c = im_c
             if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer == 'instanceNorm':
                 norm_layer_1d = nn.InstanceNorm1d
             elif opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer == 'layerNorm':
@@ -106,17 +108,30 @@ class DPT_CAv2(BaseModel):
             else:
                 assert False, 'Invalid MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer'
 
+            token_c = 768
+            in_c = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.im_feat_init_c
+            output_later_dims = [256, 512, 768, 768][::-1]
+            out_c = in_c
+
             for layer_idx in range(len(self.pretrained.model.blocks)):
-                module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
+                if layer_idx in self.output_hooks:
+                    out_c = output_later_dims.pop()
+                module_dict['layer_%d_ca'%layer_idx] = CrossAttention_CAv2(opt, token_c, input_dims=in_c, output_dims=out_c, norm_layer_1d=norm_layer_1d)
+                # print(layer_idx, in_c, out_c)
+                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_transform_feat_in_qkv_if_use_init_img_feat:
+                    pass
+                else:
+                    in_c = out_c
+                
 
         if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers != -1:
             for layer_idx in range(len(self.pretrained.model.blocks)):
                 if layer_idx >= self.num_layers:
                     self.pretrained.model.blocks[layer_idx] = nn.Identity()
-                    if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
+                    if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
                         del module_dict['layer_%d_ca'%layer_idx]
 
-        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA:
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
             self.ca_modules = nn.ModuleDict(module_dict)
             self.extra_input_dict.update({'ca_modules': self.ca_modules, 'output_hooks': self.output_hooks})
 
@@ -125,7 +140,7 @@ class DPT_CAv2(BaseModel):
         if self.channels_last == True:
             x.contiguous(memory_format=torch.channels_last)
 
-        layer_1, layer_2, layer_3, layer_4 = forward_vit(self.opt, self.pretrained, x, extra_input_dict=self.extra_input_dict)
+        layer_1, layer_2, layer_3, layer_4 = forward_vit_CAv2(self.opt, self.pretrained, x, extra_input_dict=self.extra_input_dict)
 
         layer_1_rn = self.scratch.layer1_rn(layer_1)
         # print(self.scratch.layer1_rn, layer_1.shape, layer_1_rn.shape) # [hybrid] Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False) torch.Size([2, 256, 64, 80]) torch.Size([2, 256, 64, 80])
@@ -209,32 +224,3 @@ class DPTAlbedoDepthModel_CAv2(DPT_CAv2):
             # pass
 
         return x_out, {}
-
-# class DPTSegmentationModel(DPT):
-#     def __init__(self, num_classes, path=None, **kwargs):
-
-#         features = kwargs["features"] if "features" in kwargs else 256
-
-#         kwargs["use_bn"] = True
-
-#         head = nn.Sequential(
-#             nn.Conv2d(features, features, kernel_size=3, padding=1, bias=False),
-#             nn.BatchNorm2d(features),
-#             nn.ReLU(True),
-#             nn.Dropout(0.1, False),
-#             nn.Conv2d(features, num_classes, kernel_size=1),
-#             Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
-#         )
-
-#         super().__init__(head, **kwargs)
-
-#         self.auxlayer = nn.Sequential(
-#             nn.Conv2d(features, features, kernel_size=3, padding=1, bias=False),
-#             nn.BatchNorm2d(features),
-#             nn.ReLU(True),
-#             nn.Dropout(0.1, False),
-#             nn.Conv2d(features, num_classes, kernel_size=1),
-#         )
-
-#         if path is not None:
-#             self.load(path)

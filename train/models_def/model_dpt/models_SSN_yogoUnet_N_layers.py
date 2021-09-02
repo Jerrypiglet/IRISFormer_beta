@@ -141,7 +141,7 @@ class DPT_SSN_yogoUnet_N_layers(BaseModel):
                     #     if layer_idx not in self.output_layers:
                     #         continue
                         
-                    module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
+                    module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, input_dims=im_c, output_dims=token_c, norm_layer_1d=norm_layer_1d)
                     # print('+++++++++', 'layer_%d_ca'%layer_idx)
 
             else:

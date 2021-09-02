@@ -293,6 +293,9 @@ if opt.cfg.MODEL_BRDF.DPT_baseline.if_warm_up:
         scheduler_backbone, _ = create_scheduler(opt, optimizer_backbone)
         scheduler_others, _ = create_scheduler(opt, optimizer_others)
 
+if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.yogo_lr:
+    optimizer = optim.Adam(model.parameters(), lr=cfg.SOLVER.lr)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100)
 
 # <<<<<<<<<<<<< MODEL AND OPTIMIZER
 

@@ -260,14 +260,28 @@ _C.MODEL_BRDF.DPT_baseline.if_skip_patch_embed_proj = False
 _C.MODEL_BRDF.DPT_baseline.if_only_restore_backbone = False
 _C.MODEL_BRDF.DPT_baseline.if_batch_norm_in_proj_extra_in_proj_extra = False
 _C.MODEL_BRDF.DPT_baseline.if_simple_proj_extra = False
-
 _C.MODEL_BRDF.DPT_baseline.feat_proj_channels = -1
+
+_C.MODEL_BRDF.DPT_baseline.patch_size = 16
+
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid = CN()
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr = False # faster: 1e-4, backbone: 1e-5
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.yogo_lr = False # use yogo scheduler and optimizer
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels = 768
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA = False # use Cross Attention instead of assembling
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA_if_recompute_C = False # recompute tokens from im_feat then feed to next transformer
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA = CN()
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA = False # use Cross Attention instead of assembling
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_recompute_C = False # recompute tokens from im_feat then feed to next transformer
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_transform_feat_in_qkv_if_use_init_img_feat = False
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.im_feat_init_c = None
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type = 'double' # [single, double, full] of resnet
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full = CN()
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full.backbone_dims = 1856 # 64+256+512+1024
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full.proj_extra_dims = 768 # to be consistent with hybrid
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full.proj_extra_if_inst_norm = True
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full.proj_extra_if_simple = False
+
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers = -1 # only support 4 outout layers to avoid drastic changes to original DPT
+
 _C.MODEL_BRDF.DPT_baseline.dpt_large = CN()
 _C.MODEL_BRDF.DPT_baseline.dpt_large.feat_proj_channels = 1024
 
@@ -290,7 +304,6 @@ _C.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method = 'full' # if using residual/c
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.feat_fusion_method = 'sum' # fusion method in class FeatureFusionBlock_custom
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer = 'instanceNorm' # [instanceNorm, identity, layerNorm]
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims = 1344 # resnet: stem + stage 0,1,2
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.patch_size = 16
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_freeze_matseg = True
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_dense = True
 _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_freeze_unet = False

@@ -169,6 +169,7 @@ def create_job_from_yaml(yaml_filename):
 
 def deploy_to_s3(args):
     deploy_command = 'rclone sync %s %s'%(args.deploy_src, args.deploy_s3)
+    print('>>>>>>>>>>>> deploying with...: %s'%deploy_command)
     # os.system(deploy_command)
     run_command_generic(deploy_command)
     print('>>>>>>>>>>>> deployed with: %s'%deploy_command)
