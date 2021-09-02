@@ -267,6 +267,7 @@ _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr = False # faster: 1e-4, backbone: 
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels = 768
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA = False # use Cross Attention instead of assembling
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.if_use_CA_if_recompute_C = False # recompute tokens from im_feat then feed to next transformer
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers = -1 # only support 4 outout layers to avoid drastic changes to original DPT
 _C.MODEL_BRDF.DPT_baseline.dpt_large = CN()
 _C.MODEL_BRDF.DPT_baseline.dpt_large.feat_proj_channels = 1024
 
