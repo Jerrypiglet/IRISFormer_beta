@@ -152,30 +152,26 @@ def forward_vit_CAv2(opt, pretrained, x, extra_input_dict={}):
             print(im_feat_dict.keys(), output_hooks)
 
     if layer_1.ndim == 3:
-        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA and not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_grid_assembling:
             layer_1 = im_feat_dict['im_feat_%d'%output_hooks[0]]
-            # print('+++')
         else:
             layer_1 = unflatten(layer_1)
 
     if layer_2.ndim == 3:
-        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA and not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_grid_assembling:
             layer_2 = im_feat_dict['im_feat_%d'%output_hooks[1]]
-            # print('+++')
         else:
             layer_2 = unflatten(layer_2)
 
     if layer_3.ndim == 3:
-        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA and not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_grid_assembling:
             layer_3 = im_feat_dict['im_feat_%d'%output_hooks[2]]
-            # print('+++')
         else:
             layer_3 = unflatten(layer_3)
 
     if layer_4.ndim == 3:
-        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA and not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_grid_assembling:
             layer_4 = im_feat_dict['im_feat_%d'%output_hooks[3]]
-            # print('+++')
         else:
             layer_4 = unflatten(layer_4)
 
@@ -185,16 +181,16 @@ def forward_vit_CAv2(opt, pretrained, x, extra_input_dict={}):
     # DPT-large: --> torch.Size([1, 1024, 16, 20]) torch.Size([1, 1024, 16, 20]) torch.Size([1, 1024, 16, 20]) torch.Size([1, 1024, 16, 20])
 
 
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_grid_assembling:
+        layer_1 = pretrained.act_postprocess1[3 : len(pretrained.act_postprocess1)](layer_1)
+        layer_2 = pretrained.act_postprocess2[3 : len(pretrained.act_postprocess2)](layer_2)
+        layer_3 = pretrained.act_postprocess3[3 : len(pretrained.act_postprocess3)](layer_3)
+        layer_4 = pretrained.act_postprocess4[3 : len(pretrained.act_postprocess4)](layer_4)
 
-    # layer_1 = pretrained.act_postprocess1[3 : len(pretrained.act_postprocess1)](layer_1)
-    # layer_2 = pretrained.act_postprocess2[3 : len(pretrained.act_postprocess2)](layer_2)
-    # layer_3 = pretrained.act_postprocess3[3 : len(pretrained.act_postprocess3)](layer_3)
-    # layer_4 = pretrained.act_postprocess4[3 : len(pretrained.act_postprocess4)](layer_4)
-
-    # if if_print:
-        # print('---->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
-    # DPT-hybrid: ----> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 8, 10])
-    # DPT-large: ----> torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 1024, 16, 20]) torch.Size([1, 1024, 8, 10])
+        if if_print:
+            print('---->', layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
+        # DPT-hybrid: ----> torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 16, 20]) torch.Size([2, 768, 8, 10])
+        # DPT-large: ----> torch.Size([1, 256, 64, 80]) torch.Size([1, 512, 32, 40]) torch.Size([1, 1024, 16, 20]) torch.Size([1, 1024, 8, 10])
 
 
     return layer_1, layer_2, layer_3, layer_4
@@ -301,27 +297,30 @@ def forward_flex_CAv2(self, opt, x_input, pretrained_activations=[], extra_input
             assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method == 'full'
             # print(idx, ca_modules['layer_%d_ca'%idx])
             
-            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_transform_feat_in_qkv_if_use_init_img_feat:
-                if idx in output_hooks[1:]:
-                    im_feat_scale_factor_accu *= 1./2.
-                im_feat_scale_factor = im_feat_scale_factor_accu
-                im_feat_in = im_feat_dict['im_feat_-1']
+            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_grid_assembling:
+                pass
             else:
-                im_feat_in = im_feat_dict['im_feat_%d'%(idx-1)]
-                if idx in output_hooks[1:]:
-                    im_feat_scale_factor = 1./2.
+                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_init_img_feat:
+                    if idx in output_hooks[1:]:
+                        im_feat_scale_factor_accu *= 1./2.
+                    im_feat_scale_factor = im_feat_scale_factor_accu
+                    im_feat_in = im_feat_dict['im_feat_-1']
                 else:
-                    im_feat_scale_factor = 1.
+                    im_feat_in = im_feat_dict['im_feat_%d'%(idx-1)]
+                    if idx in output_hooks[1:]:
+                        im_feat_scale_factor = 1./2.
+                    else:
+                        im_feat_scale_factor = 1.
 
-            if if_print:
-                print(im_feat_in.shape, ca_modules['layer_%d_ca'%idx])
+                if if_print:
+                    print(im_feat_in.shape, ca_modules['layer_%d_ca'%idx])
 
-            im_feat_out, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_in, x_tokens, im_feat_scale_factor=im_feat_scale_factor, proj_coef_in=None) # torch.Size([1, 768, 320])
+                im_feat_out, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_in, x_tokens, im_feat_scale_factor=im_feat_scale_factor, proj_coef_in=None) # torch.Size([1, 768, 320])
 
-            if if_print:
-                print(im_feat_out.shape) # torch.Size([1, 768, 16, 20])
+                if if_print:
+                    print(im_feat_out.shape) # torch.Size([1, 768, 16, 20])
 
-            im_feat_dict['im_feat_%d'%idx] = im_feat_out
+                im_feat_dict['im_feat_%d'%idx] = im_feat_out
 
             if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_recompute_C:
                 assert False, 'not applicable because of different dims of I_feat (256, 512, ...) and tokens (738)'
@@ -329,6 +328,8 @@ def forward_flex_CAv2(self, opt, x_input, pretrained_activations=[], extra_input
                 x = torch.cat((x_cls_token, x_prime), dim=1)
             
             if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc:
+                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_grid_assembling:
+                    assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc_if_use_init_feat
                 if idx == (len(self.blocks)-1):
                     continue
                 if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc_if_use_previous_feat:
@@ -444,106 +445,110 @@ def _make_vit_b_rn50_backbone_CAv2(
 
     readout_oper = get_readout_oper(vit_features, features, use_readout, start_index)
 
-    pretrained.act_postprocess1 = nn.Sequential(
-        nn.Identity(), nn.Identity(), nn.Identity()
-    )
-    pretrained.act_postprocess2 = nn.Sequential(
-        nn.Identity(), nn.Identity(), nn.Identity()
-    )
-    pretrained.act_postprocess3 = nn.Sequential(
-        nn.Identity(), nn.Identity(), nn.Identity()
-    )
-    pretrained.act_postprocess4 = nn.Sequential(
-        nn.Identity(), nn.Identity(), nn.Identity()
-    )
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_grid_assembling:
 
+        if use_vit_only == True:
+            pretrained.act_postprocess1 = nn.Sequential(
+                readout_oper[0],
+                Transpose(1, 2),
+                nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
+                nn.Conv2d(
+                    in_channels=vit_features,
+                    out_channels=features[0],
+                    kernel_size=1,
+                    stride=1,
+                    padding=0,
+                ),
+                nn.ConvTranspose2d(
+                    in_channels=features[0],
+                    out_channels=features[0],
+                    kernel_size=4,
+                    stride=4,
+                    padding=0,
+                    bias=True,
+                    dilation=1,
+                    groups=1,
+                ),
+            )
 
-    # if use_vit_only == True:
-    #     pretrained.act_postprocess1 = nn.Sequential(
-    #         readout_oper[0],
-    #         Transpose(1, 2),
-    #         nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
-    #         nn.Conv2d(
-    #             in_channels=vit_features,
-    #             out_channels=features[0],
-    #             kernel_size=1,
-    #             stride=1,
-    #             padding=0,
-    #         ),
-    #         nn.ConvTranspose2d(
-    #             in_channels=features[0],
-    #             out_channels=features[0],
-    #             kernel_size=4,
-    #             stride=4,
-    #             padding=0,
-    #             bias=True,
-    #             dilation=1,
-    #             groups=1,
-    #         ),
-    #     )
+            pretrained.act_postprocess2 = nn.Sequential(
+                readout_oper[1],
+                Transpose(1, 2),
+                nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
+                nn.Conv2d(
+                    in_channels=vit_features,
+                    out_channels=features[1],
+                    kernel_size=1,
+                    stride=1,
+                    padding=0,
+                ),
+                nn.ConvTranspose2d(
+                    in_channels=features[1],
+                    out_channels=features[1],
+                    kernel_size=2,
+                    stride=2,
+                    padding=0,
+                    bias=True,
+                    dilation=1,
+                    groups=1,
+                ),
+            )
+        else:
+            pretrained.act_postprocess1 = nn.Sequential(
+                nn.Identity(), nn.Identity(), nn.Identity()
+            )
+            pretrained.act_postprocess2 = nn.Sequential(
+                nn.Identity(), nn.Identity(), nn.Identity()
+            )
+        
+        pretrained.act_postprocess3 = nn.Sequential(
+            readout_oper[2],
+            Transpose(1, 2),
+            nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
+            nn.Conv2d(
+                in_channels=vit_features,
+                out_channels=features[2],
+                kernel_size=1,
+                stride=1,
+                padding=0,
+            ),
+        )
 
-    #     pretrained.act_postprocess2 = nn.Sequential(
-    #         readout_oper[1],
-    #         Transpose(1, 2),
-    #         nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
-    #         nn.Conv2d(
-    #             in_channels=vit_features,
-    #             out_channels=features[1],
-    #             kernel_size=1,
-    #             stride=1,
-    #             padding=0,
-    #         ),
-    #         nn.ConvTranspose2d(
-    #             in_channels=features[1],
-    #             out_channels=features[1],
-    #             kernel_size=2,
-    #             stride=2,
-    #             padding=0,
-    #             bias=True,
-    #             dilation=1,
-    #             groups=1,
-    #         ),
-    #     )
-    # else:
-    #     pretrained.act_postprocess1 = nn.Sequential(
-    #         nn.Identity(), nn.Identity(), nn.Identity()
-    #     )
-    #     pretrained.act_postprocess2 = nn.Sequential(
-    #         nn.Identity(), nn.Identity(), nn.Identity()
-    #     )
-    
-    # pretrained.act_postprocess3 = nn.Sequential(
-    #     readout_oper[2],
-    #     Transpose(1, 2),
-    #     nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
-    #     nn.Conv2d(
-    #         in_channels=vit_features,
-    #         out_channels=features[2],
-    #         kernel_size=1,
-    #         stride=1,
-    #         padding=0,
-    #     ),
-    # )
+        pretrained.act_postprocess4 = nn.Sequential(
+            readout_oper[3],
+            Transpose(1, 2),
+            nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
+            nn.Conv2d(
+                in_channels=vit_features,
+                out_channels=features[3],
+                kernel_size=1,
+                stride=1,
+                padding=0,
+            ),
+            nn.Conv2d(
+                in_channels=features[3],
+                out_channels=features[3],
+                kernel_size=3,
+                stride=2,
+                padding=1,
+            ),
+        )
 
-    # pretrained.act_postprocess4 = nn.Sequential(
-    #     readout_oper[3],
-    #     Transpose(1, 2),
-    #     nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
-    #     nn.Conv2d(
-    #         in_channels=vit_features,
-    #         out_channels=features[3],
-    #         kernel_size=1,
-    #         stride=1,
-    #         padding=0,
-    #     ),
-    #     nn.Conv2d(
-    #         in_channels=features[3],
-    #         out_channels=features[3],
-    #         kernel_size=3,
-    #         stride=2,
-    #         padding=1,
-    #     ),
-    # )
+    else:
+
+        pretrained.act_postprocess1 = nn.Sequential(
+            nn.Identity(), nn.Identity(), nn.Identity()
+        )
+        pretrained.act_postprocess2 = nn.Sequential(
+            nn.Identity(), nn.Identity(), nn.Identity()
+        )
+        pretrained.act_postprocess3 = nn.Sequential(
+            nn.Identity(), nn.Identity(), nn.Identity()
+        )
+        pretrained.act_postprocess4 = nn.Sequential(
+            nn.Identity(), nn.Identity(), nn.Identity()
+        )
+
 
     pretrained.model.start_index = start_index
     pretrained.model.patch_size = [opt.cfg.MODEL_BRDF.DPT_baseline.patch_size] * 2
