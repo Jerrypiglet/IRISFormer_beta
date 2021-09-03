@@ -520,7 +520,7 @@ _C.MODEL_SEMSEG.pspnet_version = 50 # [50, 101]
 
 _C.SOLVER = CN()
 _C.SOLVER.method = 'adam'
-_C.SOLVER.lr = 0.0001
+_C.SOLVER.lr = 3e-5
 _C.SOLVER.weight_decay = 0.00001
 _C.SOLVER.max_iter = 10000000
 _C.SOLVER.max_epoch = 1000
