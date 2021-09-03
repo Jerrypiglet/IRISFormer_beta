@@ -328,6 +328,8 @@ def forward_flex_CAv2(self, opt, x_input, pretrained_activations=[], extra_input
             if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc:
                 if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc_if_use_previous_feat:
                     im_feat_in = im_feat_dict['im_feat_%d'%(idx-1)]
+                elif opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc_if_use_init_feat:
+                    im_feat_in = im_feat_dict['im_feat_-1']
                 else:
                     im_feat_in = im_feat_dict['im_feat_%d'%idx]
                 im_feat_in = im_feat_in.flatten(2)

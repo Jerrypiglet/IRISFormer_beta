@@ -170,6 +170,8 @@ def set_up_envs(opt):
             assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type in ['double', 'single', 'full'] # [single, double, full] of resnet
             opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.im_feat_init_c = {'double': 256, 'single': 64, 'full': 768}[opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type]
 
+            assert not (opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc_if_use_previous_feat and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc_if_use_init_feat)
+
     # ====== detectron (objects & masks) =====
     if opt.cfg.MODEL_DETECTRON.enable:
         opt.cfg.DATA.data_read_list.append('ob')

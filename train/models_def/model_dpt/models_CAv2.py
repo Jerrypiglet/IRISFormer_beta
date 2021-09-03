@@ -135,6 +135,8 @@ class DPT_CAv2(BaseModel):
                         module_dict['layer_%d_cac'%layer_idx] = CrossAttention_CAv2(opt, token_c, input_dims=in_c, output_dims=out_c, norm_layer_1d=norm_layer_1d)
                         if layer_idx in self.output_hooks:
                             token_c = token_later_dims.pop()
+                    elif opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc_if_use_init_feat:
+                        module_dict['layer_%d_cac'%layer_idx] = CrossAttention_CAv2(opt, token_c, input_dims=in_c, output_dims=out_c, norm_layer_1d=norm_layer_1d)
                     else:
                         if layer_idx in self.output_hooks:
                             token_c = token_later_dims.pop()
