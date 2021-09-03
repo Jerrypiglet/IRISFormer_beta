@@ -296,17 +296,23 @@ class CrossAttention_CAv2(nn.Module):
                     norm_layer_1d=norm_layer_1d)
 
 
-    def forward(self, in_feature, in_tokens, im_feat_scale_factor=1., proj_coef_in=None):
-        # pass
-        batch_size, im_feat_dim, im_h, im_w = in_feature.shape[:4]
+    def forward(self, in_feature, in_tokens, im_feat_scale_factor=1., proj_coef_in=None, if_in_feature_flattened=False):
+        # print(self.token_c, in_tokens.shape, self.input_dims, in_feature.shape)
         assert self.token_c == in_tokens.shape[1]
-        assert self.input_dims==im_feat_dim
-        if im_feat_scale_factor != 1.:
-            im_feat_resized = F.interpolate(in_feature, scale_factor=im_feat_scale_factor, mode='bilinear') # torch.Size([1, 1344, 16, 20])
+        if if_in_feature_flattened:
+            im_feat_flattened = in_feature
+            assert len(im_feat_flattened.shape) == 3
+            assert im_feat_scale_factor == 1.
+            assert self.input_dims == im_feat_flattened.shape[1]
         else:
-            im_feat_resized = in_feature
+            batch_size, im_feat_dim, im_h, im_w = in_feature.shape[:4]
+            assert self.input_dims==im_feat_dim
+            if im_feat_scale_factor != 1.:
+                im_feat_resized = F.interpolate(in_feature, scale_factor=im_feat_scale_factor, mode='bilinear') # torch.Size([1, 1344, 16, 20])
+            else:
+                im_feat_resized = in_feature
 
-        im_feat_flattened = im_feat_resized.view(batch_size, im_feat_dim, -1)
+            im_feat_flattened = im_feat_resized.view(batch_size, im_feat_dim, -1)
 
         output_dict = self.projectors(
             self.feature_block(im_feat_flattened), 
@@ -318,7 +324,8 @@ class CrossAttention_CAv2(nn.Module):
         # print(proj_coef.shape) # torch.Size([1, 2, 5120, 320])
 
         # print(in_feature.shape, out_feature.shape)
-        out_feature = out_feature.view(batch_size, self.output_dims, int(im_h*im_feat_scale_factor), int(im_w*im_feat_scale_factor))
+        if not if_in_feature_flattened:
+            out_feature = out_feature.view(batch_size, self.output_dims, int(im_h*im_feat_scale_factor), int(im_w*im_feat_scale_factor))
 
         return out_feature, proj_coef
 

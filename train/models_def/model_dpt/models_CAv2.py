@@ -122,7 +122,24 @@ class DPT_CAv2(BaseModel):
                     pass
                 else:
                     in_c = out_c
-                
+
+            if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc:
+                out_c = 768
+                in_c = 768
+                token_c = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.im_feat_init_c
+                token_later_dims = [256, 512, 768, 768][::-1]
+
+                for layer_idx in range(len(self.pretrained.model.blocks)):
+                    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc_if_use_previous_feat:
+                        # print(layer_idx, in_c, out_c, token_c, token_later_dims)
+                        module_dict['layer_%d_cac'%layer_idx] = CrossAttention_CAv2(opt, token_c, input_dims=in_c, output_dims=out_c, norm_layer_1d=norm_layer_1d)
+                        if layer_idx in self.output_hooks:
+                            token_c = token_later_dims.pop()
+                    else:
+                        if layer_idx in self.output_hooks:
+                            token_c = token_later_dims.pop()
+                        # print(layer_idx, in_c, out_c, token_c, token_later_dims)
+                        module_dict['layer_%d_cac'%layer_idx] = CrossAttention_CAv2(opt, token_c, input_dims=in_c, output_dims=out_c, norm_layer_1d=norm_layer_1d)
 
         if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers != -1:
             for layer_idx in range(len(self.pretrained.model.blocks)):

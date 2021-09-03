@@ -267,8 +267,8 @@ def forward_flex_CAv2(self, opt, x_input, pretrained_activations=[], extra_input
                 F.interpolate(pretrained_activations['stem_feat_stage_1'], scale_factor=2, mode='bilinear'), # torch.Size([4, 512, 32, 40])
                 F.interpolate(pretrained_activations['stem_feat_stage_2'], scale_factor=4, mode='bilinear'), # torch.Size([4, 1024, 16, 20])
             ], dim=1)
-        I_feat_init = self.stem.proj_extra(I_feat_init)
-        print('----', I_feat_init.shape)
+        I_feat_init = self.stem.proj_extra(I_feat_init) # torch.Size([4, 768, 64, 80])
+        # print('----', I_feat_init.shape)
 
     assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA
     im_feat_dict = {}
@@ -280,7 +280,6 @@ def forward_flex_CAv2(self, opt, x_input, pretrained_activations=[], extra_input
     im_feat_scale_factor_accu = 1.
 
     if_print = False
-
 
     for idx, blk in enumerate(self.blocks):
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers!=-1 and idx >= opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers:
@@ -322,8 +321,19 @@ def forward_flex_CAv2(self, opt, x_input, pretrained_activations=[], extra_input
             im_feat_dict['im_feat_%d'%idx] = im_feat_out
 
             if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_recompute_C:
+                assert False, 'not applicable because of different dims of I_feat (256, 512, ...) and tokens (738)'
                 x_prime = im_feat_out.flatten(2).transpose(-1, -2)
                 x = torch.cat((x_cls_token, x_prime), dim=1)
+            
+            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc:
+                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc_if_use_previous_feat:
+                    im_feat_in = im_feat_dict['im_feat_%d'%(idx-1)]
+                else:
+                    im_feat_in = im_feat_dict['im_feat_%d'%idx]
+                im_feat_in = im_feat_in.flatten(2)
+                x_tokens_out, _ = ca_modules['layer_%d_cac'%idx](x_tokens, im_feat_in, if_in_feature_flattened=True)
+                x = torch.cat((x_cls_token, x_tokens_out.transpose(-1, -2)), dim=1)
+
 
 
         # print('====', idx, torch.mean(x), torch.median(x), torch.max(x), torch.min(x), torch.var(x, unbiased=False))
