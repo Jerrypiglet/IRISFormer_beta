@@ -278,6 +278,7 @@ _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_transform_feat_in_qkv_if_use_init_im
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.im_feat_init_c = None
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type = 'double' # [single, double, full] of resnet
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full = CN()
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_shared_stem = False # if shared one resnet; or separate for tokens and im_feats
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full.backbone_dims = 1856 # 64+256+512+1024
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full.proj_extra_dims = 768 # to be consistent with hybrid
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full.proj_extra_if_inst_norm = True

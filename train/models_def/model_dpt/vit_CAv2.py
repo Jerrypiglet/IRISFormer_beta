@@ -259,7 +259,10 @@ def forward_flex_CAv2(self, opt, x_input, pretrained_activations=[], extra_input
     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type in ['single', 'double']:
         I_feat_init = self.stem(x_input) # c 64 or 256, 1/4
     else:
-        _ = self.stem(x_input)
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_shared_stem:
+            pass # already forwarded
+        else:
+            _ = self.stem(x_input)
         I_feat_init = torch.cat(
             [
                 F.interpolate(pretrained_activations['stem_feat_stem'], scale_factor=1, mode='bilinear'), # torch.Size([4, 64, 64, 80])
@@ -326,6 +329,8 @@ def forward_flex_CAv2(self, opt, x_input, pretrained_activations=[], extra_input
                 x = torch.cat((x_cls_token, x_prime), dim=1)
             
             if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc:
+                if idx == (len(self.blocks)-1):
+                    continue
                 if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc_if_use_previous_feat:
                     im_feat_in = im_feat_dict['im_feat_%d'%(idx-1)]
                 elif opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc_if_use_init_feat:
@@ -386,18 +391,32 @@ def _make_vit_b_rn50_backbone_CAv2(
 
     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type == 'full':
         # in this case, no need for resnet backbones
-        pretrained.model.stem.stem.register_forward_hook(
-            get_activation("stem_feat_stem")
-        )
-        pretrained.model.stem.stages[0].register_forward_hook(
-            get_activation("stem_feat_stage_0")
-        )
-        pretrained.model.stem.stages[1].register_forward_hook(
-            get_activation("stem_feat_stage_1")
-        )
-        pretrained.model.stem.stages[2].register_forward_hook(
-            get_activation("stem_feat_stage_2")
-        )
+        if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_shared_stem:
+            pretrained.model.stem.stem.register_forward_hook(
+                get_activation("stem_feat_stem")
+            )
+            pretrained.model.stem.stages[0].register_forward_hook(
+                get_activation("stem_feat_stage_0")
+            )
+            pretrained.model.stem.stages[1].register_forward_hook(
+                get_activation("stem_feat_stage_1")
+            )
+            pretrained.model.stem.stages[2].register_forward_hook(
+                get_activation("stem_feat_stage_2")
+            )
+        else:
+            pretrained.model.patch_embed.backbone.stem.register_forward_hook(
+                get_activation("stem_feat_stem")
+            )
+            pretrained.model.patch_embed.backbone.stages[0].register_forward_hook(
+                get_activation("stem_feat_stage_0")
+            )
+            pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
+                get_activation("stem_feat_stage_1")
+            )
+            pretrained.model.patch_embed.backbone.stages[2].register_forward_hook(
+                get_activation("stem_feat_stage_2")
+            )
 
 
     if use_vit_only == True:
@@ -425,92 +444,106 @@ def _make_vit_b_rn50_backbone_CAv2(
 
     readout_oper = get_readout_oper(vit_features, features, use_readout, start_index)
 
-    if use_vit_only == True:
-        pretrained.act_postprocess1 = nn.Sequential(
-            readout_oper[0],
-            Transpose(1, 2),
-            nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
-            nn.Conv2d(
-                in_channels=vit_features,
-                out_channels=features[0],
-                kernel_size=1,
-                stride=1,
-                padding=0,
-            ),
-            nn.ConvTranspose2d(
-                in_channels=features[0],
-                out_channels=features[0],
-                kernel_size=4,
-                stride=4,
-                padding=0,
-                bias=True,
-                dilation=1,
-                groups=1,
-            ),
-        )
-
-        pretrained.act_postprocess2 = nn.Sequential(
-            readout_oper[1],
-            Transpose(1, 2),
-            nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
-            nn.Conv2d(
-                in_channels=vit_features,
-                out_channels=features[1],
-                kernel_size=1,
-                stride=1,
-                padding=0,
-            ),
-            nn.ConvTranspose2d(
-                in_channels=features[1],
-                out_channels=features[1],
-                kernel_size=2,
-                stride=2,
-                padding=0,
-                bias=True,
-                dilation=1,
-                groups=1,
-            ),
-        )
-    else:
-        pretrained.act_postprocess1 = nn.Sequential(
-            nn.Identity(), nn.Identity(), nn.Identity()
-        )
-        pretrained.act_postprocess2 = nn.Sequential(
-            nn.Identity(), nn.Identity(), nn.Identity()
-        )
-    
+    pretrained.act_postprocess1 = nn.Sequential(
+        nn.Identity(), nn.Identity(), nn.Identity()
+    )
+    pretrained.act_postprocess2 = nn.Sequential(
+        nn.Identity(), nn.Identity(), nn.Identity()
+    )
     pretrained.act_postprocess3 = nn.Sequential(
-        readout_oper[2],
-        Transpose(1, 2),
-        nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
-        nn.Conv2d(
-            in_channels=vit_features,
-            out_channels=features[2],
-            kernel_size=1,
-            stride=1,
-            padding=0,
-        ),
+        nn.Identity(), nn.Identity(), nn.Identity()
+    )
+    pretrained.act_postprocess4 = nn.Sequential(
+        nn.Identity(), nn.Identity(), nn.Identity()
     )
 
-    pretrained.act_postprocess4 = nn.Sequential(
-        readout_oper[3],
-        Transpose(1, 2),
-        nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
-        nn.Conv2d(
-            in_channels=vit_features,
-            out_channels=features[3],
-            kernel_size=1,
-            stride=1,
-            padding=0,
-        ),
-        nn.Conv2d(
-            in_channels=features[3],
-            out_channels=features[3],
-            kernel_size=3,
-            stride=2,
-            padding=1,
-        ),
-    )
+
+    # if use_vit_only == True:
+    #     pretrained.act_postprocess1 = nn.Sequential(
+    #         readout_oper[0],
+    #         Transpose(1, 2),
+    #         nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
+    #         nn.Conv2d(
+    #             in_channels=vit_features,
+    #             out_channels=features[0],
+    #             kernel_size=1,
+    #             stride=1,
+    #             padding=0,
+    #         ),
+    #         nn.ConvTranspose2d(
+    #             in_channels=features[0],
+    #             out_channels=features[0],
+    #             kernel_size=4,
+    #             stride=4,
+    #             padding=0,
+    #             bias=True,
+    #             dilation=1,
+    #             groups=1,
+    #         ),
+    #     )
+
+    #     pretrained.act_postprocess2 = nn.Sequential(
+    #         readout_oper[1],
+    #         Transpose(1, 2),
+    #         nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
+    #         nn.Conv2d(
+    #             in_channels=vit_features,
+    #             out_channels=features[1],
+    #             kernel_size=1,
+    #             stride=1,
+    #             padding=0,
+    #         ),
+    #         nn.ConvTranspose2d(
+    #             in_channels=features[1],
+    #             out_channels=features[1],
+    #             kernel_size=2,
+    #             stride=2,
+    #             padding=0,
+    #             bias=True,
+    #             dilation=1,
+    #             groups=1,
+    #         ),
+    #     )
+    # else:
+    #     pretrained.act_postprocess1 = nn.Sequential(
+    #         nn.Identity(), nn.Identity(), nn.Identity()
+    #     )
+    #     pretrained.act_postprocess2 = nn.Sequential(
+    #         nn.Identity(), nn.Identity(), nn.Identity()
+    #     )
+    
+    # pretrained.act_postprocess3 = nn.Sequential(
+    #     readout_oper[2],
+    #     Transpose(1, 2),
+    #     nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
+    #     nn.Conv2d(
+    #         in_channels=vit_features,
+    #         out_channels=features[2],
+    #         kernel_size=1,
+    #         stride=1,
+    #         padding=0,
+    #     ),
+    # )
+
+    # pretrained.act_postprocess4 = nn.Sequential(
+    #     readout_oper[3],
+    #     Transpose(1, 2),
+    #     nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
+    #     nn.Conv2d(
+    #         in_channels=vit_features,
+    #         out_channels=features[3],
+    #         kernel_size=1,
+    #         stride=1,
+    #         padding=0,
+    #     ),
+    #     nn.Conv2d(
+    #         in_channels=features[3],
+    #         out_channels=features[3],
+    #         kernel_size=3,
+    #         stride=2,
+    #         padding=1,
+    #     ),
+    # )
 
     pretrained.model.start_index = start_index
     pretrained.model.patch_size = [opt.cfg.MODEL_BRDF.DPT_baseline.patch_size] * 2
@@ -549,7 +582,10 @@ def _make_pretrained_vitb_rn50_384_CAv2(
             model_tmp.patch_embed.backbone.stages[0]
         )
     elif opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type == 'full':
-        model.stem = model_tmp.patch_embed.backbone
+        if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_shared_stem:
+            model.stem = model_tmp.patch_embed.backbone
+        else:
+            model.stem = nn.Module()
 
         backbone_dims = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full.backbone_dims
         feat_proj_dims = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full.proj_extra_dims
