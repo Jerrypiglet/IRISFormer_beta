@@ -107,10 +107,10 @@ class Transpose(nn.Module):
         return x
 
 
-def forward_vit(opt, pretrained, x, extra_input_dict={}):
+def forward_vit(opt, pretrained, x, input_dict_extra={}):
     b, c, h, w = x.shape
 
-    glob, extra_output_dict = pretrained.model.forward_flex(opt, x, extra_input_dict=extra_input_dict)
+    glob, extra_output_dict = pretrained.model.forward_flex(opt, x, input_dict_extra=input_dict_extra)
 
     layer_1 = pretrained.activations["1"]
     layer_2 = pretrained.activations["2"]
@@ -147,7 +147,7 @@ def forward_vit(opt, pretrained, x, extra_input_dict={}):
     )
 
     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
-        im_feat_dict, output_hooks = extra_output_dict['im_feat_dict'], extra_input_dict['output_hooks']
+        im_feat_dict, output_hooks = extra_output_dict['im_feat_dict'], input_dict_extra['output_hooks']
         if if_print:
             print(im_feat_dict.keys(), output_hooks)
 
@@ -217,7 +217,7 @@ def _resize_pos_embed(self, posemb, gs_h, gs_w): # original at https://github.co
     return posemb
 
 
-def forward_flex(self, opt, x, extra_input_dict={}):
+def forward_flex(self, opt, x, input_dict_extra={}):
     b, c, h, w = x.shape
 
     pos_embed = self._resize_pos_embed(
@@ -238,7 +238,7 @@ def forward_flex(self, opt, x, extra_input_dict={}):
     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
         im_feat_dict = {}
         im_feat_dict['im_feat_-1'] = im_feat_init
-        ca_modules = extra_input_dict['ca_modules']
+        ca_modules = input_dict_extra['ca_modules']
 
     if getattr(self, "dist_token", None) is not None:
         cls_tokens = self.cls_token.expand(

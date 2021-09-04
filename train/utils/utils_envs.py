@@ -148,6 +148,13 @@ def set_up_envs(opt):
                 if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_freeze_matseg:
                     opt.cfg.MODEL_MATSEG.if_freeze = True
 
+        if opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_hybrid_CAv2']:
+            assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from in ['backbone', 'matseg', 'on-the-fly']
+            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from == 'matseg':
+                opt.cfg.MODEL_MATSEG.enable = True
+                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_freeze_matseg:
+                    opt.cfg.MODEL_MATSEG.if_freeze = True
+
         assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method in ['qtc', 'qkv']
         assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method in ['residual', 'concat', 'none', 'full']
         assert opt.cfg.MODEL_BRDF.DPT_baseline.readout in ['ignore', 'add', 'project']
@@ -170,7 +177,13 @@ def set_up_envs(opt):
             assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type in ['double', 'single', 'full'] # [single, double, full] of resnet
             opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.im_feat_init_c = {'double': 256, 'single': 64, 'full': 768}[opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type]
 
-            assert not (opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc_if_use_previous_feat and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc_if_use_init_feat)
+            assert not (opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.CAc.if_use_previous_feat and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc_if_use_init_feat)
+
+        if 'SSN' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method == 'qkv' and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv:
+            opt.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_proj_coef = True
+        if opt.cfg.MODEL_BRDF.DPT_baseline.model == 'dpt_hybrid_CAv2' and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_SSN and not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_grid_assembling:
+            opt.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_proj_coef = True
+            opt.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_affinity = True
 
     # ====== detectron (objects & masks) =====
     if opt.cfg.MODEL_DETECTRON.enable:

@@ -377,7 +377,7 @@ def _make_vit_b_rn50_backbone_SSN_unet(
             pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
                 get_activation("feat_stage_1")
             )
-            pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
+            pretrained.model.patch_embed.backbone.stages[2].register_forward_hook(
                 get_activation("feat_stage_2")
             )
         

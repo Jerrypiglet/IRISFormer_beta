@@ -538,9 +538,9 @@ def postprocess_layout_object_emitter(labels_dict, output_dict, loss_dict, opt, 
         output_dict, loss_dict = postprocess_mesh(labels_dict, output_dict, loss_dict, opt, time_meters, is_train=is_train, flattened_valid_mask_tensor=flattened_valid_mask_tensor)
 
     if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-        # extra_input_dict = {}
+        # input_dict_extra = {}
         # if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_use_est_layout:
-        #     extra_input_dict.update('lo_bdb3D_result': output_dict['results_layout']['lo_bdb3D_result']})
+        #     input_dict_extra.update('lo_bdb3D_result': output_dict['results_layout']['lo_bdb3D_result']})
         output_dict, loss_dict = postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters)
 
     return output_dict, loss_dict
@@ -604,7 +604,7 @@ def postprocess_mesh(labels_dict, output_dict, loss_dict, opt, time_meters, is_t
     return output_dict, loss_dict
 
 
-def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters, extra_input_dict={}):
+def postprocess_emitter(labels_dict, output_dict, loss_dict, opt, time_meters, input_dict_extra={}):
     
     loss_type = opt.cfg.MODEL_LAYOUT_EMITTER.emitter.loss_type
     assert loss_type in ['L2', 'KL']

@@ -92,7 +92,7 @@ class DPT_CAv2(BaseModel):
 
         self.scratch.output_conv = head
 
-        self.extra_input_dict = {}
+        self.input_dict_extra = {}
 
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer == 'instanceNorm':
             norm_layer_1d = nn.InstanceNorm1d
@@ -153,15 +153,21 @@ class DPT_CAv2(BaseModel):
                         if 'layer_%d_cac'%layer_idx in module_dict_ca:
                             del module_dict_ca['layer_%d_cac'%layer_idx]
 
+        for layer_idx in range(len(self.pretrained.model.blocks)):
+            if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
+                if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_init_img_feat and layer_idx not in self.output_hooks:
+                    if 'layer_%d_ca'%layer_idx in module_dict_ca:
+                        del module_dict_ca['layer_%d_ca'%layer_idx]
+                        
         if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
             self.ca_modules = nn.ModuleDict(module_dict_ca)
-            self.extra_input_dict.update({'ca_modules': self.ca_modules, 'output_hooks': self.output_hooks})
+            self.input_dict_extra.update({'ca_modules': self.ca_modules, 'output_hooks': self.output_hooks})
 
-    def forward(self, x):
+    def forward(self, x, input_dict_extra={}):
         if self.channels_last == True:
             x.contiguous(memory_format=torch.channels_last)
 
-        layer_1, layer_2, layer_3, layer_4 = forward_vit_CAv2(self.opt, self.pretrained, x, extra_input_dict=self.extra_input_dict)
+        layer_1, layer_2, layer_3, layer_4, output_dict_extra = forward_vit_CAv2(self.opt, self.pretrained, x, input_dict_extra={**self.input_dict_extra, **input_dict_extra})
 
         layer_1_rn = self.scratch.layer1_rn(layer_1)
         # print(self.scratch.layer1_rn, layer_1.shape, layer_1_rn.shape) # [hybrid] Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False) torch.Size([2, 256, 64, 80]) torch.Size([2, 256, 64, 80])
@@ -183,7 +189,7 @@ class DPT_CAv2(BaseModel):
 
         out = self.scratch.output_conv(path_1)
 
-        return out
+        return out, output_dict_extra
 
 
 class DPTAlbedoDepthModel_CAv2(DPT_CAv2):
@@ -226,8 +232,9 @@ class DPTAlbedoDepthModel_CAv2(DPT_CAv2):
         #     assert False, str(path)
 
     def forward(self, x, input_dict_extra={}):
+        # print('+++++++input_dict_extra', input_dict_extra.keys())
         # print('[DPTAlbedoDepthModel - x]', x.shape, torch.max(x), torch.min(x), torch.median(x)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
-        x_out = super().forward(x)
+        x_out, output_dict_extra = super().forward(x, input_dict_extra=input_dict_extra)
         # print('[DPTAlbedoDepthModel - x_out 1]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
         if self.modality == 'al':
             x_out = torch.clamp(1.01 * torch.tanh(x_out ), -1, 1)
@@ -244,4 +251,4 @@ class DPTAlbedoDepthModel_CAv2(DPT_CAv2):
             # print('[DPTAlbedoDepthModel - x_out 3]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
             # pass
 
-        return x_out, {}
+        return x_out, output_dict_extra

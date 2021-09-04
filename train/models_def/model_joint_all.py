@@ -466,7 +466,7 @@ class Model_Joint(nn.Module):
                 or self.cfg.MODEL_MATSEG.use_pred_as_input \
                 or self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool or self.cfg.MODEL_MATSEG.if_albedo_pac_conv or self.cfg.MODEL_MATSEG.if_albedo_safenet \
                 or (self.cfg.MODEL_GMM.feat_recon.enable and self.cfg.MODEL_GMM.feat_recon.use_matseg) \
-                or (self.opt.cfg.MODEL_BRDF.DPT_baseline.enable and self.opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_hybrid_SSN', 'dpt_base_SSN', 'dpt_large_SSN']):
+                or (self.opt.cfg.MODEL_BRDF.DPT_baseline.enable and self.opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_hybrid_SSN', 'dpt_base_SSN', 'dpt_large_SSN', 'dpt_hybrid_CAv2']):
 
                 input_dict_extra.update({'return_dict_matseg': return_dict_matseg})
 
@@ -651,8 +651,8 @@ class Model_Joint(nn.Module):
         if self.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and self.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_debug_unet:
             return_dict['albedo_extra_output_dict'].update({'albedo_pred_unet': extra_DPT_return_dict['albedo_pred_unet']})
 
-        if 'SSN' in self.cfg.MODEL_BRDF.DPT_baseline.model and self.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method == 'qkv' and self.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv:
-            return_dict['albedo_extra_output_dict'].update({'proj_coef_dict': extra_DPT_return_dict['proj_coef_dict'], 'hooks': extra_DPT_return_dict['hooks'], 'abs_affinity_normalized_by_pixels_input': extra_DPT_return_dict['abs_affinity_normalized_by_pixels_input']})
+        if self.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_proj_coef:
+            return_dict['albedo_extra_output_dict'].update({'proj_coef_dict': extra_DPT_return_dict['proj_coef_dict'], 'hooks': extra_DPT_return_dict['hooks'], 'abs_affinity_normalized_by_pixels': extra_DPT_return_dict['abs_affinity_normalized_by_pixels']})
 
         return return_dict
 

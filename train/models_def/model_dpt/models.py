@@ -88,7 +88,7 @@ class DPT(BaseModel):
 
         self.scratch.output_conv = head
 
-        self.extra_input_dict = {}
+        self.input_dict_extra = {}
 
         if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
             from models_def.model_dpt.utils_yogo import CrossAttention, LayerNormLastTwo
@@ -118,14 +118,14 @@ class DPT(BaseModel):
 
         if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
             self.ca_modules = nn.ModuleDict(module_dict)
-            self.extra_input_dict.update({'ca_modules': self.ca_modules, 'output_hooks': self.output_hooks})
+            self.input_dict_extra.update({'ca_modules': self.ca_modules, 'output_hooks': self.output_hooks})
 
 
     def forward(self, x):
         if self.channels_last == True:
             x.contiguous(memory_format=torch.channels_last)
 
-        layer_1, layer_2, layer_3, layer_4 = forward_vit(self.opt, self.pretrained, x, extra_input_dict=self.extra_input_dict)
+        layer_1, layer_2, layer_3, layer_4 = forward_vit(self.opt, self.pretrained, x, input_dict_extra=self.input_dict_extra)
 
         layer_1_rn = self.scratch.layer1_rn(layer_1)
         # print(self.scratch.layer1_rn, layer_1.shape, layer_1_rn.shape) # [hybrid] Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False) torch.Size([2, 256, 64, 80]) torch.Size([2, 256, 64, 80])

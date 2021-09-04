@@ -282,6 +282,6 @@ def forward_flex_SSN_unet_qkv_yogo_N_layers(self, opt, x, pretrained_activations
     x = self.norm(x) # LayerNorm
     # print('-------')
 
-    extra_return_dict = {'Q': ssn_return_dict['Q'], 'matseg_affinity': ssn_return_dict['Q_2D'], 'im_feat': im_feat_init, 'im_feat_dict': im_feat_dict, 'hooks': hooks, 'proj_coef_dict': proj_coef_dict, 'abs_affinity_normalized_by_pixels_input': abs_affinity_normalized_by_pixels_input}
+    extra_return_dict = {'Q': ssn_return_dict['Q'], 'matseg_affinity': ssn_return_dict['Q_2D'], 'im_feat': im_feat_init, 'im_feat_dict': im_feat_dict, 'hooks': hooks, 'proj_coef_dict': proj_coef_dict, 'abs_affinity_normalized_by_pixels': abs_affinity_normalized_by_pixels_input}
 
     return x, extra_return_dict

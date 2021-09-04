@@ -240,6 +240,8 @@ _C.MODEL_BRDF.DPT_baseline.if_SGD = False
 _C.MODEL_BRDF.DPT_baseline.if_warm_up = False
 _C.MODEL_BRDF.DPT_baseline.if_pos_embed = True
 _C.MODEL_BRDF.DPT_baseline.if_batch_norm = False # in DPT output head
+_C.MODEL_BRDF.DPT_baseline.if_vis_CA_proj_coef = False
+_C.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_affinity = False
 # _C.MODEL_BRDF.DPT_baseline.if_batch_norm_in_proj_extra = False
 _C.MODEL_BRDF.DPT_baseline.modality = 'al'
 _C.MODEL_BRDF.DPT_baseline.model = 'dpt_hybrid'
@@ -268,22 +270,35 @@ _C.MODEL_BRDF.DPT_baseline.dpt_hybrid = CN()
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr = False # faster: 1e-4, backbone: 1e-5
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.yogo_lr = False # use yogo scheduler and optimizer
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels = 768
+
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA = CN()
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA = False # use Cross Attention instead of assembling
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc = False # use Cross Attention-tokens to update tokens (proj im feat to tokens)
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc_if_use_previous_feat = False # use previous im_feat instead of current im_feat
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc_if_use_init_feat = False # use previous im_feat instead of current im_feat
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_recompute_C = False # recompute tokens from im_feat then feed to next transformer; not applicable to CAv2
+# _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_recompute_C = False # recompute tokens from im_feat then feed to next transformer; not applicable to CAv2
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_init_img_feat = False
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_grid_assembling = False # reverting back to grid assembling in CA
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.im_feat_init_c = None
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type = 'double' # [single, double, full] of resnet
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type = 'full' # [single, double, full] of resnet
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full = CN()
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_shared_stem = False # if shared one resnet; or separate for tokens and im_feats
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full.backbone_dims = 1856 # 64+256+512+1024
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full.proj_extra_dims = 768 # to be consistent with hybrid
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full.proj_extra_if_inst_norm = True
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full.proj_extra_if_simple = False
+
+
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc = False # use Cross Attention-tokens to update tokens (proj im feat to tokens)
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.CAc = CN()
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.CAc.if_use_previous_feat = False # use previous im_feat instead of current im_feat
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.CAc.if_use_init_feat = False # use previous im_feat instead of current im_feat
+
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_SSN = False # use SSN to generate initial token
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN = CN()
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_freeze_matseg = True
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from = 'matseg' # ['backbone', 'matseg']
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.backbone_dims = 1856 # 64+256+512+1024
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.proj_extra_dims = 768 # to be consistent with hybrid
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.proj_extra_if_inst_norm = True
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.proj_extra_if_simple = False
 
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers = -1 # only support 4 outout layers to avoid drastic changes to original DPT
 
