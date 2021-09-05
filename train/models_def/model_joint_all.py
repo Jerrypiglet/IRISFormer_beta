@@ -652,7 +652,10 @@ class Model_Joint(nn.Module):
             return_dict['albedo_extra_output_dict'].update({'albedo_pred_unet': extra_DPT_return_dict['albedo_pred_unet']})
 
         if self.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_proj_coef:
-            return_dict['albedo_extra_output_dict'].update({'proj_coef_dict': extra_DPT_return_dict['proj_coef_dict'], 'hooks': extra_DPT_return_dict['hooks'], 'abs_affinity_normalized_by_pixels': extra_DPT_return_dict['abs_affinity_normalized_by_pixels']})
+            return_dict['albedo_extra_output_dict'].update({'proj_coef_dict': extra_DPT_return_dict['proj_coef_dict'], 'hooks': extra_DPT_return_dict['hooks']})
+
+        if self.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_affinity:
+            return_dict['albedo_extra_output_dict'].update({'abs_affinity_normalized_by_pixels': extra_DPT_return_dict['abs_affinity_normalized_by_pixels']})
 
         return return_dict
 

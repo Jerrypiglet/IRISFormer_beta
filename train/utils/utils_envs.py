@@ -181,9 +181,13 @@ def set_up_envs(opt):
 
         if 'SSN' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method == 'qkv' and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv:
             opt.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_proj_coef = True
-        if opt.cfg.MODEL_BRDF.DPT_baseline.model == 'dpt_hybrid_CAv2' and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_SSN and not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_grid_assembling:
+        if opt.cfg.MODEL_BRDF.DPT_baseline.model == 'dpt_hybrid_CAv2' and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA and not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_grid_assembling:
             opt.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_proj_coef = True
-            opt.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_affinity = True
+            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_SSN:
+                opt.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_affinity = True
+
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_only_last_transformer_output_used:
+            opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_not_reduce_res = True
 
     # ====== detectron (objects & masks) =====
     if opt.cfg.MODEL_DETECTRON.enable:

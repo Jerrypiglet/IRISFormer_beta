@@ -90,9 +90,17 @@ class DPT_CAv2(BaseModel):
         self.scratch.refinenet1 = _make_fusion_block(opt, features, use_bn, if_upscale=True) # output layer
         self.scratch.refinenet2 = _make_fusion_block(opt, features, use_bn, if_upscale=if_upscale)
         self.scratch.refinenet3 = _make_fusion_block(opt, features, use_bn, if_upscale=if_upscale)
-        self.scratch.refinenet4 = _make_fusion_block(opt, features, use_bn, if_upscale=if_upscale)
+        self.scratch.refinenet4 = _make_fusion_block(opt, features, use_bn, if_upscale=if_upscale or opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_only_last_transformer_output_used)
 
         self.scratch.output_conv = head
+
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_only_last_transformer_output_used:
+            self.scratch.refinenet1 = nn.Identity()
+            self.scratch.refinenet2 = nn.Identity()
+            self.scratch.refinenet3 = nn.Identity()
+        #     self.scratch.layer1_rn = nn.Identity()
+        #     self.scratch.layer2_rn = nn.Identity()
+        #     self.scratch.layer3_rn = nn.Identity()
 
         self.input_dict_extra = {}
 
@@ -157,9 +165,10 @@ class DPT_CAv2(BaseModel):
 
         for layer_idx in range(len(self.pretrained.model.blocks)):
             if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
-                if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_init_img_feat and layer_idx not in self.output_hooks:
-                    if 'layer_%d_ca'%layer_idx in module_dict_ca:
-                        del module_dict_ca['layer_%d_ca'%layer_idx]
+                if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_init_img_feat:
+                    if layer_idx not in self.output_hooks:
+                        if 'layer_%d_ca'%layer_idx in module_dict_ca:
+                            del module_dict_ca['layer_%d_ca'%layer_idx]
                         
         if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
             self.ca_modules = nn.ModuleDict(module_dict_ca)
@@ -186,18 +195,22 @@ class DPT_CAv2(BaseModel):
         if if_print:
             print(layer_4.shape, layer_4_rn.shape) # [hybrid] Conv2d(768, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False) torch.Size([2, 768, 8, 10]) torch.Size([2, 256, 8, 10])
 
-        path_4 = self.scratch.refinenet4(layer_4_rn)
-        if if_print:
-            print(layer_4_rn.shape, path_4.shape)
-        path_3 = self.scratch.refinenet3(path_4, layer_3_rn)
-        if if_print:
-            print(layer_3_rn.shape, path_3.shape)
-        path_2 = self.scratch.refinenet2(path_3, layer_2_rn)
-        if if_print:
-            print(layer_2_rn.shape, path_2.shape)
-        path_1 = self.scratch.refinenet1(path_2, layer_1_rn)
-        if if_print:
-            print(layer_1_rn.shape, path_1.shape)
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_only_last_transformer_output_used:
+            assert self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_not_reduce_res
+            path_1 = self.scratch.refinenet4(layer_4_rn + layer_3_rn*0. + layer_2_rn*0. + layer_1_rn*0.) # [HACK] not using three other outputs while keeping their network layers
+        else:
+            path_4 = self.scratch.refinenet4(layer_4_rn)
+            if if_print:
+                print(layer_4_rn.shape, path_4.shape)
+            path_3 = self.scratch.refinenet3(path_4, layer_3_rn)
+            if if_print:
+                print(layer_3_rn.shape, path_3.shape)
+            path_2 = self.scratch.refinenet2(path_3, layer_2_rn)
+            if if_print:
+                print(layer_2_rn.shape, path_2.shape)
+            path_1 = self.scratch.refinenet1(path_2, layer_1_rn)
+            if if_print:
+                print(layer_1_rn.shape, path_1.shape)
 
         out = self.scratch.output_conv(path_1)
 
