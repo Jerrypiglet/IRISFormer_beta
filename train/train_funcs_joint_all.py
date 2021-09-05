@@ -844,14 +844,18 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     patch_size = opt.cfg.MODEL_BRDF.DPT_baseline.patch_size
                     spixel_hw = [256//patch_size, 320//patch_size]
                     abs_affinity_normalized_by_pixels_input = abs_affinity_normalized_by_pixels_input.view(-1, spixel_hw[0], spixel_hw[1], abs_affinity_normalized_by_pixels_input.shape[-2], abs_affinity_normalized_by_pixels_input.shape[-1])
-
                     for sample_idx_batch, abs_affinity_normalized_by_pixels_input_single in enumerate(abs_affinity_normalized_by_pixels_input):
                         sample_idx = sample_idx_batch+batch_size*batch_id
                         if opt.is_master:
                             for spixel_h in [spixel_hw[0]//3, spixel_hw[0]//3*2]:
                                 for spixel_w in [spixel_hw[1]//3, spixel_hw[1]//3*2]:
+                            # for spixel_h in [0, 1]:
+                            #     for spixel_w in [0, 1]:
                                     abs_affinity_normalized_by_pixels_input_vis = abs_affinity_normalized_by_pixels_input_single[spixel_h, spixel_w, :, :].detach().cpu().numpy()
                                     # print(abs_affinity_normalized_by_pixels_input.shape, abs_affinity_normalized_by_pixels_input_vis.shape)
+                                    writer.add_histogram('VAL_hist_DPT-SSN_abs_affinity_normalized_by_pixels_sample%d/head%d_spixel%d_PRED/%d'%(sample_idx, head, spixel_h*patch_size, spixel_w*patch_size), \
+                                        abs_affinity_normalized_by_pixels_input_vis, tid)
+
                                     abs_affinity_normalized_by_pixels_input_vis = abs_affinity_normalized_by_pixels_input_vis / (np.amax(abs_affinity_normalized_by_pixels_input_vis)+1e-6)
                                     writer.add_image('VAL_DPT-SSN_abs_affinity_normalized_by_pixels_sample%d/head%d_spixel%d_PRED/%d'%(sample_idx, head, spixel_h*patch_size, spixel_w*patch_size), \
                                         abs_affinity_normalized_by_pixels_input_vis, tid, dataformats='HW')

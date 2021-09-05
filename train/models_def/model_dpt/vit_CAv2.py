@@ -233,19 +233,28 @@ def get_SSN_tokens_CAv2(self, opt, pretrained_activations, input_dict_extra={}):
     # print(spixel_dims)
 
     mask_resized = input_dict_extra['brdf_loss_mask']
+    if_hard_affinity_for_c = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_hard_affinity_for_c
 
-    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from == 'matseg':
-        ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, feats_in=input_dict_extra['return_dict_matseg']['embedding'], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
-    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from == 'matseg-2':
-        ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, feats_in=input_dict_extra['return_dict_matseg']['feats_matseg_dict']['p0'], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
-    elif opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from == 'backbone':
-        ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, feats_in=backbone_feat_init, mask=F.interpolate(mask_resized.unsqueeze(1), scale_factor=1./4., mode='nearest').squeeze(1), if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1)) # Q: [im_height/4, im_width/4]
-        # assert False
+    # print(input_dict_extra['return_dict_matseg']['instance'].shape, input_dict_extra['return_dict_matseg']['instance'])
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg:
+        affinity_gt = input_dict_extra['return_dict_matseg']['instance'].float() # one hot, [-1, 50, 256, 320]
+        affinity_in = torch.cat([affinity_gt, torch.zeros(batch_size, spixel_dims[0]*spixel_dims[1]-50, mask_resized.shape[-2], mask_resized.shape[-1]).float().cuda()], dim=1)
+        affinity_in_normalizedJ = affinity_in / (torch.sum(affinity_in, 1, keepdims=True) + 1e-6)
+        ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, affinity_in=affinity_in_normalizedJ, mask=mask_resized, if_return_codebook_only=True, if_hard_affinity_for_c=False, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
+        abs_affinity_normalized_by_pixels = affinity_in / (affinity_in.sum(-1, keepdims=True).sum(-2, keepdims=True)+1e-6)
+    else:
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from == 'matseg':
+            ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, feats_in=input_dict_extra['return_dict_matseg']['embedding'], mask=mask_resized, if_return_codebook_only=True, if_hard_affinity_for_c=if_hard_affinity_for_c, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from == 'matseg-2':
+            ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, feats_in=input_dict_extra['return_dict_matseg']['feats_matseg_dict']['p0'], mask=mask_resized, if_return_codebook_only=True, if_hard_affinity_for_c=if_hard_affinity_for_c, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
+        elif opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from == 'backbone':
+            ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, feats_in=backbone_feat_init, mask=F.interpolate(mask_resized.unsqueeze(1), scale_factor=1./4., mode='nearest').squeeze(1), if_return_codebook_only=True, if_hard_affinity_for_c=if_hard_affinity_for_c, scale_down_gamma_tensor=(1, 1)) # Q: [im_height/4, im_width/4]
+            # assert False
 
-    # abs_affinity = ssn_return_dict['abs_affinity'] # fixed for now
-    # # print(abs_affinity.shape, abs_affinity[0].sum(-1).sum(-1), abs_affinity[0].sum(0)) # torch.Size([1, 320, 256, 320]); normalized by **spixel dim (1)**
-    # dist_matrix = ssn_return_dict['dist_matrix'] # fixed for now
-    abs_affinity_normalized_by_pixels = ssn_return_dict['abs_affinity_normalized_by_pixels'] # fixed for now
+        # abs_affinity = ssn_return_dict['abs_affinity'] # fixed for now
+        # # print(abs_affinity.shape, abs_affinity[0].sum(-1).sum(-1), abs_affinity[0].sum(0)) # torch.Size([1, 320, 256, 320]); normalized by **spixel dim (1)**
+        # dist_matrix = ssn_return_dict['dist_matrix'] # fixed for now
+        abs_affinity_normalized_by_pixels = ssn_return_dict['abs_affinity_normalized_by_pixels'] # fixed for now
 
     c = ssn_return_dict['C'] # codebook
     c = c.view([batch_size, d, spixel_dims[0], spixel_dims[1]])
@@ -392,12 +401,12 @@ def forward_flex_CAv2(self, opt, x_input, pretrained_activations=[], input_dict_
             
             if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc:
                 if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_grid_assembling:
-                    assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc_if_use_init_feat
+                    assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.CAc.if_use_init_feat
                 if idx == (len(self.blocks)-1):
                     continue
-                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc_if_use_previous_feat:
+                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.CAc.if_use_previous_feat:
                     im_feat_in = im_feat_dict['im_feat_%d'%(idx-1)]
-                elif opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc_if_use_init_feat:
+                elif opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.CAc.if_use_init_feat:
                     im_feat_in = im_feat_dict['im_feat_-1']
                 else:
                     im_feat_in = im_feat_dict['im_feat_%d'%idx]

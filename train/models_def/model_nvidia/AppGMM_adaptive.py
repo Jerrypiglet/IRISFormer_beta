@@ -44,7 +44,7 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
 
         self.if_dense = if_dense
 
-    def forward(self, tensor_to_transform, feats_in=None, affinity_in=None, if_affinity_normalized_by_pixels=False, mask=None, scale_down_gamma_tensor=1, index_add=True, if_return_codebook_only=False, if_assert_no_scale=False):
+    def forward(self, tensor_to_transform, feats_in=None, affinity_in=None, if_affinity_normalized_by_pixels=False, mask=None, scale_down_gamma_tensor=1, index_add=True, if_return_codebook_only=False, if_assert_no_scale=False, if_hard_affinity_for_c=False):
         '''
         INPUTS:
         tensor_to_transform -      nbatch x D1 x H x W
@@ -86,12 +86,15 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
             abs_affinity = affinity_in
         assert abs_affinity.shape[1]==J
 
-
         # print(abs_affinity.shape, dist_matrix.shape, spixel_features.shape) # torch.Size([1, J, H, W]) torch.Size([1, 9, HW]) torch.Size([1, D, J]); h, w being the dimensions of spixels, j=h*w
-        
+        if if_hard_affinity_for_c:
+            abs_affinity_argmax = torch.argmax(abs_affinity, 1)
+            abs_affinity = F.one_hot(abs_affinity_argmax, num_classes=abs_affinity.shape[1]).permute(0, 3, 1, 2).float()
+            abs_affinity = abs_affinity / (abs_affinity.sum(1, keepdim=True)+1e-6)
+            abs_affinity_normalized_by_pixels = abs_affinity / (abs_affinity.sum(-1, keepdims=True).sum(-2, keepdims=True)+1e-6)
 
         recon_return_dict = self.recon_tensor(abs_affinity, tensor_to_transform, scale_down_gamma_tensor=scale_down_gamma_tensor, if_return_codebook_only=if_return_codebook_only, \
-            if_assert_no_scale=if_assert_no_scale, if_affinity_normalized_by_pixels=if_affinity_normalized_by_pixels)
+            if_assert_no_scale=if_assert_no_scale, if_affinity_normalized_by_pixels=if_affinity_normalized_by_pixels, if_hard_affinity_for_c=if_hard_affinity_for_c)
 
         res = dict({
             'abs_affinity': abs_affinity, 
@@ -111,7 +114,7 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
 
         return  res
 
-    def recon_tensor(self, gamma, tensor_to_transform, scale_down_gamma_tensor=1, if_return_codebook_only=False, if_assert_no_scale=False, if_affinity_normalized_by_pixels=False):
+    def recon_tensor(self, gamma, tensor_to_transform, scale_down_gamma_tensor=1, if_return_codebook_only=False, if_assert_no_scale=False, if_affinity_normalized_by_pixels=False, if_hard_affinity_for_c=False):
         '''
         gamma: Q, BxJxHxW
         tensor_to_transform: BxDxHxW, where N*scale_down_gamma_tensor=HW

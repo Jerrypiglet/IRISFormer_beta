@@ -177,7 +177,7 @@ def set_up_envs(opt):
             assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type in ['double', 'single', 'full'] # [single, double, full] of resnet
             opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.im_feat_init_c = {'double': 256, 'single': 64, 'full': 768}[opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type]
 
-            assert not (opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.CAc.if_use_previous_feat and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc_if_use_init_feat)
+            assert not (opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.CAc.if_use_previous_feat and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.CAc.if_use_init_feat)
 
         if 'SSN' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method == 'qkv' and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv:
             opt.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_proj_coef = True

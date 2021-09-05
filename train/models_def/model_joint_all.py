@@ -468,6 +468,7 @@ class Model_Joint(nn.Module):
                 or (self.cfg.MODEL_GMM.feat_recon.enable and self.cfg.MODEL_GMM.feat_recon.use_matseg) \
                 or (self.opt.cfg.MODEL_BRDF.DPT_baseline.enable and self.opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_hybrid_SSN', 'dpt_base_SSN', 'dpt_large_SSN', 'dpt_hybrid_CAv2']):
 
+                return_dict_matseg.update({'instance': input_dict['instance']})
                 input_dict_extra.update({'return_dict_matseg': return_dict_matseg})
 
             if self.cfg.MODEL_BRDF.DPT_baseline.enable:
