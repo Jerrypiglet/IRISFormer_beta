@@ -338,7 +338,8 @@ class FeatureFusionBlock_custom(nn.Module):
         bn=False,
         expand=False,
         align_corners=True,
-        if_up_resize_override=None, 
+        # if_up_resize_override=None, 
+        if_upscale=True, 
         if_assert_one_input=False
     ):
         """Init.
@@ -350,7 +351,8 @@ class FeatureFusionBlock_custom(nn.Module):
         super(FeatureFusionBlock_custom, self).__init__()
 
         self.opt = opt
-        self.if_up_resize_override = if_up_resize_override
+        # self.if_up_resize_override = if_up_resize_override
+        self.if_upscale = if_upscale
         self.if_assert_one_input = if_assert_one_input
 
         self.deconv = deconv
@@ -415,7 +417,8 @@ class FeatureFusionBlock_custom(nn.Module):
 
         output = self.resConfUnit2(output)
 
-        if (not self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_reduce_res) or self.if_up_resize_override==True:
+        # if (not self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_reduce_res) or self.if_up_resize_override==True:
+        if self.if_upscale:
             output = nn.functional.interpolate(
                 output, scale_factor=2, mode="bilinear", align_corners=self.align_corners
             )

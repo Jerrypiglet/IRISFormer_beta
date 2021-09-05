@@ -355,16 +355,22 @@ def forward_flex_CAv2(self, opt, x_input, pretrained_activations=[], input_dict_
                 if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_init_img_feat:
                     if idx in output_hooks[1:]:
                         im_feat_scale_factor_accu *= 1./2.
-                    im_feat_scale_factor = im_feat_scale_factor_accu
+                    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_not_reduce_res:
+                        im_feat_scale_factor= 1.
+                    else:
+                        im_feat_scale_factor = im_feat_scale_factor_accu
                     if idx not in output_hooks:
                         continue
                     im_feat_in = im_feat_dict['im_feat_-1']
                 else:
                     im_feat_in = im_feat_dict['im_feat_%d'%(idx-1)]
-                    if idx in output_hooks[1:]:
-                        im_feat_scale_factor = 1./2.
-                    else:
+                    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_not_reduce_res:
                         im_feat_scale_factor = 1.
+                    else:
+                        if idx in output_hooks[1:]:
+                            im_feat_scale_factor = 1./2.
+                        else:
+                            im_feat_scale_factor = 1.
 
                 if if_print:
                     print(im_feat_in.shape, ca_modules['layer_%d_ca'%idx])

@@ -301,7 +301,7 @@ _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.proj_extra_dims = 768 # to be consi
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.proj_extra_if_inst_norm = True
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.proj_extra_if_simple = False
 
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_not_reduce_res = False # if not reducing resolution in vit_SSN_unet_qkv.py
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_not_reduce_res = False # if not reducing resolution in vit_CAv2.py
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_only_last_transformer_output_used = False # [debug] if only using the last transformer outoput in unet, instead of using 4 intermediate outputs
 
 _C.MODEL_BRDF.DPT_baseline.dpt_large = CN()
