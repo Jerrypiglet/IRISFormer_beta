@@ -234,11 +234,13 @@ def get_SSN_tokens_CAv2(self, opt, pretrained_activations, input_dict_extra={}):
 
     mask_resized = input_dict_extra['brdf_loss_mask']
 
-    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from == 'matseg':
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from == 'matseg':
         ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, feats_in=input_dict_extra['return_dict_matseg']['embedding'], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
-    else:
-        # ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, feats_in=pretrained_activations['feat_stage_2'], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1./2., 1)) # Q: [im_height/4, im_width/4]
-        assert False
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from == 'matseg-2':
+        ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, feats_in=input_dict_extra['return_dict_matseg']['feats_matseg_dict']['p0'], mask=mask_resized, if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
+    elif opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from == 'backbone':
+        ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, feats_in=backbone_feat_init, mask=F.interpolate(mask_resized.unsqueeze(1), scale_factor=1./4., mode='nearest').squeeze(1), if_return_codebook_only=True, scale_down_gamma_tensor=(1, 1)) # Q: [im_height/4, im_width/4]
+        # assert False
 
     # abs_affinity = ssn_return_dict['abs_affinity'] # fixed for now
     # # print(abs_affinity.shape, abs_affinity[0].sum(-1).sum(-1), abs_affinity[0].sum(0)) # torch.Size([1, 320, 256, 320]); normalized by **spixel dim (1)**

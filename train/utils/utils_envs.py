@@ -149,8 +149,8 @@ def set_up_envs(opt):
                     opt.cfg.MODEL_MATSEG.if_freeze = True
 
         if opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_hybrid_CAv2']:
-            assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from in ['backbone', 'matseg', 'on-the-fly']
-            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from == 'matseg':
+            assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from in ['backbone', 'matseg', 'matseg-2']
+            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from in ['matseg', 'matseg-2']:
                 opt.cfg.MODEL_MATSEG.enable = True
                 if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_freeze_matseg:
                     opt.cfg.MODEL_MATSEG.if_freeze = True
