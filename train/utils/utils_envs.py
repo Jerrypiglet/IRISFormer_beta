@@ -152,7 +152,7 @@ def set_up_envs(opt):
             assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from in ['backbone', 'matseg', 'on-the-fly']
             if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from == 'matseg':
                 opt.cfg.MODEL_MATSEG.enable = True
-                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_freeze_matseg:
+                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_freeze_matseg:
                     opt.cfg.MODEL_MATSEG.if_freeze = True
 
         assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method in ['qtc', 'qkv']

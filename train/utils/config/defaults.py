@@ -267,6 +267,7 @@ _C.MODEL_BRDF.DPT_baseline.feat_proj_channels = -1
 _C.MODEL_BRDF.DPT_baseline.patch_size = 16
 
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid = CN()
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers = -1 # only support 4 outout layers to avoid drastic changes to original DPT
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr = False # faster: 1e-4, backbone: 1e-5
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.yogo_lr = False # use yogo scheduler and optimizer
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels = 768
@@ -300,7 +301,8 @@ _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.proj_extra_dims = 768 # to be consi
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.proj_extra_if_inst_norm = True
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.proj_extra_if_simple = False
 
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers = -1 # only support 4 outout layers to avoid drastic changes to original DPT
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_not_reduce_res = False # if not reducing resolution in vit_SSN_unet_qkv.py
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_only_last_transformer_output_used = False # [debug] if only using the last transformer outoput in unet, instead of using 4 intermediate outputs
 
 _C.MODEL_BRDF.DPT_baseline.dpt_large = CN()
 _C.MODEL_BRDF.DPT_baseline.dpt_large.feat_proj_channels = 1024
