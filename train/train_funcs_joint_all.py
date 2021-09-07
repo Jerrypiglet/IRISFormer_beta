@@ -816,23 +816,39 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     spixel_hw = [256//patch_size, 320//patch_size]
                     head = 0
                     for idx, hook in enumerate(hooks):
-                        proj_coef_matrix = proj_coef_dict['proj_coef_%d'%hook]
+                        proj_coef_matrix = proj_coef_dict['proj_coef_%d'%hook].detach() # torch.Size([1, 2, 5120, 320])
+                        # print(idx, proj_coef_matrix[0, 0, :5, 0])
+                        # print(idx, proj_coef_matrix[0, 0, :5, -1])
+                        proj_coef_matrix = F.softmax(proj_coef_matrix, dim=2).cpu().numpy() # softmax in pixels dim
                         for sample_idx_batch, proj_coef_matrix_single in enumerate(proj_coef_matrix):
                             sample_idx = sample_idx_batch+batch_size*batch_id
                             if opt.is_master:
-                                proj_coef_matrix_single_vis = proj_coef_matrix_single[head].view(start_im_hw[0], start_im_hw[1], spixel_hw[0], spixel_hw[1]).detach().cpu().numpy()
-                                # print(proj_coef_matrix_single_vis.shape)
-                                for spixel_h in [spixel_hw[0]//3, spixel_hw[0]//3*2]:
-                                    for spixel_w in [spixel_hw[1]//3, spixel_hw[1]//3*2]:
-                                        proj_coef_matrix_single_token_vis = proj_coef_matrix_single_vis[:, :, spixel_h, spixel_w]
-                                        # print(proj_coef_matrix_single_token_vis.shape, np.sum(proj_coef_matrix_single_token_vis))
-                                        # print(np.min(proj_coef_matrix_single_token_vis), np.max(proj_coef_matrix_single_token_vis), np.median(proj_coef_matrix_single_token_vis))
-                                        # proj_coef_matrix_single_token_vis = proj_coef_matrix_single_token_vis - np.amin(proj_coef_matrix_single_token_vis)
-                                        proj_coef_matrix_single_token_vis = proj_coef_matrix_single_token_vis / (np.amax(proj_coef_matrix_single_token_vis)+1e-6)
-                                        proj_coef_matrix_single_token_vis = cv2.resize(proj_coef_matrix_single_token_vis, dsize=(320, 256), interpolation=cv2.INTER_NEAREST)
+                                proj_coef_matrix_single_vis = proj_coef_matrix_single[head].reshape(start_im_hw[0], start_im_hw[1], spixel_hw[0], spixel_hw[1])
+                                # print('>>>>', idx, sample_idx_batch, proj_coef_matrix_single_vis[0, :5, 0, 0])
+                                # print('>>>>', idx, sample_idx_batch, proj_coef_matrix_single_vis[0, :5, -1, -1])
+                                a_list = []
+                                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_SSN and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg:
+                                    for spixel_h in [0, 1]:
+                                        for spixel_w in [0, 1]:
+                                            a_list.append([spixel_h, spixel_w])
+                                else:
+                                    for spixel_h in [spixel_hw[0]//3, spixel_hw[0]//3*2]:
+                                        for spixel_w in [spixel_hw[1]//3, spixel_hw[1]//3*2]:
+                                            a_list.append([spixel_h, spixel_w])
 
-                                        writer.add_image('VAL_DPT-CA_proj_coef_sample%d/head%d_spixel%d-%d_PRED/%d'%(sample_idx, head, spixel_h*patch_size, spixel_w*patch_size, hook), \
-                                            proj_coef_matrix_single_token_vis, tid, dataformats='HW')
+                                for spixel_h, spixel_w in a_list:
+                                    # print(spixel_h, spixel_w, proj_coef_matrix_single_vis.shape)
+                                    proj_coef_matrix_single_token_vis = proj_coef_matrix_single_vis[:, :, spixel_h, spixel_w]
+                                    # print(proj_coef_matrix_single_token_vis.shape, np.sum(proj_coef_matrix_single_token_vis))
+                                    print(spixel_h, spixel_w, hook, np.min(proj_coef_matrix_single_token_vis), np.max(proj_coef_matrix_single_token_vis), np.median(proj_coef_matrix_single_token_vis), np.amax(proj_coef_matrix_single_vis))
+                                    # proj_coef_matrix_single_token_vis = proj_coef_matrix_single_token_vis - np.amin(proj_coef_matrix_single_token_vis)
+                                    # proj_coef_matrix_single_token_vis = proj_coef_matrix_single_token_vis / (np.amax(proj_coef_matrix_single_vis)+1e-6)
+                                    # proj_coef_matrix_single_token_vis = proj_coef_matrix_single_token_vis / (np.sum(proj_coef_matrix_single_token_vis) + 1e-6)
+                                    proj_coef_matrix_single_token_vis = np.clip(proj_coef_matrix_single_token_vis * start_im_hw[0] * start_im_hw[1] / 5., 0., 1.)
+                                    proj_coef_matrix_single_token_vis = cv2.resize(proj_coef_matrix_single_token_vis, dsize=(320, 256), interpolation=cv2.INTER_NEAREST)
+
+                                    writer.add_image('VAL_DPT-CA_proj_coef_sample%d/head%d_spixel(%d)%d-%d_PRED/%d'%(sample_idx, head, spixel_h*spixel_hw[0]+spixel_w, spixel_h*patch_size, spixel_w*patch_size, hook), \
+                                        proj_coef_matrix_single_token_vis, tid, dataformats='HW')
 
                         if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_not_reduce_res:
                             start_im_hw = start_im_hw[0]//2, start_im_hw[1]//2
@@ -843,22 +859,42 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     abs_affinity_normalized_by_pixels_input = output_dict['albedo_extra_output_dict']['abs_affinity_normalized_by_pixels'] # torch.Size([1, 320, 64, 80])
                     patch_size = opt.cfg.MODEL_BRDF.DPT_baseline.patch_size
                     spixel_hw = [256//patch_size, 320//patch_size]
-                    abs_affinity_normalized_by_pixels_input = abs_affinity_normalized_by_pixels_input.view(-1, spixel_hw[0], spixel_hw[1], abs_affinity_normalized_by_pixels_input.shape[-2], abs_affinity_normalized_by_pixels_input.shape[-1])
+                    abs_affinity_normalized_by_pixels_input = abs_affinity_normalized_by_pixels_input.view(-1, spixel_hw[0], spixel_hw[1], abs_affinity_normalized_by_pixels_input.shape[-2], abs_affinity_normalized_by_pixels_input.shape[-1]).detach().cpu().numpy()
                     for sample_idx_batch, abs_affinity_normalized_by_pixels_input_single in enumerate(abs_affinity_normalized_by_pixels_input):
                         sample_idx = sample_idx_batch+batch_size*batch_id
                         if opt.is_master:
-                            for spixel_h in [spixel_hw[0]//3, spixel_hw[0]//3*2]:
-                                for spixel_w in [spixel_hw[1]//3, spixel_hw[1]//3*2]:
-                            # for spixel_h in [0, 1]:
-                            #     for spixel_w in [0, 1]:
-                                    abs_affinity_normalized_by_pixels_input_vis = abs_affinity_normalized_by_pixels_input_single[spixel_h, spixel_w, :, :].detach().cpu().numpy()
-                                    # print(abs_affinity_normalized_by_pixels_input.shape, abs_affinity_normalized_by_pixels_input_vis.shape)
-                                    writer.add_histogram('VAL_hist_DPT-SSN_abs_affinity_normalized_by_pixels_sample%d/head%d_spixel%d_PRED/%d'%(sample_idx, head, spixel_h*patch_size, spixel_w*patch_size), \
-                                        abs_affinity_normalized_by_pixels_input_vis, tid)
+                            a_list = []
+                            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_SSN and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg:
+                                for spixel_h in [0, 1]:
+                                    for spixel_w in [0, 1]:
+                                        a_list.append([spixel_h, spixel_w])
+                            else:
+                                for spixel_h in [spixel_hw[0]//3, spixel_hw[0]//3*2]:
+                                    for spixel_w in [spixel_hw[1]//3, spixel_hw[1]//3*2]:
+                                        a_list.append([spixel_h, spixel_w])
 
-                                    abs_affinity_normalized_by_pixels_input_vis = abs_affinity_normalized_by_pixels_input_vis / (np.amax(abs_affinity_normalized_by_pixels_input_vis)+1e-6)
-                                    writer.add_image('VAL_DPT-SSN_abs_affinity_normalized_by_pixels_sample%d/head%d_spixel%d_PRED/%d'%(sample_idx, head, spixel_h*patch_size, spixel_w*patch_size), \
-                                        abs_affinity_normalized_by_pixels_input_vis, tid, dataformats='HW')
+                            for spixel_h, spixel_w in a_list:
+                                abs_affinity_normalized_by_pixels_input_vis = abs_affinity_normalized_by_pixels_input_single[spixel_h, spixel_w, :, :]
+                                # print(abs_affinity_normalized_by_pixels_input.shape, abs_affinity_normalized_by_pixels_input_vis.shape)
+                                writer.add_histogram('VAL_hist_DPT-SSN_abs_affinity_normalized_by_pixels_sample%d/head%d_spixel(%d)%d-%d_PRED'%(sample_idx, head, spixel_h*spixel_hw[0]+spixel_w, spixel_h*patch_size, spixel_w*patch_size), \
+                                    abs_affinity_normalized_by_pixels_input_vis, tid)
+
+                                # abs_affinity_normalized_by_pixels_input_vis = abs_affinity_normalized_by_pixels_input_vis / (np.amax(abs_affinity_normalized_by_pixels_input)+1e-6)
+                                abs_affinity_normalized_by_pixels_input_vis = np.clip(abs_affinity_normalized_by_pixels_input_vis * 256 * 320 / 5., 0., 1.)
+                                writer.add_image('VAL_DPT-SSN_abs_affinity_normalized_by_pixels_sample%d/head%d_spixel(%d)%d-%d_PRED'%(sample_idx, head, spixel_h*spixel_hw[0]+spixel_w, spixel_h*patch_size, spixel_w*patch_size), \
+                                    abs_affinity_normalized_by_pixels_input_vis, tid, dataformats='HW')
+
+                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_SSN and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg:
+                    assert 'num_mat_masks' in output_dict['albedo_extra_output_dict'] and 'instance' in output_dict['albedo_extra_output_dict']
+                    for sample_idx_batch, abs_affinity_normalized_by_pixels_input_single in enumerate(abs_affinity_normalized_by_pixels_input):
+                        sample_idx = sample_idx_batch+batch_size*batch_id
+                        if opt.is_master:
+                            num_mat_masks = output_dict['albedo_extra_output_dict']['num_mat_masks'][sample_idx_batch].item()
+                            instance = output_dict['albedo_extra_output_dict']['instance'][sample_idx_batch].detach().cpu().numpy()
+                            # print(instance.shape, instance.sum(-1).sum(-1), instance.dtype)
+                            for mask_idx in range(num_mat_masks+1):
+                                writer.add_image('VAL_DPT-SSN_gt_matseg_instance_sample%d/%d'%(sample_idx, mask_idx), \
+                                    instance[mask_idx].astype(np.float32), tid, dataformats='HW')
 
             # ======= Vis BRDFsemseg / semseg
             if opt.cfg.DATA.load_semseg_gt:

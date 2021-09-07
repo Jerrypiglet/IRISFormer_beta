@@ -468,7 +468,7 @@ class Model_Joint(nn.Module):
                 or (self.cfg.MODEL_GMM.feat_recon.enable and self.cfg.MODEL_GMM.feat_recon.use_matseg) \
                 or (self.opt.cfg.MODEL_BRDF.DPT_baseline.enable and self.opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_hybrid_SSN', 'dpt_base_SSN', 'dpt_large_SSN', 'dpt_hybrid_CAv2']):
 
-                return_dict_matseg.update({'instance': input_dict['instance']})
+                return_dict_matseg.update({'instance': input_dict['instance'], 'instance_valid': input_dict['instance_valid'], 'num_mat_masks': input_dict['num_mat_masks_batch']})
                 input_dict_extra.update({'return_dict_matseg': return_dict_matseg})
 
             if self.cfg.MODEL_BRDF.DPT_baseline.enable:
@@ -657,6 +657,9 @@ class Model_Joint(nn.Module):
 
         if self.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_affinity:
             return_dict['albedo_extra_output_dict'].update({'abs_affinity_normalized_by_pixels': extra_DPT_return_dict['abs_affinity_normalized_by_pixels']})
+
+        if self.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_gt_matseg:
+            return_dict['albedo_extra_output_dict'].update({'num_mat_masks': extra_DPT_return_dict['num_mat_masks'], 'instance': extra_DPT_return_dict['instance']})
 
         return return_dict
 

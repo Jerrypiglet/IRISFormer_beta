@@ -16,7 +16,7 @@ from .blocks_CAv2 import (
 )
 
 
-def _make_fusion_block(opt, features, use_bn, if_upscale=True):
+def _make_fusion_block(opt, features, use_bn, if_upscale=True, if_assert_one_input=False):
     return FeatureFusionBlock_custom(
         opt, 
         features,
@@ -25,7 +25,8 @@ def _make_fusion_block(opt, features, use_bn, if_upscale=True):
         bn=use_bn,
         expand=False,
         align_corners=True,
-        if_upscale=if_upscale
+        if_upscale=if_upscale, 
+        if_assert_one_input=if_assert_one_input
     )
 
 
@@ -90,7 +91,7 @@ class DPT_CAv2(BaseModel):
         self.scratch.refinenet1 = _make_fusion_block(opt, features, use_bn, if_upscale=True) # output layer
         self.scratch.refinenet2 = _make_fusion_block(opt, features, use_bn, if_upscale=if_upscale)
         self.scratch.refinenet3 = _make_fusion_block(opt, features, use_bn, if_upscale=if_upscale)
-        self.scratch.refinenet4 = _make_fusion_block(opt, features, use_bn, if_upscale=if_upscale or opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_only_last_transformer_output_used)
+        self.scratch.refinenet4 = _make_fusion_block(opt, features, use_bn, if_upscale=if_upscale or opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_only_last_transformer_output_used, if_assert_one_input=True)
 
         self.scratch.output_conv = head
 
@@ -125,7 +126,10 @@ class DPT_CAv2(BaseModel):
             for layer_idx in range(len(self.pretrained.model.blocks)):
                 if layer_idx in self.output_hooks:
                     out_c = output_later_dims.pop()
-                module_dict_ca['layer_%d_ca'%layer_idx] = CrossAttention_CAv2(opt, token_c, input_dims=in_c, output_dims=out_c, norm_layer_1d=norm_layer_1d)
+                ca_proj_method = 'full'
+                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_res_CA_except_first and layer_idx!=self.output_hooks[0]:
+                    ca_proj_method = 'residual'
+                module_dict_ca['layer_%d_ca'%layer_idx] = CrossAttention_CAv2(opt, token_c, input_dims=in_c, output_dims=out_c, norm_layer_1d=norm_layer_1d, ca_proj_method=ca_proj_method)
                 # print(layer_idx, in_c, out_c)
                 if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_init_img_feat:
                     pass

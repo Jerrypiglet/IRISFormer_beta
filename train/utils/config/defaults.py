@@ -21,6 +21,8 @@ _C = CN()
 
 _C.DTYPE = "float32"
 
+_C.MM1_DEBUG = False
+
 _C.PATH = CN()
 _C.PATH.cluster_names = ['kubectl', 'nvidia', 'ngc']
 _C.PATH.root = ''
@@ -242,6 +244,7 @@ _C.MODEL_BRDF.DPT_baseline.if_pos_embed = True
 _C.MODEL_BRDF.DPT_baseline.if_batch_norm = False # in DPT output head
 _C.MODEL_BRDF.DPT_baseline.if_vis_CA_proj_coef = False
 _C.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_affinity = False
+_C.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_gt_matseg = False
 # _C.MODEL_BRDF.DPT_baseline.if_batch_norm_in_proj_extra = False
 _C.MODEL_BRDF.DPT_baseline.modality = 'al'
 _C.MODEL_BRDF.DPT_baseline.model = 'dpt_hybrid'
@@ -278,6 +281,7 @@ _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA = False # use Cross Attention
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_init_img_feat = False
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_grid_assembling = False # reverting back to grid assembling in CA
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.im_feat_init_c = None
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_res_CA_except_first = False
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type = 'full' # [single, double, full] of resnet
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full = CN()
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_shared_stem = False # if shared one resnet; or separate for tokens and im_feats
@@ -297,6 +301,8 @@ _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN = CN()
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_freeze_matseg = True
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_hard_affinity_for_c = False
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg = False # if use GT matseg labels as hard affinity
+# _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_inject_gt_affinity = False # if inject (multiply) gt affinity (binary) to CA
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg_if_inject_token_mask = False # if inject (multiply) gt token masks (binary) to CA for reconstruction
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from = 'matseg' # ['backbone', 'matseg', 'matseg-2']
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.backbone_dims = 1856 # 64+256+512+1024
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.proj_extra_dims = 768 # to be consistent with hybrid

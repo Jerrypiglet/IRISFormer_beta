@@ -94,6 +94,8 @@ parser.add_argument('--reset_latest_ckpt', action='store_true', help='remove lat
 parser.add_argument('--reset_scheduler', action='store_true', help='')
 parser.add_argument('--reset_lr', action='store_true', help='')
 parser.add_argument('--reset_tid', action='store_true', help='')
+parser.add_argument('--tid_start', type=int, default=-1)
+parser.add_argument('--epoch_start', type=int, default=-1)
 # debug
 # parser.add_argument("--mini_val", type=str2bool, nargs='?', const=True, default=False)
 # to get rid of

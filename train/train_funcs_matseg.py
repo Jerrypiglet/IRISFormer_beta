@@ -38,6 +38,7 @@ def get_labels_dict_matseg(data_batch, opt):
     # input_dict['mat_aggre_map_reindex_batch'] = Variable(input_dict['mat_aggre_map_reindex_cpu'] ).to(opt.device)
     
     input_dict['instance'] = data_batch['instance'].to(opt.device)
+    input_dict['instance_valid'] = data_batch['instance_valid'].to(opt.device)
     input_dict['semantic'] = data_batch['semantic'].to(opt.device)
 
     return input_dict

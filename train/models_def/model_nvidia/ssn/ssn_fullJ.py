@@ -145,7 +145,13 @@ def ssn_iter(pixel_features,  n_iter,
         # print(torch.max(dist_matrix_full), torch.min(dist_matrix_full), torch.max(mask_flattened), torch.min(mask_flattened))
         # dist_matrix_full = torch.exp(-torch.square(dist_matrix_full)) # Equ 4 in Algorithm 1 in the SSN paper
 
+
+
         abs_affinity = (-dist_matrix_full).softmax(1) # torch.Size([1, 48, 76800])
+        # print(mask_flattened[0], torch.sum(mask_flattened[0]))
+        # print(abs_affinity.shape)
+        # print(abs_affinity[0].sum(-1)) # should be ones and zeros
+        # print(abs_affinity[0].sum(0)) # should be all ones
         # print(torch.max(abs_affinity), torch.min(abs_affinity))/
         abs_affinity_normalized_by_pixels = (-dist_matrix_full).softmax(2) * mask_flattened # torch.Size([1, 48, 76800])
         # print(abs_affinity[0, :, 0])

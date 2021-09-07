@@ -657,6 +657,7 @@ class openrooms_pickle(data.Dataset):
         h, w, _ = mat_aggre_map.shape
         gt_segmentation = mat_aggre_map
         segmentation = np.zeros([50, h, w], dtype=np.uint8)
+        segmentation_valid = np.zeros([50, h, w], dtype=np.uint8)
         for i in range(num_mat_masks+1):
             if i == 0:
                 # deal with backgroud
@@ -665,12 +666,14 @@ class openrooms_pickle(data.Dataset):
             else:
                 seg = gt_segmentation == i
                 segmentation[i-1, :, :] = seg.reshape(h, w) # segmentation[0..num_mat_masks-1] for plane instances
+                segmentation_valid[i-1, :, :] = seg.reshape(h, w) # segmentation[0..num_mat_masks-1] for plane instances
         return {
             'mat_aggre_map': torch.from_numpy(mat_aggre_map),  # 0 for invalid region
             # 'mat_aggre_map_reindex': torch.from_numpy(mat_aggre_map_reindex), # gt_seg
             'num_mat_masks': num_mat_masks,  
             'mat_notlight_mask': torch.from_numpy(mat_aggre_map!=0).float(),
             'instance': torch.ByteTensor(segmentation), # torch.Size([50, 240, 320])
+            'instance_valid': torch.ByteTensor(segmentation_valid), # torch.Size([50, 240, 320])
             'semantic': 1 - torch.FloatTensor(segmentation[num_mat_masks, :, :]).unsqueeze(0), # torch.Size([50, 240, 320]) torch.Size([1, 240, 320])
             'im_matseg_transformed_trainval': im_matseg_transformed_trainval
         }

@@ -213,6 +213,8 @@ def _resize_pos_embed(self, posemb, gs_h, gs_w): # original at https://github.co
     return posemb
 
 def get_SSN_tokens_CAv2(self, opt, pretrained_activations, input_dict_extra={}):
+    extra_return_dict = {}
+
     backbone_feat_init = torch.cat(
         [
             F.interpolate(pretrained_activations['backbone_feat_stem'], scale_factor=1, mode='bilinear'), # torch.Size([4, 64, 64, 80])
@@ -232,16 +234,20 @@ def get_SSN_tokens_CAv2(self, opt, pretrained_activations, input_dict_extra={}):
     ssn_op = SSNFeatsTransformAdaptive(None, spixel_dims=spixel_dims, if_dense=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_dense)
     # print(spixel_dims)
 
-    mask_resized = input_dict_extra['brdf_loss_mask']
+    mask_resized = input_dict_extra['brdf_loss_mask'] # original im size
     if_hard_affinity_for_c = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_hard_affinity_for_c
 
     # print(input_dict_extra['return_dict_matseg']['instance'].shape, input_dict_extra['return_dict_matseg']['instance'])
     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg:
-        affinity_gt = input_dict_extra['return_dict_matseg']['instance'].float() # one hot, [-1, 50, 256, 320]
+        affinity_gt = input_dict_extra['return_dict_matseg']['instance_valid'].float() # one hot, [-1, 50, 256, 320]; last one being invalid instance (e.g. window, lamp)
+        # print(input_dict_extra['return_dict_matseg']['num_mat_masks'], affinity_gt.sum(-1).sum(-1))
+        extra_return_dict.update({'num_mat_masks': input_dict_extra['return_dict_matseg']['num_mat_masks'], 'instance': input_dict_extra['return_dict_matseg']['instance_valid']})
         affinity_in = torch.cat([affinity_gt, torch.zeros(batch_size, spixel_dims[0]*spixel_dims[1]-50, mask_resized.shape[-2], mask_resized.shape[-1]).float().cuda()], dim=1)
         affinity_in_normalizedJ = affinity_in / (torch.sum(affinity_in, 1, keepdims=True) + 1e-6)
         ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, affinity_in=affinity_in_normalizedJ, mask=mask_resized, if_return_codebook_only=True, if_hard_affinity_for_c=False, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
         abs_affinity_normalized_by_pixels = affinity_in / (affinity_in.sum(-1, keepdims=True).sum(-2, keepdims=True)+1e-6)
+        tokens_mask = (affinity_in.sum(-1).sum(-1) != 0).float()
+        # print(tokens_mask, input_dict_extra['return_dict_matseg']['num_mat_masks'])
     else:
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from == 'matseg':
             ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, feats_in=input_dict_extra['return_dict_matseg']['embedding'], mask=mask_resized, if_return_codebook_only=True, if_hard_affinity_for_c=if_hard_affinity_for_c, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
@@ -255,14 +261,22 @@ def get_SSN_tokens_CAv2(self, opt, pretrained_activations, input_dict_extra={}):
         # # print(abs_affinity.shape, abs_affinity[0].sum(-1).sum(-1), abs_affinity[0].sum(0)) # torch.Size([1, 320, 256, 320]); normalized by **spixel dim (1)**
         # dist_matrix = ssn_return_dict['dist_matrix'] # fixed for now
         abs_affinity_normalized_by_pixels = ssn_return_dict['abs_affinity_normalized_by_pixels'] # fixed for now
+        tokens_mask = None
 
     c = ssn_return_dict['C'] # codebook
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg:
+        # print(c.shape) # torch.Size([1, 768, 80])
+        c = c * tokens_mask.unsqueeze(1)
+
+    # print('----', c[0, :5, 0], torch.linalg.norm(c[0, :, 0]))
+    # print('====', c[0, :5, -1], torch.linalg.norm(c[0, :, -1]))
+
     c = c.view([batch_size, d, spixel_dims[0], spixel_dims[1]])
 
     # x = self.patch_embed.proj(c).flatten(2).transpose(1, 2) # torch.Size([8, 320, 768]); will be Identity op in qkv recon
     x = c.flatten(2).transpose(1, 2) # torch.Size([8, 320, 768]); will be Identity op in qkv recon
 
-    extra_return_dict = {'Q': ssn_return_dict['Q'], 'matseg_affinity': ssn_return_dict['Q_2D'], 'abs_affinity_normalized_by_pixels': abs_affinity_normalized_by_pixels}
+    extra_return_dict.update({'Q': ssn_return_dict['Q'], 'matseg_affinity': ssn_return_dict['Q_2D'], 'abs_affinity_normalized_by_pixels': abs_affinity_normalized_by_pixels, 'tokens_mask': tokens_mask})
 
     return x, extra_return_dict
 
@@ -271,6 +285,7 @@ def forward_flex_CAv2(self, opt, x_input, pretrained_activations=[], input_dict_
     b, c, h, w = x_input.shape
 
     return_dict = {}
+    extra_return_dict = {}
 
     # pos_embed = self._resize_pos_embed(
     #     self.pos_embed, h // self.patch_size[1], w // self.patch_size[0]
@@ -294,6 +309,13 @@ def forward_flex_CAv2(self, opt, x_input, pretrained_activations=[], input_dict_
         im_feat_resnet = self.patch_embed.proj(output_resnet)
         x = im_feat_resnet.flatten(2).transpose(1, 2)
 
+    if 'tokens_mask' in extra_return_dict and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg_if_inject_token_mask:
+        tokens_mask = extra_return_dict['tokens_mask'] # print(tokens_mask.shape)
+    else:
+        tokens_mask = None
+
+    # tokens_mask = None
+    im_mask = input_dict_extra['brdf_loss_mask'].float() # original im size [-1, h, w]
 
     if getattr(self, "dist_token", None) is not None:
         cls_tokens = self.cls_token.expand(
@@ -310,7 +332,6 @@ def forward_flex_CAv2(self, opt, x_input, pretrained_activations=[], input_dict_
     # if opt.cfg.MODEL_BRDF.DPT_baseline.if_pos_embed:
     #     x = x + pos_embed
     # x = self.pos_drop(x)
-
 
     # stem for I_feat_init
     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type in ['single', 'double']:
@@ -346,8 +367,24 @@ def forward_flex_CAv2(self, opt, x_input, pretrained_activations=[], input_dict_
     for idx, blk in enumerate(self.blocks):
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers!=-1 and idx >= opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers:
             continue
+        
+        # if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg:
+        #     # print(x.shape, blk) # torch.Size([1, 81, 768]) Block(
+        #     '''
+        #         ideally should use tokens_mask in attention
+        #     '''
+        #     x = blk([x, tokens_mask])
+        # else:            
+        #     x = blk(x)
 
-        x = blk(x)
+        if tokens_mask is not None:
+            tokens_mask_full = torch.cat((torch.ones((tokens_mask.shape[0], 1)).cuda().float(), tokens_mask), dim=1)
+        else:
+            tokens_mask_full = tokens_mask
+
+        x = blk(x, {'tokens_mask': tokens_mask_full})
+        # print(x[0, :50, :5])
+
         if if_print:
             print('=========', idx)
         
@@ -386,7 +423,8 @@ def forward_flex_CAv2(self, opt, x_input, pretrained_activations=[], input_dict_
                 if if_print:
                     print(im_feat_in.shape, ca_modules['layer_%d_ca'%idx])
 
-                im_feat_out, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_in, x_tokens, im_feat_scale_factor=im_feat_scale_factor, proj_coef_in=None) # torch.Size([1, 768, 320])
+                im_feat_out, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_in, x_tokens, im_feat_scale_factor=im_feat_scale_factor, proj_coef_in=None, \
+                    tokens_mask=tokens_mask, im_mask=im_mask, im_mask_scale_factor=im_feat_scale_factor/4.) # torch.Size([1, 768, 320])
 
                 if if_print:
                     print(im_feat_out.shape) # torch.Size([1, 768, 16, 20])

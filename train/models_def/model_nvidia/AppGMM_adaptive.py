@@ -135,9 +135,8 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
         if scale_down_tensor != 1: # scale tensor
             assert not if_assert_no_scale
             # print(gamma.shape, tensor_to_transform.shape, scale_down_gamma_tensor)
-            tensor_to_transform_resized = F.interpolate(tensor_to_transform, scale_factor=1./float(scale_down_tensor), mode='bilinear')
-            tensor_to_transform_resized = tensor_to_transform_resized / (torch.sum(tensor_to_transform_resized, 1, keepdims=True)+1e-6)
-            tensor_to_transform = tensor_to_transform_resized
+            tensor_to_transform = F.interpolate(tensor_to_transform, scale_factor=1./float(scale_down_tensor), mode='bilinear')
+            # tensor_to_transform_resized = tensor_to_transform_resized / (torch.sum(tensor_to_transform_resized, 1, keepdims=True)+1e-6)
         
         if gamma.shape[-2::]!=tensor_to_transform.shape[-2::]:
             print('gamma.shape[-2::]!=tensor_to_transform.shape[-2::]!', gamma.shape, tensor_to_transform.shape)
@@ -156,10 +155,14 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
             Q_M_Jnormalized = gamma / (gamma.sum(-1, keepdims=True).sum(-2, keepdims=True)+1e-6) # [B, J, H, W]  # **normalize by pixels HW**
         else:
             Q_M_Jnormalized = gamma
-            # print(gamma.sum(-1).sum(-1))
+
+        # print(Q_M_Jnormalized.sum(-1).sum(-1))
+
         tensor_to_transform_flattened = tensor_to_transform.permute(0, 2, 3, 1).view(batch_size, -1, D)
         tensor_to_transform_J = Q_M_Jnormalized.view(batch_size, J, -1) @ tensor_to_transform_flattened # [B, J, D], the code book
         tensor_to_transform_J = tensor_to_transform_J.permute(0, 2, 1) # [B, D, J], the code book
+
+        # print('====', tensor_to_transform_J.shape, tensor_to_transform_J[0])
 
         if if_return_codebook_only:
             im_single_hat = None

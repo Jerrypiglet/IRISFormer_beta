@@ -185,6 +185,9 @@ def set_up_envs(opt):
             opt.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_proj_coef = True
             if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_SSN:
                 opt.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_affinity = True
+                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg:
+                    opt.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_gt_matseg = True
+
 
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_only_last_transformer_output_used:
             opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_not_reduce_res = True
@@ -616,6 +619,9 @@ def set_up_checkpointing(opt, model, optimizer, scheduler, logger):
             tid_start = checkpoint_restored['iteration']
         if 'epoch' in checkpoint_restored and not opt.reset_tid:
             epoch_start = checkpoint_restored['epoch']
+        if opt.tid_start != -1 and opt.epoch_start != -1:
+            tid_start = opt.tid_start
+            epoch_start = opt.epoch_start
         print(checkpoint_restored.keys())
         logger.info(colored('Restoring from epoch %d - iter %d'%(epoch_start, tid_start), 'white', 'on_blue'))
 
