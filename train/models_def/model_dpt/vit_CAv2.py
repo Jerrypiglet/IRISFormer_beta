@@ -246,10 +246,10 @@ def get_SSN_tokens_CAv2(self, opt, pretrained_activations, input_dict_extra={}):
         affinity_in_normalizedJ = affinity_in / (torch.sum(affinity_in, 1, keepdims=True) + 1e-6)
         ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, affinity_in=affinity_in_normalizedJ, mask=mask_resized, if_return_codebook_only=True, if_hard_affinity_for_c=False, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
         abs_affinity_normalized_by_pixels = affinity_in / (affinity_in.sum(-1, keepdims=True).sum(-2, keepdims=True)+1e-6)
-        tokens_mask = (affinity_in.sum(-1).sum(-1) != 0).float()
+        tokens_mask = (affinity_in.sum(-1).sum(-1) > 10).float()
         assert torch.sum(tokens_mask) != 0
         # print(tokens_mask)
-        # print(tokens_mask, input_dict_extra['return_dict_matseg']['num_mat_masks'])
+        print(tokens_mask, input_dict_extra['return_dict_matseg']['num_mat_masks'])
     else:
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from == 'matseg':
             ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, feats_in=input_dict_extra['return_dict_matseg']['embedding'], mask=mask_resized, if_return_codebook_only=True, if_hard_affinity_for_c=if_hard_affinity_for_c, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
@@ -385,8 +385,8 @@ def forward_flex_CAv2(self, opt, x_input, pretrained_activations=[], input_dict_
         else:
             tokens_mask_full = tokens_mask
 
-        # x = blk(x, {'tokens_mask': tokens_mask_full})
-        x = blk(x)
+        x = blk(x, {'tokens_mask': tokens_mask_full})
+        # x = blk(x)
         # print(x[0, :50, :5])
 
         if if_print:
