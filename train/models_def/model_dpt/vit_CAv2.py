@@ -264,6 +264,7 @@ def get_SSN_tokens_CAv2(self, opt, pretrained_activations, input_dict_extra={}):
         # dist_matrix = ssn_return_dict['dist_matrix'] # fixed for now
         abs_affinity_normalized_by_pixels = ssn_return_dict['abs_affinity_normalized_by_pixels'] # fixed for now
         tokens_mask = None
+        affinity_in_normalizedJ = None
 
     c = ssn_return_dict['C'] # codebook
     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg:
@@ -278,7 +279,7 @@ def get_SSN_tokens_CAv2(self, opt, pretrained_activations, input_dict_extra={}):
     # x = self.patch_embed.proj(c).flatten(2).transpose(1, 2) # torch.Size([8, 320, 768]); will be Identity op in qkv recon
     x = c.flatten(2).transpose(1, 2) # torch.Size([8, 320, 768]); will be Identity op in qkv recon
 
-    extra_return_dict.update({'Q': ssn_return_dict['Q'], 'matseg_affinity': ssn_return_dict['Q_2D'], 'abs_affinity_normalized_by_pixels': abs_affinity_normalized_by_pixels, 'tokens_mask': tokens_mask})
+    extra_return_dict.update({'Q': ssn_return_dict['Q'], 'matseg_affinity': ssn_return_dict['Q_2D'], 'abs_affinity_normalized_by_pixels': abs_affinity_normalized_by_pixels, 'affinity_in_normalizedJ': affinity_in_normalizedJ, 'tokens_mask': tokens_mask})
 
     return x, extra_return_dict
 
@@ -315,6 +316,11 @@ def forward_flex_CAv2(self, opt, x_input, pretrained_activations=[], input_dict_
         tokens_mask = extra_return_dict['tokens_mask'] # print(tokens_mask.shape)
     else:
         tokens_mask = None
+
+    if 'affinity_in_normalizedJ' in extra_return_dict and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg_if_inject_proj_coef:
+        affinity_in_normalizedJ = F.interpolate(extra_return_dict['affinity_in_normalizedJ'], scale_factor=1./4., mode='nearest') # print(tokens_mask.shape)
+    else:
+        affinity_in_normalizedJ = None
 
     # tokens_mask = None
     im_mask = input_dict_extra['brdf_loss_mask'].float() # original im size [-1, h, w]
@@ -380,10 +386,13 @@ def forward_flex_CAv2(self, opt, x_input, pretrained_activations=[], input_dict_
         # else:            
         #     x = blk(x)
 
-        if tokens_mask is not None:
-            tokens_mask_full = torch.cat((torch.ones((tokens_mask.shape[0], 1)).cuda().float(), tokens_mask), dim=1)
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg_if_inject_transformer:
+            if tokens_mask is not None:
+                tokens_mask_full = torch.cat((torch.ones((tokens_mask.shape[0], 1)).cuda().float(), tokens_mask), dim=1)
+            else:
+                tokens_mask_full = tokens_mask
         else:
-            tokens_mask_full = tokens_mask
+            tokens_mask_full = None
 
         x = blk(x, {'tokens_mask': tokens_mask_full})
         # x = blk(x)
@@ -427,7 +436,7 @@ def forward_flex_CAv2(self, opt, x_input, pretrained_activations=[], input_dict_
                 if if_print:
                     print(im_feat_in.shape, ca_modules['layer_%d_ca'%idx])
 
-                im_feat_out, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_in, x_tokens, im_feat_scale_factor=im_feat_scale_factor, proj_coef_in=None, \
+                im_feat_out, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_in, x_tokens, im_feat_scale_factor=im_feat_scale_factor, proj_coef_in=affinity_in_normalizedJ, \
                     tokens_mask=tokens_mask, im_mask=im_mask, im_mask_scale_factor=im_feat_scale_factor/4.) # torch.Size([1, 768, 320])
 
                 if if_print:

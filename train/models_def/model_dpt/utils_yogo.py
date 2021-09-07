@@ -171,6 +171,15 @@ class Projector(nn.Module):
         # N, h, HW, C/h * N, h, C/h, L -> N, h, HW, L
         # print(proj_q.shape, proj_k.shape, self.proj_kq_matmul(proj_q, proj_k).shape) # SSN: torch.Size([1, 2, 5120, 128]) torch.Size([1, 2, 128, 80]) torch.Size([1, 2, 5120, 80])
         proj_coef = self.proj_kq_matmul(proj_q, proj_k) / np.sqrt(C / h)
+
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg_if_inject_proj_coef:
+            # assert False, 'disabled for now'
+            assert proj_coef_in is not None
+            # print(proj_coef_in[0].sum(0)) # should be all 1s or 0s
+            proj_coef_in = proj_coef_in.flatten(2).transpose(-1, -2).unsqueeze(1).repeat(1, self.head, 1, 1)
+            # print(proj_coef_in.shape, proj_coef.shape) # torch.Size([2, 80, 256, 320]) torch.Size([2, 2, 5120, 80])
+            proj_coef = proj_coef_in
+
         # print('---->', proj_coef[0, 0, :5, 0])
         # print('====>', proj_coef[0, 0, :5, -1])
         if im_mask is not None:
@@ -190,8 +199,8 @@ class Projector(nn.Module):
             proj_coef = torch.exp(proj_coef) / ((torch.exp(proj_coef) * tokens_mask_dim4).sum(-1, keepdims=True) + 1e-6)
             proj_coef = proj_coef * tokens_mask_dim4
             # print(tokens_mask[0])
-            # print(proj_coef[0].sum(0).sum(0)) # should be ones and zeros
-            # print(proj_coef[0].sum(-1)) # should be all ones
+            # print(proj_coef[0][0].sum(-1)) # num of tokens that a pixel belong to: should be ones and zeros
+            # print(proj_coef[0][0].sum(0)) # num of pixels that a token maps to; float; not useful
         else:
             proj_coef = F.softmax(proj_coef, dim=3)
 
@@ -200,6 +209,7 @@ class Projector(nn.Module):
         # print('---proj_coef', proj_coef.shape)
         
         if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_use_Q_as_proj_coef:
+        # if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg_if_inject_proj_coef:
             assert False, 'disabled for now'
             assert proj_coef_in is not None
             # print('---proj_coef_in', proj_coef_in.shape)
