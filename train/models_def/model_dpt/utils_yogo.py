@@ -153,7 +153,7 @@ class Projector(nn.Module):
 
     def forward(self, x, x_t, proj_coef_in=None, tokens_mask=None, im_mask=None):
         # print(x.shape, x_t.shape) # torch.Size([1, 512, 5120]) torch.Size([1, 768, 320])
-        print(proj_coef_in, tokens_mask, im_mask)
+        # print(proj_coef_in, tokens_mask, im_mask)
         # print('----', x_t[0, :5, 0])
         # print('====', x_t[0, :5, -1])
 

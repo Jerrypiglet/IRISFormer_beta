@@ -385,7 +385,8 @@ def forward_flex_CAv2(self, opt, x_input, pretrained_activations=[], input_dict_
         else:
             tokens_mask_full = tokens_mask
 
-        x = blk(x, {'tokens_mask': tokens_mask_full})
+        # x = blk(x, {'tokens_mask': tokens_mask_full})
+        x = blk(x)
         # print(x[0, :50, :5])
 
         if if_print:
