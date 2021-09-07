@@ -153,6 +153,7 @@ class Projector(nn.Module):
 
     def forward(self, x, x_t, proj_coef_in=None, tokens_mask=None, im_mask=None):
         # print(x.shape, x_t.shape) # torch.Size([1, 512, 5120]) torch.Size([1, 768, 320])
+        print(proj_coef_in, tokens_mask, im_mask)
         # print('----', x_t[0, :5, 0])
         # print('====', x_t[0, :5, -1])
 
@@ -365,6 +366,8 @@ class CrossAttention_CAv2(nn.Module):
                     im_mask_resized = im_mask
                 im_mask_flattened = im_mask_resized.flatten(2)
                 assert im_mask_flattened.shape[2:]==im_feat_flattened.shape[2:]
+            else:
+                im_mask_flattened = None
 
         output_dict = self.projectors(
             self.feature_block(im_feat_flattened), 

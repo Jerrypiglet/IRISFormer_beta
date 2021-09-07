@@ -819,7 +819,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                         proj_coef_matrix = proj_coef_dict['proj_coef_%d'%hook].detach() # torch.Size([1, 2, 5120, 320])
                         # print(idx, proj_coef_matrix[0, 0, :5, 0])
                         # print(idx, proj_coef_matrix[0, 0, :5, -1])
-                        proj_coef_matrix = F.softmax(proj_coef_matrix, dim=2).cpu().numpy() # softmax in pixels dim
+                        print(proj_coef_matrix.shape, np.min(proj_coef_matrix.cpu().numpy()), np.max(proj_coef_matrix.cpu().numpy()), np.median(proj_coef_matrix.cpu().numpy()))
+                        proj_coef_matrix = F.softmax(proj_coef_matrix, dim=3).cpu().numpy() # softmax in pixels dim
+                        print(proj_coef_matrix.shape, np.min(proj_coef_matrix), np.max(proj_coef_matrix), np.median(proj_coef_matrix))
                         for sample_idx_batch, proj_coef_matrix_single in enumerate(proj_coef_matrix):
                             sample_idx = sample_idx_batch+batch_size*batch_id
                             if opt.is_master:
@@ -842,9 +844,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                                     # print(proj_coef_matrix_single_token_vis.shape, np.sum(proj_coef_matrix_single_token_vis))
                                     print(spixel_h, spixel_w, hook, np.min(proj_coef_matrix_single_token_vis), np.max(proj_coef_matrix_single_token_vis), np.median(proj_coef_matrix_single_token_vis), np.amax(proj_coef_matrix_single_vis))
                                     # proj_coef_matrix_single_token_vis = proj_coef_matrix_single_token_vis - np.amin(proj_coef_matrix_single_token_vis)
-                                    # proj_coef_matrix_single_token_vis = proj_coef_matrix_single_token_vis / (np.amax(proj_coef_matrix_single_vis)+1e-6)
+                                    proj_coef_matrix_single_token_vis = proj_coef_matrix_single_token_vis / (np.amax(proj_coef_matrix_single_vis)+1e-6)
                                     # proj_coef_matrix_single_token_vis = proj_coef_matrix_single_token_vis / (np.sum(proj_coef_matrix_single_token_vis) + 1e-6)
-                                    proj_coef_matrix_single_token_vis = np.clip(proj_coef_matrix_single_token_vis * start_im_hw[0] * start_im_hw[1] / 5., 0., 1.)
+                                    # proj_coef_matrix_single_token_vis = np.clip(proj_coef_matrix_single_token_vis * start_im_hw[0] * start_im_hw[1] / 5., 0., 1.)
                                     proj_coef_matrix_single_token_vis = cv2.resize(proj_coef_matrix_single_token_vis, dsize=(320, 256), interpolation=cv2.INTER_NEAREST)
 
                                     writer.add_image('VAL_DPT-CA_proj_coef_sample%d/head%d_spixel(%d)%d-%d_PRED/%d'%(sample_idx, head, spixel_h*spixel_hw[0]+spixel_w, spixel_h*patch_size, spixel_w*patch_size, hook), \
