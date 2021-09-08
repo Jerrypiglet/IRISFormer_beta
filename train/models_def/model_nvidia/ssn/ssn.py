@@ -70,7 +70,8 @@ def get_hard_abs_labels(affinity_matrix, init_label_map, num_spixels_width):
 
 def ssn_iter(pixel_features,  n_iter,
              num_spixels_width, num_spixels_height, 
-             index_add=True):
+             mask=None, 
+             index_add=False):
     """
     computing assignment iterations
     detailed process is in Algorithm 1, line 2 - 6
@@ -85,6 +86,8 @@ def ssn_iter(pixel_features,  n_iter,
 
     """
     height, width = pixel_features.shape[-2:]
+    batch_size = pixel_features.shape[0]
+
     # num_spixels_width  = int(math.sqrt(num_spixels * width / height))
     # num_spixels_height = int(math.sqrt(num_spixels * height / width))
     num_spixels = num_spixels_width * num_spixels_height
@@ -99,6 +102,11 @@ def ssn_iter(pixel_features,  n_iter,
 
     pixel_features = pixel_features.reshape(*pixel_features.shape[:2], -1)
     permuted_pixel_features = pixel_features.permute(0, 2, 1).contiguous()
+
+    if mask is None:
+        mask = torch.ones((batch_size, height, width), dtype=torch.float32, device=spixel_features.device)
+    mask_flattened = mask.reshape(batch_size, 1, -1)
+
 
     # import time
     # st = time.time()
@@ -124,8 +132,14 @@ def ssn_iter(pixel_features,  n_iter,
             init_label_map, 
             num_spixels_width, num_spixels_height) 
 
-        affinity_matrix = (-dist_matrix).softmax(1)
+        # print(dist_matrix.shape, mask_flattened.shape, mask.shape)
+        dist_matrix_masked_dense = dist_matrix * mask_flattened + torch.ones_like(dist_matrix) * 1e8 * (1. - mask_flattened)
+
+        affinity_matrix = (-dist_matrix_masked_dense).softmax(1)
         reshaped_affinity_matrix = affinity_matrix.reshape(-1) 
+
+        # print(dist_matrix.shape, mask_flattened.shape) # torch.Size([1, 9, 81920]) torch.Size([1, 1, 81920])
+        # affinity_matrix_normalized_by_pixels = (-dist_matrix).softmax(2) * mask_flattened # torch.Size([1, 48, 76800])
 
         # M-step: update the centroids
 
@@ -139,6 +153,7 @@ def ssn_iter(pixel_features,  n_iter,
         else:
             #use the index_add function to collect the spixel features, so we don't have to use the sparse_to_dense function
             spixel_features_w= (affinity_matrix).unsqueeze(-1) * permuted_pixel_features.unsqueeze(1) # Bx9xNxC
+            # print(spixel_features_w.shape, affinity_matrix.shape, permuted_pixel_features.shape) # torch.Size([1, 9, 81920, 4]) torch.Size([1, 9, 81920]) torch.Size([1, 81920, 4])
             spixel_features_w = spixel_features_w.reshape(spixel_features_w.shape[0], -1, spixel_features_w.shape[-1]).contiguous()
             index_abs2rel =  abs_indices[1, :].reshape(9, height, width).contiguous() #9xHxW
             
@@ -168,16 +183,25 @@ def ssn_iter(pixel_features,  n_iter,
 
     # hard_labels = get_hard_abs_labels(affinity_matrix, init_label_map, num_spixels_width)
     # import ipdb; ipdb.set_trace()
+
+    spixel_pixel_mul = None
+
     if not index_add:
         #abs_affinity: B x J x N
-        return abs_affinity, dist_matrix, spixel_features
+        assert False
+        return abs_affinity, None, dist_matrix, spixel_features, spixel_pixel_mul
     else:
         #abs_affinity:    B x J x N
         #affinity_matrix: B x 9 x N
         #index_abs2rel:   9 x H x W
         abs_affinity = torch.zeros(spixel_features_w.shape[0], num_spixels, height*width, device=spixel_features_w.device) # BxJxN
         abs_affinity = msparse2dense(abs_affinity, affinity_matrix, index_abs2rel)
-        return abs_affinity, dist_matrix, spixel_features
+
+        dist_matrix_sparse = torch.zeros(spixel_features_w.shape[0], num_spixels, height*width, device=spixel_features_w.device) + 1e8 # BxJxN
+        dist_matrix_sparse = msparse2dense(dist_matrix_sparse, dist_matrix, index_abs2rel)
+        abs_affinity_normalized_by_pixels = (-dist_matrix_sparse).softmax(2) * mask_flattened # torch.Size([1, 48, 76800])\
+
+        return abs_affinity, abs_affinity_normalized_by_pixels, dist_matrix_masked_dense, spixel_features, spixel_pixel_mul
 
 def msparse2dense(
     abs_affinity,    #BxJxN

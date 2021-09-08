@@ -5,6 +5,7 @@ import types
 import math
 import torch.nn.functional as F
 from models_def.model_nvidia.AppGMM_adaptive import SSNFeatsTransformAdaptive
+import numpy as np
 
 activations = {}
 
@@ -231,7 +232,7 @@ def get_SSN_tokens_CAv2(self, opt, pretrained_activations, input_dict_extra={}):
     batch_size, d = backbone_feat_init.shape[0], backbone_feat_init.shape[1]
     spixel_dims = [input_dict_extra['im_height']//self.patch_size[0], input_dict_extra['im_width']//self.patch_size[1]]
 
-    ssn_op = SSNFeatsTransformAdaptive(None, spixel_dims=spixel_dims, if_dense=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_dense)
+    ssn_op = SSNFeatsTransformAdaptive(None, spixel_dims=spixel_dims, if_dense=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_dense)
     # print(spixel_dims)
 
     mask_resized = input_dict_extra['brdf_loss_mask'] # original im size
@@ -242,14 +243,33 @@ def get_SSN_tokens_CAv2(self, opt, pretrained_activations, input_dict_extra={}):
         affinity_gt = input_dict_extra['return_dict_matseg']['instance_valid'].float() # one hot, [-1, 50, 256, 320]; last one being invalid instance (e.g. window, lamp)
         # print(input_dict_extra['return_dict_matseg']['num_mat_masks'], affinity_gt.sum(-1).sum(-1))
         extra_return_dict.update({'num_mat_masks': input_dict_extra['return_dict_matseg']['num_mat_masks'], 'instance': input_dict_extra['return_dict_matseg']['instance_valid']})
-        affinity_in = torch.cat([affinity_gt, torch.zeros(batch_size, spixel_dims[0]*spixel_dims[1]-50, mask_resized.shape[-2], mask_resized.shape[-1]).float().cuda()], dim=1)
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg_if_duplicate_tokens:
+            # pass
+            dup_idxes_batch = []
+            spixel_num = spixel_dims[0]*spixel_dims[1]
+            for sample_idx, num_mat_masks in enumerate(input_dict_extra['return_dict_matseg']['num_mat_masks']):
+                num_mat_masks = num_mat_masks.item()
+                dup_idxes = list(range(num_mat_masks)) * (spixel_num // num_mat_masks)
+                # print(num_mat_masks, spixel_num-len(dup_idxes))
+                if spixel_num-len(dup_idxes) != 0:
+                    dup_idxes += np.random.choice(np.array(list(range(num_mat_masks))), spixel_num-len(dup_idxes)).tolist()
+                dup_idxes_batch += [[sample_idx, x] for x in dup_idxes]
+            dup_idxes_batch_array = np.array(dup_idxes_batch).transpose()
+            # print(affinity_gt.shape, dup_idxes_batch_array.shape, dup_idxes_batch)
+            # print(affinity_gt[dup_idxes_batch_array].shape)
+            affinity_in = affinity_gt[dup_idxes_batch_array].unflatten(0, (affinity_gt.shape[0], spixel_num))
+        else:
+            affinity_in = torch.cat([affinity_gt, torch.zeros(batch_size, spixel_dims[0]*spixel_dims[1]-50, mask_resized.shape[-2], mask_resized.shape[-1]).float().cuda()], dim=1)
         affinity_in_normalizedJ = affinity_in / (torch.sum(affinity_in, 1, keepdims=True) + 1e-6)
         ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, affinity_in=affinity_in_normalizedJ, mask=mask_resized, if_return_codebook_only=True, if_hard_affinity_for_c=False, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
         abs_affinity_normalized_by_pixels = affinity_in / (affinity_in.sum(-1, keepdims=True).sum(-2, keepdims=True)+1e-6)
-        tokens_mask = (affinity_in.sum(-1).sum(-1) > 10).float()
-        assert torch.sum(tokens_mask) != 0
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg_if_duplicate_tokens:
+            tokens_mask = torch.ones((affinity_in.shape[0], affinity_in.shape[1])).cuda().float()
+        else:
+            tokens_mask = (affinity_in.sum(-1).sum(-1) > 10).float()
+            assert torch.sum(tokens_mask) != 0
         # print(tokens_mask)
-        print(tokens_mask, input_dict_extra['return_dict_matseg']['num_mat_masks'])
+        # print(tokens_mask, input_dict_extra['return_dict_matseg']['num_mat_masks'])
     else:
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from == 'matseg':
             ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, feats_in=input_dict_extra['return_dict_matseg']['embedding'], mask=mask_resized, if_return_codebook_only=True, if_hard_affinity_for_c=if_hard_affinity_for_c, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]

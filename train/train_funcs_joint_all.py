@@ -834,8 +834,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                                         for spixel_w in [0, 1]:
                                             a_list.append([spixel_h, spixel_w])
                                 else:
-                                    for spixel_h in [spixel_hw[0]//3, spixel_hw[0]//3*2]:
-                                        for spixel_w in [spixel_hw[1]//3, spixel_hw[1]//3*2]:
+                                    for spixel_h in [spixel_hw[0]//3, spixel_hw[0]//3*2, spixel_hw[0]-1]:
+                                        for spixel_w in [spixel_hw[1]//3, spixel_hw[1]//3*2, spixel_hw[1]-1]:
                                             a_list.append([spixel_h, spixel_w])
 
                                 for spixel_h, spixel_w in a_list:
@@ -871,8 +871,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                                     for spixel_w in [0, 1]:
                                         a_list.append([spixel_h, spixel_w])
                             else:
-                                for spixel_h in [spixel_hw[0]//3, spixel_hw[0]//3*2]:
-                                    for spixel_w in [spixel_hw[1]//3, spixel_hw[1]//3*2]:
+                                for spixel_h in [spixel_hw[0]//3, spixel_hw[0]//3*2, spixel_hw[0]-1]:
+                                    for spixel_w in [spixel_hw[1]//3, spixel_hw[1]//3*2, spixel_hw[1]-1]:
                                         a_list.append([spixel_h, spixel_w])
 
                             for spixel_h, spixel_w in a_list:

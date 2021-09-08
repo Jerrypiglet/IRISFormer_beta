@@ -253,7 +253,7 @@ model.print_net()
 
 # set up optimizers
 # optimizer = get_optimizer(model.parameters(), cfg.SOLVER)
-optimizer = optim.Adam(model.parameters(), lr=cfg.SOLVER.lr, betas=(0.5, 0.999) )
+optimizer = optim.Adam(model.parameters(), lr=cfg.SOLVER.lr)
 if opt.cfg.SOLVER.method == 'adamw':
     optimizer = optim.AdamW(model.parameters(), lr=cfg.SOLVER.lr, weight_decay=0.05)
 

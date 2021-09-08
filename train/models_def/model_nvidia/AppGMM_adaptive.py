@@ -80,6 +80,7 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
                     num_spixels_height=self.num_spixels_height, 
                     mask=mask, 
                     index_add=index_add)
+            # print(abs_affinity.shape, abs_affinity_normalized_by_pixels.shape)
             abs_affinity = abs_affinity.view(batch_size, J, H, W)
             abs_affinity_normalized_by_pixels = abs_affinity_normalized_by_pixels.view(batch_size, J, H, W)
         else:
