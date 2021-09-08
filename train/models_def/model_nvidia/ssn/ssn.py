@@ -168,13 +168,13 @@ def ssn_iter(pixel_features,  n_iter,
                 spixel_features_w.shape[0], 
                 num_spixels, 
                 spixel_features_w.shape[-1], 
-                device=spixel_features_w.device) #BxJxC
+                device=spixel_features_w.device).float() #BxJxC
 
-            spixel_features.index_add_(dim=1, index=index_abs2rel.reshape(-1), source=spixel_features_w)
+            spixel_features.index_add_(dim=1, index=index_abs2rel.clone().reshape(-1), source=spixel_features_w)
             spixel_features = spixel_features.permute(0,2,1).contiguous() # BxCxJ
 
-            affinity_matrix_sum = torch.zeros( spixel_features_w.shape[0], num_spixels, device=spixel_features_w.device) #BxJ
-            affinity_matrix_sum.index_add_(dim=1, index=index_abs2rel.reshape(-1), source=affinity_matrix.reshape(spixel_features_w.shape[0], -1)) #BxJ
+            affinity_matrix_sum = torch.zeros( spixel_features_w.shape[0], num_spixels, device=spixel_features_w.device).float() #BxJ
+            affinity_matrix_sum.index_add_(dim=1, index=index_abs2rel.clone().reshape(-1), source=affinity_matrix.reshape(spixel_features_w.shape[0], -1)) #BxJ
             spixel_features= spixel_features / affinity_matrix_sum.unsqueeze(1) #BxCxJ
             #TODO: get gamma matrix
 

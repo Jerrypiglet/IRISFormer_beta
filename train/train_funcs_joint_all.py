@@ -846,11 +846,11 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                                     # proj_coef_matrix_single_token_vis = proj_coef_matrix_single_token_vis - np.amin(proj_coef_matrix_single_token_vis)
                                     # proj_coef_matrix_single_token_vis = proj_coef_matrix_single_token_vis / (np.amax(proj_coef_matrix_single_vis)+1e-6)
                                     # proj_coef_matrix_single_token_vis = proj_coef_matrix_single_token_vis / (np.sum(proj_coef_matrix_single_token_vis) + 1e-6)
-                                    proj_coef_matrix_single_token_vis = np.clip(proj_coef_matrix_single_token_vis * start_im_hw[0] * start_im_hw[1] / 5., 0., 1.)
+                                    proj_coef_matrix_single_token_vis = np.clip(proj_coef_matrix_single_token_vis * start_im_hw[0] * start_im_hw[1] / 10., 0., 1.)
                                     proj_coef_matrix_single_token_vis = cv2.resize(proj_coef_matrix_single_token_vis, dsize=(320, 256), interpolation=cv2.INTER_NEAREST)
 
                                     writer.add_image('VAL_DPT-CA_proj_coef_sample%d/head%d_spixel(%d)%d-%d_PRED/%d'%(sample_idx, head, spixel_h*spixel_hw[0]+spixel_w, spixel_h*patch_size, spixel_w*patch_size, hook), \
-                                        proj_coef_matrix_single_token_vis, tid, dataformats='HW')
+                                        vis_disp_colormap(proj_coef_matrix_single_token_vis, normalize=False, cmap_name='viridis')[0], tid, dataformats='HWC')
 
                         if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_not_reduce_res:
                             start_im_hw = start_im_hw[0]//2, start_im_hw[1]//2
@@ -881,10 +881,10 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                                 writer.add_histogram('VAL_hist_DPT-SSN_abs_affinity_normalized_by_pixels_sample%d/head%d_spixel(%d)%d-%d_PRED'%(sample_idx, head, spixel_h*spixel_hw[0]+spixel_w, spixel_h*patch_size, spixel_w*patch_size), \
                                     abs_affinity_normalized_by_pixels_input_vis, tid)
 
-                                # abs_affinity_normalized_by_pixels_input_vis = abs_affinity_normalized_by_pixels_input_vis / (np.amax(abs_affinity_normalized_by_pixels_input)+1e-6)
-                                abs_affinity_normalized_by_pixels_input_vis = np.clip(abs_affinity_normalized_by_pixels_input_vis * 256 * 320 / 5., 0., 1.)
+                                abs_affinity_normalized_by_pixels_input_vis = abs_affinity_normalized_by_pixels_input_vis / (np.amax(abs_affinity_normalized_by_pixels_input_vis)+1e-6)
+                                # abs_affinity_normalized_by_pixels_input_vis = np.clip(abs_affinity_normalized_by_pixels_input_vis * 256 * 320 / 10., 0., 1.)
                                 writer.add_image('VAL_DPT-SSN_abs_affinity_normalized_by_pixels_sample%d/head%d_spixel(%d)%d-%d_PRED'%(sample_idx, head, spixel_h*spixel_hw[0]+spixel_w, spixel_h*patch_size, spixel_w*patch_size), \
-                                    abs_affinity_normalized_by_pixels_input_vis, tid, dataformats='HW')
+                                    vis_disp_colormap(abs_affinity_normalized_by_pixels_input_vis, normalize=False, cmap_name='viridis')[0], tid, dataformats='HWC')
 
                 if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_SSN and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg:
                     assert 'num_mat_masks' in output_dict['albedo_extra_output_dict'] and 'instance' in output_dict['albedo_extra_output_dict']

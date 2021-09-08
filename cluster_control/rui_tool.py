@@ -51,9 +51,10 @@ def parse_args():
     create_parser.add_argument('-f', '--file', type=str, help='POD''ath to template file')
     create_parser.add_argument('-s', '--string', type=str, help='Input command')
     create_parser.add_argument('-d', '--deploy', action='store_true', help='deploy the code')
+    create_parser.add_argument('-z', '--zip', action='store_true', help='deploy the code')
     create_parser.add_argument('--resume', type=str, help='resume_from: e.g. 20201129-232627', default='NoCkpt')
     create_parser.add_argument('--deploy_src', type=str, help='deploy to target path', default='~/Documents/Projects/semanticInverse/train/')
-    create_parser.add_argument('--deploy_s3', type=str, help='deploy s3 container', default='s3mm1:train')
+    create_parser.add_argument('--deploy_s3', type=str, help='deploy s3 container', default='s3mm1:train/train')
     create_parser.add_argument('--deploy_tar', type=str, help='deploy to target path', default='/viscompfs/users/ruizhu/train')
     create_parser.add_argument('--python_path', type=str, help='python path in pod', default='/viscompfs/users/ruizhu/envs/py38/bin/python')
     create_parser.add_argument('--pip_path', type=str, help='python path in pod', default='/viscompfs/users/ruizhu/envs/py38/bin/pip')
@@ -168,7 +169,10 @@ def create_job_from_yaml(yaml_filename):
     print(stdout)
 
 def deploy_to_s3(args):
-    deploy_command = 'rclone sync %s %s'%(args.deploy_src, args.deploy_s3)
+    if args.zip:
+        deploy_command = 'cd %s && zip -r tmp.zip * && rclone --progress sync tmp.zip %s/ && cd -'%(args.deploy_src, args.deploy_s3)
+    else:
+        deploy_command = 'rclone --progress sync %s %s'%(args.deploy_src, args.deploy_s3)
     print('>>>>>>>>>>>> deploying with...: %s'%deploy_command)
     # os.system(deploy_command)
     run_command_generic(deploy_command)
@@ -213,7 +217,11 @@ def create(args):
         command_str = command_str.replace('python', args.python_path)
         if args.deploy:
             args.deploy_tar += '-%s'%datetime_str
-            command_str = 'rclone copy %s %s && cd %s && '%(args.deploy_s3, args.deploy_tar, args.deploy_tar) + command_str
+            args.deploy_s3 += '-%s'%datetime_str
+            if args.zip:
+                command_str = 'rclone --progress copy %s/tmp.zip %s/ && cd %s && unzip tmp.zip && '%(args.deploy_s3, args.deploy_tar, args.deploy_tar) + command_str
+            else:
+                command_str = 'rclone --progress copy %s %s && cd %s && '%(args.deploy_s3, args.deploy_tar, args.deploy_tar) + command_str
         else:
             command_str = 'cd %s && '%(args.deploy_tar) + command_str
         command_str = command_str.replace('pip', args.pip_path)

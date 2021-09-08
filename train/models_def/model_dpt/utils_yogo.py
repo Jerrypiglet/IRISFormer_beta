@@ -153,7 +153,7 @@ class Projector(nn.Module):
 
     def forward(self, x, x_t, proj_coef_in=None, tokens_mask=None, im_mask=None):
         # print(x.shape, x_t.shape) # torch.Size([1, 512, 5120]) torch.Size([1, 768, 320])
-        # print(proj_coef_in, tokens_mask, im_mask)
+        # print(proj_coef_in, tokens_mask, im_mask.shape)
         # print('----', x_t[0, :5, 0])
         # print('====', x_t[0, :5, -1])
 
@@ -353,6 +353,8 @@ class CrossAttention_CAv2(nn.Module):
 
     def forward(self, in_feature, in_tokens, im_feat_scale_factor=1., proj_coef_in=None, if_in_feature_flattened=False, tokens_mask=None, im_mask=None, im_mask_scale_factor=1., ):
         # print(self.token_c, in_tokens.shape, self.input_dims, in_feature.shape)
+        # im_mask = None
+
         assert self.token_c == in_tokens.shape[1]
         if if_in_feature_flattened:
             im_feat_flattened = in_feature
@@ -371,9 +373,10 @@ class CrossAttention_CAv2(nn.Module):
 
             if im_mask is not None:
                 if im_mask_scale_factor != 1.:
-                    im_mask_resized = F.interpolate(im_mask.unsqueeze(1), scale_factor=im_mask_scale_factor, mode='bilinear') # torch.Size([1, 1, 16, 20])
+                    im_mask_resized = F.interpolate(im_mask.unsqueeze(1), scale_factor=im_mask_scale_factor, mode='nearest') # torch.Size([1, 1, 16, 20])
                 else:
                     im_mask_resized = im_mask
+                # print(im_mask_resized[0][0].shape, im_mask_resized[0][0].sum(0), im_mask_resized[0][0].sum(1).shape, im_mask_resized[0][0][0], im_mask_resized[0][0][0].shape)
                 im_mask_flattened = im_mask_resized.flatten(2)
                 assert im_mask_flattened.shape[2:]==im_feat_flattened.shape[2:]
             else:

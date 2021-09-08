@@ -259,7 +259,9 @@ def get_SSN_tokens_CAv2(self, opt, pretrained_activations, input_dict_extra={}):
             # print(affinity_gt[dup_idxes_batch_array].shape)
             affinity_in = affinity_gt[dup_idxes_batch_array].unflatten(0, (affinity_gt.shape[0], spixel_num))
         else:
+            # simply padding with zero tokens
             affinity_in = torch.cat([affinity_gt, torch.zeros(batch_size, spixel_dims[0]*spixel_dims[1]-50, mask_resized.shape[-2], mask_resized.shape[-1]).float().cuda()], dim=1)
+
         affinity_in_normalizedJ = affinity_in / (torch.sum(affinity_in, 1, keepdims=True) + 1e-6)
         ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, affinity_in=affinity_in_normalizedJ, mask=mask_resized, if_return_codebook_only=True, if_hard_affinity_for_c=False, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
         abs_affinity_normalized_by_pixels = affinity_in / (affinity_in.sum(-1, keepdims=True).sum(-2, keepdims=True)+1e-6)

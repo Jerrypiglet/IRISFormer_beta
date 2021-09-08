@@ -1,5 +1,5 @@
 import torch
-# torch.autograd.set_detect_anomaly(True)
+torch.autograd.set_detect_anomaly(True)
 # torch.backends.cudnn.benchmark = True
 import numpy as np
 from torch.autograd import Variable

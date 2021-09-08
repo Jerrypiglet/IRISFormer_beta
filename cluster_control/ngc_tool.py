@@ -56,6 +56,7 @@ def parse_args():
     create_parser.add_argument('-f', '--file', type=str, help='Path to template file', default='ngc_template.json')
     create_parser.add_argument('-s', '--string', type=str, help='Input command')
     create_parser.add_argument('-d', '--deploy', action='store_true', help='deploy the code')
+    create_parser.add_argument('-z', '--zip', action='store_true', help='deploy the code')
     create_parser.add_argument('-c', '--copy', action='store_true', help='copy dataset to tmp storage')
     create_parser.add_argument('--copy_cmd', type=str, help='cmd to transfer data via network to local fast storage', default='rclone copy --progress --fast-list --checkers=128 --transfers=128 #DUMP_SRC #DUMP_DEST')
     create_parser.add_argument('--resume', type=str, help='resume_from: e.g. 20201129-232627', default='NoCkpt')
@@ -203,7 +204,10 @@ def create_job_from_json(json_filename):
 
 def deploy_to_s3(args):
     deploy_command = 'cd /home/ruzhu/Documents/Projects/semanticInverse && rsync -ah --progress mm1:/home/ruizhu/Documents/Projects/semanticInverse/train . --filter="- *.pyc" --filter="- */__pycache__"'
-    deploy_command += ' && rclone sync %s %s/%s'%(args.deploy_src, args.deploy_s3, args.datetime_str)
+    if args.zip:
+        deploy_command += ' && cd train && zip -r %s.zip * && rclone sync %s.zip %s/ && cd -'%(args.datetime_str, args.datetime_str, args.deploy_s3)
+    else:
+        deploy_command += ' && rclone sync %s %s/%s'%(args.deploy_src, args.deploy_s3, args.datetime_str)
     # os.system(deploy_command)
     print('>>>>>>>>>>>> deploying with: %s'%deploy_command)
     run_command_generic(deploy_command)
@@ -250,7 +254,10 @@ def create(args):
         if args.deploy:
             if args.if_rclone_to_deploy:
                 args.deploy_tar += '-%s'%args.datetime_str
-                command_str = 'rclone copy %s/%s %s && cd %s && '%(args.deploy_s3, args.datetime_str, args.deploy_tar, args.deploy_tar) + command_str
+                if args.zip:
+                    command_str = 'rclone copy %s/%s.zip %s/ && cd %s && unzip %s.zip && '%(args.deploy_s3, args.datetime_str, args.deploy_tar, args.deploy_tar, args.datetime_str) + command_str
+                else:
+                    command_str = 'rclone copy %s/%s %s && cd %s && '%(args.deploy_s3, args.datetime_str, args.deploy_tar, args.deploy_tar) + command_str
             else:
                 command_str = 'cd %s && '%(args.deploy_tar) + command_str
 
