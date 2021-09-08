@@ -1,6 +1,6 @@
 import torch
-torch.autograd.set_detect_anomaly(True)
-# torch.backends.cudnn.benchmark = True
+# torch.autograd.set_detect_anomaly(True)
+torch.backends.cudnn.benchmark = True
 import numpy as np
 from torch.autograd import Variable
 import torch.optim as optim
