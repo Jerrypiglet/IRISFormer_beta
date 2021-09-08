@@ -283,11 +283,11 @@ class Pad(object):
                 raise (RuntimeError("segtransform.Pad() need padding while padding argument is None\n"))
             # if name=='brdf_loss_mask':
             #     print(image.shape)
-            image = cv2.copyMakeBorder(image, 0, pad_h, 0, pad_w, cv2.BORDER_CONSTANT, value=self.padding_with)
+            image = cv2.copyMakeBorder(image, 0, pad_h, 0, pad_w, cv2.BORDER_REFLECT, value=self.padding_with)
             # if name=='brdf_loss_mask':
             #     print(image.shape, '---')
             if label is not None:    
-                label = cv2.copyMakeBorder(label, 0, pad_h, 0, pad_w, cv2.BORDER_CONSTANT, value=self.padding_with)
+                label = cv2.copyMakeBorder(label, 0, pad_h, 0, pad_w, cv2.BORDER_REFLECT, value=self.padding_with)
 
         if if_channel_first:
             if c == 1:

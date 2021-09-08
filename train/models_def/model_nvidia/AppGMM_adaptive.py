@@ -157,6 +157,7 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
         else:
             Q_M_Jnormalized = gamma
 
+        # Q_M_Jnormalized = gamma
         # print(Q_M_Jnormalized.sum(-1).sum(-1))
 
         tensor_to_transform_flattened = tensor_to_transform.permute(0, 2, 3, 1).view(batch_size, -1, D)

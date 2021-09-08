@@ -170,9 +170,9 @@ def create_job_from_yaml(yaml_filename):
 
 def deploy_to_s3(args):
     if args.zip:
-        deploy_command = 'cd %s && zip -r tmp.zip * && rclone --progress sync tmp.zip %s/ && cd -'%(args.deploy_src, args.deploy_s3)
+        deploy_command = 'cd %s && zip -r tmp.zip * && rclone --progress sync tmp.zip %s/ && rm *.zip && cd -'%(args.deploy_src, args.deploy_s3)
     else:
-        deploy_command = 'rclone --progress sync %s %s'%(args.deploy_src, args.deploy_s3)
+        deploy_command = 'rclone --progress --exclude *.pyc sync %s %s'%(args.deploy_src, args.deploy_s3)
     print('>>>>>>>>>>>> deploying with...: %s'%deploy_command)
     # os.system(deploy_command)
     run_command_generic(deploy_command)

@@ -204,10 +204,11 @@ def create_job_from_json(json_filename):
 
 def deploy_to_s3(args):
     deploy_command = 'cd /home/ruzhu/Documents/Projects/semanticInverse && rsync -ah --progress mm1:/home/ruizhu/Documents/Projects/semanticInverse/train . --filter="- *.pyc" --filter="- */__pycache__"'
+    # deploy_command = 'cd /home/ruzhu/Documents/Projects/semanticInverse'
     if args.zip:
-        deploy_command += ' && cd train && zip -r %s.zip * && rclone sync %s.zip %s/ && cd -'%(args.datetime_str, args.datetime_str, args.deploy_s3)
+        deploy_command += ' && cd train && zip -r %s.zip * && rclone sync %s.zip %s/ && rm *.zip && cd -'%(args.datetime_str, args.datetime_str, args.deploy_s3)
     else:
-        deploy_command += ' && rclone sync %s %s/%s'%(args.deploy_src, args.deploy_s3, args.datetime_str)
+        deploy_command += ' && rclone --exclude *.pyc sync %s %s/%s'%(args.deploy_src, args.deploy_s3, args.datetime_str)
     # os.system(deploy_command)
     print('>>>>>>>>>>>> deploying with: %s'%deploy_command)
     run_command_generic(deploy_command)

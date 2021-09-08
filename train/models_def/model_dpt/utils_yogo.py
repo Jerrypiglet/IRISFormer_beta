@@ -172,6 +172,7 @@ class Projector(nn.Module):
         # print(proj_q.shape, proj_k.shape, self.proj_kq_matmul(proj_q, proj_k).shape) # SSN: torch.Size([1, 2, 5120, 128]) torch.Size([1, 2, 128, 80]) torch.Size([1, 2, 5120, 80])
         proj_coef = self.proj_kq_matmul(proj_q, proj_k) / np.sqrt(C / h)
 
+        if_exp = True
         if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg_if_inject_proj_coef:
             # assert False, 'disabled for now'
             assert proj_coef_in is not None
@@ -179,6 +180,7 @@ class Projector(nn.Module):
             proj_coef_in = proj_coef_in.flatten(2).transpose(-1, -2).unsqueeze(1).repeat(1, self.head, 1, 1)
             # print(proj_coef_in.shape, proj_coef.shape) # torch.Size([2, 80, 256, 320]) torch.Size([2, 2, 5120, 80])
             proj_coef = proj_coef_in
+            if_exp = False
 
         # print('---->', proj_coef[0, 0, :5, 0])
         # print('====>', proj_coef[0, 0, :5, -1])
@@ -192,17 +194,23 @@ class Projector(nn.Module):
         else:
             output_dict = {'proj_coef': proj_coef.clone()}
 
-        if tokens_mask is not None:
-            # print(tokens_mask.shape, proj_coef.shape) # torch.Size([1, 320]) torch.Size([1, 2, 5120, 320])
-            # tokens_mask_dim4 = tokens_mask.unsqueeze(1).unsqueeze(1)
-            # proj_coef = proj_coef * tokens_mask_dim4 + torch.ones_like(proj_coef) * (-1e6) * (1. - tokens_mask_dim4) # masked softmax
-            proj_coef = torch.exp(proj_coef) / ((torch.exp(proj_coef) * tokens_mask_dim4).sum(-1, keepdims=True) + 1e-6)
-            proj_coef = proj_coef * tokens_mask_dim4
-            # print(tokens_mask[0])
-            # print(proj_coef[0][0].sum(-1)) # num of tokens that a pixel belong to: should be ones and zeros
-            # print(proj_coef[0][0].sum(0)) # num of pixels that a token maps to; float; not useful
+        if if_exp:
+            if tokens_mask is not None:
+                # print(tokens_mask.shape, proj_coef.shape) # torch.Size([1, 320]) torch.Size([1, 2, 5120, 320])
+                # tokens_mask_dim4 = tokens_mask.unsqueeze(1).unsqueeze(1)
+                # proj_coef = proj_coef * tokens_mask_dim4 + torch.ones_like(proj_coef) * (-1e6) * (1. - tokens_mask_dim4) # masked softmax
+                proj_coef = torch.exp(proj_coef) / ((torch.exp(proj_coef) * tokens_mask_dim4).sum(-1, keepdims=True) + 1e-6)
+                proj_coef = proj_coef * tokens_mask_dim4
+                # print(tokens_mask[0])
+                # print(proj_coef[0][0].sum(-1)) # num of tokens that a pixel belong to: should be ones and zeros
+                # print(proj_coef[0][0].sum(0)) # num of pixels that a token maps to; float; not useful
+            else:
+                proj_coef = F.softmax(proj_coef, dim=3)
         else:
-            proj_coef = F.softmax(proj_coef, dim=3)
+            if tokens_mask is not None:
+                proj_coef = proj_coef * tokens_mask_dim4
+            proj_coef = proj_coef / (proj_coef.sum(-1, keepdims=True)+1e-8)
+
 
         
         # print(proj_coef.shape) # torch.Size([-1, 2 (head num), 5120, 320]), torch.Size([-1, 2 (head num), 1280, 320]), torch.Size([-1, 2 (head num), 320, 320]), torch.Size([-1, 2 (head num), 80, 320]), 
