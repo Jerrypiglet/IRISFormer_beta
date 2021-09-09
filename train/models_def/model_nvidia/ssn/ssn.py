@@ -37,6 +37,7 @@ def calc_init_centroid(images, num_spixels_width, num_spixels_height):
         num_spixels = num_spixels_width * num_spixels_height
         labels = torch.arange(num_spixels, device=device).reshape(1, 1, *centroids.shape[-2:]).type_as(centroids)
         init_label_map = torch.nn.functional.interpolate(labels, size=(height, width), mode="nearest")
+        # print(init_label_map)
         init_label_map = init_label_map.repeat(batchsize, 1, 1, 1)
 
     init_label_map = init_label_map.reshape(batchsize, -1)
@@ -70,7 +71,7 @@ def get_hard_abs_labels(affinity_matrix, init_label_map, num_spixels_width):
 
 def ssn_iter(pixel_features,  n_iter,
              num_spixels_width, num_spixels_height, 
-             mask=None, 
+             mask_pixel=None, 
              index_add=False):
     """
     computing assignment iterations
@@ -93,6 +94,7 @@ def ssn_iter(pixel_features,  n_iter,
     num_spixels = num_spixels_width * num_spixels_height
 
     spixel_features, init_label_map = calc_init_centroid(pixel_features, num_spixels_width, num_spixels_height)
+    # print(init_label_map.shape, print(init_label_map))
 
     if not index_add:
         abs_indices = get_abs_indices(init_label_map, num_spixels_width) 
@@ -103,9 +105,9 @@ def ssn_iter(pixel_features,  n_iter,
     pixel_features = pixel_features.reshape(*pixel_features.shape[:2], -1)
     permuted_pixel_features = pixel_features.permute(0, 2, 1).contiguous()
 
-    if mask is None:
-        mask = torch.ones((batch_size, height, width), dtype=torch.float32, device=spixel_features.device)
-    mask_flattened = mask.reshape(batch_size, 1, -1)
+    if mask_pixel is None:
+        mask_pixel = torch.ones((batch_size, height, width), dtype=torch.float32, device=spixel_features.device)
+    mask_pixel_flattened = mask_pixel.reshape(batch_size, 1, -1)
 
 
     # import time
@@ -132,14 +134,16 @@ def ssn_iter(pixel_features,  n_iter,
             init_label_map, 
             num_spixels_width, num_spixels_height) 
 
-        # print(dist_matrix.shape, mask_flattened.shape, mask.shape)
-        dist_matrix_masked_dense = dist_matrix * mask_flattened + torch.ones_like(dist_matrix) * 1e8 * (1. - mask_flattened)
+        # print(dist_matrix.shape, mask_pixel_flattened.shape, mask.shape)
+
+        dist_matrix_masked_dense = dist_matrix * mask_pixel_flattened + torch.ones_like(dist_matrix) * 1e8 * (1. - mask_pixel_flattened)
+        # print((dist_matrix * mask_pixel_flattened).shape, torch.max(dist_matrix * mask_pixel_flattened), torch.min(dist_matrix * mask_pixel_flattened), torch.median(dist_matrix * mask_pixel_flattened), '---')
 
         affinity_matrix = (-dist_matrix_masked_dense).softmax(1)
         reshaped_affinity_matrix = affinity_matrix.reshape(-1) 
 
-        # print(dist_matrix.shape, mask_flattened.shape) # torch.Size([1, 9, 81920]) torch.Size([1, 1, 81920])
-        # affinity_matrix_normalized_by_pixels = (-dist_matrix).softmax(2) * mask_flattened # torch.Size([1, 48, 76800])
+        # print(dist_matrix.shape, mask_pixel_flattened.shape) # torch.Size([1, 9, 81920]) torch.Size([1, 1, 81920])
+        # affinity_matrix_normalized_by_pixels = (-dist_matrix).softmax(2) * mask_pixel_flattened # torch.Size([1, 48, 76800])
 
         # M-step: update the centroids
 
@@ -188,8 +192,24 @@ def ssn_iter(pixel_features,  n_iter,
 
     if not index_add:
         #abs_affinity: B x J x N
-        assert False
-        return abs_affinity, None, dist_matrix, spixel_features, spixel_pixel_mul
+        # assert False
+        # print(dist_matrix.shape, torch.max(dist_matrix), torch.min(dist_matrix), torch.median(dist_matrix))
+        reshaped_dist_matrix_masked_dense = dist_matrix.reshape(-1)
+        # print(reshaped_dist_matrix_masked_dense.shape)
+        # print(reshaped_dist_matrix_masked_dense.shape, torch.max(reshaped_dist_matrix_masked_dense), torch.min(reshaped_dist_matrix_masked_dense), torch.median(reshaped_dist_matrix_masked_dense))
+        sparse_dist_matrix = torch.sparse_coo_tensor(abs_indices[:, mask], reshaped_dist_matrix_masked_dense[mask]) #Bx9xN
+        sparse_dist_matrix_mask = torch.sparse_coo_tensor(abs_indices[:, mask], torch.ones_like(reshaped_dist_matrix_masked_dense[mask])) #Bx9xN
+        # print(abs_indices[:, mask].shape, reshaped_dist_matrix_masked_dense[mask].shape, sparse_dist_matrix.shape, '-====')
+        dist_matrix_sparse = sparse_dist_matrix.to_dense().contiguous() #BxJxN
+        dist_matrix_sparse_mask = sparse_dist_matrix_mask.to_dense().contiguous() #BxJxN
+        dist_matrix_sparse = dist_matrix_sparse * dist_matrix_sparse_mask + torch.ones_like(dist_matrix_sparse_mask) * 1e8 * (1. - dist_matrix_sparse_mask)
+        # print(dist_matrix_sparse.shape, torch.max(dist_matrix_sparse), torch.min(dist_matrix_sparse), torch.median(dist_matrix_sparse), mask_pixel_flattened.shape)
+        dist_matrix_sparse = dist_matrix_sparse * mask_pixel_flattened + torch.ones_like(dist_matrix_sparse) * 1e8 * (1. - mask_pixel_flattened)
+        # print(dist_matrix_sparse.shape, torch.max(dist_matrix_sparse), torch.min(dist_matrix_sparse), torch.median(dist_matrix_sparse))
+
+        abs_affinity_normalized_by_pixels = (-dist_matrix_sparse).softmax(2) * mask_pixel_flattened # torch.Size([1, 48, 76800])\
+
+        return abs_affinity, abs_affinity_normalized_by_pixels, dist_matrix_masked_dense, spixel_features, spixel_pixel_mul, None
     else:
         #abs_affinity:    B x J x N
         #affinity_matrix: B x 9 x N
@@ -199,9 +219,9 @@ def ssn_iter(pixel_features,  n_iter,
 
         dist_matrix_sparse = torch.zeros(spixel_features_w.shape[0], num_spixels, height*width, device=spixel_features_w.device) + 1e8 # BxJxN
         dist_matrix_sparse = msparse2dense(dist_matrix_sparse, dist_matrix, index_abs2rel)
-        abs_affinity_normalized_by_pixels = (-dist_matrix_sparse).softmax(2) * mask_flattened # torch.Size([1, 48, 76800])\
+        abs_affinity_normalized_by_pixels = (-dist_matrix_sparse).softmax(2) * mask_pixel_flattened # torch.Size([1, 48, 76800])\
 
-        return abs_affinity, abs_affinity_normalized_by_pixels, dist_matrix_masked_dense, spixel_features, spixel_pixel_mul
+        return abs_affinity, abs_affinity_normalized_by_pixels, dist_matrix_masked_dense, spixel_features, spixel_pixel_mul, index_abs2rel
 
 def msparse2dense(
     abs_affinity,    #BxJxN

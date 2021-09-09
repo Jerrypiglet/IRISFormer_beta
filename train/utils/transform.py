@@ -260,7 +260,12 @@ class Pad(object):
         self.padding_with = padding_with
         assert isinstance(self.padding_with, numbers.Number)
 
-    def __call__(self, image, label=None, if_channel_first=False, if_channel_2_input=False, name=''):
+    def __call__(self, image, label=None, if_channel_first=False, if_channel_2_input=False, name='', if_padding_constant=False):
+        if if_padding_constant:
+            pad_mode = cv2.BORDER_CONSTANT
+        else:
+            pad_mode = cv2.BORDER_REFLECT
+            
         if image is None:
             return image
         # h, w = label.shape
@@ -283,11 +288,11 @@ class Pad(object):
                 raise (RuntimeError("segtransform.Pad() need padding while padding argument is None\n"))
             # if name=='brdf_loss_mask':
             #     print(image.shape)
-            image = cv2.copyMakeBorder(image, 0, pad_h, 0, pad_w, cv2.BORDER_REFLECT, value=self.padding_with)
+            image = cv2.copyMakeBorder(image, 0, pad_h, 0, pad_w, pad_mode, value=self.padding_with)
             # if name=='brdf_loss_mask':
             #     print(image.shape, '---')
             if label is not None:    
-                label = cv2.copyMakeBorder(label, 0, pad_h, 0, pad_w, cv2.BORDER_REFLECT, value=self.padding_with)
+                label = cv2.copyMakeBorder(label, 0, pad_h, 0, pad_w, pad_mode, value=self.padding_with)
 
         if if_channel_first:
             if c == 1:

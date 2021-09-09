@@ -277,7 +277,7 @@ class openrooms(data.Dataset):
             if mask.dtype not in [np.int32, np.float32]:
                 mask = self.extra_op(mask, name='mask') # if resize, willl not work because mask is of dtype int32
             seg = self.extra_op(seg, if_channel_first=True, name='seg')
-            brdf_loss_mask = self.extra_op(brdf_loss_mask, if_channel_2_input=True, name='brdf_loss_mask')
+            brdf_loss_mask = self.extra_op(brdf_loss_mask, if_channel_2_input=True, name='brdf_loss_mask', if_padding_constant=True)
 
         hdr_scale = 1.
 

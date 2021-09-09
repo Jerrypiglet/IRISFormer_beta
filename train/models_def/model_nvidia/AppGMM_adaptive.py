@@ -73,18 +73,19 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
             if mask is not None:
                 assert mask.shape==(batch_size, H, W)
             ssn.ssn_iter_to_use = ssn_fullJ.ssn_iter if self.if_dense else ssn.ssn_iter
-            abs_affinity, abs_affinity_normalized_by_pixels, dist_matrix, spixel_features, spixel_pixel_mul = \
+            abs_affinity, abs_affinity_normalized_by_pixels, dist_matrix, spixel_features, spixel_pixel_mul, index_abs2rel = \
                 ssn.ssn_iter_to_use(
                     feats_in, n_iter=self.n_iter, 
                     num_spixels_width=self.num_spixels_width, 
                     num_spixels_height=self.num_spixels_height, 
-                    mask=mask, 
+                    mask_pixel=mask, 
                     index_add=index_add)
             # print(abs_affinity.shape, abs_affinity_normalized_by_pixels.shape)
             abs_affinity = abs_affinity.view(batch_size, J, H, W)
             abs_affinity_normalized_by_pixels = abs_affinity_normalized_by_pixels.view(batch_size, J, H, W)
         else:
             abs_affinity = affinity_in
+            index_abs2rel = None
         assert abs_affinity.shape[1]==J
 
         # print(abs_affinity.shape, dist_matrix.shape, spixel_features.shape) # torch.Size([1, J, H, W]) torch.Size([1, 9, HW]) torch.Size([1, D, J]); h, w being the dimensions of spixels, j=h*w
@@ -103,6 +104,7 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
             'Q': recon_return_dict['Q'], 
             'C': recon_return_dict['C'], 
             'Q_2D': recon_return_dict['Q_2D'], 
+            'index_abs2rel': index_abs2rel
         })
         if affinity_in is None:
             res.update({
