@@ -4,7 +4,8 @@ import timm
 import types
 import math
 import torch.nn.functional as F
-from models_def.model_nvidia.AppGMM_adaptive import SSNFeatsTransformAdaptive
+# from models_def.model_nvidia.AppGMM_adaptive import SSNFeatsTransformAdaptive
+from models_def.model_nvidia.AppGMM_adaptive_fixed_recon import SSNFeatsTransformAdaptive
 import numpy as np
 
 activations = {}
@@ -231,6 +232,8 @@ def get_SSN_tokens_CAv2(self, opt, pretrained_activations, input_dict_extra={}):
     
     batch_size, d = backbone_feat_init.shape[0], backbone_feat_init.shape[1]
     spixel_dims = [input_dict_extra['im_height']//self.patch_size[0], input_dict_extra['im_width']//self.patch_size[1]]
+    # if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_ssn_matseg_on_lower_res:
+    #     spixel_dims = [spixel_dims[0]//4, spixel_dims[1]//4]
 
     ssn_op = SSNFeatsTransformAdaptive(None, spixel_dims=spixel_dims, if_dense=opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_dense)
     # print(spixel_dims)
@@ -263,7 +266,7 @@ def get_SSN_tokens_CAv2(self, opt, pretrained_activations, input_dict_extra={}):
             affinity_in = torch.cat([affinity_gt, torch.zeros(batch_size, spixel_dims[0]*spixel_dims[1]-50, mask_resized.shape[-2], mask_resized.shape[-1]).float().cuda()], dim=1)
 
         affinity_in_normalizedJ = affinity_in / (torch.sum(affinity_in, 1, keepdims=True) + 1e-6)
-        ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, affinity_in=affinity_in_normalizedJ, mask=mask_resized, if_return_codebook_only=True, if_hard_affinity_for_c=False, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
+        ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, affinity_in=affinity_in_normalizedJ, mask=mask_resized, if_return_codebook_only=True, if_hard_affinity_for_c=False, scale_down_gamma_and_tensor=(1, 1./4.)) # Q: [im_height, im_width]
         abs_affinity_normalized_by_pixels = affinity_in / (affinity_in.sum(-1, keepdims=True).sum(-2, keepdims=True)+1e-6)
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg_if_duplicate_tokens:
             tokens_mask = torch.ones((affinity_in.shape[0], affinity_in.shape[1])).cuda().float()
@@ -274,17 +277,26 @@ def get_SSN_tokens_CAv2(self, opt, pretrained_activations, input_dict_extra={}):
         # print(tokens_mask, input_dict_extra['return_dict_matseg']['num_mat_masks'])
     else:
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from == 'matseg':
-            ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, feats_in=input_dict_extra['return_dict_matseg']['embedding'], mask=mask_resized, if_return_codebook_only=True, if_hard_affinity_for_c=if_hard_affinity_for_c, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
+            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_ssn_matseg_on_lower_res:
+                ssn_return_dict = ssn_op(
+                    tensor_to_transform = backbone_feat_init, 
+                    feats_in = F.interpolate(input_dict_extra['return_dict_matseg']['embedding'], scale_factor=1./4., mode='bilinear'), 
+                    mask = F.interpolate(mask_resized.unsqueeze(1), scale_factor=1./4., mode='nearest').squeeze(1), 
+                    if_return_codebook_only=True, if_hard_affinity_for_c=if_hard_affinity_for_c, scale_down_gamma_and_tensor=(1, 1), if_assert_no_scale=True) # Q: [im_height, im_width]
+            else:
+                ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, feats_in=input_dict_extra['return_dict_matseg']['embedding'], mask=mask_resized, 
+                    if_return_codebook_only=True, if_hard_affinity_for_c=if_hard_affinity_for_c, scale_down_gamma_and_tensor=(1, 1./4.)) # Q: [im_height, im_width]
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from == 'matseg-2':
-            ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, feats_in=input_dict_extra['return_dict_matseg']['feats_matseg_dict']['p0'], mask=mask_resized, if_return_codebook_only=True, if_hard_affinity_for_c=if_hard_affinity_for_c, scale_down_gamma_tensor=(1, 1./4.)) # Q: [im_height, im_width]
+            ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, feats_in=input_dict_extra['return_dict_matseg']['feats_matseg_dict']['p0'], mask=mask_resized, if_return_codebook_only=True, if_hard_affinity_for_c=if_hard_affinity_for_c, scale_down_gamma_and_tensor=(1, 1./4.)) # Q: [im_height, im_width]
         elif opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from == 'backbone':
-            ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, feats_in=backbone_feat_init, mask=F.interpolate(mask_resized.unsqueeze(1), scale_factor=1./4., mode='nearest').squeeze(1), if_return_codebook_only=True, if_hard_affinity_for_c=if_hard_affinity_for_c, scale_down_gamma_tensor=(1, 1)) # Q: [im_height/4, im_width/4]
+            ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, feats_in=backbone_feat_init, mask=F.interpolate(mask_resized.unsqueeze(1), scale_factor=1./4., mode='nearest').squeeze(1), if_return_codebook_only=True, if_hard_affinity_for_c=if_hard_affinity_for_c, scale_down_gamma_and_tensor=(1, 1)) # Q: [im_height/4, im_width/4]
             # assert False
 
         # abs_affinity = ssn_return_dict['abs_affinity'] # fixed for now
         # # print(abs_affinity.shape, abs_affinity[0].sum(-1).sum(-1), abs_affinity[0].sum(0)) # torch.Size([1, 320, 256, 320]); normalized by **spixel dim (1)**
         # dist_matrix = ssn_return_dict['dist_matrix'] # fixed for now
         abs_affinity_normalized_by_pixels = ssn_return_dict['abs_affinity_normalized_by_pixels'] # fixed for now
+        # print(abs_affinity_normalized_by_pixels.shape)
         tokens_mask = None
         affinity_in_normalizedJ = None
 
@@ -301,7 +313,7 @@ def get_SSN_tokens_CAv2(self, opt, pretrained_activations, input_dict_extra={}):
     # x = self.patch_embed.proj(c).flatten(2).transpose(1, 2) # torch.Size([8, 320, 768]); will be Identity op in qkv recon
     x = c.flatten(2).transpose(1, 2) # torch.Size([8, 320, 768]); will be Identity op in qkv recon
 
-    extra_return_dict.update({'Q': ssn_return_dict['Q'], 'matseg_affinity': ssn_return_dict['Q_2D'], 'abs_affinity_normalized_by_pixels': abs_affinity_normalized_by_pixels, 'affinity_in_normalizedJ': affinity_in_normalizedJ, 'tokens_mask': tokens_mask})
+    extra_return_dict.update({'Q': ssn_return_dict['Q'], 'matseg_affinity': ssn_return_dict['abs_affinity'], 'abs_affinity_normalized_by_pixels': abs_affinity_normalized_by_pixels, 'affinity_in_normalizedJ': affinity_in_normalizedJ, 'tokens_mask': tokens_mask})
 
     return x, extra_return_dict
 

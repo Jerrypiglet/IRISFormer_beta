@@ -19,13 +19,14 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
     '''
 
     def __init__(
-            self, args, spixel_dims, n_iter=10, if_dense=False):
+            self, args, spixel_dims, n_iter=10, if_dense=False, index_add=False):
         '''
         '''
         super().__init__()
         # self.learning_rate = args.cfg.MODEL_GMM.learning_rate
         # self.ssn_grid_spixel= args.cfg.MODEL_GMM.ssn_grid_spixel
         self.ssn_grid_spixel = False
+        self.index_add = index_add # false: no aliasing
         # self.src_idx= args.cfg.MODEL_GMM.src_idx
 
         # self.spixel_nums =  (21, 15)  #w, h
@@ -44,7 +45,7 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
 
         self.if_dense = if_dense
 
-    def forward(self, tensor_to_transform, feats_in=None, affinity_in=None, if_affinity_normalized_by_pixels=False, mask=None, scale_down_gamma_and_tensor=1, index_add=True, if_return_codebook_only=False, if_assert_no_scale=False, if_hard_affinity_for_c=False):
+    def forward(self, tensor_to_transform, feats_in=None, affinity_in=None, if_affinity_normalized_by_pixels=False, mask=None, scale_down_gamma_and_tensor=1, if_return_codebook_only=False, if_assert_no_scale=False, if_hard_affinity_for_c=False):
         '''
         INPUTS:
         tensor_to_transform -      nbatch x D1 x H x W
@@ -65,6 +66,8 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
 
         # feats_in = batch['feats_in']
 
+        self.if_print = False
+
 
         if affinity_in is None:
             batch_size, D, H, W = feats_in.shape
@@ -79,11 +82,15 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
                     num_spixels_width=self.num_spixels_width, 
                     num_spixels_height=self.num_spixels_height, 
                     mask_pixel=mask, 
-                    index_add=index_add)
+                    index_add=self.index_add)
+            if self.if_print:
+                print(feats_in.shape, mask.shape, self.index_add, '>>>>SSN>>>', abs_affinity.shape, abs_affinity_normalized_by_pixels.shape) # torch.Size([1, 4, 256, 320]) torch.Size([1, 256, 320]) False >>>>SSN>>> torch.Size([1, 320, 81920]) torch.Size([1, 320, 81920])
+                print(abs_affinity_normalized_by_pixels[0].sum(-1)) # should be all ones and zeros
+                # print(abs_affinity[0].sum(1)) # should be all ones
                     
-            print(feats_in.shape, mask.shape, abs_affinity.shape, abs_affinity_normalized_by_pixels.shape)
-            abs_affinity = abs_affinity.view(batch_size, J, H, W)
-            abs_affinity_normalized_by_pixels = abs_affinity_normalized_by_pixels.view(batch_size, J, H, W)
+            # print(feats_in.shape, mask.shape, abs_affinity.shape, abs_affinity_normalized_by_pixels.shape)
+            abs_affinity = abs_affinity.view(batch_size, J, H, W) # NOT normalized
+            abs_affinity_normalized_by_pixels = abs_affinity_normalized_by_pixels.view(batch_size, J, H, W) # normalized by pixels
         else:
             abs_affinity = affinity_in
             index_abs2rel = None
@@ -96,8 +103,12 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
             abs_affinity = abs_affinity / (abs_affinity.sum(1, keepdim=True)+1e-6)
             abs_affinity_normalized_by_pixels = abs_affinity / (abs_affinity.sum(-1, keepdims=True).sum(-2, keepdims=True)+1e-6)
 
-        recon_return_dict = self.recon_tensor(abs_affinity, tensor_to_transform, scale_down_gamma_and_tensor=scale_down_gamma_and_tensor, if_return_codebook_only=if_return_codebook_only, \
-            if_assert_no_scale=if_assert_no_scale, if_affinity_normalized_by_pixels=if_affinity_normalized_by_pixels, if_hard_affinity_for_c=if_hard_affinity_for_c)
+        if affinity_in is None:
+            recon_return_dict = self.recon_tensor(abs_affinity_normalized_by_pixels, tensor_to_transform, scale_down_gamma_and_tensor=scale_down_gamma_and_tensor, if_return_codebook_only=if_return_codebook_only, \
+                if_assert_no_scale=if_assert_no_scale, if_affinity_normalized_by_pixels=True, if_hard_affinity_for_c=if_hard_affinity_for_c, abs_affinity_J=abs_affinity)
+        else:
+            recon_return_dict = self.recon_tensor(abs_affinity, tensor_to_transform, scale_down_gamma_and_tensor=scale_down_gamma_and_tensor, if_return_codebook_only=if_return_codebook_only, \
+                if_assert_no_scale=if_assert_no_scale, if_affinity_normalized_by_pixels=if_affinity_normalized_by_pixels, if_hard_affinity_for_c=if_hard_affinity_for_c)
 
         res = dict({
             'abs_affinity': abs_affinity, 
@@ -118,9 +129,9 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
 
         return  res
 
-    def recon_tensor(self, gamma, tensor_to_transform, scale_down_gamma_and_tensor=1, if_return_codebook_only=False, if_assert_no_scale=False, if_affinity_normalized_by_pixels=False, if_hard_affinity_for_c=False):
+    def recon_tensor(self, gamma, tensor_to_transform, abs_affinity_J=None, scale_down_gamma_and_tensor=1, if_return_codebook_only=False, if_assert_no_scale=False, if_affinity_normalized_by_pixels=False, if_hard_affinity_for_c=False):
         '''
-        gamma: Q, BxJxHxW
+        gamma: Q, BxJxHxW; **normalized by pixels N**
         tensor_to_transform: BxDxHxW, where N*scale_down_gamma_and_tensor=HW
         scale_down_gamma_and_tensor
         '''
@@ -129,18 +140,26 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
         else:
             scale_down_gamma = scale_down_gamma_and_tensor
             scale_down_tensor = 1
+
+        if self.if_print:
+            print(scale_down_gamma, scale_down_tensor, gamma.shape, tensor_to_transform.shape, if_assert_no_scale, if_affinity_normalized_by_pixels)
             
         if scale_down_gamma != 1: # scale Q
             assert not if_assert_no_scale # asserting gamma has been pre-resized
             # print(gamma.shape, tensor_to_transform.shape, scale_down_gamma_and_tensor)
-            gamma_resized = F.interpolate(gamma, scale_factor=1./float(scale_down_gamma), mode='bilinear')
-            gamma_resized = gamma_resized / (torch.sum(gamma_resized, 1, keepdims=True)+1e-6) # **keep normalized by spixel dim**
-            gamma = gamma_resized
+            assert False, 'disabled resizing gamma for now because of aliasing issue (especially in sparse SSN)'
+            gamma = F.interpolate(gamma, scale_factor=1./float(scale_down_gamma), mode='bilinear')
+            if self.if_print:
+                print('downnnnnnnn gamma by ', 1./float(scale_down_gamma))
+            # gamma_resized = gamma_resized / (torch.sum(gamma_resized, 1, keepdims=True)+1e-6) # **keep normalized by spixel dim**
+            # gamma = gamma_resized
         if scale_down_tensor != 1: # scale tensor
             assert not if_assert_no_scale
             # print(gamma.shape, tensor_to_transform.shape, scale_down_gamma_and_tensor)
             tensor_to_transform = F.interpolate(tensor_to_transform, scale_factor=1./float(scale_down_tensor), mode='bilinear')
             # tensor_to_transform_resized = tensor_to_transform_resized / (torch.sum(tensor_to_transform_resized, 1, keepdims=True)+1e-6)
+            if self.if_print:
+                print('downnnnnnnn tensor by ', 1./float(scale_down_tensor))
         
         if gamma.shape[-2::]!=tensor_to_transform.shape[-2::]:
             print('gamma.shape[-2::]!=tensor_to_transform.shape[-2::]!', gamma.shape, tensor_to_transform.shape)
@@ -156,23 +175,26 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
         #     print('=ad=f=asdfsda=f')
         # else:
         if not if_affinity_normalized_by_pixels:
-            Q_M_Jnormalized = gamma / (gamma.sum(-1, keepdims=True).sum(-2, keepdims=True)+1e-6) # [B, J, H, W]  # **normalize by pixels HW**
+            Q_M_pixels_normalized = gamma / (gamma.sum(-1, keepdims=True).sum(-2, keepdims=True)+1e-6) # [B, J, H, W]  # **normalize by pixels HW**
         else:
-            Q_M_Jnormalized = gamma
+            Q_M_pixels_normalized = gamma
 
-        # Q_M_Jnormalized = gamma
-        # print(Q_M_Jnormalized.sum(-1).sum(-1))
+        # Q_M_pixels_normalized = gamma
+        if self.if_print:
+            print('-- recon', Q_M_pixels_normalized.sum(-1).sum(-1))
 
         tensor_to_transform_flattened = tensor_to_transform.permute(0, 2, 3, 1).view(batch_size, -1, D)
-        tensor_to_transform_J = Q_M_Jnormalized.view(batch_size, J, -1) @ tensor_to_transform_flattened # [B, J, D], the code book
+        tensor_to_transform_J = Q_M_pixels_normalized.view(batch_size, J, -1) @ tensor_to_transform_flattened # [B, J, D], the code book
         tensor_to_transform_J = tensor_to_transform_J.permute(0, 2, 1) # [B, D, J], the code book
+        # print(tensor_to_transform_J)
 
         # print('====', tensor_to_transform_J.shape, tensor_to_transform_J[0])
 
         if if_return_codebook_only:
             im_single_hat = None
         else:
-            im_single_hat = tensor_to_transform_J @ gamma.view(batch_size, J, N) # (B, D, N) where N = H * W
+            assert abs_affinity_J is not None
+            im_single_hat = tensor_to_transform_J @ abs_affinity_J.view(batch_size, J, N) # (B, D, N) where N = H * W
             im_single_hat = im_single_hat.view(batch_size, D, H, W)
 
         return {'C': tensor_to_transform_J, 'Q': gamma.view(batch_size, J, N), 'I_hat': im_single_hat, 'Q_2D': gamma}
