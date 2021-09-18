@@ -3,6 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from models_def.model_dpt.utils_yogo import CrossAttention_CAv2
 from utils.utils_misc import *
+from models_def.model_dpt.utils_yogo import LayerNormLastTwo
 
 from .base_model import BaseModel
 from .blocks import (
@@ -117,7 +118,6 @@ class DPT_CAv2(BaseModel):
 
         module_dict_ca = {}
         if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA and not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_grid_assembling:
-            from models_def.model_dpt.utils_yogo import LayerNormLastTwo
             token_c = 768
             in_c = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.im_feat_init_c
             output_later_dims = [256, 512, 768, 768][::-1]

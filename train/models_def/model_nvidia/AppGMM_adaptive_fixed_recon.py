@@ -26,7 +26,7 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
         # self.learning_rate = args.cfg.MODEL_GMM.learning_rate
         # self.ssn_grid_spixel= args.cfg.MODEL_GMM.ssn_grid_spixel
         self.ssn_grid_spixel = False
-        self.index_add = index_add # false: no aliasing
+        self.index_add = index_add # false: no aliasing; true: faster but aliasing
         # self.src_idx= args.cfg.MODEL_GMM.src_idx
 
         # self.spixel_nums =  (21, 15)  #w, h
@@ -67,7 +67,6 @@ class SSNFeatsTransformAdaptive(torch.nn.Module):
         # feats_in = batch['feats_in']
 
         self.if_print = False
-
 
         if affinity_in is None:
             batch_size, D, H, W = feats_in.shape

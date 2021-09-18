@@ -895,8 +895,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                                     abs_affinity_normalized_by_pixels_input_vis, tid)
 
                                 # print(np.sum(abs_affinity_normalized_by_pixels_input_vis), '----------')
-                                abs_affinity_normalized_by_pixels_input_vis = abs_affinity_normalized_by_pixels_input_vis / (np.amax(abs_affinity_normalized_by_pixels_input_vis)+1e-6)
-                                # abs_affinity_normalized_by_pixels_input_vis = np.clip(abs_affinity_normalized_by_pixels_input_vis * 256 * 320 / 10., 0., 1.)
+                                # abs_affinity_normalized_by_pixels_input_vis = abs_affinity_normalized_by_pixels_input_vis / (np.amax(abs_affinity_normalized_by_pixels_input_vis)+1e-6)
+                                abs_affinity_normalized_by_pixels_input_vis = np.clip(abs_affinity_normalized_by_pixels_input_vis * 256 * 320 / 10., 0., 1.)
                                 writer.add_image('VAL_DPT-SSN_abs_affinity_normalized_by_pixels_sample%d/head%d_spixel(%d)%d-%d_PRED'%(sample_idx, head, spixel_h*spixel_hw[1]+spixel_w, spixel_h*patch_size, spixel_w*patch_size), \
                                     vis_disp_colormap(abs_affinity_normalized_by_pixels_input_vis, normalize=False, cmap_name='viridis')[0], tid, dataformats='HWC')
 

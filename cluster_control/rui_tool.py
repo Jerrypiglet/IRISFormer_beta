@@ -55,7 +55,8 @@ def parse_args():
     create_parser.add_argument('--resume', type=str, help='resume_from: e.g. 20201129-232627', default='NoCkpt')
     create_parser.add_argument('--deploy_src', type=str, help='deploy to target path', default='~/Documents/Projects/semanticInverse/train/')
     create_parser.add_argument('--deploy_s3', type=str, help='deploy s3 container', default='s3mm1:train/train')
-    create_parser.add_argument('--deploy_tar', type=str, help='deploy to target path', default='/viscompfs/users/ruizhu/train')
+    create_parser.add_argument('--deploy_tar', type=str, help='deploy to target path', default='/viscompfs/users/ruizhu/job_list')
+    create_parser.add_argument('--deploy_train_path', type=str, help='deploy to target path', default='/viscompfs/users/ruizhu/train')
     create_parser.add_argument('--python_path', type=str, help='python path in pod', default='/viscompfs/users/ruizhu/envs/py38/bin/python')
     create_parser.add_argument('--pip_path', type=str, help='python path in pod', default='/viscompfs/users/ruizhu/envs/py38/bin/pip')
     create_parser.add_argument('--gpus', type=int, help='nubmer of GPUs', default=2)  
@@ -216,14 +217,14 @@ def create(args):
 
         command_str = command_str.replace('python', args.python_path)
         if args.deploy:
-            args.deploy_tar += '-%s'%datetime_str
+            args.deploy_tar += '/train-%s'%datetime_str
             args.deploy_s3 += '-%s'%datetime_str
             if args.zip:
-                command_str = 'rclone --progress copy %s/tmp.zip %s/ && cd %s && unzip tmp.zip && '%(args.deploy_s3, args.deploy_tar, args.deploy_tar) + command_str
+                command_str = 'mkdir %s && rclone --progress copy %s/tmp.zip %s/ && cd %s && unzip tmp.zip && '%(args.deploy_tar, args.deploy_s3, args.deploy_tar, args.deploy_tar) + command_str
             else:
                 command_str = 'rclone --progress copy %s %s && cd %s && '%(args.deploy_s3, args.deploy_tar, args.deploy_tar) + command_str
         else:
-            command_str = 'cd %s && '%(args.deploy_tar) + command_str
+            command_str = 'cd %s && '%(args.deploy_train_path) + command_str
         command_str = command_str.replace('pip', args.pip_path)
             
         yaml_content['spec']['template']['spec']['containers'][0]['args'][0] += command_str

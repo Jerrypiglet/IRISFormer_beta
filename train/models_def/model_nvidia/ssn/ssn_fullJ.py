@@ -71,7 +71,7 @@ def get_hard_abs_labels(affinity_matrix, init_label_map, num_spixels_width):
 
 def ssn_iter(pixel_features,  n_iter,
              num_spixels_width, num_spixels_height, 
-             mask=None, 
+             mask_pixel=None, 
              index_add=True):
     """
     computing assignment iterations
@@ -131,9 +131,9 @@ def ssn_iter(pixel_features,  n_iter,
         #     init_label_map, 
         #     num_spixels_width, num_spixels_height) 
 
-        if mask is None:
-            mask = torch.ones((batch_size, height, width), dtype=torch.float32, device=spixel_features.device)
-        mask_flattened = mask.reshape(batch_size, 1, -1)
+        if mask_pixel is None:
+            mask_pixel = torch.ones((batch_size, height, width), dtype=torch.float32, device=spixel_features.device)
+        mask_flattened = mask_pixel.reshape(batch_size, 1, -1)
         # print(torch.unique(mask_flattened))
         # print(spixel_features.shape, pixel_features.shape) # torch.Size([1, 4, 192]) torch.Size([1, 4, 81920])
         dist_matrix_full = torch.cdist(spixel_features.transpose(-1, -2), pixel_features.transpose(-1, -2), p=2) # torch.Size([1, 48, 76800])
@@ -205,7 +205,7 @@ def ssn_iter(pixel_features,  n_iter,
     # import ipdb; ipdb.set_trace()
     # if not index_add:
     #abs_affinity: B x J x N
-    return abs_affinity, abs_affinity_normalized_by_pixels, dist_matrix_full, spixel_features, spixel_pixel_mul
+    return abs_affinity, abs_affinity_normalized_by_pixels, dist_matrix_full, spixel_features, spixel_pixel_mul, None
     # else:
     #     #abs_affinity:    B x J x N
     #     #affinity_matrix: B x 9 x N

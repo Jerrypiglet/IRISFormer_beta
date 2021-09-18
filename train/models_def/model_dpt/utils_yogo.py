@@ -153,7 +153,7 @@ class Projector(nn.Module):
 
     def forward(self, x, x_t, proj_coef_in=None, tokens_mask=None, im_mask=None):
         # print(x.shape, x_t.shape) # torch.Size([1, 512, 5120]) torch.Size([1, 768, 320])
-        # print(proj_coef_in, tokens_mask, im_mask.shape)
+        # print(proj_coef_in, tokens_mask.shape, im_mask.shape) # None torch.Size([1, 320]) torch.Size([1, 1, 5120])
         # print('----', x_t[0, :5, 0])
         # print('====', x_t[0, :5, -1])
 
@@ -169,7 +169,14 @@ class Projector(nn.Module):
         # -> N, h, HW, c/H
         proj_q = proj_q.view(N, h, C // h, -1).permute(0, 1, 3, 2)
         # N, h, HW, C/h * N, h, C/h, L -> N, h, HW, L
-        # print(proj_q.shape, proj_k.shape, self.proj_kq_matmul(proj_q, proj_k).shape) # SSN: torch.Size([1, 2, 5120, 128]) torch.Size([1, 2, 128, 80]) torch.Size([1, 2, 5120, 80])
+        # print(proj_q.shape, proj_k.shape, proj_v.shape, self.proj_kq_matmul(proj_q, proj_k).shape) # SSN: torch.Size([1, 2, 5120, 128]) torch.Size([1, 2, 128, 320]) torch.Size([1, 2, 128, 320]) torch.Size([1, 2, 5120, 320])
+
+        if tokens_mask is not None:
+            tokens_mask_dim4 = tokens_mask.unsqueeze(1).unsqueeze(1)
+
+        if tokens_mask is not None:
+            proj_k = proj_k * tokens_mask_dim4
+            proj_v = proj_v * tokens_mask_dim4
         proj_coef = self.proj_kq_matmul(proj_q, proj_k) / np.sqrt(C / h)
 
         if_exp = True
@@ -189,7 +196,6 @@ class Projector(nn.Module):
 
         if tokens_mask is not None:
             # print(tokens_mask.shape, proj_coef.shape) # torch.Size([1, 320]) torch.Size([1, 2, 5120, 320])
-            tokens_mask_dim4 = tokens_mask.unsqueeze(1).unsqueeze(1)
             output_dict = {'proj_coef': proj_coef.clone() * tokens_mask_dim4}
         else:
             output_dict = {'proj_coef': proj_coef.clone()}
@@ -199,7 +205,7 @@ class Projector(nn.Module):
                 # print(tokens_mask.shape, proj_coef.shape) # torch.Size([1, 320]) torch.Size([1, 2, 5120, 320])
                 # tokens_mask_dim4 = tokens_mask.unsqueeze(1).unsqueeze(1)
                 # proj_coef = proj_coef * tokens_mask_dim4 + torch.ones_like(proj_coef) * (-1e6) * (1. - tokens_mask_dim4) # masked softmax
-                proj_coef = torch.exp(proj_coef) / ((torch.exp(proj_coef) * tokens_mask_dim4).sum(-1, keepdims=True) + 1e-6)
+                proj_coef = torch.exp(proj_coef) * tokens_mask_dim4 / ((torch.exp(proj_coef) * tokens_mask_dim4).sum(-1, keepdims=True) + 1e-8)
                 proj_coef = proj_coef * tokens_mask_dim4
                 # print(tokens_mask[0])
                 # print(proj_coef[0][0].sum(-1)) # num of tokens that a pixel belong to: should be ones and zeros
@@ -237,8 +243,13 @@ class Projector(nn.Module):
         if tokens_mask is not None:
             proj_v = proj_v * tokens_mask_dim4
             proj_coef = proj_coef * tokens_mask_dim4
-            # print(proj_coef.shape, tokens_mask)
-        x_p = self.proj_matmul(proj_v, proj_coef.permute(0, 1, 3, 2))
+            # print(proj_v.shape, proj_coef.shape) # torch.Size([1, 2, 256, 320]) torch.Size([1, 2, 5120, 320])
+            # print(proj_v[0][0].sum(0)[:20])
+            # print(proj_coef[0][0].sum(0)[:20])
+            if torch.sum(torch.isnan(proj_v)) > 0:
+                assert False
+        x_p = self.proj_matmul(proj_v, proj_coef.permute(0, 1, 3, 2)) # torch.Size([1, 2, 384, 5120])
+        # print(x_p.shape)
         # -> N, C, H, W
         _, _, S = x.shape
         x_p = self.proj_bn(x_p.view(N, -1, S))

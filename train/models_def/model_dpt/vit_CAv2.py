@@ -266,14 +266,21 @@ def get_SSN_tokens_CAv2(self, opt, pretrained_activations, input_dict_extra={}):
             affinity_in = torch.cat([affinity_gt, torch.zeros(batch_size, spixel_dims[0]*spixel_dims[1]-50, mask_resized.shape[-2], mask_resized.shape[-1]).float().cuda()], dim=1)
 
         affinity_in_normalizedJ = affinity_in / (torch.sum(affinity_in, 1, keepdims=True) + 1e-6)
-        ssn_return_dict = ssn_op(tensor_to_transform=backbone_feat_init, affinity_in=affinity_in_normalizedJ, mask=mask_resized, if_return_codebook_only=True, if_hard_affinity_for_c=False, scale_down_gamma_and_tensor=(1, 1./4.)) # Q: [im_height, im_width]
         abs_affinity_normalized_by_pixels = affinity_in / (affinity_in.sum(-1, keepdims=True).sum(-2, keepdims=True)+1e-6)
+        # print(abs_affinity_normalized_by_pixels[0].sum(-1).sum(-1)) # should be ones and some zeros (padded)
+
+        ssn_return_dict = ssn_op(
+            tensor_to_transform=backbone_feat_init, 
+            affinity_in=abs_affinity_normalized_by_pixels, 
+            mask=mask_resized, 
+            if_affinity_normalized_by_pixels=True, 
+            if_return_codebook_only=True, if_hard_affinity_for_c=False, scale_down_gamma_and_tensor=(1, 1./4.)) # Q: [im_height, im_width]
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg_if_duplicate_tokens:
             tokens_mask = torch.ones((affinity_in.shape[0], affinity_in.shape[1])).cuda().float()
         else:
-            tokens_mask = (affinity_in.sum(-1).sum(-1) > 10).float()
-            assert torch.sum(tokens_mask) != 0
-        # print(tokens_mask)
+            tokens_mask = (affinity_in.sum(-1).sum(-1) > 1).float()
+            print(tokens_mask.sum(-1), '=======')
+            assert torch.any(torch.sum(tokens_mask, -1)) != 0
         # print(tokens_mask, input_dict_extra['return_dict_matseg']['num_mat_masks'])
     else:
         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from == 'matseg':
