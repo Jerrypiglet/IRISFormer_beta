@@ -245,7 +245,9 @@ class Crop(object):
             return image
 
 class Pad(object):
-    def __init__(self, pad_to_hw, padding_with):
+    def __init__(self, pad_to_hw, padding_with=0, pad_option='const'):
+        self.pad_option = pad_option
+        assert self.pad_option in ['const', 'reflect']
         if isinstance(pad_to_hw, int):
             self.pad_h = pad_to_hw
             self.pad_w = pad_to_hw
@@ -261,7 +263,7 @@ class Pad(object):
         assert isinstance(self.padding_with, numbers.Number)
 
     def __call__(self, image, label=None, if_channel_first=False, if_channel_2_input=False, name='', if_padding_constant=False):
-        if if_padding_constant:
+        if if_padding_constant or self.pad_option=='const':
             pad_mode = cv2.BORDER_CONSTANT
         else:
             pad_mode = cv2.BORDER_REFLECT

@@ -102,8 +102,10 @@ def set_up_envs(opt):
         im_width_pad_to = int(np.ceil(opt.cfg.DATA.im_width/32.)*32)
         im_height_pad_to = int(np.ceil(opt.cfg.DATA.im_height/32.)*32)
         im_pad_with = 0
+        pad_option = opt.cfg.DATA.pad_option
+        assert pad_option in ['const', 'reflect']
         opt.if_pad = True
-        opt.pad_op = transform.Pad([im_height_pad_to, im_width_pad_to], padding_with=im_pad_with)
+        opt.pad_op = transform.Pad([im_height_pad_to, im_width_pad_to], padding_with=im_pad_with, pad_option=pad_option)
     if opt.cfg.DATA.if_resize_to_32x:
         im_width_resize_to = int(np.ceil(opt.cfg.DATA.im_width/32.)*32)
         im_height_resize_to = int(np.ceil(opt.cfg.DATA.im_height/32.)*32)

@@ -248,9 +248,6 @@ if opt.cfg.MODEL_MATSEG.enable and opt.cfg.MODEL_MATSEG.if_freeze:
 
 model.print_net()
 
-# print('+++', model.BRDF_Net.pretrained.model.patch_embed.backbone.stem.norm.weight)
-
-
 # set up optimizers
 # optimizer = get_optimizer(model.parameters(), cfg.SOLVER)
 optimizer = optim.Adam(model.parameters(), lr=cfg.SOLVER.lr)
