@@ -23,7 +23,8 @@ spec:
         # - ". /root/miniconda2/etc/profile.d/conda.sh && conda activate /viscompfs/users/ruizhu/envs/semanticInverse"
         # - ". /root/miniconda3/etc/profile.d/conda.sh && alias python=/root/miniconda3/bin/python && which python && tensorboard --logdir / --port 6008"
         # - "which python && . /root/miniconda3/etc/profile.d/conda.sh && cd /viscompfs/users/ruizhu/semanticInverse && conda activate /viscompfs/users/ruizhu/envs/semanticInverse && which python && export TORCH_HOME=/viscompfs/users/ruizhu/ && "
-        - "which python && . /root/miniconda3/etc/profile.d/conda.sh && cd /viscompfs/users/ruizhu/semanticInverse && conda activate /viscompfs/users/ruizhu/envs/py38 && which python && export TORCH_HOME=/viscompfs/users/ruizhu/ && "
+        - "which python && . /root/miniconda3/etc/profile.d/conda.sh && conda activate /ruidata/envs/py38 && which python && export TORCH_HOME=/ruidata/ && "
+        # - "which python && "
         # -  "tensorboard --logdir / --port 6008"  # specify the directory to watch
         # - "python /opt/repo/${my_script}.py"
         # - "pip install scipy & pip show scipy & pip show numpy"
@@ -45,8 +46,8 @@ spec:
         volumeMounts:
           - name: dshm
             mountPath: /dev/shm 
-          - name: viscompfs
-            mountPath: /viscompfs
+          # - name: viscompfs
+          #   mountPath: /viscompfs
           - name: eccv20dataset
             mountPath: /eccv20dataset
           - name: siggraphasia20dataset
@@ -57,16 +58,16 @@ spec:
       - name: dshm  # shared memory
         emptyDir:
           medium: Memory
-      - name: viscompfs
-        flexVolume:
-          driver: ceph.rook.io/rook
-          fsType: ceph
-          options:
-            fsName: nautilusfs
-            clusterNamespace: rook
-            path: /viscompfs
-            mountUser: viscompfs
-            mountSecret: ceph-fs-secret
+      # - name: viscompfs
+      #   flexVolume:
+      #     driver: ceph.rook.io/rook
+      #     fsType: ceph
+      #     options:
+      #       fsName: nautilusfs
+      #       clusterNamespace: rook
+      #       path: /viscompfs
+      #       mountUser: viscompfs
+      #       mountSecret: ceph-fs-secret
       - name: eccv20dataset
         persistentVolumeClaim:
             claimName: eccv20dataset 

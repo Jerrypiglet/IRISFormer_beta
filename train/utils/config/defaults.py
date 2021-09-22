@@ -43,14 +43,14 @@ _C.PATH.dcn_cluster = ['/viscompfs/users/ruizhu/lib/Deformable-Convolution-V2-Py
 _C.PATH.dcn_local = '/home/ruizhu/Documents/Projects/semanticInverse/third-partieresults_outside/Deformable-Convolution-V2-PyTorch'
 _C.PATH.torch_home_path = ''
 _C.PATH.torch_home_local = '/home/ruizhu/Documents/Projects/semanticInverse/'
-_C.PATH.torch_home_cluster = ['/viscompfs/users/ruizhu/', '/home/ruzhu/Documents/torch', '/newfoundland/torch']
+_C.PATH.torch_home_cluster = ['/ruidata/semanticInverse/', '/home/ruzhu/Documents/torch', '/newfoundland/torch']
 # _C.DATA.semseg_colors_path = 'data/openrooms/openrooms_colors.txt'
 # _C.DATA.semseg_names_path = 'data/openrooms/openrooms_names.txt'
 _C.PATH.OR4X_mapping_catInt_to_RGB = ['data/openrooms/total3D_colors/OR4X_mapping_catInt_to_RGB_light.pkl', 'data/openrooms/total3D_colors/OR4X_mapping_catInt_to_RGB_dark.pkl']
 _C.PATH.OR4X_mapping_catStr_to_RGB = ['data/openrooms/total3D_colors/OR4X_mapping_catStr_to_RGB_light.pkl', 'data/openrooms/total3D_colors/OR4X_mapping_catStr_to_RGB_dark.pkl']
 _C.PATH.pretrained_path = ''
 _C.PATH.pretrained_local = '/home/ruizhu/Documents/Projects/semanticInverse/pretrained'
-_C.PATH.pretrained_cluster = ['/viscompfs/users/ruizhu/pretrained', '/home/ruzhu/Documents/Projects/semanticInverse/pretrained', '/newfoundland/semanticInverse/pretrained/']
+_C.PATH.pretrained_cluster = ['/ruidata/semanticInverse/pretrained', '/home/ruzhu/Documents/Projects/semanticInverse/pretrained', '/newfoundland/semanticInverse/pretrained/']
 
 # ===== debug
 

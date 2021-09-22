@@ -55,10 +55,10 @@ def parse_args():
     create_parser.add_argument('--resume', type=str, help='resume_from: e.g. 20201129-232627', default='NoCkpt')
     create_parser.add_argument('--deploy_src', type=str, help='deploy to target path', default='~/Documents/Projects/semanticInverse/train/')
     create_parser.add_argument('--deploy_s3', type=str, help='deploy s3 container', default='s3mm1:train/train')
-    create_parser.add_argument('--deploy_tar', type=str, help='deploy to target path', default='/viscompfs/users/ruizhu/job_list')
-    create_parser.add_argument('--deploy_train_path', type=str, help='deploy to target path', default='/viscompfs/users/ruizhu/train')
-    create_parser.add_argument('--python_path', type=str, help='python path in pod', default='/viscompfs/users/ruizhu/envs/py38/bin/python')
-    create_parser.add_argument('--pip_path', type=str, help='python path in pod', default='/viscompfs/users/ruizhu/envs/py38/bin/pip')
+    create_parser.add_argument('--deploy_tar', type=str, help='deploy to target path', default='/ruidata/semanticInverse/job_list')
+    create_parser.add_argument('--deploy_train_path', type=str, help='deploy to target path', default='/ruidata/semanticInverse/train')
+    create_parser.add_argument('--python_path', type=str, help='python path in pod', default='/ruidata/envs/py38/bin/python')
+    create_parser.add_argument('--pip_path', type=str, help='python path in pod', default='/ruidata/envs/py38/bin/pip')
     create_parser.add_argument('--gpus', type=int, help='nubmer of GPUs', default=2)  
     create_parser.add_argument('--cpur', type=int, help='request of CPUs', default=10)
     create_parser.add_argument('--cpul', type=int, help='limit of CPUs', default=30)
@@ -226,6 +226,7 @@ def create(args):
         else:
             command_str = 'cd %s && '%(args.deploy_train_path) + command_str
         command_str = command_str.replace('pip', args.pip_path)
+        # command_str = 'tensorboard --logdir . --port 6010'
             
         yaml_content['spec']['template']['spec']['containers'][0]['args'][0] += command_str
         yaml_content['metadata']['name'] += datetime_str

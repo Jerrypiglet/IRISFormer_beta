@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 
 metadata:
-  name: ruizhu-deployment2
+  name: ruizhu-deployment4
   namespace: ucsd-ravigroup
   labels:
     user: ruizhu
@@ -17,12 +17,13 @@ spec:
       labels:
         k8s-app: nginx
     spec:
-      nodeSelector:
-        kubernetes.io/hostname: k8s-haosu-10.sdsc.optiputer.net
+      # nodeSelector:
+      #   kubernetes.io/hostname: k8s-haosu-10.sdsc.optiputer.net
       containers:
       - name: container
         # image: localhost:30081/jerrypiglet/deeplearningconda38v5
-        image: jerrypiglet/deeplearningconda38v620210509vtk
+        # image: jerrypiglet/deeplearningconda38v620210509vtk
+        image: docker.io/jerrypiglet/deeplearningconda38v620210723cuda102
         args: ["sleep", "infinity"]
         resources:  
           requests:
@@ -42,8 +43,8 @@ spec:
         #   mountPath: /ruidata-slow-haosu
         - name: dshm
           mountPath: /dev/shm
-        - name: viscompfs
-          mountPath: /viscompfs
+        # - name: viscompfs
+        #   mountPath: /viscompfs
         - name: eccv20dataset
           mountPath: /eccv20dataset
         - name: siggraphasia20dataset
@@ -61,16 +62,16 @@ spec:
       # - name: ruidata-slow-vol-haosu
       #   persistentVolumeClaim:
       #     claimName: ruidata-slow-vol-haosu
-      - name: viscompfs
-        flexVolume:
-          driver: ceph.rook.io/rook
-          fsType: ceph
-          options:
-            fsName: nautilusfs
-            clusterNamespace: rook
-            path: /viscompfs
-            mountUser: viscompfs
-            mountSecret: ceph-fs-secret
+      # - name: viscompfs
+      #   flexVolume:
+      #     driver: ceph.rook.io/rook
+      #     fsType: ceph
+      #     options:
+      #       fsName: nautilusfs
+      #       clusterNamespace: rook
+      #       path: /viscompfs
+      #       mountUser: viscompfs
+      #       mountSecret: ceph-fs-secret
       - name: eccv20dataset
         persistentVolumeClaim:
             claimName: eccv20dataset 
@@ -80,7 +81,6 @@ spec:
       - name: ruidata
         persistentVolumeClaim:
             claimName: ruidata
-
       - name: dshm
         emptyDir:
           medium: Memory

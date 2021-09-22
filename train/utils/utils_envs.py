@@ -484,7 +484,7 @@ def set_up_folders(opt):
     # >>>> SUMMARY WRITERS
     if opt.if_cluster:
         if opt.cluster == 'kubectl':
-            opt.home_path = Path('/viscompfs/users/ruizhu/') 
+            opt.home_path = Path('/ruidata/semanticInverse/') 
         elif opt.cluster == 'nvidia':
             opt.home_path = Path('/home/ruzhu/Documents/Projects/')
         elif opt.cluster == 'ngc':
