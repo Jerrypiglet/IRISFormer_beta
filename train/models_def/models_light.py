@@ -227,14 +227,14 @@ class renderingLayer():
         v = v / np.sqrt(np.maximum(np.sum(v*v, axis=1), 1e-12)[:, np.newaxis, :, :] )
         v = v.astype(dtype = np.float32)
 
-        self.v = Variable(torch.from_numpy(v) ) # # virtual camera plane 3D coords (x-y-z with -z forward)
+        self.v = Variable(torch.from_numpy(v) ) # for rendering only: virtual camera plane 3D coords (x-y-z with -z forward)
         self.pCoord = Variable(torch.from_numpy(self.pCoord) )
 
         self.up = torch.Tensor([0,1,0] )
 
         # azimuth & elevation angles -> dir vector for each pixel
-        Az = ( (np.arange(envWidth) + 0.5) / envWidth - 0.5 )* 2 * np.pi # [-0.46875, -0.40625, -0.34375, -0.28125, -0.21875, -0.15625,-0.09375, -0.03125,  0.03125,  0.09375,  0.15625,  0.21875, 0.28125,  0.34375,  0.40625,  0.46875]
-        El = ( (np.arange(envHeight) + 0.5) / envHeight) * np.pi / 2.0 # [0.0625 0.1875 0.3125 0.4375 0.5625 0.6875 0.8125 0.9375]
+        Az = ( (np.arange(envWidth) + 0.5) / envWidth - 0.5 )* 2 * np.pi # array([-2.9452, -2.5525, -2.1598, -1.7671, -1.3744, -0.9817, -0.589, -0.1963,  0.1963,  0.589 ,  0.9817,  1.3744,  1.7671,  2.1598,  2.5525,  2.9452])
+        El = ( (np.arange(envHeight) + 0.5) / envHeight) * np.pi / 2.0 # array([0.0982, 0.2945, 0.4909, 0.6872, 0.8836, 1.0799, 1.2763, 1.4726])
         Az, El = np.meshgrid(Az, El)
         Az = Az.reshape(-1, 1)
         El = El.reshape(-1, 1)
@@ -256,12 +256,18 @@ class renderingLayer():
             self.ls = self.ls.cuda()
             self.envWeight = self.envWeight.cuda()
 
-    def forwardEnv(self, normalPred, envmap, diffusePred=None, roughPred=None, if_normal_only=False):
-        envR, envC = envmap.size(2), envmap.size(3)
+    def forwardEnv(self, normalPred, envmap=None, diffusePred=None, roughPred=None, if_normal_only=False):
+        if envmap is not None:
+            envR, envC = envmap.size(2), envmap.size(3)
+        else:
+            envR, envC = self.imHeight, self.imWidth
         
+        # print(normalPred.shape)
         normalPred = F.adaptive_avg_pool2d(normalPred, (envR, envC) )
         normalPred = normalPred / torch.sqrt( torch.clamp(
             torch.sum(normalPred * normalPred, dim=1 ), 1e-6, 1).unsqueeze(1) )
+
+        # assert normalPred.shape[2:]==(self.imHeight, self.imWidth)
 
         ldirections = self.ls.unsqueeze(0).unsqueeze(-1).unsqueeze(-1) # torch.Size([1, 128, 3, 1, 1])
 

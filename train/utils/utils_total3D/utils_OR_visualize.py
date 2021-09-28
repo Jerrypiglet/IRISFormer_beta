@@ -52,17 +52,21 @@ from utils.utils_total3D.utils_OR_xml import get_XML_root
 from utils.utils_total3D import SGOptim
 
 class Box(Scene3D):
+    '''
+    Visualize of the scene in Total3D coords
+    '''
 
-    def __init__(self, img_map, depth_map, cam_K, gt_cam_R, pred_cam_R, gt_layout, pred_layout, gt_boxes, pre_boxes, gt_meshes_paths, pre_meshes_paths, \
-                    transform_R=None, transform_t=None, hdr_scale=1., env_scale=1., \
-                    opt=None, dataset='OR', if_hide_invalid_cats=True, description='', if_mute_print=False, OR=None, \
-                    cam_fromt_axis_id=0, emitters_obj_list_gt=None, \
-                    emitter2wall_assign_info_list_gt=None, emitter_cls_prob_PRED=None, emitter_cls_prob_GT=None, \
-                    cell_info_grid_GT=None, cell_info_grid_PRED=None, \
-                    grid_size=4, paths={}, pickle_id=-1, tid=0, \
-                    gt_boxes_valid_mask_extra=None, pre_boxes_valid_mask_extra=None, \
-                    if_use_vtk=False, if_off_screen_vtk=True, \
-                    if_index_faces_with_basis=True, summary_path='.', material_dict=None):
+    def __init__(self, img_map, cam_K, gt_cam_R, pred_cam_R, gt_layout, pred_layout, gt_boxes, pre_boxes, gt_meshes_paths, pre_meshes_paths, \
+                depth_map=None, normal_map=None, cam_K_scale=1., envmap_params={}, 
+                transform_R=None, transform_t=None, hdr_scale=1., env_scale=1., \
+                opt=None, dataset='OR', if_hide_invalid_cats=True, description='', if_mute_print=False, OR=None, \
+                cam_fromt_axis_id=0, emitters_obj_list_gt=None, \
+                emitter2wall_assign_info_list_gt=None, emitter_cls_prob_PRED=None, emitter_cls_prob_GT=None, \
+                cell_info_grid_GT=None, cell_info_grid_PRED=None, \
+                grid_size=4, paths={}, pickle_id=-1, tid=0, \
+                gt_boxes_valid_mask_extra=None, pre_boxes_valid_mask_extra=None, \
+                if_use_vtk=False, if_off_screen_vtk=True, \
+                if_index_faces_with_basis=True, summary_path='.', material_dict=None):
         super(Scene3D, self).__init__()
         self.opt = opt
         if self.opt is not None:
@@ -90,6 +94,8 @@ class Box(Scene3D):
         self.faces_basis_indexes = [['x', 'z', '-y'], ['z', 'x', 'y'], ['y', 'z', 'x'], ['x', '-y', '-z'], ['z', 'y', '-x'], ['x', 'y', 'z']] # 0 for ceiling, 1 for floor
 
         self._cam_K = cam_K
+        self._cam_K_scaled = self.scale_cam_K(cam_K, cam_K_scale)
+        self._envmap_params = envmap_params
         self.gt_cam_R = gt_cam_R
         self.pred_cam_R = pred_cam_R
         self.grid_size = grid_size
@@ -125,6 +131,12 @@ class Box(Scene3D):
         
         self._img_map = img_map
         self._depth_map = depth_map
+        self._normal_map = normal_map
+        self.im_H, self.im_W = self._img_map.shape[:2]
+        if self._depth_map is not None:
+            assert self._depth_map.shape==(self.im_H, self.im_W)
+        if self._normal_map is not None:
+            assert self._normal_map.shape==(self.im_H, self.im_W, 3)
         
         self.dataset = dataset
 
@@ -208,6 +220,15 @@ class Box(Scene3D):
 
     def set_cam_K(self, cam_K):
         self.cam_k = cam_K
+    
+    def scale_cam_K(self, cam_K, cam_K_scale):
+        assert cam_K.shape==(3, 3)
+        assert cam_K[2][2]==1.
+        if cam_K_scale==1.:
+            return cam_K
+        else:
+            cam_K_scaled = np.vstack([cam_K[:2, :] * cam_K_scale, cam_K[2:3, :]])
+            return cam_K_scaled
 
     def get_valid_class_ids(self):
         return [(x, self.classes[x]) for x in self.valid_class_ids]
@@ -215,6 +236,105 @@ class Box(Scene3D):
     def save_img(self, save_path):
         img_map = Image.fromarray(self.img_map[:])
         img_map.save(str(save_path))
+
+    def get_LightNet_transforms(self, cam_R):
+        # based on get_grid_centers()
+        self.extra_transform_matrix = np.array([[0., 0., 1.], [0., -1., 0.], [1., 0., 0.]], dtype=np.float32)
+        self.extra_transform_matrix_LightNet = np.array([[1., 0., 0.], [0., -1., 0.], [0., 0., -1.]], dtype=np.float32)
+        self.post_transform_matrix = self.extra_transform_matrix @ self.extra_transform_matrix_LightNet
+
+        inv_cam_R_transform_pre = cam_R.T
+        inv_transform_matrix_post = self.post_transform_matrix.transpose()
+        # # print(inv_transform_matrix_post)
+
+        T_LightNet2Total3D_rightmult = inv_transform_matrix_post @ inv_cam_R_transform_pre
+        # T_LightNet2Total3D_rightmult = np.linalg.inv(cam_R.transpose() @ self.post_transform_matrix)
+        # print(T_LightNet2Total3D_rightmult)
+        # print(inv_transform_matrix_post)
+        assert T_LightNet2Total3D_rightmult.shape==(3,3)
+
+        return T_LightNet2Total3D_rightmult
+
+        # return inv_cam_R_transform_pre, inv_transform_matrix_post
+
+
+    def sample_points(self, sample_every=10, ):
+        uu, vv = np.meshgrid(np.arange(0, self.im_W, sample_every), np.arange(0, self.im_H, sample_every))
+        z = - self._depth_map[vv, uu]
+        u0, v0, f_x, f_y = self._cam_K_scaled[0, 2], self._cam_K_scaled[1, 2], self._cam_K_scaled[0][0], self._cam_K_scaled[1][1]
+        x = - (uu - u0) / f_x * z
+        y = (vv - v0) / f_y * z
+        points_LightNet = np.stack([x.squeeze(), y.squeeze(), z.squeeze()], -1) # [h', w', 3]
+        return points_LightNet, uu, vv
+
+    def draw_point_cloud(self, ax_3d, plot_type='GT', sample_every=10, point_scale=2.):
+        cam_R = {'GT': self.gt_cam_R, 'prediction': self.pred_cam_R}[plot_type]
+        assert self._depth_map is not None
+        assert self._normal_map is not None
+        # print(self._depth_map.shape, self._normal_map.shape)
+        # print(self._cam_K)
+
+        points_LightNet, uu, vv = self.sample_points(sample_every=sample_every)
+
+        h, w = points_LightNet.shape[:2]
+
+        T_LightNet2Total3D_rightmult = self.get_LightNet_transforms(cam_R)
+
+        # print(T_LightNet2Total3D_rightmult)
+        
+        points_vis = points_LightNet.reshape(-1, 3) @ T_LightNet2Total3D_rightmult
+        # points_vis = points_LightNet.reshape(-1, 3)
+        # print(np.linalg.det(T_LightNet2Total3D_rightmult))
+
+        # print(points_vis.shape)
+        colors = self.img_map[vv, uu, :].reshape(-1, 3).astype(np.float32) / 255.
+        # valid_points = points_vis[:, 2] < -0.05
+        # print(valid_points.shape)
+        p = ax_3d.scatter(points_vis[:, 0], points_vis[:, 1], points_vis[:, 2], s=point_scale, c=colors[:], depthshade=False)
+
+        return points_vis.reshape(h, w, 3), T_LightNet2Total3D_rightmult
+
+    def draw_SG_lighting(self, ax_3d, axis_LightNet_np, weight_np, sample_every=10, plot_type='GT'):
+        '''
+        axis_LightNet_np.shape, weight_np.shape, points_vis.shape
+        (120, 160, 12, 3), (120, 160, 12, 3), (48, 64, 3)
+        '''
+
+        cam_R = {'GT': self.gt_cam_R, 'prediction': self.pred_cam_R}[plot_type]
+        points_LightNet, _, _ = self.sample_points(sample_every=sample_every)
+        h, w = points_LightNet.shape[:2]
+        T_LightNet2Total3D_rightmult = self.get_LightNet_transforms(cam_R)
+        points_vis = points_LightNet.reshape(-1, 3) @ T_LightNet2Total3D_rightmult
+        points_vis = points_vis.reshape(h, w, 3)
+
+        envRow, envCol, SGNum = self._envmap_params['envRow'], self._envmap_params['envCol'], self._envmap_params['SGNum']
+        assert axis_LightNet_np.shape==(envRow, envCol, SGNum, 3)
+        assert weight_np.shape==(envRow, envCol, SGNum, 3)
+        im_2_env_ratios = self.im_H//envRow, self.im_W//envCol
+
+        for i, ii in enumerate(np.arange(0, self.im_H, sample_every)//im_2_env_ratios[0]):
+            for j, jj in enumerate(np.arange(0, self.im_W, sample_every)//im_2_env_ratios[1]):
+
+                axis_LightNet_show = axis_LightNet_np[ii, jj] # at half res
+                axis_show = axis_LightNet_show @ T_LightNet2Total3D_rightmult
+
+                origin_show = points_vis[i, j]
+                weight_show = np.linalg.norm(weight_np[ii, jj], axis=1)
+                # print(weight_np.shape, weight_np[ii, jj].shape, weight_show.shape)
+
+                for weight_single, axis_single in zip(weight_show, axis_show):
+                    weight_single_vis = weight_single / 200.
+                    if weight_single_vis < 0.1:
+                        continue
+                    # print(weight_single_vis)
+                    weight_single_vis = np.clip(weight_single_vis, 0., 5.)
+
+                    a = Arrow3D([origin_show[0], origin_show[0]+axis_single[0]*weight_single_vis], 
+                                [origin_show[1], origin_show[1]+axis_single[1]*weight_single_vis], 
+                                [origin_show[2], origin_show[2]+axis_single[2]*weight_single_vis], \
+                                mutation_scale=20, lw=1, arrowstyle="->", color="b")
+                    ax_3d.add_artist(a)
+
 
     def draw_projected_depth(self, type = 'prediction', return_plt = False, if_save = True, save_path='', if_vis=True, if_use_plt=False, fig_or_ax=None, cam_K_override=None, if_original_lim=True, override_img=None):
         if cam_K_override is not None:
@@ -310,6 +430,11 @@ class Box(Scene3D):
                 layout = self.pred_layout
             else:
                 layout = self.gt_layout
+
+            if layout is None:
+                continue
+
+            # print(current_type, layout)
 
             layout_basis_dict = {'x': layout['basis'][0], 'y': layout['basis'][1], 'z': layout['basis'][2], '-x': -layout['basis'][0], '-y': -layout['basis'][1], '-z': -layout['basis'][2]}
             layout_coeffs_dict = {'x': layout['coeffs'][0], 'y': layout['coeffs'][1], 'z': layout['coeffs'][2], '-x': layout['coeffs'][0], '-y': layout['coeffs'][1], '-z': layout['coeffs'][2]}
@@ -770,6 +895,8 @@ class Box(Scene3D):
                 continue
 
             obj_paths = self.gt_meshes_paths if current_type=='GT' else [x[0] for x in self.pre_meshes_paths]
+            if obj_paths is None:
+                break
             obj_paths = [obj_paths[x] for x in self.valid_bbox_idxes_dict[current_type]]
             if self.root_path is not None:
                 obj_paths = [str(Path(self.root_path) / x) for x in obj_paths]
@@ -810,13 +937,13 @@ class Box(Scene3D):
                 assert len(obj_paths)==len(vtk_objects.keys())
                 self.valid_bbox_meshes_dict[current_type]['vtk_objs'] = vtk_objects
 
-    def draw_3D_scene_plt(self, type = 'prediction', if_save = True, save_path='', fig_or_ax=[None, None],  which_to_vis='cell_info', \
+    def draw_3D_scene_plt(self, vis_type = 'prediction', if_save = True, save_path='', fig_or_ax=[None, None],  which_to_vis='cell_info', \
             if_show_emitter=True, if_show_objs=True, if_show_objs_axes=False, if_show_layout_axes=True, if_return_cells_vis_info=False, hide_cells=False, if_show_cell_normals=False, if_show_cell_meshgrid=False, hide_random_id=True, scale_emitter_length=1., \
             if_debug=False, if_dump_to_mesh=False, fig_scale=1., pickle_id=0, \
             points_backproj=None, points_backproj_color=None):
-        assert type in ['prediction', 'GT', 'both']
+        assert vis_type in ['prediction', 'GT', 'both']
         figs_to_draw = {'prediction': ['prediction'], 'GT': ['GT'],'both': ['prediction', 'GT']}
-        figs_to_draw = figs_to_draw[type]
+        figs_to_draw = figs_to_draw[vis_type]
         cells_vis_info_list_pred = []
         cells_vis_info_list_GT = []
 
@@ -826,11 +953,11 @@ class Box(Scene3D):
 
         if_new_fig = ax_3d_GT is None and ax_3d_PRED is None
         if if_new_fig:
-            fig = plt.figure(figsize=(15*fig_scale, 8*fig_scale ))
+            fig = plt.figure(figsize=(15*fig_scale, 8*fig_scale )) if vis_type=='both' else plt.figure(figsize=(12*fig_scale, 12*fig_scale ))
 
         if 'GT' in figs_to_draw:
             if if_new_fig:
-                ax_3d_GT = fig.add_subplot(121, projection='3d')
+                ax_3d_GT = fig.add_subplot(121, projection='3d') if vis_type=='both' else fig.add_subplot(111, projection='3d')
                 # ax_3d_GT = fig.gca(projection='3d')
             ax_3d_GT.set_proj_type('ortho')
             ax_3d_GT.set_aspect("auto")
@@ -839,7 +966,7 @@ class Box(Scene3D):
 
         if 'prediction' in figs_to_draw:
             if if_new_fig:
-                ax_3d_PRED = fig.add_subplot(122, projection='3d')
+                ax_3d_PRED = fig.add_subplot(122, projection='3d') if vis_type=='both' else fig.add_subplot(111, projection='3d')
                 # ax_3d_PRED = fig.gca(projection='3d')
             ax_3d_PRED.set_proj_type('ortho')
             ax_3d_PRED.set_aspect("auto")
@@ -848,15 +975,15 @@ class Box(Scene3D):
 
         # === draw layout, camera and axis
 
-        if type == 'prediction':
+        if vis_type == 'prediction':
             axes = [ax_3d_PRED]
             boxes = [self.pred_layout]
             cam_Rs = [self.pred_cam_R]
-        elif type == 'GT':
+        elif vis_type == 'GT':
             axes = [ax_3d_GT]
             boxes = [self.gt_layout]
             cam_Rs = [self.gt_cam_R]
-        elif type == 'both':
+        elif vis_type == 'both':
             axes = [ax_3d_PRED, ax_3d_GT]
             boxes = [self.pred_layout, self.gt_layout]
             cam_Rs = [self.pred_cam_R, self.gt_cam_R]
@@ -945,7 +1072,7 @@ class Box(Scene3D):
 
         # === draw objs
         cell_info_grid_dict = {'GT': self.cell_info_grid_GT, 'prediction': self.cell_info_grid_PRED}
-        if type == 'prediction':
+        if vis_type == 'prediction':
             layout_list = [self.pred_layout]
             boxes_list = [self.pre_boxes]
             cam_Rs = [self.pred_cam_R]
@@ -956,7 +1083,7 @@ class Box(Scene3D):
             fontsizes = [15]
             ax_3ds = [ax_3d_PRED]
             cells_vis_info_lists = [cells_vis_info_list_pred]
-        elif type == 'both':
+        elif vis_type == 'both':
             layout_list = [self.pred_layout, self.gt_layout]
             boxes_list = [self.pre_boxes, self.gt_boxes]
             cam_Rs = [self.pred_cam_R, self.gt_cam_R]    
@@ -967,7 +1094,7 @@ class Box(Scene3D):
             fontsizes = [15, 12]
             ax_3ds = [ax_3d_PRED, ax_3d_GT]
             cells_vis_info_lists = [cells_vis_info_list_pred, cells_vis_info_list_GT]
-        elif type == 'GT':
+        elif vis_type == 'GT':
             layout_list = [self.gt_layout]
             boxes_list = [self.gt_boxes]
             cam_Rs = [self.gt_cam_R]

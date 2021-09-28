@@ -9,7 +9,7 @@ from torch.autograd import Variable
 
 class SGEnvOptim():
     def __init__(self, isCuda = True, gpuId = 0, niter = 10, envNum = 19200,
-            envWidth = 32, envHeight = 16, SGRow = 2, SGCol = 6, ch = 3, param=None):
+            envWidth = 32, envHeight = 16, SGRow = 2, SGCol = 6, ch = 3, param=None, if_full_sphere=False):
         self.SGNum = int(SGRow*SGCol )
 
         self.envNum = envNum
@@ -26,6 +26,8 @@ class SGEnvOptim():
 
         Az = ( (np.arange(envWidth) + 0.5) / envWidth - 0.5 ) * 2 * np.pi
         El = ( (np.arange(envHeight) + 0.5) / envHeight ) * np.pi / 2.0 # [0, pi/2.]
+        if if_full_sphere:
+          El = El * 2. # [0, pi]  
         Az, El = np.meshgrid(Az, El )
         Az = Az[:, :, np.newaxis ]
         El = El[:, :, np.newaxis ]
@@ -83,12 +85,16 @@ class SGEnvOptim():
         self.mseLoss = nn.MSELoss(size_average = False )
         self.optEnv = optim.LBFGS([self.param], lr=0.2, max_iter=100 )
 
-    def renderSG(self, theta, phi, lamb, weight):
-        axisX = torch.sin(theta ) * torch.cos(phi )
-        axisY = torch.sin(theta ) * torch.sin(phi )
-        axisZ = torch.cos(theta )
+    def renderSG(self, theta, phi, lamb, weight, axis_in=None):
+        if axis_in is None:
+            axisX = torch.sin(theta ) * torch.cos(phi )
+            axisY = torch.sin(theta ) * torch.sin(phi )
+            axisZ = torch.cos(theta )
 
-        axis = torch.cat([axisX, axisY, axisZ], dim=5)
+            axis = torch.cat([axisX, axisY, axisZ], dim=5)
+            # print(axis.shape) # torch.Size([19200, 12, 1, 1, 1, 3])
+        else:
+            axis = axis_in
         # if transform_axes_list != []:
         #     camx, camy, camz = transform_axes_list[0], transform_axes_list[1], transform_axes_list[2]
         #     assert camx.shape==(self.envNum, 3) and camy.shape==(self.envNum, 3) and camz.shape==(self.envNum, 3)
