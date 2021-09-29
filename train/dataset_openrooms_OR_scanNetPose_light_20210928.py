@@ -234,6 +234,15 @@ class openrooms(data.Dataset):
             self.extra_op = opt.resize_op
             self.if_extra_op = True
 
+        # ====== per-pixel lighting =====
+        if self.opt.cfg.DATA.load_light_gt:
+            self.envWidth = envWidth
+            self.envHeight = envHeight
+            self.envRow = envRow
+            self.envCol = envCol
+            self.SGNum = SGNum
+
+
     def __len__(self):
         return len(self.data_list)
 
@@ -347,6 +356,14 @@ class openrooms(data.Dataset):
         if self.opt.cfg.DATA.load_matseg_gt:
             mat_seg_dict = self.load_matseg(mask, im_RGB_uint8)
             batch_dict.update(mat_seg_dict)
+
+        # ====== layout, emitters =====
+        if self.opt.cfg.DATA.load_layout_emitter_gt:
+            self.grid_size = self.cfg.MODEL_LAYOUT_EMITTER.emitter.grid_size
+            # self.PNG_data_root = Path('/newfoundland2/ruizhu/siggraphasia20dataset/layout_labels_V4-ORfull/') if not opt.if_cluster else self.data_root
+            # self.layout_emitter_im_width, self.layout_emitter_im_height = WIDTH_PATCH, HEIGHT_PATCH
+            with open(Path(self.cfg.PATH.total3D_colors_path) / OR4X_mapping_catInt_to_RGB['light'], 'rb') as f:
+                self.OR_mapping_catInt_to_RGB = pickle.load(f)[self.OR]
 
 
         return batch_dict

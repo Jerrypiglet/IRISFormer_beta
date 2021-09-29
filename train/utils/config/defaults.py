@@ -367,7 +367,7 @@ _C.MODEL_LIGHT.load_pretrained_MODEL_BRDF = False
 _C.MODEL_LIGHT.load_pretrained_MODEL_LIGHT = False
 _C.MODEL_LIGHT.freeze_BRDF_Net = True
 _C.MODEL_LIGHT.pretrained_pth_name = 'check_cascadeLight0_sg12_offset1.0/%s0_9.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
-# _C.MODEL_LIGHT.use_scale_aware_loss = False
+_C.MODEL_LIGHT.use_scale_aware_loss = False
 _C.MODEL_LIGHT.if_transform_to_LightNet_coords = False # if transform pred lighting to global LightNet coords
 
 # _C.MODEL_LIGHT.pretrained_pth_name = ''
