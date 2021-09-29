@@ -32,10 +32,10 @@ from SimpleLayout.SimpleSceneTorchBatch import SimpleSceneTorchBatch
 from utils.utils_total3D.utils_OR_layout import get_layout_bdb_sunrgbd
 from utils.utils_total3D.utils_OR_cam import get_rotation_matix_result
 
-from models_def.model_dpt.models import DPTAlbedoDepthModel
-from models_def.model_dpt.models_CAv2 import DPTAlbedoDepthModel_CAv2
-from models_def.model_dpt.models_SSN import DPTAlbedoDepthModel_SSN
-from models_def.model_dpt.models_SSN_yogoUnet_N_layers import DPTAlbedoDepthModel_SSN_yogoUnet_N_layers
+from models_def.model_dpt.models import DPTBRDFModel, get_BRDFNet_DPT
+from models_def.model_dpt.models_CAv2 import DPTBRDFModel_CAv2, get_BRDFNet_DPT_CAv2
+from models_def.model_dpt.models_SSN import DPTBRDFModel_SSN
+from models_def.model_dpt.models_SSN_yogoUnet_N_layers import DPTBRDFModel_SSN_yogoUnet_N_layers
 from models_def.model_dpt.transforms import Resize as dpt_Resize
 from models_def.model_dpt.transforms import NormalizeImage as dpt_NormalizeImage
 from models_def.model_dpt.transforms import PrepareForNet as dpt_PrepareForNet
@@ -103,10 +103,6 @@ class Model_Joint(nn.Module):
             self.decoder_to_use = models_brdf.decoder0
 
             if self.opt.cfg.MODEL_BRDF.DPT_baseline.enable:
-                net_w = self.opt.cfg.DATA.im_width
-                net_h = self.opt.cfg.DATA.im_height
-                dpt_optimize = True
-
                 default_models = {
                     # "midas_v21": "dpt_weights/midas_v21-f6b98070.pt",
                     "dpt_base": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_base_path,
@@ -126,30 +122,21 @@ class Model_Joint(nn.Module):
                 if_non_negative = True if self.opt.cfg.MODEL_BRDF.DPT_baseline.modality in ['de'] else False
 
                 if model_type=='dpt_hybrid':
-                    self.BRDF_Net = DPTAlbedoDepthModel(
+                    assert self.opt.cfg.MODEL_BRDF.DPT_baseline.modality == 'enabled', 'only support this mode for now; choose modes in MODEL_BRDF.enable_list'
+                    self.BRDF_Net = get_BRDFNet_DPT(
                         opt=opt, 
-                        modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
-                        path=model_path,
-                        backbone="vitb_rn50_384" if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers == -1 else "vitb_rn50_384_N_layers", 
-                        non_negative=if_non_negative,
-                        enable_attention_hooks=self.opt.cfg.MODEL_BRDF.DPT_baseline.if_enable_attention_hooks,
-                        readout=self.opt.cfg.MODEL_BRDF.DPT_baseline.readout, 
-                        skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
-                        keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
+                        model_path=model_path, 
+                        modalities=self.opt.cfg.MODEL_BRDF.enable_list
                     )
                 elif model_type=='dpt_hybrid_CAv2':
                     assert self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers != -1
-                    self.BRDF_Net = DPTAlbedoDepthModel_CAv2(
+                    assert self.opt.cfg.MODEL_BRDF.DPT_baseline.modality == 'enabled', 'only support this mode for now; choose modes in MODEL_BRDF.enable_list'
+                    self.BRDF_Net = get_BRDFNet_DPT_CAv2(
                         opt=opt, 
-                        modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
-                        path=model_path,
-                        backbone="vitb_rn50_384" if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers == -1 else "vitb_rn50_384_N_layers", 
-                        non_negative=if_non_negative,
-                        enable_attention_hooks=self.opt.cfg.MODEL_BRDF.DPT_baseline.if_enable_attention_hooks,
-                        readout=self.opt.cfg.MODEL_BRDF.DPT_baseline.readout, 
-                        skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
-                        keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
+                        model_path=model_path, 
+                        modalities=self.opt.cfg.MODEL_BRDF.enable_list
                     )
+
                 elif model_type=='dpt_hybrid_SSN':
                     # print(model_path, model_type, self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_path)
                     # assert False
@@ -159,7 +146,7 @@ class Model_Joint(nn.Module):
                     if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_patch_embed_proj:
                         skip_keys += ['pretrained.model.patch_embed.proj']
                     if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers==-1:
-                        self.BRDF_Net = DPTAlbedoDepthModel_SSN(
+                        self.BRDF_Net = DPTBRDFModel_SSN(
                             opt=opt, 
                             modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
                             path=model_path,
@@ -171,7 +158,7 @@ class Model_Joint(nn.Module):
                             keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
                         )
                     else:
-                        self.BRDF_Net = DPTAlbedoDepthModel_SSN_yogoUnet_N_layers(
+                        self.BRDF_Net = DPTBRDFModel_SSN_yogoUnet_N_layers(
                             opt=opt, 
                             modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
                             path=model_path,
@@ -183,7 +170,7 @@ class Model_Joint(nn.Module):
                             keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
                         )
                 elif model_type=='dpt_large_SSN':
-                    self.BRDF_Net = DPTAlbedoDepthModel_SSN(
+                    self.BRDF_Net = DPTBRDFModel_SSN(
                         opt=opt, 
                         modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
                         path=model_path,
@@ -194,7 +181,7 @@ class Model_Joint(nn.Module):
                         keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
                     )
                 elif model_type=='dpt_large':
-                    self.BRDF_Net = DPTAlbedoDepthModel(
+                    self.BRDF_Net = DPTBRDFModel(
                         opt=opt, 
                         modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
                         path=model_path,
@@ -204,7 +191,7 @@ class Model_Joint(nn.Module):
                         skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
                     )
                 elif model_type=='dpt_base':
-                    self.BRDF_Net = DPTAlbedoDepthModel(
+                    self.BRDF_Net = DPTBRDFModel(
                         opt=opt, 
                         modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
                         path=model_path,
@@ -214,7 +201,7 @@ class Model_Joint(nn.Module):
                         skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
                     )
                 elif model_type=='dpt_base_SSN':
-                    self.BRDF_Net = DPTAlbedoDepthModel_SSN(
+                    self.BRDF_Net = DPTBRDFModel_SSN(
                         opt=opt, 
                         modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
                         path=model_path,
@@ -309,6 +296,8 @@ class Model_Joint(nn.Module):
                 self.BRDF_Net.eval()
 
         # self.guide_net = guideNet(opt)
+
+
         if self.cfg.MODEL_LIGHT.load_pretrained_MODEL_BRDF:
             self.load_pretrained_MODEL_BRDF(self.cfg.MODEL_BRDF.pretrained_pth_name)
 
@@ -466,7 +455,7 @@ class Model_Joint(nn.Module):
                 or self.cfg.MODEL_MATSEG.use_pred_as_input \
                 or self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool or self.cfg.MODEL_MATSEG.if_albedo_pac_conv or self.cfg.MODEL_MATSEG.if_albedo_safenet \
                 or (self.cfg.MODEL_GMM.feat_recon.enable and self.cfg.MODEL_GMM.feat_recon.use_matseg) \
-                or (self.opt.cfg.MODEL_BRDF.DPT_baseline.enable and self.opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_hybrid_SSN', 'dpt_base_SSN', 'dpt_large_SSN', 'dpt_hybrid_CAv2']):
+                or (self.opt.cfg.MODEL_BRDF.DPT_baseline.enable and self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_SSN):
 
                 return_dict_matseg.update({'instance': input_dict['instance'], 'instance_valid': input_dict['instance_valid'], 'num_mat_masks': input_dict['num_mat_masks_batch']})
                 input_dict_extra.update({'return_dict_matseg': return_dict_matseg})
@@ -620,30 +609,52 @@ class Model_Joint(nn.Module):
         # print(img_batch.shape)
         # img_batch = input_dict['imBatch'].half()
         # img_input = dpt_transform({"image": img_batch})["image"]
-        dpt_prediction, extra_DPT_return_dict = self.BRDF_Net.forward(img_batch, input_dict_extra=input_dict_extra)
-        if self.cfg.MODEL_BRDF.DPT_baseline.modality == 'al':
-            albedoPred = 0.5 * (dpt_prediction + 1)
-            # if (not self.opt.cfg.DATASET.if_no_gt_semantics):
-            # print(input_dict['segBRDFBatch'].shape, input_dict['albedoBatch'].shape)
-            input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
-            albedoPred = torch.clamp(albedoPred, 0, 1)
-            # if not self.cfg.MODEL_BRDF.use_scale_aware_albedo:
-            # print(input_dict['segBRDFBatch'].shape, albedoPred.shape)
-            albedoPred_aligned = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
-                    input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
-            albedoPred_aligned = torch.clamp(albedoPred_aligned, 0, 1)
-            return_dict.update({'albedoPred': albedoPred, 'albedoPred_aligned': albedoPred_aligned})
-        elif self.cfg.MODEL_BRDF.DPT_baseline.modality == 'de':
-            # if self.cfg.MODEL_BRDF.use_scale_aware_depth:
-            depthPred = dpt_prediction
-            # else:
-            # depthPred = 0.5 * (dpt_prediction + 1) # [-1, 1] -> [0, 1]
-            depthPred_aligned = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
-                    input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
-            return_dict.update({'depthPred': depthPred, 'depthPred_aligned': depthPred_aligned})
+        # dpt_prediction, extra_DPT_return_dict = self.BRDF_Net.forward(img_batch, input_dict_extra=input_dict_extra)
+        # return_dict = self.BRDF_Net.forward(img_batch, input_dict_extra=input_dict_extra)
+
+        if self.cfg.MODEL_BRDF.DPT_baseline.modality=='enabled':
+            modalities = self.opt.cfg.MODEL_BRDF.enable_list
+            return_dicts = {}
+
+            if self.cfg.MODEL_BRDF.DPT_baseline.if_share_patchembed:
+                x = self.BRDF_Net.shared_patch_embed_backbone(img_batch)
+                input_dict_extra['shared_patch_embed_backbone_output'] = x
+            
+            for modality in modalities:
+                return_dicts[modality] = self.BRDF_Net[modality].forward(img_batch, input_dict_extra=input_dict_extra)
 
         else:
-            assert False, 'Unsupported modality: %s'%self.cfg.MODEL_BRDF.DPT_baseline.modality
+            modality = self.cfg.MODEL_BRDF.DPT_baseline.modality
+            modalities = [modality]
+            return_dicts = {modality: self.BRDF_Net.forward(img_batch, input_dict_extra=input_dict_extra)}
+
+        for modality in modalities:
+            dpt_prediction, extra_DPT_return_dict = return_dicts[modality]
+            if modality == 'al':
+                albedoPred = 0.5 * (dpt_prediction + 1)
+                # if (not self.opt.cfg.DATASET.if_no_gt_semantics):
+                # print(input_dict['segBRDFBatch'].shape, input_dict['albedoBatch'].shape)
+                input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
+                albedoPred = torch.clamp(albedoPred, 0, 1)
+                # if not self.cfg.MODEL_BRDF.use_scale_aware_albedo:
+                # print(input_dict['segBRDFBatch'].shape, albedoPred.shape)
+                albedoPred_aligned = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
+                        input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
+                albedoPred_aligned = torch.clamp(albedoPred_aligned, 0, 1)
+                return_dict.update({'albedoPred': albedoPred, 'albedoPred_aligned': albedoPred_aligned})
+            elif modality == 'de':
+                # if self.cfg.MODEL_BRDF.use_scale_aware_depth:
+                depthPred = dpt_prediction
+                # else:
+                # depthPred = 0.5 * (dpt_prediction + 1) # [-1, 1] -> [0, 1]
+                depthPred_aligned = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
+                        input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
+                return_dict.update({'depthPred': depthPred, 'depthPred_aligned': depthPred_aligned})
+            elif modality == 'ro':
+                roughPred = dpt_prediction
+                return_dict.update({'roughPred': roughPred})
+            else:
+                assert False, 'Unsupported modality: %s'%modality
 
         # print(extra_DPT_return_dict.keys())
         return_dict.update({'albedo_extra_output_dict': {}})

@@ -211,7 +211,7 @@ class DPT_SSN(BaseModel):
 
         return out, ssn_return_dict
 
-class DPTAlbedoDepthModel_SSN(DPT_SSN):
+class DPTBRDFModel_SSN(DPT_SSN):
     def __init__(
         self, opt, modality='al', path=None, non_negative=False, scale=1.0, shift=0.0, skip_keys=[], keep_keys=[], **kwargs
     ):
@@ -240,7 +240,7 @@ class DPTAlbedoDepthModel_SSN(DPT_SSN):
         super().__init__(opt, head, **kwargs)
 
         if path is not None:
-            print(magenta('===== [DPTAlbedoDepthModel_SSN] Loading %s'%path))
+            print(magenta('===== [DPTBRDFModel_SSN] Loading %s'%path))
             self.load(path, skip_keys=skip_keys, keep_keys=keep_keys)
         # else:
         #     assert False, str(path)
@@ -251,10 +251,10 @@ class DPTAlbedoDepthModel_SSN(DPT_SSN):
         # if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone:
         #     print(ssn_return_dict['albedo_pred_unet'].shape)
 
-        # print('[DPTAlbedoDepthModel_SSN - x_out 1]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
+        # print('[DPTBRDFModel_SSN - x_out 1]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
         if self.modality == 'al':
             x_out = torch.clamp(1.01 * torch.tanh(x_out ), -1, 1)
-            # print('[DPTAlbedoDepthModel_SSN - x_out 2]', self.if_batch_norm, x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
+            # print('[DPTBRDFModel_SSN - x_out 2]', self.if_batch_norm, x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
         # elif self.modality == 'de':
             # x_out = torch.clamp(x_out, 1e-8, 100)
 

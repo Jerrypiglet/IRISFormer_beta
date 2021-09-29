@@ -227,7 +227,10 @@ def forward_flex(self, opt, x, input_dict_extra={}):
     B = x.shape[0]
 
     if hasattr(self.patch_embed, "backbone"):
-        x = self.patch_embed.backbone(x)
+        if opt.cfg.MODEL_BRDF.DPT_baseline.if_share_patchembed:
+            x = input_dict_extra['shared_patch_embed_backbone_output']
+        else:
+            x = self.patch_embed.backbone(x)
         if isinstance(x, (list, tuple)):
             x = x[-1]  # last feature if backbone outputs list/tuple of features; 1/16
 

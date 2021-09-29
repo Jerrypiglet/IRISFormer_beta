@@ -138,7 +138,7 @@ def set_up_envs(opt):
         opt.cfg.DATA.if_load_png_not_hdr = True
         assert opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_large', 'dpt_base', 'dpt_hybrid', 'dpt_hybrid_SSN', 'dpt_base_SSN', 'dpt_large_SSN', 'dpt_hybrid_CAv2']
         
-        assert opt.cfg.MODEL_BRDF.DPT_baseline.modality in ['al', 'de']
+        assert opt.cfg.MODEL_BRDF.DPT_baseline.modality in ['al', 'de', 'enabled']
 
         assert opt.cfg.DATA.if_pad_to_32x or opt.cfg.DATA.if_resize_to_32x
         assert not(opt.cfg.DATA.if_pad_to_32x and opt.cfg.DATA.if_resize_to_32x)
@@ -151,11 +151,12 @@ def set_up_envs(opt):
                     opt.cfg.MODEL_MATSEG.if_freeze = True
 
         if opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_hybrid_CAv2']:
-            assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from in ['backbone', 'matseg', 'matseg-2']
-            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from in ['matseg', 'matseg-2']:
-                opt.cfg.MODEL_MATSEG.enable = True
-                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_freeze_matseg:
-                    opt.cfg.MODEL_MATSEG.if_freeze = True
+            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_SSN:
+                assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from in ['backbone', 'matseg', 'matseg-2']
+                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from in ['matseg', 'matseg-2']:
+                    opt.cfg.MODEL_MATSEG.enable = True
+                    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_freeze_matseg:
+                        opt.cfg.MODEL_MATSEG.if_freeze = True
 
         assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method in ['qtc', 'qkv']
         assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method in ['residual', 'concat', 'none', 'full']

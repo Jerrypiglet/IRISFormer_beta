@@ -88,7 +88,7 @@ class DPT(BaseModel):
 
         self.scratch.output_conv = head
 
-        self.input_dict_extra = {}
+        self.module_hooks_dict = {}
 
         if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
             from models_def.model_dpt.utils_yogo import CrossAttention, LayerNormLastTwo
@@ -118,14 +118,14 @@ class DPT(BaseModel):
 
         if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
             self.ca_modules = nn.ModuleDict(module_dict)
-            self.input_dict_extra.update({'ca_modules': self.ca_modules, 'output_hooks': self.output_hooks})
+            self.module_hooks_dict.update({'ca_modules': self.ca_modules, 'output_hooks': self.output_hooks})
 
 
-    def forward(self, x):
-        if self.channels_last == True:
+    def forward(self, x, input_dict_extra={}):
+        if self.channels_last:
             x.contiguous(memory_format=torch.channels_last)
 
-        layer_1, layer_2, layer_3, layer_4 = forward_vit(self.opt, self.pretrained, x, input_dict_extra=self.input_dict_extra)
+        layer_1, layer_2, layer_3, layer_4 = forward_vit(self.opt, self.pretrained, x, input_dict_extra={**input_dict_extra, **self.module_hooks_dict})
 
         layer_1_rn = self.scratch.layer1_rn(layer_1)
         # print(self.scratch.layer1_rn, layer_1.shape, layer_1_rn.shape) # [hybrid] Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False) torch.Size([2, 256, 64, 80]) torch.Size([2, 256, 64, 80])
@@ -190,17 +190,44 @@ class DPT(BaseModel):
 
 #         return x_out, {}
 
+def get_BRDFNet_DPT(opt, model_path, modalities=[]):
+    assert all([x in ['al', 'ro'] for x in modalities])
+
+    module_dict = {}
+    for modality in modalities:
+        module_dict[modality] = DPTBRDFModel(
+            opt=opt, 
+            modality=modality, 
+            path=model_path,
+            backbone="vitb_rn50_384" if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers == -1 else "vitb_rn50_384_N_layers", 
+            non_negative=True if opt.cfg.MODEL_BRDF.DPT_baseline.modality in ['de'] else False,
+            enable_attention_hooks=opt.cfg.MODEL_BRDF.DPT_baseline.if_enable_attention_hooks,
+            readout=opt.cfg.MODEL_BRDF.DPT_baseline.readout, 
+            skip_keys=['scratch.output_conv'] if opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
+            keep_keys=['pretrained.model.patch_embed.backbone'] if opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
+        )
+        # print('>>>>>>', type(module_dict[modality]), '>>>>>')
 
 
-class DPTAlbedoDepthModel(DPT):
+    if opt.cfg.MODEL_BRDF.DPT_baseline.if_share_patchembed:
+        module_dict['shared_patch_embed_backbone'] = module_dict[modalities[0]].pretrained.model.patch_embed.backbone
+        for modality in modalities:
+            module_dict[modality].pretrained.model.patch_embed.backbone = nn.Identity()
+
+    full_model = torch.nn.ModuleDict(module_dict)
+    
+    return full_model
+
+
+class DPTBRDFModel(DPT):
     def __init__(
         self, opt, modality='al', path=None, non_negative=False, scale=1.0, shift=0.0, skip_keys=[], keep_keys=[], **kwargs
     ):
         features = kwargs["features"] if "features" in kwargs else 256
 
         self.modality = modality
-        assert modality in ['al', 'de']
-        self.out_channels = {'al': 3, 'de': 1}[modality]
+        assert modality in ['al', 'de', 'ro'], 'Invalid modality: %s'%modality
+        self.out_channels = {'al': 3, 'de': 1, 'ro': 1}[modality]
 
         self.scale = scale
         self.shift = shift
@@ -226,28 +253,30 @@ class DPTAlbedoDepthModel(DPT):
         super().__init__(opt, head, **kwargs)
 
         if path is not None:
-            print(magenta('===== [DPTAlbedoDepthModel] Loading %s'%path))
+            print(magenta('===== [DPTBRDFModel] Loading %s'%path))
             self.load(path, skip_keys=skip_keys, keep_keys=keep_keys)
         # else:
         #     assert False, str(path)
 
     def forward(self, x, input_dict_extra={}):
-        # print('[DPTAlbedoDepthModel - x]', x.shape, torch.max(x), torch.min(x), torch.median(x)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
-        x_out = super().forward(x)
-        # print('[DPTAlbedoDepthModel - x_out 1]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
+        # print('[DPTBRDFModel - x]', x.shape, torch.max(x), torch.min(x), torch.median(x)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
+        x_out = super().forward(x, input_dict_extra=input_dict_extra)
+        # print('[DPTBRDFModel - x_out 1]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
         if self.modality == 'al':
             x_out = torch.clamp(1.01 * torch.tanh(x_out ), -1, 1)
-            # print('[DPTAlbedoDepthModel - x_out 2]', self.if_batch_norm, x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
+        elif self.modality == 'ro':
+            x_out = torch.clamp(1.01 * torch.tanh(x_out ), -1, 1)
+            x_out = torch.mean(x_out, dim=1, keepdim=True)
         elif self.modality == 'de':
             '''
             where x_out is disparity (inversed * baseline)'''
             # x_out = torch.clamp(x_out, 1e-8, 100)
-            # print('[DPTAlbedoDepthModel - x_out]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
+            # print('[DPTBRDFModel - x_out]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
             depth = self.scale * x_out + self.shift
             depth[depth < 1e-8] = 1e-8
             depth = 1.0 / depth
             # x_out = torch.clip(x_out*5000., 1e-6, 2000000.)
-            # print('[DPTAlbedoDepthModel - x_out 3]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
+            # print('[DPTBRDFModel - x_out 3]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
             # pass
 
         return x_out, {}

@@ -229,7 +229,7 @@ _C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240/%s0_13.pth' # shou
 _C.MODEL_BRDF.encoder_exclude = '' # e.g. 'x4_x5
 _C.MODEL_BRDF.use_scale_aware_depth = True
 _C.MODEL_BRDF.depth_activation = 'relu'
-_C.MODEL_BRDF.use_scale_aware_albedo = False # [default: False] set to False to use **scale-invariant** loss for albedo
+_C.MODEL_BRDF.use_scale_aware_albedo = True # [default: False] set to False to use **scale-invariant** loss for albedo
 _C.MODEL_BRDF.loss = CN()
 _C.MODEL_BRDF.loss.if_use_midas_loss_depth = False
 _C.MODEL_BRDF.loss.if_use_reg_loss_depth = False
@@ -239,6 +239,7 @@ _C.MODEL_BRDF.loss.reg_loss_albedo_weight = 0.5
 
 _C.MODEL_BRDF.DPT_baseline = CN()
 _C.MODEL_BRDF.DPT_baseline.enable = False
+_C.MODEL_BRDF.DPT_baseline.if_share_patchembed = False
 _C.MODEL_BRDF.DPT_baseline.if_SGD = False
 _C.MODEL_BRDF.DPT_baseline.if_warm_up = False
 _C.MODEL_BRDF.DPT_baseline.if_pos_embed = True
@@ -247,7 +248,7 @@ _C.MODEL_BRDF.DPT_baseline.if_vis_CA_proj_coef = False
 _C.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_affinity = False
 _C.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_gt_matseg = False
 # _C.MODEL_BRDF.DPT_baseline.if_batch_norm_in_proj_extra = False
-_C.MODEL_BRDF.DPT_baseline.modality = 'al'
+_C.MODEL_BRDF.DPT_baseline.modality = 'enabled'
 _C.MODEL_BRDF.DPT_baseline.model = 'dpt_hybrid'
 _C.MODEL_BRDF.DPT_baseline.readout = 'project'
 _C.MODEL_BRDF.DPT_baseline.use_vit_only = False
@@ -290,7 +291,6 @@ _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full.backbone_dims = 1856 # 64+256
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full.proj_extra_dims = 768 # to be consistent with hybrid
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full.proj_extra_if_inst_norm = True
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full.proj_extra_if_simple = False
-
 
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc = False # use Cross Attention-tokens to update tokens (proj im feat to tokens)
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.CAc = CN()

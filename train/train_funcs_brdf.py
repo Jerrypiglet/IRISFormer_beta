@@ -64,6 +64,10 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
             input_dict['segBRDFBatch'] = torch.ones((im_cpu.shape[0], 1, im_cpu.shape[2], im_cpu.shape[3]), dtype=torch.float32).cuda(non_blocking=True)
             input_dict['segAllBatch'] = input_dict['segBRDFBatch']
 
+        input_dict['segBRDFBatch'] = input_dict['segBRDFBatch'] * input_dict['brdf_loss_mask'].unsqueeze(1)
+        input_dict['segAllBatch'] = input_dict['segAllBatch'] * input_dict['brdf_loss_mask'].unsqueeze(1)
+
+
     if opt.cfg.DATA.load_semseg_gt:
         input_dict['semseg_label'] = data_batch['semseg_label'].cuda(non_blocking=True)
         input_dict['semseg_label_ori'] = data_batch['semseg_label_ori'].cuda(non_blocking=True)

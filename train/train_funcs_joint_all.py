@@ -777,28 +777,30 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
             # === BRDF-DPT superpixel segmentation
             if opt.cfg.MODEL_BRDF.DPT_baseline.enable:
                 mode = opt.cfg.MODEL_BRDF.DPT_baseline.modality
-                modality = {'al': 'albedo', 'de': 'depth'}[mode]
-                if not '%s_extra_output_dict'%modality in output_dict:
-                    pass
-                else:
-                    if opt.cfg.MODEL_BRDF.DPT_baseline.model == 'dpt_hybrid_SSN' or opt.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_affinity:
-                        decoder_key = 'matseg'
-                        affinity_matrix = output_dict['%s_extra_output_dict'%modality]['%s_affinity'%decoder_key]
-                        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_ssn_matseg_on_lower_res:
-                            affinity_matrix = F.interpolate(affinity_matrix, scale_factor=4., mode='bilinear')
-                        # print(affinity_matrix.shape, affinity_matrix[0].sum(-1).sum(-1)) # should be either normalized by J, or RAW dist matrix
-                        affinity_matrix_label = torch.argmax(affinity_matrix, 1).detach().cpu().numpy()
+                assert mode=='enabled'
+                # modality = {'al': 'albedo', 'de': 'depth'}[mode]
+                for modality in opt.cfg.MODEL_BRDF.enable_list:
+                    if not '%s_extra_output_dict'%modality in output_dict:
+                        pass
+                    else:
+                        if opt.cfg.MODEL_BRDF.DPT_baseline.model == 'dpt_hybrid_SSN' or opt.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_affinity:
+                            decoder_key = 'matseg'
+                            affinity_matrix = output_dict['%s_extra_output_dict'%modality]['%s_affinity'%decoder_key]
+                            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_ssn_matseg_on_lower_res:
+                                affinity_matrix = F.interpolate(affinity_matrix, scale_factor=4., mode='bilinear')
+                            # print(affinity_matrix.shape, affinity_matrix[0].sum(-1).sum(-1)) # should be either normalized by J, or RAW dist matrix
+                            affinity_matrix_label = torch.argmax(affinity_matrix, 1).detach().cpu().numpy()
 
-                        for sample_idx_batch, affinity_matrix_label_single in enumerate(affinity_matrix_label):
-                            sample_idx = sample_idx_batch+batch_size*batch_id
-                            if sample_idx >= opt.cfg.TEST.vis_max_samples:
-                                break
+                            for sample_idx_batch, affinity_matrix_label_single in enumerate(affinity_matrix_label):
+                                sample_idx = sample_idx_batch+batch_size*batch_id
+                                if sample_idx >= opt.cfg.TEST.vis_max_samples:
+                                    break
 
-                            im_single_resized = scikit_resize(im_single_list[sample_idx], (affinity_matrix_label_single.shape[0], affinity_matrix_label_single.shape[1]))
+                                im_single_resized = scikit_resize(im_single_list[sample_idx], (affinity_matrix_label_single.shape[0], affinity_matrix_label_single.shape[1]))
 
-                            if opt.is_master:
-                                im_single_ssn_result = mark_boundaries(im_single_resized, affinity_matrix_label_single)
-                                writer.add_image('VAL_DPT-SSN_%s_SSN_%s/%d'%(modality, decoder_key, sample_idx), im_single_ssn_result, tid, dataformats='HWC')
+                                if opt.is_master:
+                                    im_single_ssn_result = mark_boundaries(im_single_resized, affinity_matrix_label_single)
+                                    writer.add_image('VAL_DPT-SSN_%s_SSN_%s/%d'%(modality, decoder_key, sample_idx), im_single_ssn_result, tid, dataformats='HWC')
 
 
                 if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_debug_unet:

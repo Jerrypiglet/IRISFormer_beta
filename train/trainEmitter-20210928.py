@@ -250,6 +250,8 @@ model.print_net()
 
 # set up optimizers
 # optimizer = get_optimizer(model.parameters(), cfg.SOLVER)
+# print(model.BRDF_Net, '===f=asdfas')
+
 optimizer = optim.Adam(model.parameters(), lr=cfg.SOLVER.lr)
 if opt.cfg.SOLVER.method == 'adamw':
     optimizer = optim.AdamW(model.parameters(), lr=cfg.SOLVER.lr, weight_decay=0.05)
@@ -486,27 +488,6 @@ num_mat_masks_MAX = 0
 
 model.train(not opt.cfg.MODEL_SEMSEG.fix_bn)
 synchronize()
-if opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_large_SSN', 'dpt_hybrid', 'dpt_hybrid_SSN']:
-    if opt.cfg.MODEL_BRDF.DPT_baseline.enable and not(opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_feat_in_transformer):
-        if opt.distributed:
-            print(model.module.BRDF_Net.pretrained.model.patch_embed.backbone.stem.norm.bias)
-        else:
-            print(model.BRDF_Net.pretrained.model.patch_embed.backbone.stem.norm.bias)
-'''
-tensor([ 7.6822e-02,  1.3747e-01,  1.7786e-01,  1.2228e-01,  1.3169e-01,
-        -1.9725e-05,  1.8636e-01,  1.1685e-01,  1.2985e-01,  1.1506e-01,
-         1.0491e-01,  1.4802e-01,  1.5881e-01,  2.9753e-01,  1.1565e-01,
-         1.1791e-01,  1.2548e-01,  2.7642e-01,  1.1524e-01,  1.1916e-01,
-         1.2935e-01,  3.2841e-01,  9.7098e-02,  1.2557e-01,  1.1197e-01,
-         1.2638e-01,  1.5132e-01,  2.7703e-01,  1.3556e-01,  1.9152e-01,
-         9.4249e-02,  1.4314e-01,  1.1369e-01,  1.3198e-01,  1.3196e-01,
-         1.9317e-01,  1.2727e-01,  1.1400e-01,  1.1572e-01,  1.1789e-01,
-         1.1287e-01,  9.6660e-02,  1.0051e-01,  1.4812e-01,  1.8120e-01,
-         2.9408e-01,  8.3459e-02,  1.4994e-01,  2.5048e-01,  1.8411e-01,
-         1.1894e-01,  2.1533e-01, -4.0096e-04,  1.3774e-01,  1.4944e-01,
-         1.3586e-01,  1.3746e-01,  1.5885e-01,  1.2834e-01,  1.3462e-01,
-         1.7779e-01,  1.2519e-01,  2.4257e-01,  1.7199e-01], device='cuda:0',
-'''
 
 # for epoch in list(range(opt.epochIdFineTune+1, opt.cfg.SOLVER.max_epoch)):
 # for epoch_0 in list(range(1, 2) ):

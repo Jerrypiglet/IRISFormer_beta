@@ -198,7 +198,7 @@ class DPT_SSN_yogoUnet_N_layers(BaseModel):
 
         return out, ssn_return_dict
 
-class DPTAlbedoDepthModel_SSN_yogoUnet_N_layers(DPT_SSN_yogoUnet_N_layers):
+class DPTBRDFModel_SSN_yogoUnet_N_layers(DPT_SSN_yogoUnet_N_layers):
     '''
     N layers, 
     of which up to 4 layers are connected to outputs
@@ -231,7 +231,7 @@ class DPTAlbedoDepthModel_SSN_yogoUnet_N_layers(DPT_SSN_yogoUnet_N_layers):
         super().__init__(opt, head, **kwargs)
 
         if path is not None:
-            print(magenta('===== [DPTAlbedoDepthModel_SSN] Loading %s'%path))
+            print(magenta('===== [DPTBRDFModel_SSN] Loading %s'%path))
             self.load(path, skip_keys=skip_keys, keep_keys=keep_keys)
         # else:
         #     assert False, str(path)
@@ -242,10 +242,10 @@ class DPTAlbedoDepthModel_SSN_yogoUnet_N_layers(DPT_SSN_yogoUnet_N_layers):
         # if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone:
         #     print(ssn_return_dict['albedo_pred_unet'].shape)
 
-        # print('[DPTAlbedoDepthModel_SSN - x_out 1]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
+        # print('[DPTBRDFModel_SSN - x_out 1]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
         if self.modality == 'al':
             x_out = torch.clamp(1.01 * torch.tanh(x_out ), -1, 1)
-            # print('[DPTAlbedoDepthModel_SSN - x_out 2]', self.if_batch_norm, x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
+            # print('[DPTBRDFModel_SSN - x_out 2]', self.if_batch_norm, x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
         # elif self.modality == 'de':
             # x_out = torch.clamp(x_out, 1e-8, 100)
 
