@@ -1004,6 +1004,17 @@ class Model_Joint(nn.Module):
             normalPred = input_dict['normalBatch']
             roughPred = input_dict['roughBatch']
 
+        imBatch = input_dict['imBatch']
+
+        # print(imBatch.shape, albedoPred.shape, depthPred.shape, normalPred.shape, roughPred.shape)
+        if self.cfg.DATA.if_pad_to_32x:
+            imBatch = imBatch[:, :, :self.cfg.DATA.im_height, :self.cfg.DATA.im_width].contiguous()
+            albedoPred = albedoPred[:, :, :self.cfg.DATA.im_height, :self.cfg.DATA.im_width].contiguous()
+            depthPred = depthPred[:, :, :self.cfg.DATA.im_height, :self.cfg.DATA.im_width].contiguous()
+            normalPred = normalPred[:, :, :self.cfg.DATA.im_height, :self.cfg.DATA.im_width].contiguous()
+            roughPred = roughPred[:, :, :self.cfg.DATA.im_height, :self.cfg.DATA.im_width].contiguous()
+            # print('-->', imBatch.shape, albedoPred.shape, depthPred.shape, normalPred.shape, roughPred.shape)
+
         if self.cfg.MODEL_LIGHT.freeze_BRDF_Net and not self.cfg.MODEL_LIGHT.use_GT_brdf:
             assert self.BRDF_Net.training == False
             
@@ -1018,7 +1029,7 @@ class Model_Joint(nn.Module):
         depthPred = depthPred / torch.clamp(torch.mean(depthPred, dim=1), min=1e-10).unsqueeze(1) / 3.0
         depthPred = depthPred.view(bn, ch, nrow, ncol)
 
-        imBatchLarge = F.interpolate(input_dict['imBatch'], [480, 640], mode='bilinear')
+        imBatchLarge = F.interpolate(imBatch, [480, 640], mode='bilinear')
         albedoPredLarge = F.interpolate(albedoPred, [480, 640], mode='bilinear')
         depthPredLarge = F.interpolate(depthPred, [480, 640], mode='bilinear')
         normalPredLarge = F.interpolate(normalPred, [480, 640], mode='bilinear')
@@ -1034,13 +1045,14 @@ class Model_Joint(nn.Module):
             x1, x2, x3, x4, x5, x6 = self.LIGHT_Net['lightEncoder'](input_batch.detach(), input_dict['envmapsPreBatch'].detach() )
 
         # Prediction
-        axisPred_ori = self.LIGHT_Net['axisDecoder'](x1, x2, x3, x4, x5, x6, input_dict['envmapsBatch'] )
+        axisPred_ori = self.LIGHT_Net['axisDecoder'](x1, x2, x3, x4, x5, x6, input_dict['envmapsBatch'] ) # torch.Size([4, 12, 3, 120, 160])
+        # print(axisPred_ori.shape)
         lambPred_ori = self.LIGHT_Net['lambDecoder'](x1, x2, x3, x4, x5, x6, input_dict['envmapsBatch'] )
         weightPred_ori = self.LIGHT_Net['weightDecoder'](x1, x2, x3, x4, x5, x6, input_dict['envmapsBatch'] )
         bn, SGNum, _, envRow, envCol = axisPred_ori.size()
         # envmapsPred = torch.cat([axisPred.view(bn, SGNum * 3, envRow, envCol ), lambPred, weightPred], dim=1)
 
-        imBatchSmall = F.adaptive_avg_pool2d(input_dict['imBatch'], (self.cfg.MODEL_LIGHT.envRow, self.cfg.MODEL_LIGHT.envCol) )
+        imBatchSmall = F.adaptive_avg_pool2d(imBatch, (self.cfg.MODEL_LIGHT.envRow, self.cfg.MODEL_LIGHT.envCol) )
         segBatchSmall = F.adaptive_avg_pool2d(input_dict['segBRDFBatch'], (self.cfg.MODEL_LIGHT.envRow, self.cfg.MODEL_LIGHT.envCol) )
         notDarkEnv = (torch.mean(torch.mean(torch.mean(input_dict['envmapsBatch'], 4), 4), 1, True ) > 0.001 ).float()
         segEnvBatch = (segBatchSmall * input_dict['envmapsIndBatch'].expand_as(segBatchSmall) ).unsqueeze(-1).unsqueeze(-1)
