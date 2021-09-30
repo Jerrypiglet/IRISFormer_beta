@@ -624,15 +624,16 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
     if opt.cfg.MODEL_MATSEG.enable:
         match_segmentatin = MatchSegmentation()
 
+    im_paths_list = []
+    albedoBatch_list = []
+    normalBatch_list = []
+    roughBatch_list = []
+    depthBatch_list = []
+    imBatch_list = []
+    segAllBatch_list = []
+    segBRDFBatch_list = []
+    
     if opt.cfg.MODEL_BRDF.enable:
-        im_paths_list = []
-        albedoBatch_list = []
-        normalBatch_list = []
-        roughBatch_list = []
-        depthBatch_list = []
-        imBatch_list = []
-        segAllBatch_list = []
-        segBRDFBatch_list = []
 
         diffusePreBatch_list = []
         specularPreBatch_list = []
@@ -1308,16 +1309,20 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
             
             # ===== Vis BRDF 1/2
             # print(((input_dict['albedoBatch'] ) ** (1.0/2.2) ).data.shape) # [b, 3, h, w]
+            im_paths_list.append(input_dict['im_paths'])
+            imBatch_list.append(input_dict['imBatch'])
+            segAllBatch_list.append(input_dict['segAllBatch'])
+            segBRDFBatch_list.append(input_dict['segBRDFBatch'])
+            if 'al' in opt.cfg.DATA.data_read_list:
+                albedoBatch_list.append(input_dict['albedoBatch'])
+            if 'no' in opt.cfg.DATA.data_read_list:
+                normalBatch_list.append(input_dict['normalBatch'])
+            if 'ro' in opt.cfg.DATA.data_read_list:
+                roughBatch_list.append(input_dict['roughBatch'])
+            if 'de' in opt.cfg.DATA.data_read_list:
+                depthBatch_list.append(input_dict['depthBatch'])
+
             if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
-                # if opt.is_master:
-                    # print(input_dict.keys())
-                im_paths_list.append(input_dict['im_paths'])
-                # print(input_dict['im_paths'])
-
-                imBatch_list.append(input_dict['imBatch'])
-                segAllBatch_list.append(input_dict['segAllBatch'])
-                segBRDFBatch_list.append(input_dict['segBRDFBatch'])
-
                 if opt.cascadeLevel > 0:
                     diffusePreBatch_list.append(input_dict['pre_batch_dict_brdf']['diffusePreBatch'])
                     specularPreBatch_list.append(input_dict['pre_batch_dict_brdf']['specularPreBatch'])
@@ -1325,21 +1330,16 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                 n = 0
                 if 'al' in opt.cfg.MODEL_BRDF.enable_list:
                     # if (not opt.cfg.DATASET.if_no_gt_semantics):
-                    albedoBatch_list.append(input_dict['albedoBatch'])
                     albedoPreds_list.append(output_dict['albedoPreds'][n])
                     albedoPreds_aligned_list.append(output_dict['albedoPreds_aligned'][n])
-
                 if 'no' in opt.cfg.MODEL_BRDF.enable_list:
                     # if (not opt.cfg.DATASET.if_no_gt_semantics):
-                    normalBatch_list.append(input_dict['normalBatch'])
                     normalPreds_list.append(output_dict['normalPreds'][n])
                 if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
                     # if (not opt.cfg.DATASET.if_no_gt_semantics):
-                    roughBatch_list.append(input_dict['roughBatch'])
                     roughPreds_list.append(output_dict['roughPreds'][n])
                 if 'de' in opt.cfg.MODEL_BRDF.enable_list:
                     # if (not opt.cfg.DATASET.if_no_gt_semantics):
-                    depthBatch_list.append(input_dict['depthBatch'])
                     depthPreds_list.append(output_dict['depthPreds'][n])
 
             # ===== LIGHT
@@ -1393,99 +1393,106 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
 
     # ===== Vis BRDF 2/2
     # ===== logging top N to TB
+    im_paths_list = flatten_list(im_paths_list)
+
+    if 'al' in opt.cfg.DATA.data_read_list:
+        # if (not opt.cfg.DATASET.if_no_gt_semantics):
+        albedoBatch_vis = torch.cat(albedoBatch_list)
+    if 'no' in opt.cfg.DATA.data_read_list:
+        # if (not opt.cfg.DATASET.if_no_gt_semantics):
+        normalBatch_vis = torch.cat(normalBatch_list)
+    if 'ro' in opt.cfg.DATA.data_read_list:
+        # if (not opt.cfg.DATASET.if_no_gt_semantics):
+        roughBatch_vis = torch.cat(roughBatch_list)
+    if 'de' in opt.cfg.DATA.data_read_list:
+        # if (not opt.cfg.DATASET.if_no_gt_semantics):
+        depthBatch_vis = torch.cat(depthBatch_list)
+
+    imBatch_vis = torch.cat(imBatch_list)
+    segAllBatch_vis = torch.cat(segAllBatch_list)
+    segBRDFBatch_vis = torch.cat(segBRDFBatch_list)
+
+    print('Saving vis to ', '{0}'.format(opt.summary_vis_path_task, tid))
+    # Save the ground truth and the input
+    # albedoBatch_vis_sdr = ( (albedoBatch_vis ) ** (1.0/2.2) ).data # torch.Size([16, 3, 192, 256]) 
+    im_batch_vis_sdr = ( (imBatch_vis)**(1.0/2.2) ).data
+
+    ## ---- GTs
+    # if (not opt.cfg.DATASET.if_no_gt_semantics):
+    if 'al' in opt.cfg.DATA.data_read_list:
+        albedo_gt_batch_vis_sdr = ( (albedoBatch_vis ) ** (1.0/2.2) ).data
+    if 'no' in opt.cfg.DATA.data_read_list:
+        normal_gt_batch_vis_sdr = (0.5*(normalBatch_vis + 1) ).data
+    if 'ro' in opt.cfg.DATA.data_read_list:
+        rough_gt_batch_vis_sdr = (0.5*(roughBatch_vis + 1) ).data
+    if 'de' in opt.cfg.DATA.data_read_list:
+        depthOut = 1 / torch.clamp(depthBatch_vis + 1, 1e-6, 10) * segAllBatch_vis.expand_as(depthBatch_vis) # invert the gt depth just for visualization purposes!
+        depth_gt_batch_vis_sdr = ( depthOut*segAllBatch_vis.expand_as(depthBatch_vis) ).data
+
+    if not opt.test_real and opt.is_master:
+        vutils.save_image(im_batch_vis_sdr,
+                '{0}/{1}_im.png'.format(opt.summary_vis_path_task, tid) )
+        if 'al' in opt.cfg.DATA.data_read_list:
+            vutils.save_image(albedo_gt_batch_vis_sdr,
+                '{0}/{1}_albedoGt.png'.format(opt.summary_vis_path_task, tid) )
+        if 'no' in opt.cfg.DATA.data_read_list:
+            vutils.save_image(normal_gt_batch_vis_sdr,
+                '{0}/{1}_normalGt.png'.format(opt.summary_vis_path_task, tid) )
+        if 'ro' in opt.cfg.DATA.data_read_list:
+            vutils.save_image(rough_gt_batch_vis_sdr,
+                '{0}/{1}_roughGt.png'.format(opt.summary_vis_path_task, tid) )
+        if 'de' in opt.cfg.DATA.data_read_list:
+            vutils.save_image(depth_gt_batch_vis_sdr,
+                '{0}/{1}_depthGt.png'.format(opt.summary_vis_path_task, tid) )
+
+    if 'al' in opt.cfg.DATA.data_read_list:
+        albedo_gt_batch_vis_sdr_numpy = albedo_gt_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
+    if 'no' in opt.cfg.DATA.data_read_list:
+        normal_gt_batch_vis_sdr_numpy = normal_gt_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
+    if 'ro' in opt.cfg.DATA.data_read_list:
+        rough_gt_batch_vis_sdr_numpy = rough_gt_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
+    if 'de' in opt.cfg.DATA.data_read_list:
+        depth_gt_batch_vis_sdr_numpy = depth_gt_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
+    # print('++++', rough_gt_batch_vis_sdr_numpy.shape, depth_gt_batch_vis_sdr_numpy.shape, albedo_gt_batch_vis_sdr_numpy.shape, albedo_gt_batch_vis_sdr_numpy.dtype)
+    # print(np.amax(albedo_gt_batch_vis_sdr_numpy), np.amin(albedo_gt_batch_vis_sdr_numpy), np.mean(albedo_gt_batch_vis_sdr_numpy))
+    depth_min_and_scale_list = []
+    if not opt.test_real and opt.is_master:
+        for sample_idx in range(im_batch_vis_sdr.shape[0]):
+            writer.add_image('VAL_brdf-segBRDF_GT/%d'%sample_idx, segBRDFBatch_vis[sample_idx].cpu().detach().numpy().squeeze(), tid, dataformats='HW')
+            segAll = segAllBatch_vis[sample_idx].cpu().detach().numpy().squeeze()
+            writer.add_image('VAL_brdf-segAll_GT/%d'%sample_idx, segAll, tid, dataformats='HW')
+            if 'al' in opt.cfg.DATA.data_read_list:
+                writer.add_image('VAL_brdf-albedo_GT/%d'%sample_idx, albedo_gt_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
+            if 'no' in opt.cfg.DATA.data_read_list:
+                writer.add_image('VAL_brdf-normal_GT/%d'%sample_idx, normal_gt_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
+            if 'ro' in opt.cfg.DATA.data_read_list:
+                writer.add_image('VAL_brdf-rough_GT/%d'%sample_idx, rough_gt_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
+            if 'de' in opt.cfg.DATA.data_read_list:
+                depth_normalized, depth_min_and_scale = vis_disp_colormap(depth_gt_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True, valid_mask=segAll==1)
+                depth_min_and_scale_list.append(depth_min_and_scale)
+                writer.add_image('VAL_brdf-depth_GT/%d'%sample_idx, depth_normalized, tid, dataformats='HWC')
+
+
+    ## ---- ESTs
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
-        im_paths_list = flatten_list(im_paths_list)
-        # print(im_paths_list)
 
         if 'al' in opt.cfg.MODEL_BRDF.enable_list:
-            # if (not opt.cfg.DATASET.if_no_gt_semantics):
-            albedoBatch_vis = torch.cat(albedoBatch_list)
             albedoPreds_vis = torch.cat(albedoPreds_list)
             albedoPreds_aligned_vis = torch.cat(albedoPreds_aligned_list)
+
         if 'no' in opt.cfg.MODEL_BRDF.enable_list:
-            # if (not opt.cfg.DATASET.if_no_gt_semantics):
-            normalBatch_vis = torch.cat(normalBatch_list)
             normalPreds_vis = torch.cat(normalPreds_list)
+
         if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
-            # if (not opt.cfg.DATASET.if_no_gt_semantics):
-            roughBatch_vis = torch.cat(roughBatch_list)
             roughPreds_vis = torch.cat(roughPreds_list)
+
         if 'de' in opt.cfg.MODEL_BRDF.enable_list:
-            # if (not opt.cfg.DATASET.if_no_gt_semantics):
-            depthBatch_vis = torch.cat(depthBatch_list)
             depthPreds_vis = torch.cat(depthPreds_list)
-
-        imBatch_vis = torch.cat(imBatch_list)
-        segAllBatch_vis = torch.cat(segAllBatch_list)
-        segBRDFBatch_vis = torch.cat(segBRDFBatch_list)
-
 
         if opt.cascadeLevel > 0:
             diffusePreBatch_vis = torch.cat(diffusePreBatch_list)
             specularPreBatch_vis = torch.cat(specularPreBatch_list)
             renderedImBatch_vis = torch.cat(renderedImBatch_list)
-
-
-        print('Saving vis to ', '{0}'.format(opt.summary_vis_path_task, tid))
-        # Save the ground truth and the input
-        # albedoBatch_vis_sdr = ( (albedoBatch_vis ) ** (1.0/2.2) ).data # torch.Size([16, 3, 192, 256]) 
-        im_batch_vis_sdr = ( (imBatch_vis)**(1.0/2.2) ).data
-
-        # ==== GTs
-        # if (not opt.cfg.DATASET.if_no_gt_semantics):
-        if 'al' in opt.cfg.MODEL_BRDF.enable_list:
-            albedo_gt_batch_vis_sdr = ( (albedoBatch_vis ) ** (1.0/2.2) ).data
-        if 'no' in opt.cfg.MODEL_BRDF.enable_list:
-            normal_gt_batch_vis_sdr = (0.5*(normalBatch_vis + 1) ).data
-        if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
-            rough_gt_batch_vis_sdr = (0.5*(roughBatch_vis + 1) ).data
-        if 'de' in opt.cfg.MODEL_BRDF.enable_list:
-            depthOut = 1 / torch.clamp(depthBatch_vis + 1, 1e-6, 10) * segAllBatch_vis.expand_as(depthBatch_vis) # invert the gt depth just for visualization purposes!
-            depth_gt_batch_vis_sdr = ( depthOut*segAllBatch_vis.expand_as(depthBatch_vis) ).data
-
-        if not opt.test_real and opt.is_master:
-            vutils.save_image(im_batch_vis_sdr,
-                    '{0}/{1}_im.png'.format(opt.summary_vis_path_task, tid) )
-            if 'al' in opt.cfg.MODEL_BRDF.enable_list:
-                vutils.save_image(albedo_gt_batch_vis_sdr,
-                    '{0}/{1}_albedoGt.png'.format(opt.summary_vis_path_task, tid) )
-            if 'no' in opt.cfg.MODEL_BRDF.enable_list:
-                vutils.save_image(normal_gt_batch_vis_sdr,
-                    '{0}/{1}_normalGt.png'.format(opt.summary_vis_path_task, tid) )
-            if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
-                vutils.save_image(rough_gt_batch_vis_sdr,
-                    '{0}/{1}_roughGt.png'.format(opt.summary_vis_path_task, tid) )
-            if 'de' in opt.cfg.MODEL_BRDF.enable_list:
-                vutils.save_image(depth_gt_batch_vis_sdr,
-                    '{0}/{1}_depthGt.png'.format(opt.summary_vis_path_task, tid) )
-
-        if 'al' in opt.cfg.MODEL_BRDF.enable_list:
-            albedo_gt_batch_vis_sdr_numpy = albedo_gt_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
-        if 'no' in opt.cfg.MODEL_BRDF.enable_list:
-            normal_gt_batch_vis_sdr_numpy = normal_gt_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
-        if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
-            rough_gt_batch_vis_sdr_numpy = rough_gt_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
-        if 'de' in opt.cfg.MODEL_BRDF.enable_list:
-            depth_gt_batch_vis_sdr_numpy = depth_gt_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
-        # print('++++', rough_gt_batch_vis_sdr_numpy.shape, depth_gt_batch_vis_sdr_numpy.shape, albedo_gt_batch_vis_sdr_numpy.shape, albedo_gt_batch_vis_sdr_numpy.dtype)
-        # print(np.amax(albedo_gt_batch_vis_sdr_numpy), np.amin(albedo_gt_batch_vis_sdr_numpy), np.mean(albedo_gt_batch_vis_sdr_numpy))
-        depth_min_and_scale_list = []
-        if not opt.test_real and opt.is_master:
-            for sample_idx in range(im_batch_vis_sdr.shape[0]):
-                writer.add_image('VAL_brdf-segBRDF_GT/%d'%sample_idx, segBRDFBatch_vis[sample_idx].cpu().detach().numpy().squeeze(), tid, dataformats='HW')
-                segAll = segAllBatch_vis[sample_idx].cpu().detach().numpy().squeeze()
-                writer.add_image('VAL_brdf-segAll_GT/%d'%sample_idx, segAll, tid, dataformats='HW')
-                if 'al' in opt.cfg.MODEL_BRDF.enable_list:
-                    writer.add_image('VAL_brdf-albedo_GT/%d'%sample_idx, albedo_gt_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
-                if 'no' in opt.cfg.MODEL_BRDF.enable_list:
-                    writer.add_image('VAL_brdf-normal_GT/%d'%sample_idx, normal_gt_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
-                if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
-                    writer.add_image('VAL_brdf-rough_GT/%d'%sample_idx, rough_gt_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
-                if 'de' in opt.cfg.MODEL_BRDF.enable_list:
-                    depth_normalized, depth_min_and_scale = vis_disp_colormap(depth_gt_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True, valid_mask=segAll==1)
-                    depth_min_and_scale_list.append(depth_min_and_scale)
-                    writer.add_image('VAL_brdf-depth_GT/%d'%sample_idx, depth_normalized, tid, dataformats='HWC')
-
 
         if opt.cascadeLevel > 0 and opt.is_master:
             vutils.save_image( ( (diffusePreBatch_vis)**(1.0/2.2) ).data,
