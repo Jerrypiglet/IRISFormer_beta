@@ -383,12 +383,12 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
                 writer.add_scalar('training/gpus', opt.num_gpus, tid)
         # if opt.is_master:
         if tid % 2000 == 0:
-            for sample_idx, (im_single, im_trainval_RGB, im_path) in enumerate(zip(data_batch['im'], data_batch['im_trainval_RGB'], data_batch['image_path'])):
+            for sample_idx, (im_single, im_trainval_SDR, im_path) in enumerate(zip(data_batch['im'], data_batch['im_trainval_SDR'], data_batch['image_path'])):
                 im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
-                im_trainval_RGB = im_trainval_RGB.numpy().squeeze().transpose(1, 2, 0)
+                im_trainval_SDR = im_trainval_SDR.numpy().squeeze().transpose(1, 2, 0)
                 if opt.is_master:
                     writer.add_image('TRAIN_im/%d'%sample_idx, im_single, tid, dataformats='HWC')
-                    writer.add_image('TRAIN_im_trainval_RGB/%d'%sample_idx, im_trainval_RGB, tid, dataformats='HWC')
+                    writer.add_image('TRAIN_im_trainval_SDR/%d'%sample_idx, im_trainval_SDR, tid, dataformats='HWC')
                     writer.add_text('TRAIN_image_name/%d'%sample_idx, im_path, tid)
             if opt.cfg.DATA.load_matseg_gt:
                 for sample_idx, (im_single, mat_aggre_map) in enumerate(zip(data_batch['im_matseg_transformed_trainval'], input_dict['mat_aggre_map_cpu'])):

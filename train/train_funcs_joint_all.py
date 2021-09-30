@@ -101,9 +101,9 @@ def get_matcls_meters(opt):
 def get_labels_dict_joint(data_batch, opt):
 
     # prepare input_dict from data_batch (from dataloader)
-    labels_dict = {'im_trainval_RGB': data_batch['im_trainval_RGB'].cuda(non_blocking=True), 'im_SDR_RGB': data_batch['im_SDR_RGB'].cuda(non_blocking=True), 'batch_idx': data_batch['image_index']}
-    if 'im_SDR_RGB_next' in data_batch:
-        labels_dict['im_SDR_RGB_next'] = data_batch['im_SDR_RGB_next'].cuda(non_blocking=True)
+    labels_dict = {'im_trainval_SDR': data_batch['im_trainval_SDR'].cuda(non_blocking=True), 'im_fixedscale_SDR': data_batch['im_fixedscale_SDR'].cuda(non_blocking=True), 'batch_idx': data_batch['image_index']}
+    if 'im_fixedscale_SDR_next' in data_batch:
+        labels_dict['im_fixedscale_SDR_next'] = data_batch['im_fixedscale_SDR_next'].cuda(non_blocking=True)
 
     if opt.cfg.DATA.load_matseg_gt:
         labels_dict_matseg = get_labels_dict_matseg(data_batch, opt)
@@ -686,7 +686,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
             if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable:
                 semseg_pred = output_dict['semseg_pred'].cpu().numpy()
 
-            for sample_idx_batch, (im_single, im_path) in enumerate(zip(data_batch['im_SDR_RGB'], data_batch['image_path'])):
+            for sample_idx_batch, (im_single, im_path) in enumerate(zip(data_batch['im_fixedscale_SDR'], data_batch['image_path'])):
                 sample_idx = sample_idx_batch+batch_size*batch_id
                 print('[Image] Visualizing %d sample...'%sample_idx, batch_id, sample_idx_batch)
                 if sample_idx >= opt.cfg.TEST.vis_max_samples:
@@ -705,8 +705,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
 
                     if opt.cfg.MODEL_MATSEG.albedo_pooling_debug and not opt.if_cluster:
                         os.makedirs('tmp/demo_%s'%(opt.task_name), exist_ok=True)
-                        np.save('tmp/demo_%s/im_trainval_RGB_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), im_single)
-                        print('Saved to' + 'tmp/demo_%s/im_trainval_RGB_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx))
+                        np.save('tmp/demo_%s/im_trainval_SDR_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), im_single)
+                        print('Saved to' + 'tmp/demo_%s/im_trainval_SDR_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx))
 
                     writer.add_text('VAL_image_name/%d'%(sample_idx), im_path, tid)
                     assert sample_idx == data_batch['image_index'][sample_idx_batch]
@@ -714,17 +714,17 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                             
                 if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool or opt.cfg.MODEL_MATSEG.if_albedo_safenet) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
                     if opt.is_master:
-                        if output_dict['im_trainval_RGB_mask_pooled_mean'] is not None:
-                            im_trainval_RGB_mask_pooled_mean = output_dict['im_trainval_RGB_mask_pooled_mean'][sample_idx_batch]
-                            im_trainval_RGB_mask_pooled_mean = im_trainval_RGB_mask_pooled_mean.cpu().numpy().squeeze().transpose(1, 2, 0)
-                            writer.add_image('VAL_im_trainval_RGB_mask_pooled_mean/%d'%(sample_idx), im_trainval_RGB_mask_pooled_mean, tid, dataformats='HWC')
+                        if output_dict['im_trainval_SDR_mask_pooled_mean'] is not None:
+                            im_trainval_SDR_mask_pooled_mean = output_dict['im_trainval_SDR_mask_pooled_mean'][sample_idx_batch]
+                            im_trainval_SDR_mask_pooled_mean = im_trainval_SDR_mask_pooled_mean.cpu().numpy().squeeze().transpose(1, 2, 0)
+                            writer.add_image('VAL_im_trainval_SDR_mask_pooled_mean/%d'%(sample_idx), im_trainval_SDR_mask_pooled_mean, tid, dataformats='HWC')
                         if not opt.if_cluster:
                             if 'kernel_list' in output_dict and not output_dict['kernel_list'] is None:
                                 kernel_list = output_dict['kernel_list']
                                 # print(len(kernel_list), kernel_list[0].shape)
                                 np.save('tmp/demo_%s/kernel_list_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), kernel_list[0].detach().cpu().numpy())
-                            if output_dict['im_trainval_RGB_mask_pooled_mean'] is not None:
-                                np.save('tmp/demo_%s/im_trainval_RGB_mask_pooled_mean_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), im_trainval_RGB_mask_pooled_mean)
+                            if output_dict['im_trainval_SDR_mask_pooled_mean'] is not None:
+                                np.save('tmp/demo_%s/im_trainval_SDR_mask_pooled_mean_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), im_trainval_SDR_mask_pooled_mean)
                             if 'embeddings' in output_dict and output_dict['embeddings'] is not None:
                                 np.save('tmp/demo_%s/embeddings_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), output_dict['embeddings'].detach().cpu().numpy())
                             if 'affinity' in output_dict:
@@ -932,7 +932,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     color_pred = np.array(colorize(gray_pred, colors).convert('RGB'))
                     if opt.is_master:
                         writer.add_image('VAL_semseg_PRED/%d'%(sample_idx), color_pred, tid, dataformats='HWC')
-                        im_single = data_batch['im_SDR_RGB'][sample_idx_batch].detach().cpu().numpy().astype(np.float32)
+                        im_single = data_batch['im_fixedscale_SDR'][sample_idx_batch].detach().cpu().numpy().astype(np.float32)
                         im_single = cv2.resize(im_single, (color_pred.shape[1], color_pred.shape[0]), interpolation=cv2.INTER_NEAREST)
                         color_pred = color_pred.astype(np.float32) / 255.
                         semseg_pred_overlay = im_single * color_pred + im_single * 0.2 * (1. - color_pred)
@@ -975,7 +975,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                                 writer.add_image('VAL_DETECTRON_mask_PRED_%d/%d'%(sample_idx, mask_idx), mask, tid, dataformats='HW')
                         # mask_list=map1[d["file_name"]]
 
-                    im_single = (data_batch['im_SDR_RGB'][sample_idx_batch].detach().cpu().numpy().astype(np.float32) * 255.).astype(np.uint8)
+                    im_single = (data_batch['im_fixedscale_SDR'][sample_idx_batch].detach().cpu().numpy().astype(np.float32) * 255.).astype(np.uint8)
                     v = Visualizer(im_single, metadata=MetadataCatalog.get("OR_detectron_val"), scale=1)
                     v_pred = v.draw_instance_predictions(detectron_output_dict["instances"].to("cpu"))
                     # cv2.imwrite(osp.join(viz, filesubpath,'viz.png'),v.get_image()[:, :, ::-1])
@@ -1207,7 +1207,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     if opt.is_master:
                         writer.add_image('VAL_matcls_PRED-GT/%d'%(sample_idx), summary_cat, tid, dataformats='HWC')
                         writer.add_image('VAL_matcls_matmask/%d'%(sample_idx), mat_mask.squeeze(), tid, dataformats='HW')
-                        im_single = data_batch['im_SDR_RGB'][sample_idx_batch].detach().cpu()
+                        im_single = data_batch['im_fixedscale_SDR'][sample_idx_batch].detach().cpu()
                         mat_mask = mat_mask.permute(1, 2, 0).cpu().float()
                         matmask_overlay = im_single * mat_mask + im_single * 0.2 * (1. - mat_mask)
                         writer.add_image('VAL_matcls_matmask-overlay/%d'%(sample_idx), matmask_overlay, tid, dataformats='HWC')
@@ -1374,7 +1374,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     Q_M_batch = output_dict['output_GMM']['gamma_update'].detach().cpu().numpy()
                     im_resampled_GMM_batch = output_dict['output_GMM']['im_resampled_GMM'].detach().cpu().numpy()
                     # print(Q_M_batch.shape) # [b, 315, 240, 320]
-                    for sample_idx_batch, (im_single, im_path) in enumerate(zip(data_batch['im_SDR_RGB'], data_batch['image_path'])):
+                    for sample_idx_batch, (im_single, im_path) in enumerate(zip(data_batch['im_fixedscale_SDR'], data_batch['image_path'])):
                         sample_idx = sample_idx_batch+batch_size*batch_id
                         # Q_M = Q_M_batch[sample_idx_batch]
                         # output_GMM_Q_list.append(Q_M)

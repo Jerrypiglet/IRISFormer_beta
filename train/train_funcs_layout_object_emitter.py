@@ -111,7 +111,7 @@ def get_labels_dict_layout_emitter(labels_dict_input, data_batch, opt):
             # print(labels_dict['object_labels']['patch'].shape)
             # print(labels_dict['object_labels']['size_cls'].shape)
             labels_dict['mesh_labels'] = {
-                # 'img': labels_dict_input['im_trainval_RGB'], 
+                # 'img': labels_dict_input['im_trainval_SDR'], 
                 'img': labels_dict['object_labels']['patch'], 
                 'cls': labels_dict['object_labels']['size_cls'], 
                 'mesh_points': mesh_points, 
@@ -375,7 +375,7 @@ def vis_layout_emitter(labels_dict, output_dict, data_batch, opt, time_meters=No
             gt_meshes = None
             pre_meshes = None
 
-        image = (labels_dict['im_SDR_RGB'][sample_idx_batch].detach().cpu().numpy() * 255.).astype(np.uint8)
+        image = (labels_dict['im_fixedscale_SDR'][sample_idx_batch].detach().cpu().numpy() * 255.).astype(np.uint8)
         # image = np.transpose(image, (1, 2, 0))
 
         # ---- emitters

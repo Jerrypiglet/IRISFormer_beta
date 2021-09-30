@@ -133,7 +133,7 @@ class decoder0_pacconv(nn.Module):
         # matseg_embeddings = matseg_embeddings * (2. * input_dict_extra['mat_notlight_mask_gpu_float'] - 1)
         mat_notlight_mask_gpu_float = input_dict_extra['mat_notlight_mask_gpu_float']
 
-        im_trainval_RGB_mask_pooled_mean, kernel_list = None, None
+        im_trainval_SDR_mask_pooled_mean, kernel_list = None, None
         
         # assert self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug == False
         if self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug and self.opt.if_vis_debug_pac:
@@ -152,17 +152,17 @@ class decoder0_pacconv(nn.Module):
             # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[15], strides=[15], paddings=[7], dilations=[1])
 
 
-            im_in = input_dict_extra['im_trainval_RGB']
+            im_in = input_dict_extra['im_trainval_SDR']
             # im_in = F.interpolate(im_in, [120, 160], mode='bilinear')
             # im_in = F.interpolate(im_in, [60, 80], mode='bilinear')
             # im_in = F.interpolate(im_in, [30, 40], mode='bilinear')
             
             # print(matseg_embeddings.shape, matseg_embeddings[0, :5, :2, 0])
             # matseg_embeddings = torch.ones_like(matseg_embeddings, device=matseg_embeddings.device)
-            # im_trainval_RGB_mask_pooled_mean = im_in
-            im_trainval_RGB_mask_pooled_mean, kernel_list = self.pac_conv_transform(im_in, (matseg_embeddings, mat_notlight_mask_gpu_float), x_pac_conv, force_mean=True, return_kernel_list=True)
-            print(im_trainval_RGB_mask_pooled_mean.shape, '======')
-        return_dict.update({'im_trainval_RGB_mask_pooled_mean': im_trainval_RGB_mask_pooled_mean, 'kernel_list': kernel_list})
+            # im_trainval_SDR_mask_pooled_mean = im_in
+            im_trainval_SDR_mask_pooled_mean, kernel_list = self.pac_conv_transform(im_in, (matseg_embeddings, mat_notlight_mask_gpu_float), x_pac_conv, force_mean=True, return_kernel_list=True)
+            print(im_trainval_SDR_mask_pooled_mean.shape, '======')
+        return_dict.update({'im_trainval_SDR_mask_pooled_mean': im_trainval_SDR_mask_pooled_mean, 'kernel_list': kernel_list})
 
         
         if 'x6' in self.albedo_pac_conv_mean_layers:

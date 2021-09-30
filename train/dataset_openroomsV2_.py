@@ -126,17 +126,17 @@ class openrooms(data.Dataset):
         im_ori = self.loadHdr(hdr_file)
         # Random scale the image
         im, scale = self.scaleHdr(im_ori, seg)
-        im_trainval_RGB = np.clip(im**(1.0/2.2), 0., 1.)
+        im_trainval_SDR = np.clip(im**(1.0/2.2), 0., 1.)
 
         # assert self.transforms_fixed is not None
         im_SDR_scale, _ = self.scaleHdr(im_ori, seg, forced_fixed_scale=True)
         im_SDR_RGB = np.clip(im_SDR_scale**(1.0/2.2), 0., 1.)
-        im_RGB_uint8 = (255. * im_SDR_RGB).transpose(1, 2, 0).astype(np.uint8)
-        # image = Image.fromarray(im_RGB_uint8)
-        image_transformed_fixed = self.transforms_fixed(im_RGB_uint8)
+        im_fixedscale_SDR_uint8 = (255. * im_SDR_RGB).transpose(1, 2, 0).astype(np.uint8)
+        # image = Image.fromarray(im_fixedscale_SDR_uint8)
+        image_transformed_fixed = self.transforms_fixed(im_fixedscale_SDR_uint8)
         
         batch_dict = {'im': torch.from_numpy(im), 'image_path': image_path}
-        batch_dict.update({'image_transformed_fixed': image_transformed_fixed, 'im_trainval_RGB': im_trainval_RGB, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
+        batch_dict.update({'image_transformed_fixed': image_transformed_fixed, 'im_trainval_SDR': im_trainval_SDR, 'im_SDR_RGB': im_SDR_RGB, 'im_fixedscale_SDR_uint8': im_fixedscale_SDR_uint8})
 
         if self.opt.cfg.DATA.load_brdf_gt:
             # Get paths for BRDF params
@@ -265,14 +265,14 @@ class openrooms(data.Dataset):
 
 
             # >>>> Rui: Convert to Plane-paper compatible formats
-            # print(seg.shape, mask.shape, im_RGB_uint8.shape, mat_aggre_map.shape)
-            # im_matseg_transformed_trainval, stacked_transformed = self.transforms_matseg(im_RGB_uint8, np.stack((mat_aggre_map, seg, mask), 2)) # augmented
+            # print(seg.shape, mask.shape, im_fixedscale_SDR_uint8.shape, mat_aggre_map.shape)
+            # im_matseg_transformed_trainval, stacked_transformed = self.transforms_matseg(im_fixedscale_SDR_uint8, np.stack((mat_aggre_map, seg, mask), 2)) # augmented
             # mat_aggre_map_transformed, seg, mask, = np.split(stacked_transformed, [3, 3, 1])
             # print(mat_aggre_map_transformed.shape, seg.shape, mask.shape)
-            im_matseg_transformed_trainval, mat_aggre_map_transformed = self.transforms_matseg(im_RGB_uint8, mat_aggre_map.squeeze()) # augmented
+            im_matseg_transformed_trainval, mat_aggre_map_transformed = self.transforms_matseg(im_fixedscale_SDR_uint8, mat_aggre_map.squeeze()) # augmented
             mat_aggre_map = mat_aggre_map_transformed.numpy()[..., np.newaxis]
 
-            # im_matseg_transformed_trainval = self.transforms(im_RGB_uint8) # augmented
+            # im_matseg_transformed_trainval = self.transforms(im_fixedscale_SDR_uint8) # augmented
 
             h, w, _ = mat_aggre_map.shape
             gt_segmentation = mat_aggre_map
@@ -302,7 +302,7 @@ class openrooms(data.Dataset):
             semseg_label = np.load(semseg_label_path).astype(np.uint8)
             semseg_label = cv2.resize(semseg_label, (self.im_width, self.im_height), interpolation=cv2.INTER_NEAREST)
             # Transform images
-            im_semseg_transformed_trainval, semseg_label = self.transforms(im_RGB_uint8, semseg_label) # augmented
+            im_semseg_transformed_trainval, semseg_label = self.transforms(im_fixedscale_SDR_uint8, semseg_label) # augmented
             # semseg_label[semseg_label==0] = 31
             batch_dict.update({'semseg_label': semseg_label.long(), 'im_semseg_transformed_trainval': im_semseg_transformed_trainval})
 

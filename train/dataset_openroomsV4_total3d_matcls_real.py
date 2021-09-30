@@ -148,16 +148,16 @@ class openrooms(data.Dataset):
         png_image_path, mask_path = self.data_list[index]
 
         image = Image.open(str(png_image_path))
-        im_RGB_uint8 = np.array(image)
-        im_RGB_uint8 = cv2.resize(im_RGB_uint8, (self.im_width, self.im_height), interpolation = cv2.INTER_AREA )
+        im_fixedscale_SDR_uint8 = np.array(image)
+        im_fixedscale_SDR_uint8 = cv2.resize(im_fixedscale_SDR_uint8, (self.im_width, self.im_height), interpolation = cv2.INTER_AREA )
 
-        image_transformed_fixed = self.transforms_fixed(im_RGB_uint8)
-        im_trainval_RGB = self.transforms_resize(im_RGB_uint8) # not necessarily \in [0., 1.] [!!!!]
-        im_SDR_RGB = im_RGB_uint8.astype(np.float32) / 255.
+        image_transformed_fixed = self.transforms_fixed(im_fixedscale_SDR_uint8)
+        im_trainval_SDR = self.transforms_resize(im_fixedscale_SDR_uint8) # not necessarily \in [0., 1.] [!!!!]
+        im_SDR_RGB = im_fixedscale_SDR_uint8.astype(np.float32) / 255.
         im_trainval = im_SDR_RGB
 
         batch_dict = {'image_path': str(png_image_path), 'image_index': index}
-        batch_dict.update({'image_transformed_fixed': image_transformed_fixed, 'im_trainval': torch.from_numpy(im_trainval), 'im_trainval_RGB': im_trainval_RGB, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
+        batch_dict.update({'image_transformed_fixed': image_transformed_fixed, 'im_trainval': torch.from_numpy(im_trainval), 'im_trainval_SDR': im_trainval_SDR, 'im_SDR_RGB': im_SDR_RGB, 'im_fixedscale_SDR_uint8': im_fixedscale_SDR_uint8})
 
         # ====== matcls =====
         if self.opt.cfg.DATA.load_matcls_gt:

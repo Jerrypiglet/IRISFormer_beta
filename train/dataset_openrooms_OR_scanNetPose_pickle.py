@@ -355,19 +355,19 @@ class openrooms_pickle(data.Dataset):
 
         # Read PNG image
         # image = Image.open(str(png_image_path))
-        # im_RGB_uint8 = np.array(image)
-        # im_RGB_uint8 = cv2.resize(im_RGB_uint8, (self.im_width, self.im_height), interpolation = cv2.INTER_AREA )
+        # im_fixedscale_SDR_uint8 = np.array(image)
+        # im_fixedscale_SDR_uint8 = cv2.resize(im_fixedscale_SDR_uint8, (self.im_width, self.im_height), interpolation = cv2.INTER_AREA )
 
-        im_RGB_uint8 = pickle_return_dict['im_uint8_array']
+        im_fixedscale_SDR_uint8 = pickle_return_dict['im_uint8_array']
 
-        image_transformed_fixed = self.transforms_fixed(im_RGB_uint8)
-        im_trainval_RGB = self.transforms_resize(im_RGB_uint8) # not necessarily \in [0., 1.] [!!!!]
-        # print(im_trainval_RGB.shape, type(im_trainval_RGB), torch.max(im_trainval_RGB), torch.min(im_trainval_RGB), torch.mean(im_trainval_RGB))
-        im_SDR_RGB = im_RGB_uint8.astype(np.float32) / 255.
+        image_transformed_fixed = self.transforms_fixed(im_fixedscale_SDR_uint8)
+        im_trainval_SDR = self.transforms_resize(im_fixedscale_SDR_uint8) # not necessarily \in [0., 1.] [!!!!]
+        # print(im_trainval_SDR.shape, type(im_trainval_SDR), torch.max(im_trainval_SDR), torch.min(im_trainval_SDR), torch.mean(im_trainval_SDR))
+        im_fixedscale_SDR = im_fixedscale_SDR_uint8.astype(np.float32) / 255.
         if self.if_extra_op:
-            im_SDR_RGB = self.extra_op(im_SDR_RGB, name='im_SDR_RGB')
+            im_fixedscale_SDR = self.extra_op(im_fixedscale_SDR, name='im_fixedscale_SDR')
 
-        im_trainval = im_trainval_RGB # [3, 240, 320], tensor, not in [0., 1.]
+        im_trainval = im_trainval_SDR # [3, 240, 320], tensor, not in [0., 1.]
 
         batch_dict.update({'image_path': str(png_image_path), 'brdf_loss_mask': torch.from_numpy(brdf_loss_mask)})
 
@@ -377,25 +377,25 @@ class openrooms_pickle(data.Dataset):
             if not png_image_next_path.exists():
                 return self.__getitem__((index+1)%len(self.data_list))
             image_next = Image.open(str(png_image_next_path))
-            im_RGB_uint8_next = np.array(image_next)
-            im_RGB_uint8_next = cv2.resize(im_RGB_uint8_next, (self.im_width, self.im_height), interpolation = cv2.INTER_AREA )
-            im_SDR_RGB_next = im_RGB_uint8_next.astype(np.float32) / 255.
-            batch_dict.update({'im_SDR_RGB_next': im_SDR_RGB_next})
+            im_fixedscale_SDR_uint8_next = np.array(image_next)
+            im_fixedscale_SDR_uint8_next = cv2.resize(im_fixedscale_SDR_uint8_next, (self.im_width, self.im_height), interpolation = cv2.INTER_AREA )
+            im_fixedscale_SDR_next = im_fixedscale_SDR_uint8_next.astype(np.float32) / 255.
+            batch_dict.update({'im_fixedscale_SDR_next': im_fixedscale_SDR_next})
 
         
         # image_transformed_fixed: normalized, not augmented [only needed in semseg]
 
-        # im_trainval: normalized, augmented; HDR (same as im_trainval_RGB in png case) -> for input to network
+        # im_trainval: normalized, augmented; HDR (same as im_trainval_SDR in png case) -> for input to network
 
-        # im_trainval_RGB: normalized, augmented; LDR (SRGB space)
-        # im_SDR_RGB: normalized, NOT augmented; LDR
-        # im_RGB_uint8: im_SDR_RGB -> 255
+        # im_trainval_SDR: normalized, augmented; LDR (SRGB space)
+        # im_fixedscale_SDR: normalized, NOT augmented; LDR
+        # im_fixedscale_SDR_uint8: im_fixedscale_SDR -> 255
 
-        # print('------', image_transformed_fixed.shape, im_trainval.shape, im_trainval_RGB.shape, im_SDR_RGB.shape, im_RGB_uint8.shape, )
+        # print('------', image_transformed_fixed.shape, im_trainval.shape, im_trainval_SDR.shape, im_fixedscale_SDR.shape, im_fixedscale_SDR_uint8.shape, )
         # png: ------ torch.Size([3, 240, 320]) (240, 320, 3) torch.Size([3, 240, 320]) (240, 320, 3) (240, 320, 3)
         # hdr: ------ torch.Size([3, 240, 320]) (3, 240, 320) (3, 240, 320) (3, 240, 320) (240, 320, 3)
 
-        batch_dict.update({'hdr_scale': hdr_scale, 'image_transformed_fixed': image_transformed_fixed, 'im_trainval': im_trainval, 'im_trainval_RGB': im_trainval_RGB, 'im_SDR_RGB': im_SDR_RGB, 'im_RGB_uint8': im_RGB_uint8})
+        batch_dict.update({'hdr_scale': hdr_scale, 'image_transformed_fixed': image_transformed_fixed, 'im_trainval': im_trainval, 'im_trainval_SDR': im_trainval_SDR, 'im_fixedscale_SDR': im_fixedscale_SDR, 'im_fixedscale_SDR_uint8': im_fixedscale_SDR_uint8})
 
         # ====== BRDF =====
         # image_path = batch_dict['image_path']
@@ -409,7 +409,7 @@ class openrooms_pickle(data.Dataset):
 
         # ====== matseg =====
         if self.opt.cfg.DATA.load_matseg_gt:
-            mat_seg_dict = self.load_matseg(mask, im_RGB_uint8)
+            mat_seg_dict = self.load_matseg(mask, im_fixedscale_SDR_uint8)
             batch_dict.update(mat_seg_dict)
 
         return batch_dict
@@ -418,10 +418,10 @@ class openrooms_pickle(data.Dataset):
         # Read HDR image
         im_ori = self.loadHdr(hdr_image_path)
         # == no random scaling for inference
-        im_SDR_fixedscale, _ = self.scaleHdr(im_ori, seg, forced_fixed_scale=True)
-        im_SDR_RGB = np.clip(im_SDR_fixedscale**(1.0/2.2), 0., 1.)
-        im_RGB_uint8 = (255. * im_SDR_RGB).transpose(1, 2, 0).astype(np.uint8)
-        Image.fromarray(im_RGB_uint8).save(png_image_path)
+        im_fixedscale, _ = self.scaleHdr(im_ori, seg, forced_fixed_scale=True)
+        im_fixedscale_SDR = np.clip(im_fixedscale**(1.0/2.2), 0., 1.)
+        im_fixedscale_SDR_uint8 = (255. * im_fixedscale_SDR).transpose(1, 2, 0).astype(np.uint8)
+        Image.fromarray(im_fixedscale_SDR_uint8).save(png_image_path)
         print(yellow('>>> Saved png file to %s'%png_image_path))
 
     def load_scannet_compatible(self, batch_dict, frame_info):
@@ -642,15 +642,15 @@ class openrooms_pickle(data.Dataset):
 
         return return_scene_dict
 
-    def load_matseg(self, mask, im_RGB_uint8):
+    def load_matseg(self, mask, im_fixedscale_SDR_uint8):
         # >>>> Rui: Read obj mask
         mat_aggre_map, num_mat_masks = self.get_map_aggre_map(mask) # 0 for invalid region
         # if self.if_extra_op:
         #     mat_aggre_map = self.extra_op(mat_aggre_map, name='mat_aggre_map', if_channel_2_input=True)
         # if self.if_extra_op:
-        #     im_RGB_uint8 = self.extra_op(im_RGB_uint8, name='im_RGB_uint8')
-        # print(mat_aggre_map.shape, im_RGB_uint8.shape)
-        im_matseg_transformed_trainval, mat_aggre_map_transformed = self.transforms_matseg(im_RGB_uint8, mat_aggre_map.squeeze()) # augmented
+        #     im_fixedscale_SDR_uint8 = self.extra_op(im_fixedscale_SDR_uint8, name='im_fixedscale_SDR_uint8')
+        # print(mat_aggre_map.shape, im_fixedscale_SDR_uint8.shape)
+        im_matseg_transformed_trainval, mat_aggre_map_transformed = self.transforms_matseg(im_fixedscale_SDR_uint8, mat_aggre_map.squeeze()) # augmented
         # print(im_matseg_transformed_trainval.shape, mat_aggre_map_transformed.shape)
         mat_aggre_map = mat_aggre_map_transformed.numpy()[..., np.newaxis]
 

@@ -26,7 +26,7 @@ def get_labels_dict_semseg(data_batch, opt):
     input_dict['im_batch_semseg'] = data_batch['im_semseg_transformed_trainval'].cuda(non_blocking=True)
     input_dict['semseg_label'] = data_batch['semseg_label'].cuda(non_blocking=True)
 
-    input_dict['im_RGB_uint8'] = data_batch['im_RGB_uint8'].cuda(non_blocking=True)
+    input_dict['im_fixedscale_SDR_uint8'] = data_batch['im_fixedscale_SDR_uint8'].cuda(non_blocking=True)
 
     return input_dict
 

@@ -430,7 +430,7 @@ class Model_Joint(nn.Module):
 
         if self.cfg.MODEL_GMM.enable:
             input_dict_GMM = input_dict
-            input_dict_GMM['imgs_ref'] = input_dict['im_SDR_RGB'].permute(0, 3, 1, 2)
+            input_dict_GMM['imgs_ref'] = input_dict['im_fixedscale_SDR'].permute(0, 3, 1, 2)
             batch_idx = input_dict['batch_idx'][0]
             if self.cfg.MODEL_GMM.appearance_recon.enable:
                 input_dict_GMM['dmaps_ref'] = input_dict['depthBatch']
@@ -727,7 +727,7 @@ class Model_Joint(nn.Module):
                 input_dict_extra.update({'gamma_SSN3D': input_dict_extra['gamma_SSN3D'], 'MODEL_GMM': input_dict_extra['MODEL_GMM']})
             if self.cfg.MODEL_MATSEG.if_albedo_pooling:
                 input_dict_extra.update({'matseg-instance': input_dict['instance'], 'semseg-num_mat_masks_batch': input_dict['num_mat_masks_batch']})
-                input_dict_extra.update({'im_trainval_RGB': input_dict['im_trainval_RGB']})
+                input_dict_extra.update({'im_trainval_SDR': input_dict['im_trainval_SDR']})
                 if self.cfg.MODEL_MATSEG.albedo_pooling_from == 'pred':
                     assert input_dict_extra is not None
                     assert input_dict_extra['return_dict_matseg'] is not None
@@ -736,7 +736,7 @@ class Model_Joint(nn.Module):
             if self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool or self.cfg.MODEL_MATSEG.if_albedo_pac_conv or self.cfg.MODEL_MATSEG.if_albedo_safenet:
                 assert input_dict_extra is not None
                 assert input_dict_extra['return_dict_matseg'] is not None
-                input_dict_extra.update({'im_trainval_RGB': input_dict['im_trainval_RGB'], 'mat_notlight_mask_gpu_float': input_dict['mat_notlight_mask_gpu_float']})
+                input_dict_extra.update({'im_trainval_SDR': input_dict['im_trainval_SDR'], 'mat_notlight_mask_gpu_float': input_dict['mat_notlight_mask_gpu_float']})
                 input_dict_extra.update({'matseg-embeddings': input_dict_extra['return_dict_matseg']['embedding']})
 
             # print(input_dict['segBRDFBatch'].shape, input_dict['segAllBatch'].shape)
@@ -778,7 +778,7 @@ class Model_Joint(nn.Module):
             return_dict.update({'semseg_pred': semsegPred})
             
         if self.cfg.MODEL_MATSEG.if_albedo_pooling or self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool or self.cfg.MODEL_MATSEG.if_albedo_safenet:
-            return_dict.update({'im_trainval_RGB_mask_pooled_mean': albedo_output['im_trainval_RGB_mask_pooled_mean']})
+            return_dict.update({'im_trainval_SDR_mask_pooled_mean': albedo_output['im_trainval_SDR_mask_pooled_mean']})
             if 'kernel_list' in albedo_output:
                 return_dict.update({'kernel_list': albedo_output['kernel_list']})
             if 'embeddings' in albedo_output:

@@ -530,13 +530,13 @@ class decoder0(nn.Module):
         #     xin5 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], xin5, scale_feat_map=2)
         dx6 = F.relu(self.dgn6(self.dconv6(F.interpolate(xin5, scale_factor=2, mode='bilinear') ) ), True)
 
-        im_trainval_RGB_mask_pooled_mean = None
+        im_trainval_SDR_mask_pooled_mean = None
         if self.if_albedo_pooling:
             dx6_pooled_mean = self.mask_pooled_mean(dx6, instance, num_mat_masks_batch)
             dx6 = torch.cat([dx6, dx6 - dx6_pooled_mean], 1)
 
             if self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
-                im_trainval_RGB_mask_pooled_mean = self.mask_pooled_mean(input_dict_extra['im_trainval_RGB'], instance, num_mat_masks_batch)
+                im_trainval_SDR_mask_pooled_mean = self.mask_pooled_mean(input_dict_extra['im_trainval_SDR'], instance, num_mat_masks_batch)
 
         if self.if_albedo_asso_pool_conv:
             dx6_pool_1 = self.acco_pool_1(dx6, matseg_embeddings)
@@ -558,11 +558,11 @@ class decoder0(nn.Module):
             # print(dx6_pool_mean.shape)
             # dx6 = torch.cat([dx6, dx6_pool_1, dx6_pool_2, dx6_pool_4], 1)
             if self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
-                im_trainval_RGB_mask_pooled_mean_list = []
+                im_trainval_SDR_mask_pooled_mean_list = []
                 for acco_pool_mean in self.acco_pool_mean_list:
-                    im_trainval_RGB_mask_pooled_mean = acco_pool_mean(input_dict_extra['im_trainval_RGB'], matseg_embeddings * (2. * input_dict_extra['mat_notlight_mask_gpu_float'] - 1))
-                    im_trainval_RGB_mask_pooled_mean_list.append(im_trainval_RGB_mask_pooled_mean)
-                im_trainval_RGB_mask_pooled_mean = torch.stack(im_trainval_RGB_mask_pooled_mean_list, dim=0).mean(dim=0)
+                    im_trainval_SDR_mask_pooled_mean = acco_pool_mean(input_dict_extra['im_trainval_SDR'], matseg_embeddings * (2. * input_dict_extra['mat_notlight_mask_gpu_float'] - 1))
+                    im_trainval_SDR_mask_pooled_mean_list.append(im_trainval_SDR_mask_pooled_mean)
+                im_trainval_SDR_mask_pooled_mean = torch.stack(im_trainval_SDR_mask_pooled_mean_list, dim=0).mean(dim=0)
 
 
             if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_pool_keep_input            :
@@ -579,7 +579,7 @@ class decoder0(nn.Module):
 
         return_dict = {'extra_output_dict': extra_output_dict, 'dx1': dx1, 'dx2': dx2, 'dx3': dx3, 'dx4': dx4, 'dx5': dx5, 'dx6': dx6}
         # if self.if_albedo_pooling:
-        return_dict.update({'im_trainval_RGB_mask_pooled_mean': im_trainval_RGB_mask_pooled_mean})
+        return_dict.update({'im_trainval_SDR_mask_pooled_mean': im_trainval_SDR_mask_pooled_mean})
 
         if self.if_not_final_fc:
             return return_dict

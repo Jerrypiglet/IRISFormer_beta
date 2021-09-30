@@ -113,7 +113,7 @@ class decoder0_safenet(nn.Module):
         
         # assert self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug == False
         if self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug and self.opt.if_vis_debug_pac:
-            im_in = input_dict_extra['im_trainval_RGB']
+            im_in = input_dict_extra['im_trainval_SDR']
             im_in = F.interpolate(im_in, [120, 160], mode='bilinear')
             # im_in = F.interpolate(im_in, [60, 80], mode='bilinear')
             # im_in = F.interpolate(im_in, [30, 40], mode='bilinear')
@@ -159,7 +159,7 @@ class decoder0_safenet(nn.Module):
             # A = torch.exp(torch.matmul(embeddings_sampled, embeddings_2))
             # A = A / (A.sum(dim=2, keepdims=True))
 
-        return_dict.update({'im_trainval_RGB_mask_pooled_mean': im_in_transformed, 'kernel_list': kernel_list, 'affinity': A, 'sample_ij': sample_ij, 'embeddings': embeddings})
+        return_dict.update({'im_trainval_SDR_mask_pooled_mean': im_in_transformed, 'kernel_list': kernel_list, 'affinity': A, 'sample_ij': sample_ij, 'embeddings': embeddings})
 
         
         if 'x6' in self.albedo_safenet_affinity_layers:

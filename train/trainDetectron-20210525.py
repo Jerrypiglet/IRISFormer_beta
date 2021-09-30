@@ -633,21 +633,21 @@ else:
 
                 if tid % opt.debug_every_iter == 0:       
                     if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool or opt.cfg.MODEL_MATSEG.if_albedo_safenet) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
-                        if opt.is_master and output_dict['im_trainval_RGB_mask_pooled_mean'] is not None:
-                            for sample_idx, im_trainval_RGB_mask_pooled_mean in enumerate(output_dict['im_trainval_RGB_mask_pooled_mean']):
-                                im_trainval_RGB_mask_pooled_mean = im_trainval_RGB_mask_pooled_mean.detach().cpu().numpy().squeeze().transpose(1, 2, 0)
-                                writer.add_image('TRAIN_im_trainval_RGB_debug/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), data_batch['im_trainval_RGB'][sample_idx].numpy().squeeze().transpose(1, 2, 0), tid, dataformats='HWC')
-                                writer.add_image('TRAIN_im_trainval_RGB_mask_pooled_mean/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), im_trainval_RGB_mask_pooled_mean, tid, dataformats='HWC')
+                        if opt.is_master and output_dict['im_trainval_SDR_mask_pooled_mean'] is not None:
+                            for sample_idx, im_trainval_SDR_mask_pooled_mean in enumerate(output_dict['im_trainval_SDR_mask_pooled_mean']):
+                                im_trainval_SDR_mask_pooled_mean = im_trainval_SDR_mask_pooled_mean.detach().cpu().numpy().squeeze().transpose(1, 2, 0)
+                                writer.add_image('TRAIN_im_trainval_SDR_debug/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), data_batch['im_trainval_SDR'][sample_idx].numpy().squeeze().transpose(1, 2, 0), tid, dataformats='HWC')
+                                writer.add_image('TRAIN_im_trainval_SDR_mask_pooled_mean/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), im_trainval_SDR_mask_pooled_mean, tid, dataformats='HWC')
                                 logger.info('Added debug pooling sample')
                 
                 # ===== Logging summaries of training samples
                 if tid % 2000 == 0:
-                    for sample_idx, (im_single, im_trainval_RGB, im_path) in enumerate(zip(data_batch['im_trainval'], data_batch['im_trainval_RGB'], data_batch['image_path'])):
+                    for sample_idx, (im_single, im_trainval_SDR, im_path) in enumerate(zip(data_batch['im_trainval'], data_batch['im_trainval_SDR'], data_batch['image_path'])):
                         # im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
-                        im_trainval_RGB = im_trainval_RGB.numpy().squeeze().transpose(1, 2, 0)
+                        im_trainval_SDR = im_trainval_SDR.numpy().squeeze().transpose(1, 2, 0)
                         if opt.is_master:
                             # writer.add_image('TRAIN_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
-                            writer.add_image('TRAIN_im_trainval_RGB/%d'%sample_idx, im_trainval_RGB, tid, dataformats='HWC')
+                            writer.add_image('TRAIN_im_trainval_SDR/%d'%sample_idx, im_trainval_SDR, tid, dataformats='HWC')
                             writer.add_text('TRAIN_image_name/%d'%sample_idx, im_path, tid)
                     if opt.cfg.DATA.load_matseg_gt:
                         for sample_idx, (im_single, mat_aggre_map) in enumerate(zip(data_batch['im_matseg_transformed_trainval'], labels_dict['mat_aggre_map_cpu'])):

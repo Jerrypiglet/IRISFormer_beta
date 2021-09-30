@@ -231,7 +231,7 @@ class decoder0(nn.Module):
         #     xin5 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_SSN3D'], xin5, scale_feat_map=2)
         dx6 = F.relu(self.dgn6(self.dconv6(F.interpolate(xin5, scale_factor=2, mode='bilinear') ) ), True)
 
-        im_trainval_RGB_mask_pooled_mean = None
+        im_trainval_SDR_mask_pooled_mean = None
 
         if dx6.size(3) != im.size(3) or dx6.size(2) != im.size(2):
             dx6 = F.interpolate(dx6, [im.size(2), im.size(3)], mode='bilinear')
@@ -275,6 +275,6 @@ class decoder0(nn.Module):
 
         return_dict = {'x_out': x_out, 'extra_output_dict': extra_output_dict}
         # if self.if_albedo_pooling:
-        return_dict.update({'im_trainval_RGB_mask_pooled_mean': im_trainval_RGB_mask_pooled_mean})
+        return_dict.update({'im_trainval_SDR_mask_pooled_mean': im_trainval_SDR_mask_pooled_mean})
 
         return return_dict
