@@ -315,6 +315,9 @@ class Box(Scene3D):
         for i, ii in enumerate(np.arange(0, self.im_H, sample_every)//im_2_env_ratios[0]):
             for j, jj in enumerate(np.arange(0, self.im_W, sample_every)//im_2_env_ratios[1]):
 
+                # if ii != 100 and jj != 50:
+                #     continue
+
                 axis_LightNet_show = axis_LightNet_np[ii, jj] # at half res
                 axis_show = axis_LightNet_show @ T_LightNet2Total3D_rightmult
 
