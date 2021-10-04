@@ -32,7 +32,7 @@ from SimpleLayout.SimpleSceneTorchBatch import SimpleSceneTorchBatch
 from utils.utils_total3D.utils_OR_layout import get_layout_bdb_sunrgbd
 from utils.utils_total3D.utils_OR_cam import get_rotation_matix_result
 
-from models_def.model_dpt.models import DPTBRDFModel, get_BRDFNet_DPT
+from models_def.model_dpt.models import DPTBRDFModel, get_BRDFNet_DPT, get_LightNet_DPT
 from models_def.model_dpt.models_CAv2 import DPTBRDFModel_CAv2, get_BRDFNet_DPT_CAv2
 from models_def.model_dpt.models_SSN import DPTBRDFModel_SSN
 from models_def.model_dpt.models_SSN_yogoUnet_N_layers import DPTBRDFModel_SSN_yogoUnet_N_layers
@@ -45,6 +45,8 @@ import time
 
 from icecream import ic
 
+from models_def.model_dpt.blocks import forward_vit
+import torch.utils.checkpoint as cp
 class Model_Joint(nn.Module):
     def __init__(self, opt, logger):
         super(Model_Joint, self).__init__()
@@ -126,7 +128,8 @@ class Model_Joint(nn.Module):
                     self.BRDF_Net = get_BRDFNet_DPT(
                         opt=opt, 
                         model_path=model_path, 
-                        modalities=self.opt.cfg.MODEL_BRDF.enable_list
+                        modalities=self.opt.cfg.MODEL_BRDF.enable_list, 
+                        backbone="vitb_rn50_384" if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers == -1 else "vitb_rn50_384_N_layers"
                     )
                 elif model_type=='dpt_hybrid_CAv2':
                     assert self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers != -1
@@ -191,15 +194,23 @@ class Model_Joint(nn.Module):
                         skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
                     )
                 elif model_type=='dpt_base':
-                    self.BRDF_Net = DPTBRDFModel(
+                    # self.BRDF_Net = DPTBRDFModel(
+                    #     opt=opt, 
+                    #     modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
+                    #     path=model_path,
+                    #     backbone="vitb16_384",
+                    #     non_negative=if_non_negative,
+                    #     enable_attention_hooks=False,
+                    #     skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
+                    # )
+                    assert self.opt.cfg.MODEL_BRDF.DPT_baseline.modality == 'enabled', 'only support this mode for now; choose modes in MODEL_BRDF.enable_list'
+                    self.BRDF_Net = get_BRDFNet_DPT(
                         opt=opt, 
-                        modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
-                        path=model_path,
-                        backbone="vitb16_384",
-                        non_negative=if_non_negative,
-                        enable_attention_hooks=False,
-                        skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
+                        model_path=model_path, 
+                        modalities=self.opt.cfg.MODEL_BRDF.enable_list, 
+                        backbone="vitb16_384"
                     )
+
                 elif model_type=='dpt_base_SSN':
                     self.BRDF_Net = DPTBRDFModel_SSN(
                         opt=opt, 
@@ -302,11 +313,46 @@ class Model_Joint(nn.Module):
             self.load_pretrained_MODEL_BRDF(self.cfg.MODEL_BRDF.pretrained_pth_name)
 
         if self.cfg.MODEL_LIGHT.enable:
-            self.LIGHT_Net = nn.ModuleDict({})
-            self.LIGHT_Net.update({'lightEncoder':  models_light.encoderLight(cascadeLevel = opt.cascadeLevel, SGNum = opt.cfg.MODEL_LIGHT.SGNum )})
-            self.LIGHT_Net.update({'axisDecoder':  models_light.decoderLight(mode=0, SGNum = opt.cfg.MODEL_LIGHT.SGNum )})
-            self.LIGHT_Net.update({'lambDecoder':  models_light.decoderLight(mode = 1, SGNum = opt.cfg.MODEL_LIGHT.SGNum )})
-            self.LIGHT_Net.update({'weightDecoder':  models_light.decoderLight(mode = 2, SGNum = opt.cfg.MODEL_LIGHT.SGNum )})
+            if self.cfg.MODEL_LIGHT.DPT_baseline.enable:
+                assert opt.cascadeLevel == 0
+                model_type = self.opt.cfg.MODEL_LIGHT.DPT_baseline.model
+                if model_type=='dpt_hybrid':
+                    self.LIGHT_Net = get_LightNet_DPT(
+                        opt=opt, 
+                        SGNum=opt.cfg.MODEL_LIGHT.SGNum, 
+                        model_path=None, 
+                        modalities=opt.cfg.MODEL_LIGHT.enable_list, 
+                        backbone="vitb_rn50_384" if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers == -1 else "vitb_rn50_384_N_layers"
+                    )
+                elif model_type=='dpt_base':
+                    self.LIGHT_Net = get_LightNet_DPT(
+                        opt=opt, 
+                        SGNum=opt.cfg.MODEL_LIGHT.SGNum, 
+                        model_path=None, 
+                        modalities=opt.cfg.MODEL_LIGHT.enable_list, 
+                        backbone="vitb16_384", 
+                    )
+                else:
+                    assert False, 'not supported yet!'
+            else:
+                self.LIGHT_Net = nn.ModuleDict({})
+                self.LIGHT_Net.update({'lightEncoder':  models_light.encoderLight(cascadeLevel = opt.cascadeLevel, SGNum = opt.cfg.MODEL_LIGHT.SGNum )})
+                if 'axis' in opt.cfg.MODEL_LIGHT.enable_list:
+                    self.LIGHT_Net.update({'axisDecoder':  models_light.decoderLight(mode=0, SGNum = opt.cfg.MODEL_LIGHT.SGNum )})
+                if 'lamb' in opt.cfg.MODEL_LIGHT.enable_list:
+                    self.LIGHT_Net.update({'lambDecoder':  models_light.decoderLight(mode = 1, SGNum = opt.cfg.MODEL_LIGHT.SGNum )})
+                if 'weight' in opt.cfg.MODEL_LIGHT.enable_list:
+                    self.LIGHT_Net.update({'weightDecoder':  models_light.decoderLight(mode = 2, SGNum = opt.cfg.MODEL_LIGHT.SGNum )})
+
+            if self.cfg.MODEL_LIGHT.DPT_baseline.enable_as_indept_weight_est:
+                self.LIGHT_WEIGHT_Net = get_LightNet_DPT(
+                    opt=opt, 
+                    SGNum=opt.cfg.MODEL_LIGHT.SGNum, 
+                    model_path=None, 
+                    modalities=['weight'], 
+                    backbone="vitb16_384", 
+                )
+
             self.non_learnable_layers['renderLayer'] = models_light.renderingLayer(isCuda = opt.if_cuda, 
                 imWidth=opt.cfg.MODEL_LIGHT.envCol, imHeight=opt.cfg.MODEL_LIGHT.envRow, 
                 envWidth = opt.cfg.MODEL_LIGHT.envWidth, envHeight = opt.cfg.MODEL_LIGHT.envHeight)
@@ -616,7 +662,10 @@ class Model_Joint(nn.Module):
             modalities = self.opt.cfg.MODEL_BRDF.enable_list
             return_dicts = {}
 
-            if self.cfg.MODEL_BRDF.DPT_baseline.if_share_patchembed:
+            if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_share_pretrained:
+                module_hooks_dict = {}
+                input_dict_extra['shared_pretrained'] = forward_vit(self.opt, self.opt.cfg.MODEL_BRDF.DPT_baseline, self.BRDF_Net.shared_pretrained, img_batch, input_dict_extra={**input_dict_extra, **module_hooks_dict})
+            elif self.cfg.MODEL_BRDF.DPT_baseline.if_share_patchembed:
                 x = self.BRDF_Net.shared_patch_embed_backbone(img_batch)
                 input_dict_extra['shared_patch_embed_backbone_output'] = x
             
@@ -991,21 +1040,7 @@ class Model_Joint(nn.Module):
 
         return return_dict_layout_emitter
 
-    def forward_light(self, input_dict, return_dict_brdf):
-        # Normalize Albedo and depth
-        if not self.cfg.MODEL_LIGHT.use_GT_brdf:
-            depthPred = return_dict_brdf['depthPred']
-            albedoPred = return_dict_brdf['albedoPred']
-            normalPred = return_dict_brdf['normalPred']
-            roughPred = return_dict_brdf['roughPred']
-        else:
-            albedoPred = input_dict['albedoBatch']
-            depthPred = input_dict['depthBatch']
-            normalPred = input_dict['normalBatch']
-            roughPred = input_dict['roughBatch']
-
-        imBatch = input_dict['imBatch']
-
+    def forward_LIGHT_Net(self, input_dict, imBatch, albedoPred, depthPred, normalPred, roughPred, ):
         # print(imBatch.shape, albedoPred.shape, depthPred.shape, normalPred.shape, roughPred.shape)
         if self.cfg.DATA.if_pad_to_32x:
             imBatch = imBatch[:, :, :self.cfg.DATA.im_height, :self.cfg.DATA.im_width].contiguous()
@@ -1014,9 +1049,6 @@ class Model_Joint(nn.Module):
             normalPred = normalPred[:, :, :self.cfg.DATA.im_height, :self.cfg.DATA.im_width].contiguous()
             roughPred = roughPred[:, :, :self.cfg.DATA.im_height, :self.cfg.DATA.im_width].contiguous()
             # print('-->', imBatch.shape, albedoPred.shape, depthPred.shape, normalPred.shape, roughPred.shape)
-
-        if self.cfg.MODEL_LIGHT.freeze_BRDF_Net and not self.cfg.MODEL_LIGHT.use_GT_brdf:
-            assert self.BRDF_Net.training == False
             
         # note: normalization/rescaling also needed for GT BRDFs
         bn, ch, nrow, ncol = albedoPred.size()
@@ -1029,11 +1061,11 @@ class Model_Joint(nn.Module):
         depthPred = depthPred / torch.clamp(torch.mean(depthPred, dim=1), min=1e-10).unsqueeze(1) / 3.0
         depthPred = depthPred.view(bn, ch, nrow, ncol)
 
-        imBatchLarge = F.interpolate(imBatch, [480, 640], mode='bilinear')
-        albedoPredLarge = F.interpolate(albedoPred, [480, 640], mode='bilinear')
-        depthPredLarge = F.interpolate(depthPred, [480, 640], mode='bilinear')
-        normalPredLarge = F.interpolate(normalPred, [480, 640], mode='bilinear')
-        roughPredLarge = F.interpolate(roughPred, [480,640], mode='bilinear')
+        imBatchLarge = F.interpolate(imBatch, 2, mode='bilinear')
+        albedoPredLarge = F.interpolate(albedoPred, 2, mode='bilinear')
+        depthPredLarge = F.interpolate(depthPred, 2, mode='bilinear')
+        normalPredLarge = F.interpolate(normalPred, 2, mode='bilinear')
+        roughPredLarge = F.interpolate(roughPred, 2, mode='bilinear')
 
         input_batch = torch.cat([imBatchLarge, albedoPredLarge,
             0.5*(normalPredLarge+1), 0.5 * (roughPredLarge+1), depthPredLarge ], dim=1 )
@@ -1044,12 +1076,149 @@ class Model_Joint(nn.Module):
             assert self.opt.cascadeLevel > 0
             x1, x2, x3, x4, x5, x6 = self.LIGHT_Net['lightEncoder'](input_batch.detach(), input_dict['envmapsPreBatch'].detach() )
 
+        print(input_batch.shape, x1.shape, x2.shape, x3.shape, x4.shape, x5.shape, x6.shape) # torch.Size([4, 11, 480, 640]) torch.Size([4, 128, 60, 80]) torch.Size([4, 256, 30, 40]) torch.Size([4, 256, 15, 20]) torch.Size([4, 512, 7, 10]) torch.Size([4, 512, 3, 5]) torch.Size([4, 1024, 3, 5])
+
         # Prediction
-        axisPred_ori = self.LIGHT_Net['axisDecoder'](x1, x2, x3, x4, x5, x6, input_dict['envmapsBatch'] ) # torch.Size([4, 12, 3, 120, 160])
-        # print(axisPred_ori.shape)
-        lambPred_ori = self.LIGHT_Net['lambDecoder'](x1, x2, x3, x4, x5, x6, input_dict['envmapsBatch'] )
-        weightPred_ori = self.LIGHT_Net['weightDecoder'](x1, x2, x3, x4, x5, x6, input_dict['envmapsBatch'] )
-        bn, SGNum, _, envRow, envCol = axisPred_ori.size()
+        if 'axis' in self.cfg.MODEL_LIGHT.enable_list:
+            axisPred_ori = self.LIGHT_Net['axisDecoder'](x1, x2, x3, x4, x5, x6, input_dict['envmapsBatch'] ) # torch.Size([4, 12, 3, 120, 160])
+        else:
+            # assert False
+            # axisPred_ori = input_dict['']
+            axisPred_ori = input_dict['sg_axis_Batch'] # (4, 120, 160, 12, 3)
+            axisPred_ori = axisPred_ori.permute(0, 3, 4, 1, 2)
+        if 'lamb' in self.cfg.MODEL_LIGHT.enable_list:
+            lambPred_ori = self.LIGHT_Net['lambDecoder'](x1, x2, x3, x4, x5, x6, input_dict['envmapsBatch'] ) # torch.Size([4, 12, 120, 160])
+        else:
+            lambPred_ori = input_dict['sg_lamb_Batch'] # (4, 120, 160, 12, 1)
+            lambPred_ori = lambPred_ori.squeeze(4).permute(0, 3, 1, 2)
+            # print(lambPred_ori[0, :2, :3, :4])
+
+        if 'weight' in self.cfg.MODEL_LIGHT.enable_list:
+            weightPred_ori = self.LIGHT_Net['weightDecoder'](x1, x2, x3, x4, x5, x6, input_dict['envmapsBatch'] ) # torch.Size([4, 36, 120, 160])
+        else:
+            weightPred_ori = input_dict['sg_weight_Batch'] # (4, 120, 160, 12, 3)
+            weightPred_ori = weightPred_ori.flatten(3).permute(0, 3, 1, 2)
+            # weightPred_ori = torch.ones_like(weightPred_ori).cuda() * 0.1
+            # weightPred_ori[weightPred_ori>500] = 500.
+            # weightPred_ori = weightPred_ori / 500.
+        # print(torch.max(weightPred_ori), torch.min(weightPred_ori), torch.median(weightPred_ori))
+
+        return axisPred_ori, lambPred_ori, weightPred_ori
+
+    def forward_LIGHT_Net_DPT_baseline(self, input_dict, imBatch, albedoPred, depthPred, normalPred, roughPred, ):
+        im_h, im_w = self.cfg.DATA.im_height, self.cfg.DATA.im_width
+        # if self.cfg.DATA.if_pad_to_32x:
+        #     imBatch = imBatch[:, :, :im_h, :im_w].contiguous()
+        #     albedoPred = albedoPred[:, :, :im_h, :im_w].contiguous()
+        #     depthPred = depthPred[:, :, :im_h, :im_w].contiguous()
+        #     normalPred = normalPred[:, :, :im_h, :im_w].contiguous()
+        #     roughPred = roughPred[:, :, :im_h, :im_w].contiguous()
+            # print('-->', imBatch.shape, albedoPred.shape, depthPred.shape, normalPred.shape, roughPred.shape)
+            
+        # note: normalization/rescaling also needed for GT BRDFs
+        # bn, ch, nrow, ncol = albedoPred.size()
+        # albedoPred[:, :, :im_h, :im_w] = albedoPred[:, :, :im_h, :im_w] / torch.clamp(
+        #         torch.mean(albedoPred[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
+        #     , min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0
+
+        # bn, ch, nrow, ncol = depthPred.size()
+        # depthPred[:, :, :im_h, :im_w] = depthPred[:, :, :im_h, :im_w] / torch.clamp(
+        #         torch.mean(depthPred[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
+        #     , min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0
+
+        # imBatchLarge = F.interpolate(imBatch, [self.cfg.DATA.im_height*2, self.cfg.DATA.im_width*2], mode='bilinear')
+        # albedoPredLarge = F.interpolate(albedoPred, [self.cfg.DATA.im_height*2, self.cfg.DATA.im_width*2], mode='bilinear')
+        # depthPredLarge = F.interpolate(depthPred, [self.cfg.DATA.im_height*2, self.cfg.DATA.im_width*2], mode='bilinear')
+        # normalPredLarge = F.interpolate(normalPred, [self.cfg.DATA.im_height*2, self.cfg.DATA.im_width*2], mode='bilinear')
+        # roughPredLarge = F.interpolate(roughPred, [self.cfg.DATA.im_height*2, self.cfg.DATA.im_width*2], mode='bilinear')
+
+        input_batch = torch.cat([imBatch, albedoPred, 0.5*(normalPred+1), 0.5 * (roughPred+1), depthPred ], dim=1 ).detach()
+        # input_batch = imBatch
+
+        input_dict_extra = {}
+        input_dict_extra.update({'input_dict': input_dict})
+
+        modalities = self.opt.cfg.MODEL_LIGHT.enable_list
+        return_dicts = {}
+
+        if self.opt.cfg.MODEL_LIGHT.DPT_baseline.if_share_pretrained:
+            module_hooks_dict = {}
+            # if self.opt.cfg.MODEL_LIGHT.DPT_baseline.if_checkpoint:
+            #     input_dict_extra['shared_pretrained'] = cp.checkpoint(forward_vit, self.opt, self.opt.cfg.MODEL_LIGHT.DPT_baseline, self.LIGHT_Net.shared_pretrained, input_batch, {**input_dict_extra, **module_hooks_dict})
+            # else:
+            input_dict_extra['shared_pretrained'] = forward_vit(self.opt, self.opt.cfg.MODEL_LIGHT.DPT_baseline, self.LIGHT_Net.shared_pretrained, input_batch, input_dict_extra={**input_dict_extra, **module_hooks_dict})
+        elif self.cfg.MODEL_LIGHT.DPT_baseline.if_share_patchembed:
+            # if self.opt.cfg.MODEL_LIGHT.DPT_baseline.if_checkpoint:
+            #     x = cp.checkpoint(self.LIGHT_Net.shared_patch_embed_backbone, input_batch)
+            # else:
+            x = self.LIGHT_Net.shared_patch_embed_backbone(input_batch)
+            input_dict_extra['shared_patch_embed_backbone_output'] = x
+        
+        for modality in modalities:
+            # if self.opt.cfg.MODEL_LIGHT.DPT_baseline.if_checkpoint:
+            #     return_dicts[modality] = cp.checkpoint(self.LIGHT_Net[modality].forward, input_batch, input_dict_extra)
+            # else:
+            return_dicts[modality] = self.LIGHT_Net[modality].forward(input_batch, input_dict_extra=input_dict_extra)
+
+        assert self.opt.cascadeLevel == 0
+
+        return return_dicts['axis'][:, :, :, :im_h//2, :im_w//2], return_dicts['lamb'][:, :, :im_h//2, :im_w//2], return_dicts['weight'][:, :, :im_h//2, :im_w//2]
+
+    def forward_LIGHT_WEIGHT_Net_DPT_baseline(self, input_dict, imBatch, albedoPred, depthPred, normalPred, roughPred, ):
+        im_h, im_w = self.cfg.DATA.im_height, self.cfg.DATA.im_width
+
+        input_batch = torch.cat([imBatch, albedoPred, 0.5*(normalPred+1), 0.5 * (roughPred+1), depthPred ], dim=1 ).detach()
+        # input_batch = imBatch
+
+        input_dict_extra = {}
+        input_dict_extra.update({'input_dict': input_dict})
+
+        modality = 'weight'
+        return_dicts = {}
+
+
+        return_dicts[modality] = self.LIGHT_WEIGHT_Net[modality].forward(input_batch, input_dict_extra=input_dict_extra)
+
+        assert self.opt.cascadeLevel == 0
+
+        return return_dicts['weight'][:, :, :im_h//2, :im_w//2]
+
+    def forward_light(self, input_dict, return_dict_brdf):
+        # Normalize Albedo and depth
+        if self.cfg.MODEL_LIGHT.use_GT_brdf:
+            albedoPred = input_dict['albedoBatch']
+            depthPred = input_dict['depthBatch']
+            normalPred = input_dict['normalBatch']
+            roughPred = input_dict['roughBatch']
+        else:
+            depthPred = return_dict_brdf['depthPred']
+            albedoPred = return_dict_brdf['albedoPred']
+            normalPred = return_dict_brdf['normalPred']
+            roughPred = return_dict_brdf['roughPred']
+
+        imBatch = input_dict['imBatch']
+
+        if self.cfg.MODEL_LIGHT.freeze_BRDF_Net and not self.cfg.MODEL_LIGHT.use_GT_brdf:
+            assert self.BRDF_Net.training == False
+
+        if self.cfg.MODEL_LIGHT.DPT_baseline.enable:
+            axisPred_ori, lambPred_ori, weightPred_ori = self.forward_LIGHT_Net_DPT_baseline(input_dict, imBatch, albedoPred, depthPred, normalPred, roughPred)
+        else:
+            axisPred_ori, lambPred_ori, weightPred_ori = self.forward_LIGHT_Net(input_dict, imBatch, albedoPred, depthPred, normalPred, roughPred)
+            # print(axisPred_ori.shape, lambPred_ori.shape, weightPred_ori.shape)
+
+        if self.cfg.MODEL_LIGHT.DPT_baseline.enable_as_indept_weight_est:
+            weightPred_ori = self.forward_LIGHT_WEIGHT_Net_DPT_baseline(input_dict, imBatch, albedoPred, depthPred, normalPred, roughPred)
+            # print(weightPred_ori.shape)
+
+        # print(input_dict.keys())
+        # print(input_dict['envmapsBatch'].shape, axisPred_ori.shape, lambPred_ori.shape, weightPred_ori.shape) # torch.Size([4, 3, 120, 160, 8, 16]) torch.Size([4, 12, 3, 120, 160]) torch.Size([4, 12, 120, 160]) torch.Size([4, 36, 120, 160])
+        # print(axisPred_ori[0, 0, :, :2, :2])
+        # print(lambPred_ori[0, :3, :2, :2])
+        # print(weightPred_ori[0, :3, :2, :2])
+            
+
+        # bn, SGNum, _, envRow, envCol = axisPred_ori.size()
         # envmapsPred = torch.cat([axisPred.view(bn, SGNum * 3, envRow, envCol ), lambPred, weightPred], dim=1)
 
         imBatchSmall = F.adaptive_avg_pool2d(imBatch, (self.cfg.MODEL_LIGHT.envRow, self.cfg.MODEL_LIGHT.envCol) )
@@ -1081,7 +1250,7 @@ class Model_Joint(nn.Module):
         else:
             normal_input, rough_input = input_dict['normalBatch'], input_dict['roughBatch']
 
-        if self.cfg.MODEL_LIGHT.use_GT_light:
+        if self.cfg.MODEL_LIGHT.use_GT_light_envmap:
             envmapsImage_input = input_dict['envmapsBatch']
         else:
             envmapsImage_input = envmapsPredImage

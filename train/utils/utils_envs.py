@@ -98,6 +98,9 @@ def set_up_envs(opt):
 
     opt.if_pad = False
     opt.if_resize = False
+    if opt.cfg.MODEL_BRDF.DPT_baseline.enable or opt.cfg.MODEL_LIGHT.DPT_baseline.enable:
+        opt.cfg.DATA.if_pad_to_32x = True
+
     if opt.cfg.DATA.if_pad_to_32x:
         im_width_pad_to = int(np.ceil(opt.cfg.DATA.im_width/32.)*32)
         im_height_pad_to = int(np.ceil(opt.cfg.DATA.im_height/32.)*32)
@@ -134,6 +137,7 @@ def set_up_envs(opt):
     assert opt.cfg.MODEL_BRDF.depth_activation in ['sigmoid', 'relu', 'midas']
     
     # ====== DPT =====
+    opt.cfg.MODEL_LIGHT.DPT_baseline.dpt_hybrid = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.DPT_baseline.enable:
         opt.cfg.DATA.if_load_png_not_hdr = True
         assert opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_large', 'dpt_base', 'dpt_hybrid', 'dpt_hybrid_SSN', 'dpt_base_SSN', 'dpt_large_SSN', 'dpt_hybrid_CAv2']
@@ -169,8 +173,8 @@ def set_up_envs(opt):
             opt.cfg.MODEL_BRDF.DPT_baseline.feat_proj_channels = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels
         elif 'dpt_large' in opt.cfg.MODEL_BRDF.DPT_baseline.model:
             opt.cfg.MODEL_BRDF.DPT_baseline.feat_proj_channels = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_large.feat_proj_channels
-        else:
-            assert False, 'not supported yet'
+        # else:
+        #     assert False, 'not supported yet'
 
         if 'CAv2' in opt.cfg.MODEL_BRDF.DPT_baseline.model:
             opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA = True
@@ -304,6 +308,8 @@ def set_up_envs(opt):
             opt.cfg.MODEL_BRDF.enable_BRDF_decoders = True
             if opt.cfg.MODEL_LIGHT.freeze_BRDF_Net:
                 opt.cfg.MODEL_BRDF.if_freeze = True
+
+        opt.cfg.MODEL_LIGHT.enable_list = opt.cfg.MODEL_LIGHT.enable_list.split('_')
 
     # ====== semseg =====
     if opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable or opt.cfg.MODEL_SEMSEG.use_as_input or opt.cfg.MODEL_MATSEG.use_semseg_as_input:

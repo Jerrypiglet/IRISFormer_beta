@@ -761,7 +761,7 @@ else:
                 print('----loss_keys_backward', loss_keys_backward)
 
 
-            loss.backward()
+            # loss.backward()
 
             if opt.is_master and tid % 100 == 0:
                 for name, param in model.named_parameters():

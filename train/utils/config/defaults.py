@@ -240,10 +240,12 @@ _C.MODEL_BRDF.loss.reg_loss_albedo_weight = 0.5
 _C.MODEL_BRDF.DPT_baseline = CN()
 _C.MODEL_BRDF.DPT_baseline.enable = False
 _C.MODEL_BRDF.DPT_baseline.if_share_patchembed = False
+_C.MODEL_BRDF.DPT_baseline.if_share_pretrained = False
+
 _C.MODEL_BRDF.DPT_baseline.if_SGD = False
 _C.MODEL_BRDF.DPT_baseline.if_warm_up = False
-_C.MODEL_BRDF.DPT_baseline.if_pos_embed = True
-_C.MODEL_BRDF.DPT_baseline.if_batch_norm = False # in DPT output head
+_C.MODEL_BRDF.DPT_baseline.if_pos_embed = False
+_C.MODEL_BRDF.DPT_baseline.if_batch_norm = True # in DPT output head
 _C.MODEL_BRDF.DPT_baseline.if_vis_CA_proj_coef = False
 _C.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_affinity = False
 _C.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_gt_matseg = False
@@ -261,7 +263,7 @@ _C.MODEL_BRDF.DPT_baseline.dpt_large_path = 'NA'
 _C.MODEL_BRDF.DPT_baseline.if_freeze_backbone = False
 _C.MODEL_BRDF.DPT_baseline.if_enable_attention_hooks = False
 _C.MODEL_BRDF.DPT_baseline.if_freeze_pretrained = False
-_C.MODEL_BRDF.DPT_baseline.if_imagenet_backbone = False
+_C.MODEL_BRDF.DPT_baseline.if_imagenet_backbone = True
 _C.MODEL_BRDF.DPT_baseline.if_skip_last_conv = True
 _C.MODEL_BRDF.DPT_baseline.if_skip_patch_embed_proj = False
 _C.MODEL_BRDF.DPT_baseline.if_only_restore_backbone = False
@@ -362,13 +364,35 @@ _C.MODEL_LIGHT.envmapWidth = 1024
 _C.MODEL_LIGHT.envmapHeight = 512
 _C.MODEL_LIGHT.offset = 1. # 'the offset for log error'
 _C.MODEL_LIGHT.use_GT_brdf = False
-_C.MODEL_LIGHT.use_GT_light = False
+_C.MODEL_LIGHT.use_GT_light_envmap = False
+# _C.MODEL_LIGHT.use_GT_light_axis = False
+# _C.MODEL_LIGHT.use_GT_light_lamb = False
+# _C.MODEL_LIGHT.use_GT_light_weight = False
+_C.MODEL_LIGHT.load_GT_light_sg = False
 _C.MODEL_LIGHT.load_pretrained_MODEL_BRDF = False
 _C.MODEL_LIGHT.load_pretrained_MODEL_LIGHT = False
 _C.MODEL_LIGHT.freeze_BRDF_Net = True
 _C.MODEL_LIGHT.pretrained_pth_name = 'check_cascadeLight0_sg12_offset1.0/%s0_9.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
 _C.MODEL_LIGHT.use_scale_aware_loss = False
 _C.MODEL_LIGHT.if_transform_to_LightNet_coords = False # if transform pred lighting to global LightNet coords
+_C.MODEL_LIGHT.enable_list = 'axis_lamb_weight'
+
+_C.MODEL_LIGHT.DPT_baseline = CN()
+_C.MODEL_LIGHT.DPT_baseline.enable = False
+_C.MODEL_LIGHT.DPT_baseline.model = 'dpt_hybrid'
+_C.MODEL_LIGHT.DPT_baseline.enable_as_indept_weight_est = False
+_C.MODEL_LIGHT.DPT_baseline.if_share_patchembed = False
+_C.MODEL_LIGHT.DPT_baseline.if_share_pretrained = False
+_C.MODEL_LIGHT.DPT_baseline.if_batch_norm = True # in DPT output head
+_C.MODEL_LIGHT.DPT_baseline.if_imagenet_backbone = False
+_C.MODEL_LIGHT.DPT_baseline.readout = 'ignore'
+_C.MODEL_LIGHT.DPT_baseline.if_pos_embed = False
+_C.MODEL_LIGHT.DPT_baseline.if_checkpoint = False
+_C.MODEL_LIGHT.DPT_baseline.patch_size = 16
+_C.MODEL_LIGHT.DPT_baseline.in_channels = 11
+
+_C.MODEL_LIGHT.DPT_baseline.dpt_hybrid = CN() # share with MODEL_BRDF
+
 
 # _C.MODEL_LIGHT.pretrained_pth_name = ''
 

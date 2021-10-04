@@ -107,10 +107,10 @@ class Transpose(nn.Module):
         return x
 
 
-def forward_vit(opt, pretrained, x, input_dict_extra={}):
+def forward_vit(opt, cfg_DPT, pretrained, x, input_dict_extra={}):
     b, c, h, w = x.shape
 
-    glob, extra_output_dict = pretrained.model.forward_flex(opt, x, input_dict_extra=input_dict_extra)
+    glob, extra_output_dict = pretrained.model.forward_flex(opt, cfg_DPT, x, input_dict_extra=input_dict_extra)
 
     layer_1 = pretrained.activations["1"]
     layer_2 = pretrained.activations["2"]
@@ -146,34 +146,34 @@ def forward_vit(opt, pretrained, x, input_dict_extra={}):
         )
     )
 
-    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
+    if cfg_DPT.dpt_hybrid.CA.if_use_CA:
         im_feat_dict, output_hooks = extra_output_dict['im_feat_dict'], input_dict_extra['output_hooks']
         if if_print:
             print(im_feat_dict.keys(), output_hooks)
 
     if layer_1.ndim == 3:
-        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
+        if cfg_DPT.dpt_hybrid.CA.if_use_CA:
             layer_1 = im_feat_dict['im_feat_%d'%output_hooks[0]]
             # print('+++')
         else:
             layer_1 = unflatten(layer_1)
 
     if layer_2.ndim == 3:
-        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
+        if cfg_DPT.dpt_hybrid.CA.if_use_CA:
             layer_2 = im_feat_dict['im_feat_%d'%output_hooks[1]]
             # print('+++')
         else:
             layer_2 = unflatten(layer_2)
 
     if layer_3.ndim == 3:
-        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
+        if cfg_DPT.dpt_hybrid.CA.if_use_CA:
             layer_3 = im_feat_dict['im_feat_%d'%output_hooks[2]]
             # print('+++')
         else:
             layer_3 = unflatten(layer_3)
 
     if layer_4.ndim == 3:
-        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
+        if cfg_DPT.dpt_hybrid.CA.if_use_CA:
             layer_4 = im_feat_dict['im_feat_%d'%output_hooks[3]]
             # print('+++')
         else:
@@ -217,7 +217,7 @@ def _resize_pos_embed(self, posemb, gs_h, gs_w): # original at https://github.co
     return posemb
 
 
-def forward_flex(self, opt, x, input_dict_extra={}):
+def forward_flex(self, opt, cfg_DPT, x, input_dict_extra={}):
     b, c, h, w = x.shape
 
     pos_embed = self._resize_pos_embed(
@@ -227,7 +227,7 @@ def forward_flex(self, opt, x, input_dict_extra={}):
     B = x.shape[0]
 
     if hasattr(self.patch_embed, "backbone"):
-        if opt.cfg.MODEL_BRDF.DPT_baseline.if_share_patchembed:
+        if cfg_DPT.if_share_patchembed:
             x = input_dict_extra['shared_patch_embed_backbone_output']
         else:
             x = self.patch_embed.backbone(x)
@@ -238,7 +238,7 @@ def forward_flex(self, opt, x, input_dict_extra={}):
     im_feat_init = self.patch_embed.proj(x)
     x = im_feat_init.flatten(2).transpose(1, 2)
 
-    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
+    if cfg_DPT.dpt_hybrid.CA.if_use_CA:
         im_feat_dict = {}
         im_feat_dict['im_feat_-1'] = im_feat_init
         ca_modules = input_dict_extra['ca_modules']
@@ -255,29 +255,29 @@ def forward_flex(self, opt, x, input_dict_extra={}):
         )  # stole cls_tokens impl from Phil Wang, thanks
         x = torch.cat((cls_tokens, x), dim=1)
 
-    if opt.cfg.MODEL_BRDF.DPT_baseline.if_pos_embed:
+    if cfg_DPT.if_pos_embed:
         x = x + pos_embed
     x = self.pos_drop(x)
 
     for idx, blk in enumerate(self.blocks):
-        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers!=-1 and idx >= opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers:
+        if cfg_DPT.dpt_hybrid.keep_N_layers!=-1 and idx >= cfg_DPT.dpt_hybrid.keep_N_layers:
             continue
 
         x = blk(x)
         
-        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
-            assert opt.cfg.MODEL_BRDF.DPT_baseline.readout == 'ignore'
+        if cfg_DPT.dpt_hybrid.CA.if_use_CA:
+            assert cfg_DPT.readout == 'ignore'
             # print(x.shape, im_feat_init.shape) # torch.Size([1, 321, 768]) torch.Size([1, 768, 16, 20])
             x_cls_token = x[:, 0:1, :] # [-1, 1, 768]
             x_tokens = x[:, 1:, :].transpose(1, 2) # [-1, 768, 320]
 
-            assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method == 'full'
+            assert cfg_DPT.dpt_SSN.ca_proj_method == 'full'
             im_feat_idx, proj_coef_idx = ca_modules['layer_%d_ca'%idx](im_feat_dict['im_feat_%d'%(idx-1)], x_tokens, im_feat_scale_factor=1., proj_coef_in=None) # torch.Size([1, 768, 320])
             # print(im_feat_idx.shape) # torch.Size([1, 768, 16, 20])
             im_feat_dict['im_feat_%d'%idx] = im_feat_idx
 
 
-            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_recompute_C:
+            if cfg_DPT.dpt_hybrid.CA.if_use_CA_if_recompute_C:
                 x_prime = im_feat_idx.flatten(2).transpose(-1, -2)
                 x = torch.cat((x_cls_token, x_prime), dim=1)
 
@@ -290,7 +290,7 @@ def forward_flex(self, opt, x, input_dict_extra={}):
     x = self.norm(x)
 
     extra_output_dict = {}
-    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
+    if cfg_DPT.dpt_hybrid.CA.if_use_CA:
         extra_output_dict['im_feat_dict'] = im_feat_dict
 
     return x, extra_output_dict
@@ -446,6 +446,7 @@ def _make_vit_b16_backbone(
 
 
 def _make_vit_b_rn50_backbone(
+    cfg_DPT, 
     model,
     features=[256, 512, 768, 768],
     size=[384, 384],
@@ -489,7 +490,7 @@ def _make_vit_b_rn50_backbone(
         pretrained.act_postprocess1 = nn.Sequential(
             readout_oper[0],
             Transpose(1, 2),
-            nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
+            nn.Unflatten(2, torch.Size([size[0] // cfg_DPT.patch_size, size[1] // cfg_DPT.patch_size])),
             nn.Conv2d(
                 in_channels=vit_features,
                 out_channels=features[0],
@@ -512,7 +513,7 @@ def _make_vit_b_rn50_backbone(
         pretrained.act_postprocess2 = nn.Sequential(
             readout_oper[1],
             Transpose(1, 2),
-            nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
+            nn.Unflatten(2, torch.Size([size[0] // cfg_DPT.patch_size, size[1] // cfg_DPT.patch_size])),
             nn.Conv2d(
                 in_channels=vit_features,
                 out_channels=features[1],
@@ -542,7 +543,7 @@ def _make_vit_b_rn50_backbone(
     pretrained.act_postprocess3 = nn.Sequential(
         readout_oper[2],
         Transpose(1, 2),
-        nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
+        nn.Unflatten(2, torch.Size([size[0] // cfg_DPT.patch_size, size[1] // cfg_DPT.patch_size])),
         nn.Conv2d(
             in_channels=vit_features,
             out_channels=features[2],
@@ -555,7 +556,7 @@ def _make_vit_b_rn50_backbone(
     pretrained.act_postprocess4 = nn.Sequential(
         readout_oper[3],
         Transpose(1, 2),
-        nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
+        nn.Unflatten(2, torch.Size([size[0] // cfg_DPT.patch_size, size[1] // cfg_DPT.patch_size])),
         nn.Conv2d(
             in_channels=vit_features,
             out_channels=features[3],
@@ -573,8 +574,7 @@ def _make_vit_b_rn50_backbone(
     )
 
     pretrained.model.start_index = start_index
-    pretrained.model.patch_size = [16, 16]
-
+    pretrained.model.patch_size = [cfg_DPT.patch_size]*2
     # We inject this function into the VisionTransformer instances so that
     # we can use it with interpolated position embeddings without modifying the library source.
     pretrained.model.forward_flex = types.MethodType(forward_flex, pretrained.model)
@@ -589,18 +589,21 @@ def _make_vit_b_rn50_backbone(
 
 
 def _make_pretrained_vitb_rn50_384(
+    cfg_DPT, 
     pretrained,
     use_readout="ignore",
     hooks=None,
     use_vit_only=False,
     enable_attention_hooks=False,
+    in_chans=3
 ):
     print('========= [_make_pretrained_vitb_rn50_384] pretrained', pretrained)
 
-    model = timm.create_model("vit_base_resnet50_384", pretrained=pretrained)
+    model = timm.create_model("vit_base_resnet50_384", pretrained=pretrained, in_chans=in_chans)
 
     hooks = [0, 1, 8, 11] if hooks == None else hooks
     return _make_vit_b_rn50_backbone(
+        cfg_DPT, 
         model,
         features=[256, 512, 768, 768],
         size=[384, 384],
@@ -628,9 +631,9 @@ def _make_pretrained_vitl16_384(
 
 
 def _make_pretrained_vitb16_384(
-    pretrained, use_readout="ignore", hooks=None, enable_attention_hooks=False
+    pretrained, use_readout="ignore", hooks=None, enable_attention_hooks=False, in_chans=3
 ):
-    model = timm.create_model("vit_base_patch16_384", pretrained=pretrained)
+    model = timm.create_model("vit_base_patch16_384", pretrained=pretrained, in_chans=in_chans)
 
     hooks = [2, 5, 8, 11] if hooks == None else hooks
     return _make_vit_b16_backbone(

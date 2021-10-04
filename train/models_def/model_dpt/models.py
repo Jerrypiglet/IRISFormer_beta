@@ -13,7 +13,7 @@ from .blocks import (
 )
 
 
-def _make_fusion_block(opt, features, use_bn):
+def _make_fusion_block(opt, features, use_bn, if_upscale=True):
     return FeatureFusionBlock_custom(
         opt, 
         features,
@@ -22,6 +22,7 @@ def _make_fusion_block(opt, features, use_bn):
         bn=use_bn,
         expand=False,
         align_corners=True,
+        if_upscale=if_upscale
     )
 
 
@@ -30,17 +31,23 @@ class DPT(BaseModel):
         self,
         opt, 
         head,
+        cfg_DPT, 
         features=256,
         backbone="vitb_rn50_384",
+        if_imagenet_backbone=True, 
         readout="project",
         channels_last=False,
         use_bn=False,
         enable_attention_hooks=False,
+        in_chans=3, 
+        if_upscale_last_layer=True, 
+
     ):
 
         super(DPT, self).__init__()
 
         self.channels_last = channels_last
+        self.cfg_DPT = cfg_DPT
 
         self.opt = opt
 
@@ -69,9 +76,10 @@ class DPT(BaseModel):
 
         # Instantiate backbone and reassemble blocks
         self.pretrained, self.scratch = _make_encoder(
+            cfg_DPT, 
             backbone,
             features,
-            opt.cfg.MODEL_BRDF.DPT_baseline.if_imagenet_backbone,  # Set to true of you want to train from scratch, uses ImageNet weights
+            if_imagenet_backbone,  # Set to true of you want to train from scratch, uses ImageNet weights
             groups=1,
             expand=False,
             exportable=False,
@@ -79,9 +87,10 @@ class DPT(BaseModel):
             use_vit_only=opt.cfg.MODEL_BRDF.DPT_baseline.use_vit_only, 
             use_readout=readout,
             enable_attention_hooks=enable_attention_hooks,
+            in_chans=in_chans
         )
 
-        self.scratch.refinenet1 = _make_fusion_block(opt, features, use_bn)
+        self.scratch.refinenet1 = _make_fusion_block(opt, features, use_bn, if_upscale=if_upscale_last_layer)
         self.scratch.refinenet2 = _make_fusion_block(opt, features, use_bn)
         self.scratch.refinenet3 = _make_fusion_block(opt, features, use_bn)
         self.scratch.refinenet4 = _make_fusion_block(opt, features, use_bn)
@@ -124,8 +133,11 @@ class DPT(BaseModel):
     def forward(self, x, input_dict_extra={}):
         if self.channels_last:
             x.contiguous(memory_format=torch.channels_last)
-
-        layer_1, layer_2, layer_3, layer_4 = forward_vit(self.opt, self.pretrained, x, input_dict_extra={**input_dict_extra, **self.module_hooks_dict})
+        
+        if self.cfg_DPT.if_share_pretrained:
+            layer_1, layer_2, layer_3, layer_4 = input_dict_extra['shared_pretrained']
+        else:
+            layer_1, layer_2, layer_3, layer_4 = forward_vit(self.opt, self.cfg_DPT, self.pretrained, x, input_dict_extra={**input_dict_extra, **self.module_hooks_dict})
 
         layer_1_rn = self.scratch.layer1_rn(layer_1)
         # print(self.scratch.layer1_rn, layer_1.shape, layer_1_rn.shape) # [hybrid] Conv2d(256, 256, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False) torch.Size([2, 256, 64, 80]) torch.Size([2, 256, 64, 80])
@@ -149,48 +161,7 @@ class DPT(BaseModel):
 
         return out
 
-
-# class DPTDepthModel(DPT):
-#     def __init__(
-#         self, path=None, non_negative=True, scale=1.0, shift=0.0, invert=False, **kwargs
-#     ):
-#         features = kwargs["features"] if "features" in kwargs else 256
-
-#         self.scale = scale
-#         self.shift = shift
-#         self.invert = invert
-
-#         head = nn.Sequential(
-#             nn.Conv2d(features, features // 2, kernel_size=3, stride=1, padding=1),
-#             Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
-#             nn.Conv2d(features // 2, 32, kernel_size=3, stride=1, padding=1),
-#             nn.ReLU(True),
-#             nn.Conv2d(32, 1, kernel_size=1, stride=1, padding=0),
-#             nn.ReLU(True) if non_negative else nn.Identity(),
-#             nn.Identity(),
-#         )
-
-#         super().__init__(head, **kwargs)
-
-#         if path is not None:
-#             self.load(path)
-
-#     def forward(self, x, input_dict_extra={}):
-#         # inv_depth = super().forward(x).squeeze(dim=1)
-
-#         # if self.invert:
-#         #     depth = self.scale * inv_depth + self.shift
-#         #     depth[depth < 1e-8] = 1e-8
-#         #     depth = 1.0 / depth
-#         #     return depth
-#         # else:
-#         #     return inv_depth
-#         x_out = super().forward(x)
-#         x_out = torch.clamp(x_out, 1e-8, 100)
-
-#         return x_out, {}
-
-def get_BRDFNet_DPT(opt, model_path, modalities=[]):
+def get_BRDFNet_DPT(opt, model_path, backbone, modalities=[]):
     assert all([x in ['al', 'ro'] for x in modalities])
 
     module_dict = {}
@@ -199,17 +170,21 @@ def get_BRDFNet_DPT(opt, model_path, modalities=[]):
             opt=opt, 
             modality=modality, 
             path=model_path,
-            backbone="vitb_rn50_384" if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers == -1 else "vitb_rn50_384_N_layers", 
+            backbone=backbone, 
+            if_imagenet_backbone=opt.cfg.MODEL_BRDF.DPT_baseline.if_imagenet_backbone, 
             non_negative=True if opt.cfg.MODEL_BRDF.DPT_baseline.modality in ['de'] else False,
             enable_attention_hooks=opt.cfg.MODEL_BRDF.DPT_baseline.if_enable_attention_hooks,
             readout=opt.cfg.MODEL_BRDF.DPT_baseline.readout, 
             skip_keys=['scratch.output_conv'] if opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
-            keep_keys=['pretrained.model.patch_embed.backbone'] if opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
+            keep_keys=['pretrained.model.patch_embed.backbone'] if opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else [], 
+            cfg_DPT=opt.cfg.MODEL_BRDF.DPT_baseline
         )
-        # print('>>>>>>', type(module_dict[modality]), '>>>>>')
 
-
-    if opt.cfg.MODEL_BRDF.DPT_baseline.if_share_patchembed:
+    if opt.cfg.MODEL_BRDF.DPT_baseline.if_share_pretrained:
+        module_dict['shared_pretrained'] = module_dict[modalities[0]].pretrained
+        for modality in modalities:
+            module_dict[modality].pretrained = nn.Identity()
+    elif opt.cfg.MODEL_BRDF.DPT_baseline.if_share_patchembed:
         module_dict['shared_patch_embed_backbone'] = module_dict[modalities[0]].pretrained.model.patch_embed.backbone
         for modality in modalities:
             module_dict[modality].pretrained.model.patch_embed.backbone = nn.Identity()
@@ -217,7 +192,6 @@ def get_BRDFNet_DPT(opt, model_path, modalities=[]):
     full_model = torch.nn.ModuleDict(module_dict)
     
     return full_model
-
 
 class DPTBRDFModel(DPT):
     def __init__(
@@ -280,6 +254,95 @@ class DPTBRDFModel(DPT):
             # pass
 
         return x_out, {}
+
+
+def get_LightNet_DPT(opt, SGNum, model_path, backbone, modalities=[]):
+    assert all([x in ['axis', 'lamb', 'weight'] for x in modalities])
+
+    module_dict = {}
+    for modality in modalities:
+        module_dict[modality] = DPTLightModel(
+            opt=opt, 
+            SGNum=SGNum, 
+            modality=modality, 
+            path=model_path,
+            backbone=backbone, 
+            if_imagenet_backbone=opt.cfg.MODEL_LIGHT.DPT_baseline.if_imagenet_backbone, 
+            enable_attention_hooks=opt.cfg.MODEL_BRDF.DPT_baseline.if_enable_attention_hooks,
+            readout=opt.cfg.MODEL_LIGHT.DPT_baseline.readout, 
+            skip_keys=['scratch.output_conv'] if opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
+            keep_keys=['pretrained.model.patch_embed.backbone'] if opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else [], 
+            in_chans=opt.cfg.MODEL_LIGHT.DPT_baseline.in_channels, 
+            if_upscale_last_layer=False, 
+            cfg_DPT=opt.cfg.MODEL_LIGHT.DPT_baseline
+        )
+
+    if opt.cfg.MODEL_LIGHT.DPT_baseline.if_share_pretrained:
+        module_dict['shared_pretrained'] = module_dict[modalities[0]].pretrained
+        for modality in modalities:
+            module_dict[modality].pretrained = nn.Identity()
+    elif opt.cfg.MODEL_LIGHT.DPT_baseline.if_share_patchembed:
+        module_dict['shared_patch_embed_backbone'] = module_dict[modalities[0]].pretrained.model.patch_embed.backbone
+        for modality in modalities:
+            module_dict[modality].pretrained.model.patch_embed.backbone = nn.Identity()
+
+    full_model = torch.nn.ModuleDict(module_dict)
+    
+    return full_model
+
+class DPTLightModel(DPT):
+    def __init__(
+        self, opt, SGNum,  modality, path=None, skip_keys=[], keep_keys=[], **kwargs
+    ):
+        features = kwargs["features"] if "features" in kwargs else 256
+
+        self.SGNum = SGNum
+        self.modality = modality
+        assert modality in ['axis', 'lamb', 'weight'], 'Invalid modality: %s'%modality
+        self.out_channels = {'axis': 3*SGNum, 'lamb': SGNum, 'weight': 3*SGNum}[modality]
+
+        self.if_batch_norm = opt.cfg.MODEL_LIGHT.DPT_baseline.if_batch_norm
+
+        head = nn.Sequential(
+            nn.Conv2d(features, features // 2, kernel_size=3, stride=1, padding=1),
+            Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
+            nn.Conv2d(features // 2, 32, kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(32) if self.if_batch_norm else nn.Identity(),
+            # nn.GroupNorm(num_groups=4, num_channels=32) if self.if_batch_norm else nn.Identity(),
+            nn.ReLU(True),
+            nn.Conv2d(32, self.out_channels, kernel_size=1, stride=1, padding=0),
+            # nn.BatchNorm2d(self.out_channels) if self.if_batch_norm else nn.Identity(),
+            # nn.GroupNorm(self.out_channels) if self.if_batch_norm else nn.Identity(),
+            # nn.ReLU(True) if non_negative else nn.Identity(),
+        )
+        # if self.if_batch_norm:
+        #     head.insert(3, nn.GroupNorm(num_groups=4, num_channels=32))
+
+        super().__init__(opt, head, **kwargs)
+
+        if path is not None:
+            print(magenta('===== [DPTLightModel] Loading %s'%path))
+            self.load(path, skip_keys=skip_keys, keep_keys=keep_keys)
+        # else:
+        #     assert False, str(path)
+
+    def forward(self, x, input_dict_extra={}):
+        x_out = super().forward(x, input_dict_extra=input_dict_extra)
+        # print(x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out))
+        x_out = 1.01 * torch.tanh(x_out )
+
+        if self.modality in ['lamb', 'weight']:
+            x_out = 0.5 * (x_out + 1)
+            x_out = torch.clamp(x_out, 0., 1.)
+        elif self.modality in ['axis']:
+            bn, _, row, col = x_out.size()
+            x_out = x_out.view(bn, self.SGNum, 3, row, col)
+            x_out = x_out / torch.clamp(torch.sqrt(torch.sum(x_out * x_out,
+                dim=2).unsqueeze(2) ), min = 1e-6).expand_as(x_out )
+        else:
+            assert False
+        return x_out
+
 
 # class DPTSegmentationModel(DPT):
 #     def __init__(self, num_classes, path=None, **kwargs):

@@ -10,6 +10,7 @@ from .vit import (
 
 
 def _make_encoder(
+    cfg_DPT, 
     backbone,
     features,
     use_pretrained,
@@ -20,6 +21,7 @@ def _make_encoder(
     use_vit_only=False,
     use_readout="ignore",
     enable_attention_hooks=False,
+    in_chans=3
 ):
     if backbone == "vitl16_384":
         pretrained = _make_pretrained_vitl16_384(
@@ -33,11 +35,13 @@ def _make_encoder(
         )  # ViT-L/16 - 85.0% Top1 (backbone)
     elif backbone == "vitb_rn50_384":
         pretrained = _make_pretrained_vitb_rn50_384(
+            cfg_DPT, 
             use_pretrained,
             hooks=hooks,
             use_vit_only=use_vit_only,
             use_readout=use_readout,
             enable_attention_hooks=enable_attention_hooks,
+            in_chans=in_chans
         )
         scratch = _make_scratch(
             [256, 512, 768, 768], features, groups=groups, expand=expand
@@ -59,6 +63,7 @@ def _make_encoder(
             hooks=hooks,
             use_readout=use_readout,
             enable_attention_hooks=enable_attention_hooks,
+            in_chans=in_chans
         )
         scratch = _make_scratch(
             [96, 192, 384, 768], features, groups=groups, expand=expand

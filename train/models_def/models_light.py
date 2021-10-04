@@ -53,6 +53,7 @@ class encoderLight(nn.Module ):
     def forward(self, input_batch, envs = None):
 
         input1 = self.preProcess(input_batch )
+        # print(input_batch.shape, input1.shape)
         input2 = envs
 
         if self.cascadeLevel == 0:
@@ -129,10 +130,11 @@ class decoderLight(nn.Module ):
 
         if dx6.size(3) != env.size(3) or dx6.size(2) != env.size(2):
             dx6 = F.interpolate(dx6, [env.size(2), env.size(3)], mode='bilinear')
-        x_orig = self.dconvFinal(self.dpadFinal(dx6 ) )
+        # x_orig = self.dconvFinal(self.dpadFinal(dx6 ) )
 
         x_out = 1.01 * torch.tanh(self.dconvFinal(self.dpadFinal(dx6) ) )
 
+        # print(dx6.shape, x_out.shape) # torch.Size([4, 128, 120, 160]) torch.Size([4, 36 (or 12), 120, 160])
         if self.mode == 1 or self.mode == 2:
             x_out = 0.5 * (x_out + 1)
             x_out = torch.clamp(x_out, 0, 1)

@@ -534,6 +534,17 @@ class openrooms(data.Dataset):
                     envmapsInd = envmapsInd * 0 
                     envmapsPre = np.zeros((84, 120, 160), dtype=np.float32 ) 
 
+            if self.opt.cfg.MODEL_LIGHT.load_GT_light_sg:
+                sgEnv_path = hdr_image_path.replace('im_', 'imsgEnv_').replace('.hdr', '.h5')
+                sgEnv = self.loadH5(sgEnv_path) # (120, 160, 12, 6)
+                sgEnv_torch = torch.from_numpy(sgEnv)
+                sg_theta_torch, sg_phi_torch, sg_lamb_torch, sg_weight_torch = torch.split(sgEnv_torch, [1, 1, 1, 3], dim=3)
+                sg_axisX = torch.sin(sg_theta_torch ) * torch.cos(sg_phi_torch )
+                sg_axisY = torch.sin(sg_theta_torch ) * torch.sin(sg_phi_torch )
+                sg_axisZ = torch.cos(sg_theta_torch )
+                sg_axis_torch = torch.cat([sg_axisX, sg_axisY, sg_axisZ], dim=3)
+
+
         if self.cascadeLevel > 0:
             # Read albedo
             albedoPre = self.loadH5(albedoPre_path )
@@ -576,6 +587,13 @@ class openrooms(data.Dataset):
 
             if self.cascadeLevel > 0:
                 batch_dict_brdf['envmapsPre'] = envmapsPre
+
+            if self.opt.cfg.MODEL_LIGHT.load_GT_light_sg:
+                batch_dict_brdf['sg_theta'] = sg_theta_torch
+                batch_dict_brdf['sg_phi'] = sg_phi_torch
+                batch_dict_brdf['sg_lamb'] = sg_lamb_torch
+                batch_dict_brdf['sg_axis'] = sg_axis_torch
+                batch_dict_brdf['sg_weight'] = sg_weight_torch
 
         if self.cascadeLevel > 0:
             batch_dict_brdf['albedoPre'] = albedoPre

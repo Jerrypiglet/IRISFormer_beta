@@ -26,6 +26,14 @@ def get_labels_dict_light(data_batch, opt, list_from_brdf=None, return_input_bat
 
         extra_dict.update({'envmapsBatch': envmapsBatch, 'envmapsIndBatch': envmapsIndBatch})
 
+        if 'axis' not in opt.cfg.MODEL_LIGHT.enable_list:
+            extra_dict.update({'sg_theta_Batch': data_batch['sg_theta'].cuda(non_blocking=True), 'sg_phi_Batch': data_batch['sg_phi'].cuda(non_blocking=True)})
+            extra_dict.update({'sg_axis_Batch': data_batch['sg_axis'].cuda(non_blocking=True)})
+        if 'lamb' not in opt.cfg.MODEL_LIGHT.enable_list:
+            extra_dict.update({'sg_lamb_Batch': data_batch['sg_lamb'].cuda(non_blocking=True)})
+        if 'weight' not in opt.cfg.MODEL_LIGHT.enable_list:
+            extra_dict.update({'sg_weight_Batch': data_batch['sg_weight'].cuda(non_blocking=True)})
+
         if opt.cascadeLevel > 0:
 
             diffusePre_cpu = data_batch['diffusePre']
