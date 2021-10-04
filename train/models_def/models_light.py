@@ -128,13 +128,14 @@ class decoderLight(nn.Module ):
         xin5 = torch.cat([dx5, x1], dim=1 )
         dx6 = F.relu(self.dgn6(self.dconv6(F.interpolate(xin5, scale_factor=2, mode='bilinear') ) ), True)
 
-        if dx6.size(3) != env.size(3) or dx6.size(2) != env.size(2):
-            dx6 = F.interpolate(dx6, [env.size(2), env.size(3)], mode='bilinear')
+        if env is not None:
+            if dx6.size(3) != env.size(3) or dx6.size(2) != env.size(2):
+                dx6 = F.interpolate(dx6, [env.size(2), env.size(3)], mode='bilinear')
         # x_orig = self.dconvFinal(self.dpadFinal(dx6 ) )
 
         x_out = 1.01 * torch.tanh(self.dconvFinal(self.dpadFinal(dx6) ) )
 
-        # print(dx6.shape, x_out.shape) # torch.Size([4, 128, 120, 160]) torch.Size([4, 36 (or 12), 120, 160])
+        # print(dx1.shape, dx2.shape, dx3.shape, dx5.shape, dx5.shape, dx6.shape, x_out.shape) # torch.Size([4, 128, 120, 160]) torch.Size([4, 36 (or 12), 120, 160])
         if self.mode == 1 or self.mode == 2:
             x_out = 0.5 * (x_out + 1)
             x_out = torch.clamp(x_out, 0, 1)
@@ -263,6 +264,9 @@ class renderingLayer():
             envR, envC = envmap.size(2), envmap.size(3)
         else:
             envR, envC = self.imHeight, self.imWidth
+
+        # print(normalPred.shape, diffusePred.shape, roughPred.shape)
+        assert normalPred.shape[-2:] == diffusePred.shape[-2:] == roughPred.shape[-2:]
         
         # print(normalPred.shape)
         normalPred = F.adaptive_avg_pool2d(normalPred, (envR, envC) )
