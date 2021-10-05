@@ -168,9 +168,9 @@ def wrapperBRDFLight(dataBatch, opt,
     envmapsPred = torch.cat([axisPred.view(bn, SGNum * 3, envRow, envCol ), lambPred, weightPred], dim=1)
 
     imBatchSmall = F.adaptive_avg_pool2d(imBatch, (opt.envRow, opt.envCol) )
-    segBatchSmall = F.adaptive_avg_pool2d(segBRDFBatch, (opt.envRow, opt.envCol) )
+    segBRDFBatchSmall = F.adaptive_avg_pool2d(segBRDFBatch, (opt.envRow, opt.envCol) )
     notDarkEnv = (torch.mean(torch.mean(torch.mean(envmapsBatch, 4), 4), 1, True ) > 0.001 ).float()
-    segEnvBatch = (segBatchSmall * envmapsIndBatch.expand_as(segBatchSmall) ).unsqueeze(-1).unsqueeze(-1)
+    segEnvBatch = (segBRDFBatchSmall * envmapsIndBatch.expand_as(segBRDFBatchSmall) ).unsqueeze(-1).unsqueeze(-1)
     segEnvBatch = segEnvBatch * notDarkEnv.unsqueeze(-1).unsqueeze(-1)
     
     # Compute the recontructed error
@@ -189,7 +189,7 @@ def wrapperBRDFLight(dataBatch, opt,
 
 
     # Compute the rendered error
-    pixelNum = max( (torch.sum(segBatchSmall ).cpu().data).item(), 1e-5 )
+    pixelNum = max( (torch.sum(segBRDFBatchSmall ).cpu().data).item(), 1e-5 )
 
     diffusePred, specularPred = renderLayer.forwardEnv(albedoPred.detach(), normalPred,
             roughPred, envmapsPredImage )
@@ -203,7 +203,7 @@ def wrapperBRDFLight(dataBatch, opt,
     renderedImPred = torch.clamp(diffusePredScaled + specularPredScaled, 0, 1)
 
     renderErr = torch.sum( (renderedImPred - imBatchSmall)
-        * (renderedImPred - imBatchSmall) * segBatchSmall.expand_as(imBatchSmall )  ) \
+        * (renderedImPred - imBatchSmall) * segBRDFBatchSmall.expand_as(imBatchSmall )  ) \
         / pixelNum / 3.0
 
     if isLightOut == False:

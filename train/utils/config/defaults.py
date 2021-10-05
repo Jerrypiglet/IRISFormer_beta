@@ -379,7 +379,7 @@ _C.MODEL_LIGHT.enable_list = 'axis_lamb_weight'
 
 _C.MODEL_LIGHT.DPT_baseline = CN()
 _C.MODEL_LIGHT.DPT_baseline.enable = False
-_C.MODEL_LIGHT.DPT_baseline.model = 'dpt_hybrid'
+_C.MODEL_LIGHT.DPT_baseline.model = 'dpt_base'
 _C.MODEL_LIGHT.DPT_baseline.enable_as_indept_weight_est = False
 _C.MODEL_LIGHT.DPT_baseline.if_share_patchembed = False
 _C.MODEL_LIGHT.DPT_baseline.if_share_pretrained = False

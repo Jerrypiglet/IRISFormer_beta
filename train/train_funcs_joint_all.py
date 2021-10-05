@@ -1349,6 +1349,12 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                 renderedImPred = output_dict['renderedImPred'].detach().cpu().numpy()
                 renderedImPred_sdr = output_dict['renderedImPred_sdr'].detach().cpu().numpy()
                 imBatchSmall = output_dict['imBatchSmall'].detach().cpu().numpy()
+                segEnvBatch = output_dict['segEnvBatch'].detach().cpu().numpy() # (4, 1, 120, 160, 1, 1)
+                reconstErr_loss_map_batch = output_dict['reconstErr_loss_map'].detach().cpu().numpy() # [4, 3, 120, 160, 8, 16]
+                reconstErr_loss_map_2D_batch = reconstErr_loss_map_batch.mean(-1).mean(-1).mean(1)
+
+                # print(reconstErr_loss_map_2D_batch.shape, np.amax(reconstErr_loss_map_2D_batch), np.amin(reconstErr_loss_map_2D_batch),np.median(reconstErr_loss_map_2D_batch)) # (4, 120, 160) 3.9108467 0.0 0.22725311
+
                 for sample_idx_batch in range(envmapsPredScaledImage.shape[0]):
                     sample_idx = sample_idx_batch+batch_size*batch_id
                     # assert envmapsPredScaledImage.shape[0] == batch_size
@@ -1363,10 +1369,20 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                         cv2.imwrite('{0}/{1}-{2}_{3}.hdr'.format(opt.summary_vis_path_task, tid, sample_idx, name_tag) , I_hdr_downsampled[:, :, [2, 1, 0]])
 
                     for I_png, name_tag in zip([renderedImPred[sample_idx_batch], renderedImPred_sdr[sample_idx_batch], imBatchSmall[sample_idx_batch]], ['renderedIm_Pred', 'renderedImPred_sdr', 'imBatchSmall_GT']):
+                        I_png = np.clip(I_png, 0., 1.)
                         I_png = (I_png.transpose(1, 2, 0) * 255.).astype(np.uint8)
                         if opt.is_master:
                             writer.add_image('VAL_light-%s/%d'%(name_tag, sample_idx), I_png, tid, dataformats='HWC')
                         Image.fromarray(I_png).save('{0}/{1}-{2}_light-{3}.png'.format(opt.summary_vis_path_task, tid, sample_idx, name_tag))
+
+                    segEnv = segEnvBatch[sample_idx_batch].squeeze()
+                    if opt.is_master:
+                        writer.add_image('VAL_light-%s/%d'%('segEnv_mask', sample_idx), segEnv, tid, dataformats='HW')
+
+                    reconstErr_loss_map_2D = reconstErr_loss_map_2D_batch[sample_idx_batch].squeeze()
+                    reconstErr_loss_map_2D = reconstErr_loss_map_2D / np.amax(reconstErr_loss_map_2D)
+                    if opt.is_master:
+                        writer.add_image('VAL_light-%s/%d'%('reconstErr_loss_map_2D', sample_idx), reconstErr_loss_map_2D, tid, dataformats='HW')
         
             # ===== Vis GMM
             if opt.cfg.MODEL_GMM.enable:

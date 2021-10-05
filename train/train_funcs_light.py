@@ -74,37 +74,34 @@ def get_labels_dict_light(data_batch, opt, list_from_brdf=None, return_input_bat
 def postprocess_light(input_dict, output_dict, loss_dict, opt, time_meters):
     # Compute the recontructed error
     if opt.cfg.MODEL_LIGHT.use_scale_aware_loss:
-        reconstErr = torch.sum( 
-                    ( torch.log(output_dict['envmapsPredImage'] + opt.cfg.MODEL_LIGHT.offset) -
-                    torch.log(input_dict['envmapsBatch'] + opt.cfg.MODEL_LIGHT.offset ) )
-                * 
-                    ( torch.log(output_dict['envmapsPredImage'] + opt.cfg.MODEL_LIGHT.offset ) -
-                        torch.log(input_dict['envmapsBatch'] + opt.cfg.MODEL_LIGHT.offset ) ) 
-                *
-                    output_dict['segEnvBatch'].expand_as(output_dict['envmapsPredImage'] ) 
-                ) \
-            / output_dict['pixelNum_recon'] / 3.0 / opt.cfg.MODEL_LIGHT.envWidth / opt.cfg.MODEL_LIGHT.envHeight
+        reconstErr_loss_map = ( torch.log(output_dict['envmapsPredImage'] + opt.cfg.MODEL_LIGHT.offset) - torch.log(input_dict['envmapsBatch'] + opt.cfg.MODEL_LIGHT.offset ) ) \
+            * \
+                ( torch.log(output_dict['envmapsPredImage'] + opt.cfg.MODEL_LIGHT.offset ) - torch.log(input_dict['envmapsBatch'] + opt.cfg.MODEL_LIGHT.offset ) ) \
+            * \
+                output_dict['segEnvBatch'].expand_as(output_dict['envmapsPredImage'] )
     else:
-        reconstErr = torch.sum( 
-                    ( torch.log(output_dict['envmapsPredScaledImage'] + opt.cfg.MODEL_LIGHT.offset) -
-                    torch.log(input_dict['envmapsBatch'] + opt.cfg.MODEL_LIGHT.offset ) )
-                * 
-                    ( torch.log(output_dict['envmapsPredScaledImage'] + opt.cfg.MODEL_LIGHT.offset ) -
-                        torch.log(input_dict['envmapsBatch'] + opt.cfg.MODEL_LIGHT.offset ) ) 
-                *
-                    output_dict['segEnvBatch'].expand_as(output_dict['envmapsPredImage'] ) 
-                ) \
-            / output_dict['pixelNum_recon'] / 3.0 / opt.cfg.MODEL_LIGHT.envWidth / opt.cfg.MODEL_LIGHT.envHeight
+        reconstErr_loss_map = ( torch.log(output_dict['envmapsPredScaledImage'] + opt.cfg.MODEL_LIGHT.offset) - torch.log(input_dict['envmapsBatch'] + opt.cfg.MODEL_LIGHT.offset ) ) \
+            * \
+                ( torch.log(output_dict['envmapsPredScaledImage'] + opt.cfg.MODEL_LIGHT.offset ) - torch.log(input_dict['envmapsBatch'] + opt.cfg.MODEL_LIGHT.offset ) ) \
+            * \
+                output_dict['segEnvBatch'].expand_as(output_dict['envmapsPredImage'] ) 
+
+    reconstErr = torch.sum(reconstErr_loss_map) \
+        / output_dict['pixelNum_recon'] / 3.0 / opt.cfg.MODEL_LIGHT.envWidth / opt.cfg.MODEL_LIGHT.envHeight
+
+    output_dict['reconstErr_loss_map'] = reconstErr_loss_map
 
     loss_dict['loss_light-reconstErr'] = reconstErr
 
     # Compute the rendered error
     renderErr = torch.sum( (output_dict['renderedImPred'] - output_dict['imBatchSmall'])
-        * (output_dict['renderedImPred'] - output_dict['imBatchSmall']) * output_dict['segBatchSmall'].expand_as(output_dict['imBatchSmall'] )  ) \
+        * (output_dict['renderedImPred'] - output_dict['imBatchSmall']) * output_dict['segBRDFBatchSmall'].expand_as(output_dict['imBatchSmall'] )  ) \
         / output_dict['pixelNum_render'] / 3.0
     loss_dict['loss_light-renderErr'] = renderErr
 
+    print(opt.renderWeight, opt.reconstWeight)
     loss_dict['loss_light-ALL'] = opt.renderWeight * renderErr + opt.reconstWeight * reconstErr
+    # loss_dict['loss_light-ALL'] = opt.renderWeight * renderErr
 
     # torch.Size([4, 3, 120, 160, 8, 16]) torch.Size([4, 3, 120, 160, 8, 16]) torch.Size([4, 3, 120, 160]) torch.Size([4, 3, 120, 160])
     # print(output_dict['envmapsPredScaledImage'].shape, input_dict['envmapsBatch'].shape, output_dict['renderedImPred'].shape, output_dict['imBatchSmall'].shape)

@@ -281,6 +281,7 @@ class openrooms(data.Dataset):
             mask_path = ''
             mask = np.ones((self.im_height, self.im_width, 3), dtype=np.uint8)
 
+        seg_ori = np.copy(seg)
         brdf_loss_mask = np.ones((self.im_height, self.im_width), dtype=np.uint8)
         if self.if_extra_op:
             if mask.dtype not in [np.int32, np.float32]:
@@ -373,7 +374,7 @@ class openrooms(data.Dataset):
         # image_path = batch_dict['image_path']
         # if self.opt.cfg.DATA.load_brdf_gt and (not self.opt.cfg.DATASET.if_no_gt_semantics):
         if self.opt.cfg.DATA.load_brdf_gt:
-            batch_dict_brdf = self.load_brdf_lighting(hdr_image_path, if_load_immask, mask_path, mask, seg, hdr_scale, frame_info)
+            batch_dict_brdf = self.load_brdf_lighting(hdr_image_path, if_load_immask, mask_path, mask, seg, seg_ori, hdr_scale, frame_info)
             batch_dict.update(batch_dict_brdf)
 
         if self.opt.cfg.MODEL_GMM.enable:
@@ -443,7 +444,7 @@ class openrooms(data.Dataset):
         # print(cam_K_scaled)
 
 
-    def load_brdf_lighting(self, hdr_image_path, if_load_immask, mask_path, mask, seg, hdr_scale, frame_info):
+    def load_brdf_lighting(self, hdr_image_path, if_load_immask, mask_path, mask, seg, seg_ori, hdr_scale, frame_info):
         batch_dict_brdf = {}
         # Get paths for BRDF params
         if 'al' in self.cfg.DATA.data_read_list:
@@ -507,9 +508,9 @@ class openrooms(data.Dataset):
             specularPre_path = hdr_image_path.replace('im_', 'imspecular_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
 
         if if_load_immask:
-            segArea = np.logical_and(seg > 0.49, seg < 0.51 ).astype(np.float32 )
-            segEnv = (seg < 0.1).astype(np.float32 )
-            segObj = (seg > 0.9) 
+            segArea = np.logical_and(seg_ori > 0.49, seg_ori < 0.51 ).astype(np.float32 )
+            segEnv = (seg_ori < 0.1).astype(np.float32 )
+            segObj = (seg_ori > 0.9) 
 
             if self.opt.cfg.MODEL_LIGHT.enable:
                 segObj = segObj.squeeze()
@@ -519,10 +520,16 @@ class openrooms(data.Dataset):
 
             segObj = segObj.astype(np.float32 )
         else:
-            segObj = np.ones_like(seg, dtype=np.float32)
-            segEnv = np.zeros_like(seg, dtype=np.float32)
-            segArea = np.zeros_like(seg, dtype=np.float32)
+            segObj = np.ones_like(seg_ori, dtype=np.float32)
+            segEnv = np.zeros_like(seg_ori, dtype=np.float32)
+            segArea = np.zeros_like(seg_ori, dtype=np.float32)
 
+        if self.if_extra_op:
+            segObj = self.extra_op(segObj, if_channel_first=True, name='segObj')
+            segEnv = self.extra_op(segEnv, if_channel_first=True, name='segEnv')
+            segArea = self.extra_op(segArea, if_channel_first=True, name='segArea')
+
+        
         if self.opt.cfg.DATA.load_light_gt:
             envmaps, envmapsInd = self.loadEnvmap(env_path )
             envmaps = envmaps * hdr_scale 
