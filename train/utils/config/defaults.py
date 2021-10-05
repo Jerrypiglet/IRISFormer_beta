@@ -380,7 +380,6 @@ _C.MODEL_LIGHT.enable_list = 'axis_lamb_weight'
 _C.MODEL_LIGHT.DPT_baseline = CN()
 _C.MODEL_LIGHT.DPT_baseline.enable = False
 _C.MODEL_LIGHT.DPT_baseline.model = 'dpt_base'
-_C.MODEL_LIGHT.DPT_baseline.enable_as_indept_weight_est = False
 _C.MODEL_LIGHT.DPT_baseline.if_share_patchembed = False
 _C.MODEL_LIGHT.DPT_baseline.if_share_pretrained = False
 _C.MODEL_LIGHT.DPT_baseline.if_batch_norm = True # in DPT output head
@@ -390,6 +389,10 @@ _C.MODEL_LIGHT.DPT_baseline.if_pos_embed = False
 _C.MODEL_LIGHT.DPT_baseline.if_checkpoint = False
 _C.MODEL_LIGHT.DPT_baseline.patch_size = 16
 _C.MODEL_LIGHT.DPT_baseline.in_channels = 11
+
+_C.MODEL_LIGHT.DPT_baseline.enable_as_single_est = False
+_C.MODEL_LIGHT.DPT_baseline.enable_as_single_est_modality = 'weight'
+_C.MODEL_LIGHT.DPT_baseline.enable_as_single_est_freeze_LightNet = False
 
 _C.MODEL_LIGHT.DPT_baseline.dpt_hybrid = CN() # share with MODEL_BRDF
 
@@ -578,7 +581,7 @@ _C.SOLVER = CN()
 _C.SOLVER.method = 'adam'
 _C.SOLVER.lr = 3e-5
 _C.SOLVER.weight_decay = 0.00001
-_C.SOLVER.max_iter = 10000000
+# _C.SOLVER.max_iter = 10000000
 _C.SOLVER.max_epoch = 1000
 _C.SOLVER.ims_per_batch = 16
 _C.SOLVER.if_test_dataloader = False

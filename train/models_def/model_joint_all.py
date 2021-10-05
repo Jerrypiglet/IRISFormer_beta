@@ -344,7 +344,7 @@ class Model_Joint(nn.Module):
                 if 'weight' in opt.cfg.MODEL_LIGHT.enable_list:
                     self.LIGHT_Net.update({'weightDecoder':  models_light.decoderLight(mode = 2, SGNum = opt.cfg.MODEL_LIGHT.SGNum )})
 
-            if self.cfg.MODEL_LIGHT.DPT_baseline.enable_as_indept_weight_est:
+            if self.cfg.MODEL_LIGHT.DPT_baseline.enable_as_single_est:
                 self.LIGHT_WEIGHT_Net = get_LightNet_DPT(
                     opt=opt, 
                     SGNum=opt.cfg.MODEL_LIGHT.SGNum, 
@@ -365,9 +365,9 @@ class Model_Joint(nn.Module):
                     self.turn_off_names(['BRDF_Net'])
                     freeze_bn_in_module(self.BRDF_Net)
 
-                if self.cfg.MODEL_LIGHT.if_freeze:
-                    self.turn_off_names(['LIGHT_Net'])
-                    freeze_bn_in_module(self.LIGHT_Net)
+            if self.cfg.MODEL_LIGHT.if_freeze or self.cfg.MODEL_LIGHT.DPT_baseline.enable_as_single_est_freeze_LightNet:
+                self.turn_off_names(['LIGHT_Net'])
+                freeze_bn_in_module(self.LIGHT_Net)
 
             if self.cfg.MODEL_LIGHT.load_pretrained_MODEL_LIGHT:
                 self.load_pretrained_MODEL_LIGHT(self.cfg.MODEL_LIGHT.pretrained_pth_name)
@@ -515,7 +515,7 @@ class Model_Joint(nn.Module):
         return_dict.update(return_dict_brdf)
 
         if self.cfg.MODEL_LIGHT.enable:
-            if self.cfg.MODEL_LIGHT.if_freeze:
+            if self.cfg.MODEL_LIGHT.if_freeze or self.cfg.MODEL_LIGHT.DPT_baseline.enable_as_single_est_freeze_LightNet:
                 self.LIGHT_Net.eval()
             return_dict_light = self.forward_light(input_dict, return_dict_brdf=return_dict_brdf)
         else:
@@ -1075,7 +1075,7 @@ class Model_Joint(nn.Module):
             , min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0
 
         normalPred[:, :, :im_h, :im_w] =  0.5 * (normalPred[:, :, :im_h, :im_w] + 1)
-        depthPred[:, :, :im_h, :im_w] =  0.5 * (depthPred[:, :, :im_h, :im_w] + 1)
+        roughPred[:, :, :im_h, :im_w] =  0.5 * (roughPred[:, :, :im_h, :im_w] + 1)
 
         imBatchLarge = F.interpolate(imBatch, scale_factor=2, mode='bilinear')
         albedoPredLarge = F.interpolate(albedoPred, scale_factor=2, mode='bilinear')
@@ -1158,7 +1158,7 @@ class Model_Joint(nn.Module):
         # roughPredLarge = F.interpolate(roughPred, [self.cfg.DATA.im_height*2, self.cfg.DATA.im_width*2], mode='bilinear')
 
         normalPred[:, :, :im_h, :im_w] =  0.5 * (normalPred[:, :, :im_h, :im_w] + 1)
-        depthPred[:, :, :im_h, :im_w] =  0.5 * (depthPred[:, :, :im_h, :im_w] + 1)
+        roughPred[:, :, :im_h, :im_w] =  0.5 * (roughPred[:, :, :im_h, :im_w] + 1)
         
         input_batch = torch.cat([imBatch, albedoPred, normalPred, roughPred, depthPred ], dim=1 ).detach()
         # input_batch = imBatch
@@ -1192,24 +1192,32 @@ class Model_Joint(nn.Module):
 
         return return_dicts['axis'], return_dicts['lamb'], return_dicts['weight']
 
-    def forward_LIGHT_WEIGHT_Net_DPT_baseline(self, input_dict, imBatch, albedoPred, depthPred, normalPred, roughPred, ):
+    def forward_LIGHT_SINGLE_Net_DPT_baseline(self, input_dict, imBatch, albedoPred, depthPred, normalPred, roughPred, ):
         im_h, im_w = self.cfg.DATA.im_height, self.cfg.DATA.im_width
+        assert self.cfg.DATA.pad_option == 'const'
 
-        input_batch = torch.cat([imBatch, albedoPred, 0.5*(normalPred+1), 0.5 * (roughPred+1), depthPred ], dim=1 ).detach()
-        # input_batch = imBatch
+        albedoPred[:, :, :im_h, :im_w] = albedoPred[:, :, :im_h, :im_w] / torch.clamp(
+                torch.mean(albedoPred[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
+            , min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0
+        depthPred[:, :, :im_h, :im_w] = depthPred[:, :, :im_h, :im_w] / torch.clamp(
+                torch.mean(depthPred[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
+            , min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0
+        normalPred[:, :, :im_h, :im_w] =  0.5 * (normalPred[:, :, :im_h, :im_w] + 1)
+        roughPred[:, :, :im_h, :im_w] =  0.5 * (roughPred[:, :, :im_h, :im_w] + 1)
+        
+        input_batch = torch.cat([imBatch, albedoPred, normalPred, roughPred, depthPred ], dim=1 ).detach()
 
         input_dict_extra = {}
         input_dict_extra.update({'input_dict': input_dict})
 
-        modality = 'weight'
+        modality = self.cfg.MODEL_LIGHT.DPT_baseline.enable_as_single_est_modality
         return_dicts = {}
-
 
         return_dicts[modality] = self.LIGHT_WEIGHT_Net[modality].forward(input_batch, input_dict_extra=input_dict_extra)
 
         assert self.opt.cascadeLevel == 0
 
-        return return_dicts['weight']
+        return return_dicts[modality]
 
     def forward_light(self, input_dict, return_dict_brdf):
         im_h, im_w = self.cfg.DATA.im_height, self.cfg.DATA.im_width
@@ -1238,8 +1246,21 @@ class Model_Joint(nn.Module):
             axisPred_ori, lambPred_ori, weightPred_ori = self.forward_LIGHT_Net(input_dict, imBatch, albedoPred, depthPred, normalPred, roughPred)
             # print(axisPred_ori.shape, lambPred_ori.shape, weightPred_ori.shape)
 
-        if self.cfg.MODEL_LIGHT.DPT_baseline.enable_as_indept_weight_est:
-            weightPred_ori = self.forward_LIGHT_WEIGHT_Net_DPT_baseline(input_dict, imBatch, albedoPred, depthPred, normalPred, roughPred)
+        if self.opt.is_master:
+            print('--(unet) weight', torch.max(weightPred_ori), torch.min(weightPred_ori), torch.median(weightPred_ori), weightPred_ori.shape)
+
+        if self.cfg.MODEL_LIGHT.DPT_baseline.enable_as_single_est:
+            singlePred_ori = self.forward_LIGHT_SINGLE_Net_DPT_baseline(input_dict, imBatch, albedoPred, depthPred, normalPred, roughPred)
+            modality = self.cfg.MODEL_LIGHT.DPT_baseline.enable_as_single_est_modality
+            if modality=='weight':
+                weightPred_ori = singlePred_ori
+            elif modality=='axis':
+                axisPred_ori = singlePred_ori
+            elif modality=='lamb':
+                lambPred_ori = singlePred_ori
+            else:
+                assert False
+
             # print(weightPred_ori.shape)
 
         if self.opt.is_master:

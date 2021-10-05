@@ -333,7 +333,7 @@ class DPTLightModel(DPT):
 
         if self.modality in ['lamb', 'weight']:
             x_out = 0.5 * (x_out + 1)
-            x_out = torch.clamp(x_out, 0., 1.)
+            # x_out = torch.clamp(x_out, 0., 1.)
         elif self.modality in ['axis']:
             bn, _, row, col = x_out.size()
             x_out = x_out.view(bn, self.SGNum, 3, row, col)
