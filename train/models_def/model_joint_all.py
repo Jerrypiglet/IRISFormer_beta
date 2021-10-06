@@ -1249,6 +1249,7 @@ class Model_Joint(nn.Module):
         if self.opt.is_master:
             print('--(unet) weight', torch.max(weightPred_ori), torch.min(weightPred_ori), torch.median(weightPred_ori), weightPred_ori.shape)
             print('--(unet) lamb', torch.max(lambPred_ori), torch.min(lambPred_ori), torch.median(lambPred_ori), lambPred_ori.shape)
+            print('--(unet) axis', torch.max(axisPred_ori), torch.min(axisPred_ori), torch.median(axisPred_ori), axisPred_ori.shape)
 
         if self.cfg.MODEL_LIGHT.DPT_baseline.enable_as_single_est:
             singlePred_ori = self.forward_LIGHT_SINGLE_Net_DPT_baseline(input_dict, imBatch, albedoPred, depthPred, normalPred, roughPred)
