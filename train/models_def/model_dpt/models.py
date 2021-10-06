@@ -302,17 +302,23 @@ class DPTLightModel(DPT):
         self.out_channels = {'axis': 3*SGNum, 'lamb': SGNum, 'weight': 3*SGNum}[modality]
 
         self.if_batch_norm = opt.cfg.MODEL_LIGHT.DPT_baseline.if_batch_norm
+        self.if_group_norm = opt.cfg.MODEL_LIGHT.DPT_baseline.if_group_norm
+
+        assert not (self.if_batch_norm and self.if_group_norm)
 
         head = nn.Sequential(
-            nn.Conv2d(features, features // 2, kernel_size=3, stride=1, padding=1),
-            Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
-            nn.Conv2d(features // 2, 32, kernel_size=3, stride=1, padding=1),
-            nn.BatchNorm2d(32) if self.if_batch_norm else nn.Identity(),
-            # nn.GroupNorm(num_groups=4, num_channels=32) if self.if_batch_norm else nn.Identity(),
+            nn.Conv2d(features, features//2, kernel_size=3, stride=1, padding=1),
+            nn.GroupNorm(num_groups=features//2//8, num_channels=features//2) if self.if_group_norm else nn.Identity(),
+            nn.BatchNorm2d(features//2) if self.if_batch_norm else nn.Identity(),
             nn.ReLU(True),
-            nn.Conv2d(32, self.out_channels, kernel_size=1, stride=1, padding=0),
+            Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
+            nn.Conv2d(features//2, 64, kernel_size=3, stride=1, padding=1),
+            nn.GroupNorm(num_groups=8, num_channels=64) if self.if_group_norm else nn.Identity(),
+            nn.BatchNorm2d(64) if self.if_batch_norm else nn.Identity(),
+            nn.ReLU(True),
+            nn.Conv2d(64, self.out_channels, kernel_size=1, stride=1, padding=0),
             # nn.BatchNorm2d(self.out_channels) if self.if_batch_norm else nn.Identity(),
-            # nn.GroupNorm(self.out_channels) if self.if_batch_norm else nn.Identity(),
+            # nn.GroupNorm(self.out_channels) if self.if_group_norm else nn.Identity(),
             # nn.ReLU(True) if non_negative else nn.Identity(),
         )
         # if self.if_batch_norm:
@@ -320,6 +326,8 @@ class DPTLightModel(DPT):
 
         super().__init__(opt, head, **kwargs)
 
+        self.relu = nn.ReLU(True)
+ 
         if path is not None:
             print(magenta('===== [DPTLightModel] Loading %s'%path))
             self.load(path, skip_keys=skip_keys, keep_keys=keep_keys)
@@ -329,11 +337,15 @@ class DPTLightModel(DPT):
     def forward(self, x, input_dict_extra={}):
         x_out = super().forward(x, input_dict_extra=input_dict_extra)
         # print(x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out))
-        x_out = 1.01 * torch.tanh(x_out )
-
-        if self.modality in ['lamb', 'weight']:
+        if self.modality in ['lamb']:
+            x_out = torch.tanh(x_out )
             x_out = 0.5 * (x_out + 1)
-            # x_out = torch.clamp(x_out, 0., 1.)
+            x_out = torch.clamp(x_out, min=0.)
+        elif self.modality in ['weight']:
+            # x_out = self.relu(x_out )
+            x_out = torch.tanh(x_out )
+            x_out = 0.5 * (x_out + 1)
+            x_out = torch.clamp(x_out, min=0.)
         elif self.modality in ['axis']:
             bn, _, row, col = x_out.size()
             x_out = x_out.view(bn, self.SGNum, 3, row, col)

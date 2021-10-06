@@ -1345,6 +1345,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
             # ===== LIGHT
             if opt.cfg.MODEL_LIGHT.enable:
                 envmapsPredScaledImage = output_dict['envmapsPredScaledImage'].detach().cpu().numpy()
+                envmapsPredImage = output_dict['envmapsPredImage'].detach().cpu().numpy()
                 envmapsBatch = input_dict['envmapsBatch'].detach().cpu().numpy()
                 renderedImPred = output_dict['renderedImPred'].detach().cpu().numpy()
                 renderedImPred_sdr = output_dict['renderedImPred_sdr'].detach().cpu().numpy()
@@ -1358,7 +1359,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                 for sample_idx_batch in range(envmapsPredScaledImage.shape[0]):
                     sample_idx = sample_idx_batch+batch_size*batch_id
                     # assert envmapsPredScaledImage.shape[0] == batch_size
-                    for I_hdr, name_tag in zip([envmapsPredScaledImage[sample_idx_batch], envmapsBatch[sample_idx_batch]], ['light_Pred', 'light_GT']):
+                    for I_hdr, name_tag in zip([envmapsPredImage[sample_idx_batch], envmapsPredScaledImage[sample_idx_batch], envmapsBatch[sample_idx_batch]], ['light_Pred', 'light_PredScaled', 'light_GT']):
                         H_grid, W_grid, h, w = I_hdr.shape[1:]
                         downsize_ratio = 4
                         assert H_grid % downsize_ratio == 0

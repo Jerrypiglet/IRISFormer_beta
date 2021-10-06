@@ -196,6 +196,8 @@ class output2env():
         axis = axisOrig # torch.Size([B, 12(SGNum), 3, 120, 160])
 
         weight = 0.999 * weightOrig
+        # weight = 0.8 * weightOrig
+
         weight = torch.tan(np.pi / 2 * weight )
 
         lambOrig = 0.999 * lambOrig

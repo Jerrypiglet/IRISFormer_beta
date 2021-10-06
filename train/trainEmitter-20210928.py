@@ -254,7 +254,7 @@ model.print_net()
 
 optimizer = optim.Adam(model.parameters(), lr=cfg.SOLVER.lr)
 if opt.cfg.SOLVER.method == 'adamw':
-    optimizer = optim.AdamW(model.parameters(), lr=cfg.SOLVER.lr, weight_decay=0.05)
+    optimizer = optim.AdamW(model.parameters(), lr=cfg.SOLVER.lr, weight_decay=0.01)
 
 # optimizer = optim.Adam(model.parameters(), lr=cfg.SOLVER.lr, betas=(0.5, 0.999) )
 if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
@@ -759,7 +759,6 @@ else:
             if opt.is_master and tid % 20 == 0:
                 print('----loss_dict', loss_dict.keys())
                 print('----loss_keys_backward', loss_keys_backward)
-
 
             loss.backward()
 

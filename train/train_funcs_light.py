@@ -80,6 +80,11 @@ def postprocess_light(input_dict, output_dict, loss_dict, opt, time_meters):
             * \
                 output_dict['segEnvBatch'].expand_as(output_dict['envmapsPredImage'] )
     else:
+        # a = torch.log(output_dict['envmapsPredScaledImage'] + opt.cfg.MODEL_LIGHT.offset)
+        # b = torch.log(input_dict['envmapsBatch'] + opt.cfg.MODEL_LIGHT.offset )
+        # if opt.is_master:
+        #     print('>>>>', torch.max(a), torch.min(a), torch.median(a))
+        #     print('>---', torch.max(b), torch.min(b), torch.median(b))
         reconstErr_loss_map = ( torch.log(output_dict['envmapsPredScaledImage'] + opt.cfg.MODEL_LIGHT.offset) - torch.log(input_dict['envmapsBatch'] + opt.cfg.MODEL_LIGHT.offset ) ) \
             * \
                 ( torch.log(output_dict['envmapsPredScaledImage'] + opt.cfg.MODEL_LIGHT.offset ) - torch.log(input_dict['envmapsBatch'] + opt.cfg.MODEL_LIGHT.offset ) ) \
