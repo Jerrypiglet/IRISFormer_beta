@@ -42,6 +42,9 @@ def set_up_envs(opt):
     opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path = opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path_local
     opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path = opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path_local
 
+    opt.cfg.DATASET.swin_path = opt.cfg.DATASET.swin_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.swin_path_local
+
+
     if opt.data_root is not None:
         opt.cfg.DATASET.dataset_path = opt.data_root
 
@@ -109,6 +112,8 @@ def set_up_envs(opt):
         assert pad_option in ['const', 'reflect']
         opt.if_pad = True
         opt.pad_op = transform.Pad([im_height_pad_to, im_width_pad_to], padding_with=im_pad_with, pad_option=pad_option)
+        opt.cfg.DATA.im_width_padded = im_width_pad_to
+        opt.cfg.DATA.im_height_padded = im_height_pad_to
     if opt.cfg.DATA.if_resize_to_32x:
         im_width_resize_to = int(np.ceil(opt.cfg.DATA.im_width/32.)*32)
         im_height_resize_to = int(np.ceil(opt.cfg.DATA.im_height/32.)*32)
@@ -140,7 +145,7 @@ def set_up_envs(opt):
     opt.cfg.MODEL_LIGHT.DPT_baseline.dpt_hybrid = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.DPT_baseline.enable:
         opt.cfg.DATA.if_load_png_not_hdr = True
-        assert opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_large', 'dpt_base', 'dpt_hybrid', 'dpt_hybrid_SSN', 'dpt_base_SSN', 'dpt_large_SSN', 'dpt_hybrid_CAv2']
+        assert opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_large', 'dpt_base', 'dpt_hybrid', 'dpt_hybrid_SSN', 'dpt_base_SSN', 'dpt_large_SSN', 'dpt_hybrid_CAv2', 'swin']
         
         assert opt.cfg.MODEL_BRDF.DPT_baseline.modality in ['al', 'de', 'enabled']
 

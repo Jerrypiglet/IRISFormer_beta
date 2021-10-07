@@ -29,14 +29,18 @@ class PPM(nn.Module):
             out.append(F.interpolate(f(x), x_size[2:], mode='bilinear', align_corners=True))
         return torch.cat(out, 1)
 
-def LSregress(pred, gt, origin):
+def LSregress(pred, gt, origin, if_clamp_coeff=True):
+    # print(pred.shape)
     nb = pred.size(0)
     origSize = pred.size()
     pred = pred.reshape(nb, -1)
     gt = gt.reshape(nb, -1)
 
-    coef = (torch.sum(pred * gt, dim = 1) / torch.clamp(torch.sum(pred * pred, dim=1), min=1e-5)).detach()
-    coef = torch.clamp(coef, 0.001, 1000)
+    # coef = (torch.sum(pred * gt, dim = 1) / torch.clamp(torch.sum(pred * pred, dim=1), min=1e-5)).detach()
+    coef = (torch.sum(pred * gt, dim = 1) / (torch.sum(pred * pred, dim=1) + 1e-6)).detach()
+    if if_clamp_coeff:
+        coef = torch.clamp(coef, 0.001, 1000)
+    # print(coef, pred.shape)
     for n in range(0, len(origSize) -1):
         coef = coef.unsqueeze(-1)
     pred = pred.view(origSize)

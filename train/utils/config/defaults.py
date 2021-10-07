@@ -89,6 +89,10 @@ _C.DATASET.png_path_local = '/data/ruizhu/OR-pngs'
 # _C.DATASET.png_path_local = ''
 _C.DATASET.png_path_cluster = ['/siggraphasia20dataset/pngs', '/local/ruzhu/data/OR-pngs', '/datasets_mount/OR-pngs']
 
+_C.DATASET.swin_path = ''
+_C.DATASET.swin_path_local = '/home/ruizhu/Documents/Projects/semanticInverse/third_parties_outside/Swin-Transformer-Semantic-Segmentation'
+_C.DATASET.swin_path_cluster = ['/ruidata/semanticInverse/third_parties_outside/Swin-Transformer-Semantic-Segmentation', '', '']
+
 _C.DATASET.if_to_memory = False
 _C.DATASET.memory_path = '/dev/shm'
 
@@ -165,6 +169,8 @@ _C.DATA.if_also_load_next_frame = False # load next frame (only png supported) i
 _C.DATA.if_augment_train = False
 _C.DATA.im_height = 240
 _C.DATA.im_width = 320
+_C.DATA.im_height_padded = 240
+_C.DATA.im_width_padded = 320
 _C.DATA.im_height_ori = 480
 _C.DATA.im_width_ori = 640
 _C.DATA.if_pad_to_32x = False # if pad both height and width to multplicative of 32 (for DPT)
@@ -376,15 +382,17 @@ _C.MODEL_LIGHT.pretrained_pth_name = 'check_cascadeLight0_sg12_offset1.0/%s0_9.p
 _C.MODEL_LIGHT.use_scale_aware_loss = False
 _C.MODEL_LIGHT.if_transform_to_LightNet_coords = False # if transform pred lighting to global LightNet coords
 _C.MODEL_LIGHT.enable_list = 'axis_lamb_weight'
+_C.MODEL_LIGHT.if_align_log_envmap = True # instead of align raw envmap_pred and envmap_gt
 
 _C.MODEL_LIGHT.DPT_baseline = CN()
 _C.MODEL_LIGHT.DPT_baseline.enable = False
 _C.MODEL_LIGHT.DPT_baseline.model = 'dpt_base'
+# _C.MODEL_LIGHT.DPT_baseline.if_freeze_backbone = False
 _C.MODEL_LIGHT.DPT_baseline.if_share_patchembed = False
 _C.MODEL_LIGHT.DPT_baseline.if_share_pretrained = False
 _C.MODEL_LIGHT.DPT_baseline.if_batch_norm = False # in DPT output head
 _C.MODEL_LIGHT.DPT_baseline.if_group_norm = False # in DPT output head
-_C.MODEL_LIGHT.DPT_baseline.if_imagenet_backbone = False
+_C.MODEL_LIGHT.DPT_baseline.if_imagenet_backbone = True
 _C.MODEL_LIGHT.DPT_baseline.readout = 'ignore'
 _C.MODEL_LIGHT.DPT_baseline.if_pos_embed = False
 _C.MODEL_LIGHT.DPT_baseline.if_checkpoint = False

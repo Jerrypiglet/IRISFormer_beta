@@ -197,7 +197,6 @@ class output2env():
 
         weight = 0.999 * weightOrig
         # weight = 0.8 * weightOrig
-
         weight = torch.tan(np.pi / 2 * weight )
 
         lambOrig = 0.999 * lambOrig

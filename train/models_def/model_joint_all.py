@@ -114,7 +114,7 @@ class Model_Joint(nn.Module):
                     "dpt_hybrid_SSN": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_path,
                     "dpt_hybrid_CAv2": 'NA',
                     "dpt_base_SSN": 'NA',
-                    
+                    "swin": 'NA',
                     # "dpt_hybrid_kitti": "dpt_weights/dpt_hybrid_kitti-cb926ef4.pt",
                     # "dpt_hybrid_nyu": "dpt_weights/dpt_hybrid_nyu-2ce69ec7.pt",
                 }
@@ -123,7 +123,29 @@ class Model_Joint(nn.Module):
                 model_path = str(Path(self.opt.cfg.PATH.pretrained_path) / default_models[model_type]) if default_models[model_type]!='NA' else None
                 if_non_negative = True if self.opt.cfg.MODEL_BRDF.DPT_baseline.modality in ['de'] else False
 
-                if model_type=='dpt_hybrid':
+                if model_type=='swin':
+                    import sys
+                    sys.path.insert(0, str(Path(self.opt.cfg.DATASET.swin_path)))
+                    sys.path.insert(0, str(Path(self.opt.cfg.DATASET.swin_path) / 'mmseg/models'))
+                    sys.path.insert(0, str(Path(self.opt.cfg.DATASET.swin_path) / 'mmseg/models/backbones'))
+                    from swin_transformer_import import SwinTransformer
+                    from decode_heads_import import UPerHead
+                    from models_def.model_dpt.blocks import Interpolate
+                    swin_dict = {}
+                    swin_dict['backbone'] = SwinTransformer(pretrain_img_size=(opt.cfg.DATA.im_height_padded, opt.cfg.DATA.im_width_padded))
+                    swin_dict['decoder'] = UPerHead(
+                        in_channels=[96, 192, 384, 768],
+                        in_index=[0, 1, 2, 3],
+                        pool_scales=(1, 2, 3, 6),
+                        channels=512,
+                        dropout_ratio=0.1,
+                        norm_cfg=dict(type='SyncBN' if opt.distributed else 'BN', requires_grad=True),
+                        align_corners=False,
+                        num_classes=3,
+                        if_upsample=True
+                    )
+                    self.BRDF_Net = nn.ModuleDict(swin_dict)
+                elif model_type=='dpt_hybrid':
                     assert self.opt.cfg.MODEL_BRDF.DPT_baseline.modality == 'enabled', 'only support this mode for now; choose modes in MODEL_BRDF.enable_list'
                     self.BRDF_Net = get_BRDFNet_DPT(
                         opt=opt, 
@@ -139,7 +161,6 @@ class Model_Joint(nn.Module):
                         model_path=model_path, 
                         modalities=self.opt.cfg.MODEL_BRDF.enable_list
                     )
-
                 elif model_type=='dpt_hybrid_SSN':
                     # print(model_path, model_type, self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_path)
                     # assert False
@@ -368,6 +389,11 @@ class Model_Joint(nn.Module):
             if self.cfg.MODEL_LIGHT.if_freeze or self.cfg.MODEL_LIGHT.DPT_baseline.enable_as_single_est_freeze_LightNet:
                 self.turn_off_names(['LIGHT_Net'])
                 freeze_bn_in_module(self.LIGHT_Net)
+
+            # if self.cfg.MODEL_BRDF.DPT_baseline.if_freeze_backbone:
+            #         self.turn_off_names(['BRDF_Net.pretrained.model.patch_embed.backbone']) # patchembed backbone in DPT_hybrid (resnet)
+            #         freeze_bn_in_module(self.BRDF_Net.pretrained.model.patch_embed.backbone)
+
 
             if self.cfg.MODEL_LIGHT.load_pretrained_MODEL_LIGHT:
                 self.load_pretrained_MODEL_LIGHT(self.cfg.MODEL_LIGHT.pretrained_pth_name)
@@ -648,6 +674,21 @@ class Model_Joint(nn.Module):
 
         return return_dict
 
+    def forward_brdf_swin(self, input_dict, input_dict_extra={}):
+        img_batch = input_dict['imBatch']
+        backbone_output_tuple = self.BRDF_Net.backbone(img_batch)
+        backbone_output_list = list(backbone_output_tuple)
+        # 1/4 torch.Size([2, 96, 64, 80])
+        # 1/8 torch.Size([2, 192, 32, 40])
+        # 1/16 torch.Size([2, 384, 16, 20])
+        # 1/32 torch.Size([2, 768, 8, 10])
+        decoder_output = self.BRDF_Net.decoder(backbone_output_tuple)
+        # print(decoder_output.shape) # torch.Size([2, 3, 64, 80])
+
+        # for a in backbone_output_list:
+        #     print(a.shape)
+        return decoder_output, {}
+
     def forward_brdf_DPT_baseline(self, input_dict, input_dict_extra={}):
         return_dict = {}
         img_batch = input_dict['imBatch']
@@ -658,24 +699,27 @@ class Model_Joint(nn.Module):
         # dpt_prediction, extra_DPT_return_dict = self.BRDF_Net.forward(img_batch, input_dict_extra=input_dict_extra)
         # return_dict = self.BRDF_Net.forward(img_batch, input_dict_extra=input_dict_extra)
 
-        if self.cfg.MODEL_BRDF.DPT_baseline.modality=='enabled':
-            modalities = self.opt.cfg.MODEL_BRDF.enable_list
-            return_dicts = {}
-
-            if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_share_pretrained:
-                module_hooks_dict = {}
-                input_dict_extra['shared_pretrained'] = forward_vit(self.opt, self.opt.cfg.MODEL_BRDF.DPT_baseline, self.BRDF_Net.shared_pretrained, img_batch, input_dict_extra={**input_dict_extra, **module_hooks_dict})
-            elif self.cfg.MODEL_BRDF.DPT_baseline.if_share_patchembed:
-                x = self.BRDF_Net.shared_patch_embed_backbone(img_batch)
-                input_dict_extra['shared_patch_embed_backbone_output'] = x
-            
-            for modality in modalities:
-                return_dicts[modality] = self.BRDF_Net[modality].forward(img_batch, input_dict_extra=input_dict_extra)
-
+        return_dicts = {}
+        modalities = self.opt.cfg.MODEL_BRDF.enable_list
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.model == 'swin':
+            assert modalities == ['al']
+            return_dicts['al'] = self.forward_brdf_swin(input_dict, input_dict_extra={})
         else:
-            modality = self.cfg.MODEL_BRDF.DPT_baseline.modality
-            modalities = [modality]
-            return_dicts = {modality: self.BRDF_Net.forward(img_batch, input_dict_extra=input_dict_extra)}
+            if self.cfg.MODEL_BRDF.DPT_baseline.modality=='enabled':
+                if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_share_pretrained:
+                    module_hooks_dict = {}
+                    input_dict_extra['shared_pretrained'] = forward_vit(self.opt, self.opt.cfg.MODEL_BRDF.DPT_baseline, self.BRDF_Net.shared_pretrained, img_batch, input_dict_extra={**input_dict_extra, **module_hooks_dict})
+                elif self.cfg.MODEL_BRDF.DPT_baseline.if_share_patchembed:
+                    x = self.BRDF_Net.shared_patch_embed_backbone(img_batch)
+                    input_dict_extra['shared_patch_embed_backbone_output'] = x
+                
+                for modality in modalities:
+                    return_dicts[modality] = self.BRDF_Net[modality].forward(img_batch, input_dict_extra=input_dict_extra)
+            else:
+                assert False
+                # modality = self.cfg.MODEL_BRDF.DPT_baseline.modality
+                # modalities = [modality]
+                # return_dicts = {modality: self.BRDF_Net.forward(img_batch, input_dict_extra=input_dict_extra)}
 
         for modality in modalities:
             dpt_prediction, extra_DPT_return_dict = return_dicts[modality]
@@ -1064,12 +1108,12 @@ class Model_Joint(nn.Module):
         im_h, im_w = self.cfg.DATA.im_height, self.cfg.DATA.im_width
         assert self.cfg.DATA.pad_option == 'const'
 
-        bn, ch, nrow, ncol = albedoPred.size()
+        # bn, ch, nrow, ncol = albedoPred.size()
         albedoPred[:, :, :im_h, :im_w] = albedoPred[:, :, :im_h, :im_w] / torch.clamp(
                 torch.mean(albedoPred[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
             , min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0
 
-        bn, ch, nrow, ncol = depthPred.size()
+        # bn, ch, nrow, ncol = depthPred.size()
         depthPred[:, :, :im_h, :im_w] = depthPred[:, :, :im_h, :im_w] / torch.clamp(
                 torch.mean(depthPred[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
             , min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0
@@ -1315,8 +1359,15 @@ class Model_Joint(nn.Module):
         # print(axisPred_ori.shape, lambPred_ori.shape, weightPred_ori.shape, envmapsPredImage.shape, '=====')
 
         pixelNum_recon = max( (torch.sum(segEnvBatch ).cpu().data).item(), 1e-5)
-        envmapsPredScaledImage = models_brdf.LSregress(envmapsPredImage.detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
-            input_dict['envmapsBatch'] * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage )
+        if self.cfg.MODEL_LIGHT.if_align_log_envmap:
+            envmapsPredScaledImage = models_brdf.LSregress(torch.log(envmapsPredImage + self.cfg.MODEL_LIGHT.offset).detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
+                torch.log(input_dict['envmapsBatch'] + self.cfg.MODEL_LIGHT.offset) * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage, 
+                if_clamp_coeff=False)
+        else:
+            envmapsPredScaledImage = models_brdf.LSregress(envmapsPredImage.detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
+                input_dict['envmapsBatch'] * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage, 
+                if_clamp_coeff=False)
+
         if self.opt.is_master:
             ic(torch.max(input_dict['envmapsBatch']), torch.min(input_dict['envmapsBatch']),torch.median(input_dict['envmapsBatch']))
             ic(torch.max(envmapsPredImage), torch.min(envmapsPredImage),torch.median(envmapsPredImage))

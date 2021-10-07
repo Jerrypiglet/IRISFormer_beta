@@ -19,6 +19,9 @@ PACNET_PATH = Path(pwdpath) / 'third-parties' / 'pacnet'
 sys.path.insert(0, str(PACNET_PATH))
 print(sys.path)
 
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
+
 # from dataset_openroomsV4_total3d_matcls_ import openrooms, collate_fn_OR
 from dataset_openrooms_OR_scanNetPose_light_20210928 import openrooms, collate_fn_OR
 # from dataset_openrooms_OR_scanNetPose_binary_tables_ import openrooms_binary

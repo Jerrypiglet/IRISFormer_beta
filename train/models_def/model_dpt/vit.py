@@ -597,7 +597,7 @@ def _make_pretrained_vitb_rn50_384(
     enable_attention_hooks=False,
     in_chans=3
 ):
-    print('========= [_make_pretrained_vitb_rn50_384] pretrained', pretrained)
+    print('========= [_make_pretrained_vitb_rn50_384] pretrained', pretrained) # /home/ruizhu/anaconda3/envs/py38/lib/python3.8/site-packages/timm/models/vision_transformer.py, L570
 
     model = timm.create_model("vit_base_resnet50_384", pretrained=pretrained, in_chans=in_chans)
 

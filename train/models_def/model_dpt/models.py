@@ -321,8 +321,16 @@ class DPTLightModel(DPT):
             # nn.GroupNorm(self.out_channels) if self.if_group_norm else nn.Identity(),
             # nn.ReLU(True) if non_negative else nn.Identity(),
         )
-        # if self.if_batch_norm:
-        #     head.insert(3, nn.GroupNorm(num_groups=4, num_channels=32))
+        # head = nn.Sequential(
+        #     nn.Conv2d(features, SGNum*12, kernel_size=3, stride=1, padding=1),
+        #     nn.GroupNorm(num_groups=SGNum, num_channels=SGNum*12) if self.if_group_norm else nn.Identity(),
+        #     nn.ReLU(True),
+        #     Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
+        #     nn.Conv2d(SGNum*12, SGNum*6, kernel_size=3, stride=1, padding=1),
+        #     nn.GroupNorm(num_groups=SGNum, num_channels=SGNum*6) if self.if_group_norm else nn.Identity(),
+        #     nn.ReLU(True),
+        #     nn.Conv2d(SGNum*6, self.out_channels, kernel_size=1, stride=1, padding=0),
+        # )
 
         super().__init__(opt, head, **kwargs)
 
