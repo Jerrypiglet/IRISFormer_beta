@@ -341,16 +341,20 @@ class openrooms(data.Dataset):
             # Read HDR image
             im_ori = self.loadHdr(hdr_image_path)
 
-            if self.if_extra_op:
-                im_ori = self.extra_op(im_ori, name='im_ori', if_channel_first=True)
             
             # Random scale the image
-            im_trainval, hdr_scale = self.scaleHdr(im_ori, seg, forced_fixed_scale=False, if_print=True) # channel first for training
+            im_trainval, hdr_scale = self.scaleHdr(im_ori, seg_ori, forced_fixed_scale=False, if_print=True) # channel first for training
             im_trainval_SDR = np.clip(im_trainval**(1.0/2.2), 0., 1.)
+            if self.if_extra_op:
+                im_trainval = self.extra_op(im_trainval, name='im_trainval', if_channel_first=True)
+                im_trainval_SDR = self.extra_op(im_trainval_SDR, name='im_trainval_SDR', if_channel_first=True)
 
             # == no random scaling:
-            im_fixedscale, _ = self.scaleHdr(im_ori, seg, forced_fixed_scale=True)
+            im_fixedscale, _ = self.scaleHdr(im_ori, seg_ori, forced_fixed_scale=True)
             im_fixedscale_SDR = np.clip(im_fixedscale**(1.0/2.2), 0., 1.)
+            if self.if_extra_op:
+                im_fixedscale = self.extra_op(im_fixedscale, name='im_fixedscale', if_channel_first=True)
+                im_fixedscale_SDR = self.extra_op(im_fixedscale_SDR, name='im_fixedscale_SDR', if_channel_first=True)
             im_fixedscale_SDR_uint8 = (255. * im_fixedscale_SDR).transpose(1, 2, 0).astype(np.uint8)
             image_transformed_fixed = self.transforms_fixed(im_fixedscale_SDR_uint8)
 
