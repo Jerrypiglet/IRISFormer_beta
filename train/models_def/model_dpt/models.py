@@ -304,6 +304,9 @@ class DPTLightModel(DPT):
         self.if_batch_norm = opt.cfg.MODEL_LIGHT.DPT_baseline.if_batch_norm
         self.if_group_norm = opt.cfg.MODEL_LIGHT.DPT_baseline.if_group_norm
 
+        # if modality == 'axis':
+        #     self.if_batch_norm = False
+
         assert not (self.if_batch_norm and self.if_group_norm)
 
         head = nn.Sequential(
