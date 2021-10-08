@@ -405,6 +405,8 @@ _C.MODEL_LIGHT.DPT_baseline.enable_as_single_est_freeze_LightNet = False
 
 _C.MODEL_LIGHT.DPT_baseline.dpt_hybrid = CN() # share with MODEL_BRDF
 
+_C.MODEL_LIGHT.DPT_baseline.swin = CN()
+_C.MODEL_LIGHT.DPT_baseline.swin.patch_size = 4
 
 # _C.MODEL_LIGHT.pretrained_pth_name = ''
 

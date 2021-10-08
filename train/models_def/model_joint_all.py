@@ -25,6 +25,8 @@ import models_def.model_matcls as model_matcls
 # import models_def.model_nvidia.AppGMM as AppGMM
 import models_def.model_nvidia.AppGMM_singleFrame as AppGMM
 import models_def.model_nvidia.ssn.ssn as ssn
+import models_def.models_swin as models_swin
+from models_def.models_swin import get_LightNet_Swin
 
 from utils.utils_scannet import convert_IntM_from_OR, CamIntrinsic_to_cuda
 
@@ -124,27 +126,32 @@ class Model_Joint(nn.Module):
                 if_non_negative = True if self.opt.cfg.MODEL_BRDF.DPT_baseline.modality in ['de'] else False
 
                 if model_type=='swin':
-                    import sys
-                    sys.path.insert(0, str(Path(self.opt.cfg.DATASET.swin_path)))
-                    sys.path.insert(0, str(Path(self.opt.cfg.DATASET.swin_path) / 'mmseg/models'))
-                    sys.path.insert(0, str(Path(self.opt.cfg.DATASET.swin_path) / 'mmseg/models/backbones'))
-                    from swin_transformer_import import SwinTransformer
-                    from decode_heads_import import UPerHead
-                    from models_def.model_dpt.blocks import Interpolate
-                    swin_dict = {}
-                    swin_dict['backbone'] = SwinTransformer(pretrain_img_size=(opt.cfg.DATA.im_height_padded, opt.cfg.DATA.im_width_padded))
-                    swin_dict['decoder'] = UPerHead(
-                        in_channels=[96, 192, 384, 768],
-                        in_index=[0, 1, 2, 3],
-                        pool_scales=(1, 2, 3, 6),
-                        channels=512,
-                        dropout_ratio=0.1,
-                        norm_cfg=dict(type='SyncBN' if opt.distributed else 'BN', requires_grad=True),
-                        align_corners=False,
-                        num_classes=3,
-                        if_upsample=True
+                    # import sys
+                    # sys.path.insert(0, str(Path(self.opt.cfg.DATASET.swin_path)))
+                    # sys.path.insert(0, str(Path(self.opt.cfg.DATASET.swin_path) / 'mmseg/models'))
+                    # sys.path.insert(0, str(Path(self.opt.cfg.DATASET.swin_path) / 'mmseg/models/backbones'))
+                    # from swin_transformer_import import SwinTransformer
+                    # from decode_heads_import import UPerHead
+                    # from models_def.model_dpt.blocks import Interpolate
+                    # swin_dict = {}
+                    # swin_dict['backbone'] = SwinTransformer(pretrain_img_size=(opt.cfg.DATA.im_height_padded, opt.cfg.DATA.im_width_padded))
+                    # swin_dict['decoder'] = UPerHead(
+                    #     in_channels=[96, 192, 384, 768],
+                    #     in_index=[0, 1, 2, 3],
+                    #     pool_scales=(1, 2, 3, 6),
+                    #     channels=512,
+                    #     dropout_ratio=0.1,
+                    #     norm_cfg=dict(type='SyncBN' if opt.distributed else 'BN', requires_grad=True),
+                    #     align_corners=False,
+                    #     num_classes=3,
+                    #     if_upsample=True
+                    # )
+                    # self.BRDF_Net = nn.ModuleDict(swin_dict)
+                    self.BRDF_Net = models_swin.SwinBRDFModel(
+                        opt, 
+                        modality = 'al', 
+                        non_negative=False,
                     )
-                    self.BRDF_Net = nn.ModuleDict(swin_dict)
                 elif model_type=='dpt_hybrid':
                     assert self.opt.cfg.MODEL_BRDF.DPT_baseline.modality == 'enabled', 'only support this mode for now; choose modes in MODEL_BRDF.enable_list'
                     self.BRDF_Net = get_BRDFNet_DPT(
@@ -352,6 +359,12 @@ class Model_Joint(nn.Module):
                         model_path=None, 
                         modalities=opt.cfg.MODEL_LIGHT.enable_list, 
                         backbone="vitb16_384", 
+                    )
+                elif model_type=='swin':
+                    self.LIGHT_Net = get_LightNet_Swin(
+                        opt=opt, 
+                        SGNum=opt.cfg.MODEL_LIGHT.SGNum, 
+                        modalities=opt.cfg.MODEL_LIGHT.enable_list, 
                     )
                 else:
                     assert False, 'not supported yet!'
@@ -676,18 +689,20 @@ class Model_Joint(nn.Module):
 
     def forward_brdf_swin(self, input_dict, input_dict_extra={}):
         img_batch = input_dict['imBatch']
-        backbone_output_tuple = self.BRDF_Net.backbone(img_batch)
-        backbone_output_list = list(backbone_output_tuple)
-        # 1/4 torch.Size([2, 96, 64, 80])
-        # 1/8 torch.Size([2, 192, 32, 40])
-        # 1/16 torch.Size([2, 384, 16, 20])
-        # 1/32 torch.Size([2, 768, 8, 10])
-        decoder_output = self.BRDF_Net.decoder(backbone_output_tuple)
-        # print(decoder_output.shape) # torch.Size([2, 3, 64, 80])
+        # backbone_output_tuple = self.BRDF_Net.backbone(img_batch)
+        # backbone_output_list = list(backbone_output_tuple)
+        # # 1/4 torch.Size([2, 96, 64, 80])
+        # # 1/8 torch.Size([2, 192, 32, 40])
+        # # 1/16 torch.Size([2, 384, 16, 20])
+        # # 1/32 torch.Size([2, 768, 8, 10])
+        # decoder_output = self.BRDF_Net.decoder(backbone_output_tuple)
+        # # print(decoder_output.shape) # torch.Size([2, 3, 64, 80])
 
         # for a in backbone_output_list:
         #     print(a.shape)
-        return decoder_output, {}
+
+        return_dict = self.BRDF_Net(img_batch)
+        return return_dict
 
     def forward_brdf_DPT_baseline(self, input_dict, input_dict_extra={}):
         return_dict = {}
@@ -1166,6 +1181,7 @@ class Model_Joint(nn.Module):
         # print(axisPred_ori.shape, lambPred_ori.shape, weightPred_ori.shape)
         return axisPred_ori, lambPred_ori, weightPred_ori
 
+
     def forward_LIGHT_Net_DPT_baseline(self, input_dict, imBatch, albedoPred, depthPred, normalPred, roughPred, ):
         # if self.cfg.DATA.if_pad_to_32x:
         #     imBatch = imBatch[:, :, :im_h, :im_w].contiguous()
@@ -1213,24 +1229,31 @@ class Model_Joint(nn.Module):
         modalities = self.opt.cfg.MODEL_LIGHT.enable_list
         return_dicts = {}
 
-        if self.opt.cfg.MODEL_LIGHT.DPT_baseline.if_share_pretrained:
-            module_hooks_dict = {}
-            # if self.opt.cfg.MODEL_LIGHT.DPT_baseline.if_checkpoint:
-            #     input_dict_extra['shared_pretrained'] = cp.checkpoint(forward_vit, self.opt, self.opt.cfg.MODEL_LIGHT.DPT_baseline, self.LIGHT_Net.shared_pretrained, input_batch, {**input_dict_extra, **module_hooks_dict})
-            # else:
-            input_dict_extra['shared_pretrained'] = forward_vit(self.opt, self.opt.cfg.MODEL_LIGHT.DPT_baseline, self.LIGHT_Net.shared_pretrained, input_batch, input_dict_extra={**input_dict_extra, **module_hooks_dict})
-        elif self.cfg.MODEL_LIGHT.DPT_baseline.if_share_patchembed:
-            # if self.opt.cfg.MODEL_LIGHT.DPT_baseline.if_checkpoint:
-            #     x = cp.checkpoint(self.LIGHT_Net.shared_patch_embed_backbone, input_batch)
-            # else:
-            x = self.LIGHT_Net.shared_patch_embed_backbone(input_batch)
-            input_dict_extra['shared_patch_embed_backbone_output'] = x
-        
-        for modality in modalities:
-            # if self.opt.cfg.MODEL_LIGHT.DPT_baseline.if_checkpoint:
-            #     return_dicts[modality] = cp.checkpoint(self.LIGHT_Net[modality].forward, input_batch, input_dict_extra)
-            # else:
-            return_dicts[modality] = self.LIGHT_Net[modality].forward(input_batch, input_dict_extra=input_dict_extra)
+        if self.opt.cfg.MODEL_LIGHT.DPT_baseline.model == 'swin':
+            if self.opt.cfg.MODEL_LIGHT.DPT_baseline.if_share_pretrained:
+                module_hooks_dict = {}
+                input_dict_extra['shared_pretrained'] = self.LIGHT_Net.shared_pretrained(input_batch)
+            for modality in modalities:
+                return_dicts[modality] = self.LIGHT_Net[modality].forward(input_batch, input_dict_extra=input_dict_extra)
+        else:
+            if self.opt.cfg.MODEL_LIGHT.DPT_baseline.if_share_pretrained:
+                module_hooks_dict = {}
+                # if self.opt.cfg.MODEL_LIGHT.DPT_baseline.if_checkpoint:
+                #     input_dict_extra['shared_pretrained'] = cp.checkpoint(forward_vit, self.opt, self.opt.cfg.MODEL_LIGHT.DPT_baseline, self.LIGHT_Net.shared_pretrained, input_batch, {**input_dict_extra, **module_hooks_dict})
+                # else:
+                input_dict_extra['shared_pretrained'] = forward_vit(self.opt, self.opt.cfg.MODEL_LIGHT.DPT_baseline, self.LIGHT_Net.shared_pretrained, input_batch, input_dict_extra={**input_dict_extra, **module_hooks_dict})
+            elif self.cfg.MODEL_LIGHT.DPT_baseline.if_share_patchembed:
+                # if self.opt.cfg.MODEL_LIGHT.DPT_baseline.if_checkpoint:
+                #     x = cp.checkpoint(self.LIGHT_Net.shared_patch_embed_backbone, input_batch)
+                # else:
+                x = self.LIGHT_Net.shared_patch_embed_backbone(input_batch)
+                input_dict_extra['shared_patch_embed_backbone_output'] = x
+            
+            for modality in modalities:
+                # if self.opt.cfg.MODEL_LIGHT.DPT_baseline.if_checkpoint:
+                #     return_dicts[modality] = cp.checkpoint(self.LIGHT_Net[modality].forward, input_batch, input_dict_extra)
+                # else:
+                return_dicts[modality] = self.LIGHT_Net[modality].forward(input_batch, input_dict_extra=input_dict_extra)
 
         assert self.opt.cascadeLevel == 0
 

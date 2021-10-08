@@ -246,9 +246,9 @@ class DPTBRDFModel(DPT):
             where x_out is disparity (inversed * baseline)'''
             # x_out = torch.clamp(x_out, 1e-8, 100)
             # print('[DPTBRDFModel - x_out]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
-            depth = self.scale * x_out + self.shift
-            depth[depth < 1e-8] = 1e-8
-            depth = 1.0 / depth
+            x_out = self.scale * x_out + self.shift
+            x_out[x_out < 1e-8] = 1e-8
+            x_out = 1.0 / x_out
             # x_out = torch.clip(x_out*5000., 1e-6, 2000000.)
             # print('[DPTBRDFModel - x_out 3]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
             # pass

@@ -96,6 +96,11 @@ def set_up_envs(opt):
     opt.cfg.PATH.matcls_matIdG1_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.matcls_matIdG1_path)
     opt.cfg.PATH.matcls_matIdG2_path = os.path.join(opt.cfg.PATH.root, opt.cfg.PATH.matcls_matIdG2_path)
 
+    # sys.path.insert(0, str(Path(opt.cfg.DATASET.swin_path)))
+    # sys.path.insert(0, str(Path(opt.cfg.DATASET.swin_path) / 'mmseg/models'))
+    # sys.path.insert(0, str(Path(opt.cfg.DATASET.swin_path) / 'mmseg/models/backbones'))
+
+
     # ===== data =====
     opt.cfg.DATA.data_read_list = [x for x in list(set(opt.cfg.DATA.data_read_list.split('_'))) if x != '']
 
