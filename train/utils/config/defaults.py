@@ -375,6 +375,7 @@ _C.MODEL_LIGHT.use_GT_light_envmap = False
 # _C.MODEL_LIGHT.use_GT_light_lamb = False
 # _C.MODEL_LIGHT.use_GT_light_weight = False
 _C.MODEL_LIGHT.load_GT_light_sg = False
+_C.MODEL_LIGHT.use_GT_light_sg = False
 _C.MODEL_LIGHT.load_pretrained_MODEL_BRDF = False
 _C.MODEL_LIGHT.load_pretrained_MODEL_LIGHT = False
 _C.MODEL_LIGHT.freeze_BRDF_Net = True

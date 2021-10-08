@@ -755,6 +755,9 @@ class openrooms(data.Dataset):
             # if if_print:
             #     print(self.split, not forced_fixed_scale, scale)
 
+        # print('-', hdr.shape, np.max(hdr), np.min(hdr), np.median(hdr), np.mean(hdr))
+        # print('----', seg.shape, np.max(seg), np.min(seg), np.median(seg), np.mean(seg))
+        # print('-------', scale)
         hdr = scale * hdr
         return np.clip(hdr, 0, 1), scale 
 

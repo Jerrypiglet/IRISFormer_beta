@@ -59,7 +59,7 @@ class SwinBRDFModel(Swin):
 
         self.non_negative = non_negative
 
-        super().__init__(opt, self.out_channels, if_batch_norm=opt.cfg.MODEL_BRDF.DPT_baseline.if_batch_norm, **kwargs)
+        super().__init__(opt, opt.cfg.MODEL_BRDF.DPT_baseline, self.out_channels, if_batch_norm=opt.cfg.MODEL_BRDF.DPT_baseline.if_batch_norm, **kwargs)
 
         self.relu = nn.ReLU(True)
 
@@ -81,7 +81,7 @@ class SwinBRDFModel(Swin):
             depth[depth < 1e-8] = 1e-8
             depth = 1.0 / depth
 
-        return x_out
+        return x_out, {}
 
 class SwinLightModel(Swin):
     def __init__(

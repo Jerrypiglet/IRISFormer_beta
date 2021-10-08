@@ -1154,21 +1154,21 @@ class Model_Joint(nn.Module):
         # print(input_batch.shape, x1.shape, x2.shape, x3.shape, x4.shape, x5.shape, x6.shape) # torch.Size([4, 11, 480, 640]) torch.Size([4, 128, 60, 80]) torch.Size([4, 256, 30, 40]) torch.Size([4, 256, 15, 20]) torch.Size([4, 512, 7, 10]) torch.Size([4, 512, 3, 5]) torch.Size([4, 1024, 3, 5])
 
         # Prediction
-        if 'axis' in self.cfg.MODEL_LIGHT.enable_list:
+        if 'axis' in self.cfg.MODEL_LIGHT.enable_list and not self.cfg.MODEL_LIGHT.use_GT_light_sg:
             axisPred_ori = self.LIGHT_Net['axisDecoder'](x1, x2, x3, x4, x5, x6) # torch.Size([4, 12, 3, 120, 160])
         else:
             # assert False
             # axisPred_ori = input_dict['']
             axisPred_ori = input_dict['sg_axis_Batch'] # (4, 120, 160, 12, 3)
             axisPred_ori = axisPred_ori.permute(0, 3, 4, 1, 2)
-        if 'lamb' in self.cfg.MODEL_LIGHT.enable_list:
+        if 'lamb' in self.cfg.MODEL_LIGHT.enable_list and not self.cfg.MODEL_LIGHT.use_GT_light_sg:
             lambPred_ori = self.LIGHT_Net['lambDecoder'](x1, x2, x3, x4, x5, x6) # torch.Size([4, 12, 120, 160])
         else:
             lambPred_ori = input_dict['sg_lamb_Batch'] # (4, 120, 160, 12, 1)
             lambPred_ori = lambPred_ori.squeeze(4).permute(0, 3, 1, 2)
             # print(lambPred_ori[0, :2, :3, :4])
 
-        if 'weight' in self.cfg.MODEL_LIGHT.enable_list:
+        if 'weight' in self.cfg.MODEL_LIGHT.enable_list and not self.cfg.MODEL_LIGHT.use_GT_light_sg:
             weightPred_ori = self.LIGHT_Net['weightDecoder'](x1, x2, x3, x4, x5, x6) # torch.Size([4, 36, 120, 160])
         else:
             weightPred_ori = input_dict['sg_weight_Batch'] # (4, 120, 160, 12, 3)
@@ -1377,19 +1377,24 @@ class Model_Joint(nn.Module):
         if self.cfg.MODEL_LIGHT.use_GT_light_envmap:
             envmapsPredImage = input_dict['envmapsBatch']
         else:
-            envmapsPredImage, axisPred, lambPred, weightPred = self.non_learnable_layers['output2env'].output2env(axisPred_ori, lambPred_ori, weightPred_ori )
+            envmapsPredImage, axisPred, lambPred, weightPred = self.non_learnable_layers['output2env'].output2env(axisPred_ori, lambPred_ori, weightPred_ori, if_postprocessing=not self.cfg.MODEL_LIGHT.use_GT_light_sg)
 
         # print(axisPred_ori.shape, lambPred_ori.shape, weightPred_ori.shape, envmapsPredImage.shape, '=====')
 
         pixelNum_recon = max( (torch.sum(segEnvBatch ).cpu().data).item(), 1e-5)
-        if self.cfg.MODEL_LIGHT.if_align_log_envmap:
-            envmapsPredScaledImage = models_brdf.LSregress(torch.log(envmapsPredImage + self.cfg.MODEL_LIGHT.offset).detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
-                torch.log(input_dict['envmapsBatch'] + self.cfg.MODEL_LIGHT.offset) * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage, 
-                if_clamp_coeff=False)
+        if self.cfg.MODEL_LIGHT.use_GT_light_sg:
+            envmapsPredScaledImage = envmapsPredImage * (input_dict['hdr_scaleBatch'].flatten().view(-1, 1, 1, 1, 1, 1))
+        elif self.cfg.MODEL_LIGHT.use_GT_light_envmap:
+            envmapsPredScaledImage = envmapsPredImage # gt envmap already scaled in dataloader
         else:
-            envmapsPredScaledImage = models_brdf.LSregress(envmapsPredImage.detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
-                input_dict['envmapsBatch'] * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage, 
-                if_clamp_coeff=False)
+            if self.cfg.MODEL_LIGHT.if_align_log_envmap:
+                envmapsPredScaledImage = models_brdf.LSregress(torch.log(envmapsPredImage + self.cfg.MODEL_LIGHT.offset).detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
+                    torch.log(input_dict['envmapsBatch'] + self.cfg.MODEL_LIGHT.offset) * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage, 
+                    if_clamp_coeff=False)
+            else:
+                envmapsPredScaledImage = models_brdf.LSregress(envmapsPredImage.detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
+                    input_dict['envmapsBatch'] * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage, 
+                    if_clamp_coeff=False)
 
         if self.opt.is_master:
             ic(torch.max(input_dict['envmapsBatch']), torch.min(input_dict['envmapsBatch']),torch.median(input_dict['envmapsBatch']))

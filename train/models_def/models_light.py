@@ -190,17 +190,24 @@ class output2env():
 
         return envmaps
 
-    def output2env(self, axisOrig, lambOrig, weightOrig ):
+    def output2env(self, axisOrig, lambOrig, weightOrig, if_postprocessing=True):
         bn, _, envRow, envCol = weightOrig.size()
 
         axis = axisOrig # torch.Size([B, 12(SGNum), 3, 120, 160])
+        
+        if if_postprocessing:
+            weight = 0.999 * weightOrig
+            # weight = 0.8 * weightOrig 
+            weight = torch.tan(np.pi / 2 * weight )
+        else:
+            weight = weightOrig
 
-        weight = 0.999 * weightOrig
-        # weight = 0.8 * weightOrig
-        weight = torch.tan(np.pi / 2 * weight )
+        if if_postprocessing:
+            lambOrig = 0.999 * lambOrig
+            lamb = torch.tan(np.pi / 2 * lambOrig )
+        else:
+            lamb = lambOrig
 
-        lambOrig = 0.999 * lambOrig
-        lamb = torch.tan(np.pi / 2 * lambOrig )
 
         envmaps = self.fromSGtoIm(axis, lamb, weight )
 

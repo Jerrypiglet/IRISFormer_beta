@@ -21,7 +21,7 @@ class UPerHead(BaseDecodeHead):
             Module applied on the last feature. Default: (1, 2, 3, 6).
     """
 
-    def __init__(self, pool_scales=(1, 2, 3, 6), upscale_ratio=1, override_BN=None, **kwargs):
+    def __init__(self, pool_scales=(1, 2, 3, 6), upscale_ratio=1, **kwargs):
         super(UPerHead, self).__init__(
             input_transform='multiple_select', **kwargs)
         # PSP Module
@@ -68,7 +68,7 @@ class UPerHead(BaseDecodeHead):
         assert upscale_ratio in [4, 2, 1]
         if upscale_ratio==4:
             self.fpn_bottleneck = nn.Sequential(
-                Interpolate(scale_factor=2, mode="bilinear", align_corners=False),
+                Interpolate(scale_factor=2, mode="bilinear", align_corners=self.align_corners),
                 ConvModule(
                     len(self.in_channels) * self.channels,
                     len(self.in_channels) * self.channels // 2, 
@@ -77,7 +77,7 @@ class UPerHead(BaseDecodeHead):
                     conv_cfg=self.conv_cfg,
                     norm_cfg=self.norm_cfg,
                     act_cfg=self.act_cfg), 
-                Interpolate(scale_factor=2, mode="bilinear", align_corners=False),
+                Interpolate(scale_factor=2, mode="bilinear", align_corners=self.align_corners),
                 ConvModule(
                     len(self.in_channels) * self.channels // 2,
                     self.channels, 
@@ -89,7 +89,7 @@ class UPerHead(BaseDecodeHead):
             )
         elif upscale_ratio==2:
             self.fpn_bottleneck = nn.Sequential(
-                Interpolate(scale_factor=2, mode="bilinear", align_corners=False),
+                Interpolate(scale_factor=2, mode="bilinear", align_corners=self.align_corners),
                 ConvModule(
                     len(self.in_channels) * self.channels,
                     self.channels, 
@@ -156,7 +156,6 @@ class UPerHead(BaseDecodeHead):
                 size=fpn_outs[0].shape[2:],
                 mode='bilinear',
                 align_corners=self.align_corners)
-        print(self.align_corners)
         fpn_outs = torch.cat(fpn_outs, dim=1)
         output = self.fpn_bottleneck(fpn_outs)
         output = self.cls_seg(output)
