@@ -284,7 +284,7 @@ if opt.distributed:
 
 logger.info(red('Optimizer: '+type(optimizer).__name__))
 scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=50, cooldown=0, verbose=True, threshold_mode='rel', threshold=0.01)
-if opt.cfg.MODEL_BRDF.DPT_baseline.if_warm_up:
+if opt.cfg.SOLVER.if_warm_up:
     # https://github.com/microsoft/Cream/blob/2fb020852cb6ea77bb3409da5319891a132ac47f/iRPE/DeiT-with-iRPE/main.py
     from timm.scheduler import create_scheduler
     scheduler, _ = create_scheduler(opt, optimizer)
@@ -830,7 +830,7 @@ else:
                     writer.add_scalar('training/batch_size_per_gpu', len(data_batch['image_path']), tid)
                     writer.add_scalar('training/gpus', opt.num_gpus, tid)
                     current_lr = optimizer.param_groups[0]['lr']
-                    if opt.cfg.MODEL_BRDF.DPT_baseline.if_warm_up:
+                    if opt.cfg.SOLVER.if_warm_up:
                         if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
                             current_lr = scheduler_backbone._get_lr(epoch)[0]
                         else:
@@ -894,7 +894,7 @@ else:
             if tid >= opt.max_iter and opt.max_iter != -1:
                 break
     
-        if opt.cfg.MODEL_BRDF.DPT_baseline.if_warm_up:
+        if opt.cfg.SOLVER.if_warm_up:
             if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
                 scheduler_backbone.step(epoch)
                 scheduler_others.step(epoch)

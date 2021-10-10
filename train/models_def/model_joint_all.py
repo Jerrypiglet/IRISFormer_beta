@@ -393,11 +393,10 @@ class Model_Joint(nn.Module):
             self.non_learnable_layers['output2env'] = models_light.output2env(isCuda = opt.if_cuda, 
                 envWidth = opt.cfg.MODEL_LIGHT.envWidth, envHeight = opt.cfg.MODEL_LIGHT.envHeight, SGNum = opt.cfg.MODEL_LIGHT.SGNum )
 
-            if not self.opt.cfg.MODEL_LIGHT.use_GT_brdf:
-
-                if self.cfg.MODEL_LIGHT.freeze_BRDF_Net:
-                    self.turn_off_names(['BRDF_Net'])
-                    freeze_bn_in_module(self.BRDF_Net)
+            # if not self.opt.cfg.MODEL_LIGHT.use_GT_brdf:
+            if self.cfg.MODEL_LIGHT.freeze_BRDF_Net:
+                self.turn_off_names(['BRDF_Net'])
+                freeze_bn_in_module(self.BRDF_Net)
 
             if self.cfg.MODEL_LIGHT.if_freeze or self.cfg.MODEL_LIGHT.DPT_baseline.enable_as_single_est_freeze_LightNet:
                 self.turn_off_names(['LIGHT_Net'])
@@ -1099,50 +1098,50 @@ class Model_Joint(nn.Module):
 
         return return_dict_layout_emitter
 
-    def forward_LIGHT_Net(self, input_dict, imBatch, albedoPred, depthPred, normalPred, roughPred, ):
-        # print(imBatch.shape, albedoPred.shape, depthPred.shape, normalPred.shape, roughPred.shape)
+    def forward_LIGHT_Net(self, input_dict, imBatch, albedoInput, depthInput, normalInput, roughInput, ):
+        # print(imBatch.shape, albedoInput.shape, depthInput.shape, normalInput.shape, roughInput.shape)
         # if self.cfg.DATA.if_pad_to_32x:
         #     imBatch = imBatch[:, :, :self.cfg.DATA.im_height, :self.cfg.DATA.im_width].contiguous()
-        #     albedoPred = albedoPred[:, :, :self.cfg.DATA.im_height, :self.cfg.DATA.im_width].contiguous()
-        #     depthPred = depthPred[:, :, :self.cfg.DATA.im_height, :self.cfg.DATA.im_width].contiguous()
-        #     normalPred = normalPred[:, :, :self.cfg.DATA.im_height, :self.cfg.DATA.im_width].contiguous()
-        #     roughPred = roughPred[:, :, :self.cfg.DATA.im_height, :self.cfg.DATA.im_width].contiguous()
-            # print('-->', imBatch.shape, albedoPred.shape, depthPred.shape, normalPred.shape, roughPred.shape)
+        #     albedoInput = albedoInput[:, :, :self.cfg.DATA.im_height, :self.cfg.DATA.im_width].contiguous()
+        #     depthInput = depthInput[:, :, :self.cfg.DATA.im_height, :self.cfg.DATA.im_width].contiguous()
+        #     normalInput = normalInput[:, :, :self.cfg.DATA.im_height, :self.cfg.DATA.im_width].contiguous()
+        #     roughInput = roughInput[:, :, :self.cfg.DATA.im_height, :self.cfg.DATA.im_width].contiguous()
+            # print('-->', imBatch.shape, albedoInput.shape, depthInput.shape, normalInput.shape, roughInput.shape)
             
         # note: normalization/rescaling also needed for GT BRDFs
-        # bn, ch, nrow, ncol = albedoPred.size()
-        # albedoPred = albedoPred.view(bn, -1)
-        # albedoPred = albedoPred / torch.clamp(torch.mean(albedoPred, dim=1), min=1e-10).unsqueeze(1) / 3.0
-        # albedoPred = albedoPred.view(bn, ch, nrow, ncol)
+        # bn, ch, nrow, ncol = albedoInput.size()
+        # albedoInput = albedoInput.view(bn, -1)
+        # albedoInput = albedoInput / torch.clamp(torch.mean(albedoInput, dim=1), min=1e-10).unsqueeze(1) / 3.0
+        # albedoInput = albedoInput.view(bn, ch, nrow, ncol)
 
-        # bn, ch, nrow, ncol = depthPred.size()
-        # depthPred = depthPred.view(bn, -1)
-        # depthPred = depthPred / torch.clamp(torch.mean(depthPred, dim=1), min=1e-10).unsqueeze(1) / 3.0
-        # depthPred = depthPred.view(bn, ch, nrow, ncol)
+        # bn, ch, nrow, ncol = depthInput.size()
+        # depthInput = depthInput.view(bn, -1)
+        # depthInput = depthInput / torch.clamp(torch.mean(depthInput, dim=1), min=1e-10).unsqueeze(1) / 3.0
+        # depthInput = depthInput.view(bn, ch, nrow, ncol)
 
         im_h, im_w = self.cfg.DATA.im_height, self.cfg.DATA.im_width
         assert self.cfg.DATA.pad_option == 'const'
 
-        # bn, ch, nrow, ncol = albedoPred.size()
-        albedoPred[:, :, :im_h, :im_w] = albedoPred[:, :, :im_h, :im_w] / torch.clamp(
-                torch.mean(albedoPred[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
+        # bn, ch, nrow, ncol = albedoInput.size()
+        albedoInput[:, :, :im_h, :im_w] = albedoInput[:, :, :im_h, :im_w] / torch.clamp(
+                torch.mean(albedoInput[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
             , min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0
 
-        # bn, ch, nrow, ncol = depthPred.size()
-        depthPred[:, :, :im_h, :im_w] = depthPred[:, :, :im_h, :im_w] / torch.clamp(
-                torch.mean(depthPred[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
+        # bn, ch, nrow, ncol = depthInput.size()
+        depthInput[:, :, :im_h, :im_w] = depthInput[:, :, :im_h, :im_w] / torch.clamp(
+                torch.mean(depthInput[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
             , min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0
 
-        normalPred[:, :, :im_h, :im_w] =  0.5 * (normalPred[:, :, :im_h, :im_w] + 1)
-        roughPred[:, :, :im_h, :im_w] =  0.5 * (roughPred[:, :, :im_h, :im_w] + 1)
+        normalInput[:, :, :im_h, :im_w] =  0.5 * (normalInput[:, :, :im_h, :im_w] + 1)
+        roughInput[:, :, :im_h, :im_w] =  0.5 * (roughInput[:, :, :im_h, :im_w] + 1)
 
         imBatchLarge = F.interpolate(imBatch, scale_factor=2, mode='bilinear')
-        albedoPredLarge = F.interpolate(albedoPred, scale_factor=2, mode='bilinear')
-        depthPredLarge = F.interpolate(depthPred, scale_factor=2, mode='bilinear')
-        normalPredLarge = F.interpolate(normalPred, scale_factor=2, mode='bilinear')
-        roughPredLarge = F.interpolate(roughPred, scale_factor=2, mode='bilinear')
+        albedoInputLarge = F.interpolate(albedoInput, scale_factor=2, mode='bilinear')
+        depthInputLarge = F.interpolate(depthInput, scale_factor=2, mode='bilinear')
+        normalInputLarge = F.interpolate(normalInput, scale_factor=2, mode='bilinear')
+        roughInputLarge = F.interpolate(roughInput, scale_factor=2, mode='bilinear')
 
-        input_batch = torch.cat([imBatchLarge, albedoPredLarge, normalPredLarge, roughPredLarge, depthPredLarge ], dim=1 )
+        input_batch = torch.cat([imBatchLarge, albedoInputLarge, normalInputLarge, roughInputLarge, depthInputLarge ], dim=1 )
 
         if self.opt.cascadeLevel == 0:
             # print(input_batch.shape)
@@ -1157,8 +1156,6 @@ class Model_Joint(nn.Module):
         if 'axis' in self.cfg.MODEL_LIGHT.enable_list and not self.cfg.MODEL_LIGHT.use_GT_light_sg:
             axisPred_ori = self.LIGHT_Net['axisDecoder'](x1, x2, x3, x4, x5, x6) # torch.Size([4, 12, 3, 120, 160])
         else:
-            # assert False
-            # axisPred_ori = input_dict['']
             axisPred_ori = input_dict['sg_axis_Batch'] # (4, 120, 160, 12, 3)
             axisPred_ori = axisPred_ori.permute(0, 3, 4, 1, 2)
         if 'lamb' in self.cfg.MODEL_LIGHT.enable_list and not self.cfg.MODEL_LIGHT.use_GT_light_sg:
@@ -1166,7 +1163,6 @@ class Model_Joint(nn.Module):
         else:
             lambPred_ori = input_dict['sg_lamb_Batch'] # (4, 120, 160, 12, 1)
             lambPred_ori = lambPred_ori.squeeze(4).permute(0, 3, 1, 2)
-            # print(lambPred_ori[0, :2, :3, :4])
 
         if 'weight' in self.cfg.MODEL_LIGHT.enable_list and not self.cfg.MODEL_LIGHT.use_GT_light_sg:
             weightPred_ori = self.LIGHT_Net['weightDecoder'](x1, x2, x3, x4, x5, x6) # torch.Size([4, 36, 120, 160])
@@ -1182,45 +1178,45 @@ class Model_Joint(nn.Module):
         return axisPred_ori, lambPred_ori, weightPred_ori
 
 
-    def forward_LIGHT_Net_DPT_baseline(self, input_dict, imBatch, albedoPred, depthPred, normalPred, roughPred, ):
+    def forward_LIGHT_Net_DPT_baseline(self, input_dict, imBatch, albedoInput, depthInput, normalInput, roughInput, ):
         # if self.cfg.DATA.if_pad_to_32x:
         #     imBatch = imBatch[:, :, :im_h, :im_w].contiguous()
-        #     albedoPred = albedoPred[:, :, :im_h, :im_w].contiguous()
-        #     depthPred = depthPred[:, :, :im_h, :im_w].contiguous()
-        #     normalPred = normalPred[:, :, :im_h, :im_w].contiguous()
-        #     roughPred = roughPred[:, :, :im_h, :im_w].contiguous()
-            # print('-->', imBatch.shape, albedoPred.shape, depthPred.shape, normalPred.shape, roughPred.shape)
+        #     albedoInput = albedoInput[:, :, :im_h, :im_w].contiguous()
+        #     depthInput = depthInput[:, :, :im_h, :im_w].contiguous()
+        #     normalInput = normalInput[:, :, :im_h, :im_w].contiguous()
+        #     roughInput = roughInput[:, :, :im_h, :im_w].contiguous()
+            # print('-->', imBatch.shape, albedoInput.shape, depthInput.shape, normalInput.shape, roughInput.shape)
             
         # note: normalization/rescaling also needed for GT BRDFs
         im_h, im_w = self.cfg.DATA.im_height, self.cfg.DATA.im_width
         assert self.cfg.DATA.pad_option == 'const'
 
-        # bn, ch, nrow, ncol = albedoPred.size()
-        albedoPred[:, :, :im_h, :im_w] = albedoPred[:, :, :im_h, :im_w] / torch.clamp(
-                torch.mean(albedoPred[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
+        # bn, ch, nrow, ncol = albedoInput.size()
+        albedoInput[:, :, :im_h, :im_w] = albedoInput[:, :, :im_h, :im_w] / torch.clamp(
+                torch.mean(albedoInput[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
             , min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0
-        # albedoPred = albedoPred / torch.clamp(
-        #         torch.mean(albedoPred.flatten(1), dim=1, keepdim=True)
+        # albedoInput = albedoInput / torch.clamp(
+        #         torch.mean(albedoInput.flatten(1), dim=1, keepdim=True)
         #     , min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0
 
-        # bn, ch, nrow, ncol = depthPred.size()
-        depthPred[:, :, :im_h, :im_w] = depthPred[:, :, :im_h, :im_w] / torch.clamp(
-                torch.mean(depthPred[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
+        # bn, ch, nrow, ncol = depthInput.size()
+        depthInput[:, :, :im_h, :im_w] = depthInput[:, :, :im_h, :im_w] / torch.clamp(
+                torch.mean(depthInput[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
             , min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0
-        # depthPred = depthPred / torch.clamp(
-        #         torch.mean(depthPred.flatten(1), dim=1, keepdim=True)
+        # depthInput = depthInput / torch.clamp(
+        #         torch.mean(depthInput.flatten(1), dim=1, keepdim=True)
         #     , min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0
 
         # imBatchLarge = F.interpolate(imBatch, [self.cfg.DATA.im_height*2, self.cfg.DATA.im_width*2], mode='bilinear')
-        # albedoPredLarge = F.interpolate(albedoPred, [self.cfg.DATA.im_height*2, self.cfg.DATA.im_width*2], mode='bilinear')
-        # depthPredLarge = F.interpolate(depthPred, [self.cfg.DATA.im_height*2, self.cfg.DATA.im_width*2], mode='bilinear')
-        # normalPredLarge = F.interpolate(normalPred, [self.cfg.DATA.im_height*2, self.cfg.DATA.im_width*2], mode='bilinear')
-        # roughPredLarge = F.interpolate(roughPred, [self.cfg.DATA.im_height*2, self.cfg.DATA.im_width*2], mode='bilinear')
+        # albedoInputLarge = F.interpolate(albedoInput, [self.cfg.DATA.im_height*2, self.cfg.DATA.im_width*2], mode='bilinear')
+        # depthInputLarge = F.interpolate(depthInput, [self.cfg.DATA.im_height*2, self.cfg.DATA.im_width*2], mode='bilinear')
+        # normalInputLarge = F.interpolate(normalInput, [self.cfg.DATA.im_height*2, self.cfg.DATA.im_width*2], mode='bilinear')
+        # roughInputLarge = F.interpolate(roughInput, [self.cfg.DATA.im_height*2, self.cfg.DATA.im_width*2], mode='bilinear')
 
-        normalPred[:, :, :im_h, :im_w] =  0.5 * (normalPred[:, :, :im_h, :im_w] + 1)
-        roughPred[:, :, :im_h, :im_w] =  0.5 * (roughPred[:, :, :im_h, :im_w] + 1)
+        normalInput[:, :, :im_h, :im_w] =  0.5 * (normalInput[:, :, :im_h, :im_w] + 1)
+        roughInput[:, :, :im_h, :im_w] =  0.5 * (roughInput[:, :, :im_h, :im_w] + 1)
         
-        input_batch = torch.cat([imBatch, albedoPred, normalPred, roughPred, depthPred ], dim=1 ).detach()
+        input_batch = torch.cat([imBatch, albedoInput, normalInput, roughInput, depthInput ], dim=1 ).detach()
         # input_batch = imBatch
 
         input_dict_extra = {}
@@ -1291,15 +1287,25 @@ class Model_Joint(nn.Module):
 
         # Normalize Albedo and depth
         if self.cfg.MODEL_LIGHT.use_GT_brdf:
-            albedoPred = input_dict['albedoBatch']
-            depthPred = input_dict['depthBatch']
-            normalPred = input_dict['normalBatch']
-            roughPred = input_dict['roughBatch']
-        else:
-            depthPred = return_dict_brdf['depthPred']
-            albedoPred = return_dict_brdf['albedoPred']
-            normalPred = return_dict_brdf['normalPred']
-            roughPred = return_dict_brdf['roughPred']
+            if 'al' in self.cfg.MODEL_BRDF.enable_list:
+                albedoInput = return_dict_brdf['albedoPred'].detach().clone()
+            else:
+                albedoInput = input_dict['albedoBatch'].detach().clone()
+
+            if 'de' in self.cfg.MODEL_BRDF.enable_list:
+                depthInput = return_dict_brdf['depthPred'].detach().clone()
+            else:
+                depthInput = input_dict['depthBatch'].detach().clone()
+
+            if 'no' in self.cfg.MODEL_BRDF.enable_list:
+                normalInput = return_dict_brdf['normalPred'].detach().clone()
+            else:
+                normalInput = input_dict['normalBatch'].detach().clone()
+
+            if 'ro' in self.cfg.MODEL_BRDF.enable_list:
+                roughInput = return_dict_brdf['roughPred'].detach().clone()
+            else:
+                roughInput = input_dict['roughBatch'].detach().clone()
 
         imBatch = input_dict['imBatch']
         segBRDFBatch = input_dict['segBRDFBatch']
@@ -1308,18 +1314,21 @@ class Model_Joint(nn.Module):
             assert self.BRDF_Net.training == False
 
         if self.cfg.MODEL_LIGHT.DPT_baseline.enable:
-            axisPred_ori, lambPred_ori, weightPred_ori = self.forward_LIGHT_Net_DPT_baseline(input_dict, imBatch, albedoPred, depthPred, normalPred, roughPred)
+            axisPred_ori, lambPred_ori, weightPred_ori = self.forward_LIGHT_Net_DPT_baseline(input_dict, imBatch, albedoInput, depthInput, normalInput, roughInput)
         else:
-            axisPred_ori, lambPred_ori, weightPred_ori = self.forward_LIGHT_Net(input_dict, imBatch, albedoPred, depthPred, normalPred, roughPred)
+            axisPred_ori, lambPred_ori, weightPred_ori = self.forward_LIGHT_Net(input_dict, imBatch, albedoInput, depthInput, normalInput, roughInput)
             # print(axisPred_ori.shape, lambPred_ori.shape, weightPred_ori.shape)
 
-        if self.opt.is_master:
+        # if_print = self.cfg.MODEL_LIGHT.DPT_baseline.enable
+        if_print = True
+
+        if self.opt.is_master and if_print:
             print('--(unet) weight', torch.max(weightPred_ori), torch.min(weightPred_ori), torch.median(weightPred_ori), weightPred_ori.shape)
             print('--(unet) lamb', torch.max(lambPred_ori), torch.min(lambPred_ori), torch.median(lambPred_ori), lambPred_ori.shape)
             print('--(unet) axis', torch.max(axisPred_ori), torch.min(axisPred_ori), torch.median(axisPred_ori), axisPred_ori.shape)
 
         if self.cfg.MODEL_LIGHT.DPT_baseline.enable_as_single_est:
-            singlePred_ori = self.forward_LIGHT_SINGLE_Net_DPT_baseline(input_dict, imBatch, albedoPred, depthPred, normalPred, roughPred)
+            singlePred_ori = self.forward_LIGHT_SINGLE_Net_DPT_baseline(input_dict, imBatch, albedoInput, depthInput, normalInput, roughInput)
             modality = self.cfg.MODEL_LIGHT.DPT_baseline.enable_as_single_est_modality
             if modality=='weight':
                 weightPred_ori = singlePred_ori
@@ -1333,7 +1342,7 @@ class Model_Joint(nn.Module):
 
             # print(weightPred_ori.shape)
 
-        if self.opt.is_master:
+        if self.opt.is_master and if_print:
             print('--weight', torch.max(weightPred_ori), torch.min(weightPred_ori), torch.median(weightPred_ori), weightPred_ori.shape)
             # UNet: tensor(0.5139, device='cuda:0') tensor(0., device='cuda:0') tensor(0.0210, device='cuda:0') # CUDA_VISIBLE_DEVICES=4,5 python -m torch.distributed.launch --master_port 5324 --nproc_per_node=2 train/trainEmitter-20210928.py --eval_every_iter 500 --if_overfit_train True --if_val False --if_vis True --if_train False --task_name tmp --resume 20211004-153946--DATE-train_mm1_LightNet-gtBRDF-32x_ORminiOverfit-HDR_bs8on2_32workers DATASET.num_workers 16 SOLVER.ims_per_batch 2 TEST.ims_per_batch 2 MODEL_BRDF.enable True MODEL_BRDF.load_pretrained_pth False MODEL_BRDF.enable_BRDF_decoders True MODEL_BRDF.enable_list al_no_de_ro DATA.data_read_list al_no_de_ro DATA.im_height 240 DATA.im_width 320 train_h 240 train_w 320 SOLVER.lr 0.00005 MODEL_LIGHT.enable True MODEL_LIGHT.load_pretrained_MODEL_LIGHT False MODEL_LIGHT.use_GT_brdf True DATA.if_load_png_not_hdr False DATA.if_pad_to_32x True DATA.pad_option reflect DATASET.mini True
             # DPT-base: tensor(0.7339, device='cuda:1') tensor(0.2201, device='cuda:1') tensor(0.5054, device='cuda:1') # CUDA_VISIBLE_DEVICES=4,5 python -m torch.distributed.launch --master_port 5324 --nproc_per_node=2 train/trainEmitter-20210928.py --eval_every_iter 500 --if_overfit_train True --if_val False --if_vis True --if_train False --task_name tmp DATASET.num_workers 16 SOLVER.ims_per_batch 2 TEST.ims_per_batch 2 MODEL_BRDF.enable True MODEL_BRDF.load_pretrained_pth False MODEL_BRDF.enable_BRDF_decoders True MODEL_BRDF.enable_list al_no_de_ro DATA.data_read_list al_no_de_ro DATA.im_height 240 DATA.im_width 320 train_h 240 train_w 320 SOLVER.lr 0.00005 MODEL_LIGHT.enable True MODEL_LIGHT.load_pretrained_MODEL_LIGHT False MODEL_LIGHT.use_GT_brdf True DATA.if_load_png_not_hdr False DATA.if_pad_to_32x True DATA.pad_option reflect DATASET.mini True MODEL_LIGHT.DPT_baseline.enable True MODEL_LIGHT.DPT_baseline.if_share_pretrained True
@@ -1375,7 +1384,7 @@ class Model_Joint(nn.Module):
 
         # Compute the recontructed error
         if self.cfg.MODEL_LIGHT.use_GT_light_envmap:
-            envmapsPredImage = input_dict['envmapsBatch']
+            envmapsPredImage = input_dict['envmapsBatch'].detach().clone()
         else:
             envmapsPredImage, axisPred, lambPred, weightPred = self.non_learnable_layers['output2env'].output2env(axisPred_ori, lambPred_ori, weightPred_ori, if_postprocessing=not self.cfg.MODEL_LIGHT.use_GT_light_sg)
 
@@ -1391,37 +1400,44 @@ class Model_Joint(nn.Module):
                 envmapsPredScaledImage = models_brdf.LSregress(torch.log(envmapsPredImage + self.cfg.MODEL_LIGHT.offset).detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
                     torch.log(input_dict['envmapsBatch'] + self.cfg.MODEL_LIGHT.offset) * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage, 
                     if_clamp_coeff=False)
+                envmapsPredScaledImage_log = models_brdf.LSregress(torch.log(envmapsPredImage + self.cfg.MODEL_LIGHT.offset).detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
+                    torch.log(input_dict['envmapsBatch'] + self.cfg.MODEL_LIGHT.offset) * segEnvBatch.expand_as(input_dict['envmapsBatch']), torch.log(envmapsPredImage + self.cfg.MODEL_LIGHT.offset), 
+                    if_clamp_coeff=False)
             else:
                 envmapsPredScaledImage = models_brdf.LSregress(envmapsPredImage.detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
                     input_dict['envmapsBatch'] * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage, 
                     if_clamp_coeff=False)
+                envmapsPredScaledImage_log = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
 
-        if self.opt.is_master:
+        if self.opt.is_master and if_print:
             ic(torch.max(input_dict['envmapsBatch']), torch.min(input_dict['envmapsBatch']),torch.median(input_dict['envmapsBatch']))
             ic(torch.max(envmapsPredImage), torch.min(envmapsPredImage),torch.median(envmapsPredImage))
             ic(torch.max(envmapsPredScaledImage), torch.min(envmapsPredScaledImage),torch.median(envmapsPredScaledImage))
+            ic(torch.max(envmapsPredScaledImage_log), torch.min(envmapsPredScaledImage_log),torch.median(envmapsPredScaledImage_log))
 
-        return_dict.update({'envmapsPredImage': envmapsPredImage, 'envmapsPredScaledImage': envmapsPredScaledImage, 'segEnvBatch': segEnvBatch, \
+        return_dict.update({'envmapsPredImage': envmapsPredImage, 'envmapsPredScaledImage': envmapsPredScaledImage, 'envmapsPredScaledImage_log': envmapsPredScaledImage_log, \
+            'segEnvBatch': segEnvBatch, \
             'imBatchSmall': imBatchSmall, 'segBRDFBatchSmall': segBRDFBatchSmall, 'pixelNum_recon': pixelNum_recon}) 
 
         # Compute the rendered error
         pixelNum_render = max( (torch.sum(segBRDFBatchSmall ).cpu().data).item(), 1e-5 )
         
-        if not self.cfg.MODEL_LIGHT.use_GT_brdf:
-            normal_input, rough_input = return_dict_brdf['normalPred'], return_dict_brdf['roughPred']
-        else:
-            normal_input, rough_input = input_dict['normalBatch'], input_dict['roughBatch']
+        # if not self.cfg.MODEL_LIGHT.use_GT_brdf:
+        #     normal_input, rough_input = return_dict_brdf['normalInput'], return_dict_brdf['roughInput']
+        # else:
+        #     normal_input, rough_input = return_dict_brdf['normalInput'], return_dict_brdf['roughInput']
+        normal_input, rough_input = normalInput, roughInput
         if self.cfg.DATA.if_pad_to_32x:
             normal_input = normal_input[:, :, :im_h, :im_w]
             rough_input = rough_input[:, :, :im_h, :im_w]
-            albedoPred = albedoPred[:, :, :im_h, :im_w]
+            albedoInput = albedoInput[:, :, :im_h, :im_w]
 
         if self.cfg.MODEL_LIGHT.use_GT_light_envmap:
             envmapsImage_input = input_dict['envmapsBatch']
         else:
             envmapsImage_input = envmapsPredImage
 
-        diffusePred, specularPred = self.non_learnable_layers['renderLayer'].forwardEnv(normalPred=normal_input, envmap=envmapsImage_input, diffusePred=albedoPred.detach(), roughPred=rough_input)
+        diffusePred, specularPred = self.non_learnable_layers['renderLayer'].forwardEnv(normalPred=normal_input.detach(), envmap=envmapsImage_input, diffusePred=albedoInput.detach(), roughPred=rough_input.detach())
 
         diffusePredScaled, specularPredScaled = models_brdf.LSregressDiffSpec(
             diffusePred.detach(),
@@ -1433,7 +1449,7 @@ class Model_Joint(nn.Module):
         # renderedImPred = torch.clamp(renderedImPred_hdr, 0, 1)
         renderedImPred = renderedImPred_hdr
 
-        if self.opt.is_master:
+        if self.opt.is_master and if_print:
             print('--renderedImPred', torch.max(renderedImPred), torch.min(renderedImPred), torch.median(renderedImPred), renderedImPred.shape)
             # UNet: tensor(2.8596, device='cuda:0') tensor(0., device='cuda:0') tensor(0.3152, device='cuda:0') torch.Size([2, 3, 120, 160])
             # DPT: tensor(1.0586, device='cuda:0') tensor(0.0389, device='cuda:0') tensor(0.3474, device='cuda:0') torch.Size([2, 3, 120, 160])

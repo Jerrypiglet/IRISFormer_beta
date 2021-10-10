@@ -292,7 +292,6 @@ class openrooms(data.Dataset):
 
         batch_dict.update({'brdf_loss_mask': torch.from_numpy(brdf_loss_mask)})
 
-        hdr_scale = 1.
 
         # assert self.opt.cfg.DATA.if_load_png_not_hdr
         if self.opt.cfg.DATA.if_load_png_not_hdr:
@@ -322,6 +321,7 @@ class openrooms(data.Dataset):
         batch_dict.update({'image_path': str(png_image_path), 'brdf_loss_mask': torch.from_numpy(brdf_loss_mask)})
 
         if self.opt.cfg.DATA.if_load_png_not_hdr:
+            hdr_scale = 1.
             # Read PNG image
             image = Image.open(str(png_image_path))
             im_fixedscale_SDR_uint8 = np.array(image)
@@ -341,7 +341,6 @@ class openrooms(data.Dataset):
             # Read HDR image
             im_ori = self.loadHdr(hdr_image_path)
 
-            
             # Random scale the image
             im_trainval, hdr_scale = self.scaleHdr(im_ori, seg_ori, forced_fixed_scale=False, if_print=True) # channel first for training
             im_trainval_SDR = np.clip(im_trainval**(1.0/2.2), 0., 1.)
@@ -537,7 +536,7 @@ class openrooms(data.Dataset):
         if self.opt.cfg.DATA.load_light_gt:
             envmaps, envmapsInd = self.loadEnvmap(env_path )
             envmaps = envmaps * hdr_scale 
-            # print(self.split, hdr_scale, np.amax(envmaps),np.amin(envmaps), np.median(envmaps))
+            print(frame_info, self.split, hdr_scale, np.amax(envmaps),np.amin(envmaps), np.median(envmaps))
             if self.cascadeLevel > 0: 
                 envmapsPre = self.loadH5(envPre_path ) 
                 if envmapsPre is None:

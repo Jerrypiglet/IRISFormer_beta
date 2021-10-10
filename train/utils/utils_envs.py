@@ -126,7 +126,7 @@ def set_up_envs(opt):
 
     # ====== GMM =====
     if opt.cfg.MODEL_GMM.enable:
-        opt.cfg.DATA.if_load_png_not_hdr = True
+        # opt.cfg.DATA.if_load_png_not_hdr = True
         # opt.cfg.DATA.if_also_load_next_frame = True
         # opt.cfg.DATA.load_cam_pose = True
         assert not(opt.cfg.MODEL_GMM.appearance_recon.enable and opt.cfg.MODEL_GMM.feat_recon.enable)
@@ -148,7 +148,7 @@ def set_up_envs(opt):
     # ====== DPT =====
     opt.cfg.MODEL_LIGHT.DPT_baseline.dpt_hybrid = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.DPT_baseline.enable:
-        opt.cfg.DATA.if_load_png_not_hdr = True
+        # opt.cfg.DATA.if_load_png_not_hdr = True
         assert opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_large', 'dpt_base', 'dpt_hybrid', 'dpt_hybrid_SSN', 'dpt_base_SSN', 'dpt_large_SSN', 'dpt_hybrid_CAv2', 'swin']
         
         assert opt.cfg.MODEL_BRDF.DPT_baseline.modality in ['al', 'de', 'enabled']
@@ -307,16 +307,18 @@ def set_up_envs(opt):
         opt.cfg.DATA.load_light_gt = True
         opt.cfg.DATA.load_brdf_gt = True
         opt.cfg.DATA.data_read_list += 'al_no_de_ro'.split('_')
-        if opt.cfg.MODEL_LIGHT.use_GT_brdf:
-            opt.cfg.MODEL_BRDF.enable = False
-            opt.cfg.MODEL_BRDF.enable_list = ''
-            opt.cfg.MODEL_BRDF.loss_list = ''
-        else:
-            opt.cfg.MODEL_BRDF.enable = True
-            opt.cfg.MODEL_BRDF.enable_list += 'al_no_de_ro'.split('_')
-            opt.cfg.MODEL_BRDF.enable_BRDF_decoders = True
-            if opt.cfg.MODEL_LIGHT.freeze_BRDF_Net:
-                opt.cfg.MODEL_BRDF.if_freeze = True
+        if opt.cfg.MODEL_LIGHT.use_GT_brdf and opt.cfg.MODEL_BRDF.enable:
+            opt.cfg.MODEL_LIGHT.freeze_BRDF_Net = True
+            opt.cfg.MODEL_BRDF.if_freeze = True
+        #     opt.cfg.MODEL_BRDF.enable = False
+        #     opt.cfg.MODEL_BRDF.enable_list = ''
+        #     opt.cfg.MODEL_BRDF.loss_list = ''
+        # else:
+        #     opt.cfg.MODEL_BRDF.enable = True
+        #     opt.cfg.MODEL_BRDF.enable_list += 'al_no_de_ro'.split('_')
+        #     opt.cfg.MODEL_BRDF.enable_BRDF_decoders = True
+        #     if opt.cfg.MODEL_LIGHT.freeze_BRDF_Net:
+        #         opt.cfg.MODEL_BRDF.if_freeze = True
 
         opt.cfg.MODEL_LIGHT.enable_list = opt.cfg.MODEL_LIGHT.enable_list.split('_')
 
@@ -420,7 +422,7 @@ def set_up_envs(opt):
         opt.if_vis = True
 
         opt.cfg.MODEL_LAYOUT_EMITTER.enable = True
-        opt.cfg.DATA.if_load_png_not_hdr = False
+        # opt.cfg.DATA.if_load_png_not_hdr = False
         opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable = True
         opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version = 'V3'
         opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_light = False

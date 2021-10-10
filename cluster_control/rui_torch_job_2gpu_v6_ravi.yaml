@@ -97,6 +97,6 @@ spec:
                 operator: In
                 values:
                 # - 1080Ti
-                - 2080Ti
-                # - TITANRTX
+                # - 2080Ti
+                - TITANRTX
   backoffLimit: 2
