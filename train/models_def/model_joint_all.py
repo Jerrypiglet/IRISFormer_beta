@@ -1123,6 +1123,7 @@ class Model_Joint(nn.Module):
         assert self.cfg.DATA.pad_option == 'const'
 
         # bn, ch, nrow, ncol = albedoInput.size()
+        # if not self.cfg.MODEL_LIGHT.use_scale_aware_loss:
         albedoInput[:, :, :im_h, :im_w] = albedoInput[:, :, :im_h, :im_w] / torch.clamp(
                 torch.mean(albedoInput[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
             , min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0
@@ -1192,6 +1193,7 @@ class Model_Joint(nn.Module):
         assert self.cfg.DATA.pad_option == 'const'
 
         # bn, ch, nrow, ncol = albedoInput.size()
+        # if not self.cfg.MODEL_LIGHT.use_scale_aware_loss:
         albedoInput[:, :, :im_h, :im_w] = albedoInput[:, :, :im_h, :im_w] / torch.clamp(
                 torch.mean(albedoInput[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
             , min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0
@@ -1256,6 +1258,7 @@ class Model_Joint(nn.Module):
         return return_dicts['axis'], return_dicts['lamb'], return_dicts['weight']
 
     def forward_LIGHT_SINGLE_Net_DPT_baseline(self, input_dict, imBatch, albedoPred, depthPred, normalPred, roughPred, ):
+        assert False, 'disabled for now'
         im_h, im_w = self.cfg.DATA.im_height, self.cfg.DATA.im_width
         assert self.cfg.DATA.pad_option == 'const'
 
@@ -1395,7 +1398,9 @@ class Model_Joint(nn.Module):
             envmapsPredScaledImage = envmapsPredImage * (input_dict['hdr_scaleBatch'].flatten().view(-1, 1, 1, 1, 1, 1))
         elif self.cfg.MODEL_LIGHT.use_GT_light_envmap:
             envmapsPredScaledImage = envmapsPredImage # gt envmap already scaled in dataloader
-        else:
+        elif self.cfg.MODEL_LIGHT.use_scale_aware_loss:
+            envmapsPredScaledImage = envmapsPredImage # not aligning envmap
+        else: # scale-invariant
             if self.cfg.MODEL_LIGHT.if_align_log_envmap:
                 envmapsPredScaledImage = models_brdf.LSregress(torch.log(envmapsPredImage + self.cfg.MODEL_LIGHT.offset).detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
                     torch.log(input_dict['envmapsBatch'] + self.cfg.MODEL_LIGHT.offset) * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage, 
@@ -1439,11 +1444,14 @@ class Model_Joint(nn.Module):
 
         diffusePred, specularPred = self.non_learnable_layers['renderLayer'].forwardEnv(normalPred=normal_input.detach(), envmap=envmapsImage_input, diffusePred=albedoInput.detach(), roughPred=rough_input.detach())
 
-        diffusePredScaled, specularPredScaled = models_brdf.LSregressDiffSpec(
-            diffusePred.detach(),
-            specularPred.detach(),
-            imBatchSmall,
-            diffusePred, specularPred )
+        if self.cfg.MODEL_LIGHT.use_scale_aware_loss:
+            diffusePredScaled, specularPredScaled = diffusePred, specularPred
+        else:
+            diffusePredScaled, specularPredScaled = models_brdf.LSregressDiffSpec(
+                diffusePred.detach(),
+                specularPred.detach(),
+                imBatchSmall,
+                diffusePred, specularPred )
 
         renderedImPred_hdr = diffusePredScaled + specularPredScaled
         # renderedImPred = torch.clamp(renderedImPred_hdr, 0, 1)

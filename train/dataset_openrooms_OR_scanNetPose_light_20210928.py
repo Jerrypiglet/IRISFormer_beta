@@ -536,7 +536,7 @@ class openrooms(data.Dataset):
         if self.opt.cfg.DATA.load_light_gt:
             envmaps, envmapsInd = self.loadEnvmap(env_path )
             envmaps = envmaps * hdr_scale 
-            print(frame_info, self.split, hdr_scale, np.amax(envmaps),np.amin(envmaps), np.median(envmaps))
+            # print(frame_info, self.split, hdr_scale, np.amax(envmaps),np.amin(envmaps), np.median(envmaps))
             if self.cascadeLevel > 0: 
                 envmapsPre = self.loadH5(envPre_path ) 
                 if envmapsPre is None:

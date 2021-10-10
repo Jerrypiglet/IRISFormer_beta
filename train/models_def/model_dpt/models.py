@@ -309,31 +309,31 @@ class DPTLightModel(DPT):
 
         assert not (self.if_batch_norm and self.if_group_norm)
 
-        head = nn.Sequential(
-            nn.Conv2d(features, features//2, kernel_size=3, stride=1, padding=1),
-            nn.GroupNorm(num_groups=features//2//8, num_channels=features//2) if self.if_group_norm else nn.Identity(),
-            nn.BatchNorm2d(features//2) if self.if_batch_norm else nn.Identity(),
-            nn.ReLU(True),
-            Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
-            nn.Conv2d(features//2, 64, kernel_size=3, stride=1, padding=1),
-            nn.GroupNorm(num_groups=8, num_channels=64) if self.if_group_norm else nn.Identity(),
-            nn.BatchNorm2d(64) if self.if_batch_norm else nn.Identity(),
-            nn.ReLU(True),
-            nn.Conv2d(64, self.out_channels, kernel_size=1, stride=1, padding=0),
-            # nn.BatchNorm2d(self.out_channels) if self.if_batch_norm else nn.Identity(),
-            # nn.GroupNorm(self.out_channels) if self.if_group_norm else nn.Identity(),
-            # nn.ReLU(True) if non_negative else nn.Identity(),
-        )
-        # head = nn.Sequential(
-        #     nn.Conv2d(features, SGNum*12, kernel_size=3, stride=1, padding=1),
-        #     nn.GroupNorm(num_groups=SGNum, num_channels=SGNum*12) if self.if_group_norm else nn.Identity(),
-        #     nn.ReLU(True),
-        #     Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
-        #     nn.Conv2d(SGNum*12, SGNum*6, kernel_size=3, stride=1, padding=1),
-        #     nn.GroupNorm(num_groups=SGNum, num_channels=SGNum*6) if self.if_group_norm else nn.Identity(),
-        #     nn.ReLU(True),
-        #     nn.Conv2d(SGNum*6, self.out_channels, kernel_size=1, stride=1, padding=0),
-        # )
+        if self.if_group_norm:
+            head = nn.Sequential(
+                nn.Conv2d(features, SGNum*12, kernel_size=3, stride=1, padding=1),
+                nn.GroupNorm(num_groups=SGNum, num_channels=SGNum*12) if self.if_group_norm else nn.Identity(),
+                nn.ReLU(True),
+                Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
+                nn.Conv2d(SGNum*12, SGNum*6, kernel_size=3, stride=1, padding=1),
+                nn.GroupNorm(num_groups=SGNum, num_channels=SGNum*6) if self.if_group_norm else nn.Identity(),
+                nn.ReLU(True),
+                nn.Conv2d(SGNum*6, self.out_channels, kernel_size=1, stride=1, padding=0),
+            )
+        else:
+            head = nn.Sequential(
+                nn.Conv2d(features, features//2, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm2d(features//2) if self.if_batch_norm else nn.Identity(),
+                nn.ReLU(True),
+                Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
+                nn.Conv2d(features//2, 64, kernel_size=3, stride=1, padding=1),
+                nn.BatchNorm2d(64) if self.if_batch_norm else nn.Identity(),
+                nn.ReLU(True),
+                nn.Conv2d(64, self.out_channels, kernel_size=1, stride=1, padding=0),
+                # nn.BatchNorm2d(self.out_channels) if self.if_batch_norm else nn.Identity(),
+                # nn.GroupNorm(self.out_channels) if self.if_group_norm else nn.Identity(),
+                # nn.ReLU(True) if non_negative else nn.Identity(),
+            )
 
         super().__init__(opt, head, **kwargs)
 
