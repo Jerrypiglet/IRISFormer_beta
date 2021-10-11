@@ -1396,10 +1396,13 @@ class Model_Joint(nn.Module):
         pixelNum_recon = max( (torch.sum(segEnvBatch ).cpu().data).item(), 1e-5)
         if self.cfg.MODEL_LIGHT.use_GT_light_sg:
             envmapsPredScaledImage = envmapsPredImage * (input_dict['hdr_scaleBatch'].flatten().view(-1, 1, 1, 1, 1, 1))
+            envmapsPredScaledImage_log = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
         elif self.cfg.MODEL_LIGHT.use_GT_light_envmap:
             envmapsPredScaledImage = envmapsPredImage # gt envmap already scaled in dataloader
+            envmapsPredScaledImage_log = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
         elif self.cfg.MODEL_LIGHT.use_scale_aware_loss:
             envmapsPredScaledImage = envmapsPredImage # not aligning envmap
+            envmapsPredScaledImage_log = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
         else: # scale-invariant
             if self.cfg.MODEL_LIGHT.if_align_log_envmap:
                 envmapsPredScaledImage = models_brdf.LSregress(torch.log(envmapsPredImage + self.cfg.MODEL_LIGHT.offset).detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
