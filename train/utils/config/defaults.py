@@ -68,6 +68,7 @@ _C.DATASET.first_scenes = -1 # laod first # of the entire dataset: train/val
 _C.DATASET.dataset_name = 'openrooms'
 _C.DATASET.dataset_path = ''
 _C.DATASET.dataset_path_local = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms'
+_C.DATASET.dataset_path_local_quarter = '/ruidata/openrooms_raw_quarter'
 _C.DATASET.dataset_path_cluster = ['/siggraphasia20dataset/code/Routine/DatasetCreation/', '', '/datasets_mount/']
 _C.DATASET.dataset_path_binary = ''
 

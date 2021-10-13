@@ -26,6 +26,8 @@ def set_up_envs(opt):
         # opt.cfg.TRAINING.MAX_CKPT_KEEP = -1
         opt.if_save_pickles = True
 
+    if opt.cfg.DATASET.if_quarter and not opt.if_cluster:
+        opt.cfg.DATASET.dataset_path_local = opt.cfg.DATASET.dataset_path_local_quarter
     opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.dataset_path_local
     opt.cfg.DATASET.dataset_path_binary = opt.cfg.DATASET.dataset_path_binary_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.dataset_path_binary_local
     opt.cfg.DATASET.dataset_path_mini_binary = opt.cfg.DATASET.dataset_path_mini_binary_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.dataset_path_mini_binary_local

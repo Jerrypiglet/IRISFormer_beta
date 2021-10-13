@@ -149,7 +149,8 @@ def make_dataset(opt, split, task, data_root=None, data_list=None, logger=None):
     if opt.cfg.DATASET.first_scenes != -1:
         # return image_label_list[:opt.cfg.DATASET.first_scenes], meta_split_scene_name_frame_id_list[:opt.cfg.DATASET.first_scenes]
         assert False
-    elif opt.cfg.DATASET.if_quarter and task != 'vis':
+    # elif opt.cfg.DATASET.if_quarter and task != 'vis':
+    elif opt.cfg.DATASET.if_quarter and task in ['train']:
         meta_split_scene_name_frame_id_list_quarter = return_percent(meta_split_scene_name_frame_id_list, 0.25)
         all_scenes = list(set(['/'.join([x[0], x[1]]) for x in meta_split_scene_name_frame_id_list_quarter]))
         all_scenes = [x.split('/') for x in all_scenes]
@@ -304,21 +305,21 @@ class openrooms(data.Dataset):
                 pass
 
         # Read PNG image
-        image = Image.open(str(png_image_path))
-        im_fixedscale_SDR_uint8 = np.array(image)
-        im_fixedscale_SDR_uint8 = cv2.resize(im_fixedscale_SDR_uint8, (self.im_width, self.im_height), interpolation = cv2.INTER_AREA )
+        # image = Image.open(str(png_image_path))
+        # im_fixedscale_SDR_uint8 = np.array(image)
+        # im_fixedscale_SDR_uint8 = cv2.resize(im_fixedscale_SDR_uint8, (self.im_width, self.im_height), interpolation = cv2.INTER_AREA )
 
-        image_transformed_fixed = self.transforms_fixed(im_fixedscale_SDR_uint8)
-        im_trainval_SDR = self.transforms_resize(im_fixedscale_SDR_uint8) # not necessarily \in [0., 1.] [!!!!]
-        # print(im_trainval_SDR.shape, type(im_trainval_SDR), torch.max(im_trainval_SDR), torch.min(im_trainval_SDR), torch.mean(im_trainval_SDR))
-        im_fixedscale_SDR = im_fixedscale_SDR_uint8.astype(np.float32) / 255.
-        if self.if_extra_op:
-            im_fixedscale_SDR = self.extra_op(im_fixedscale_SDR, name='im_fixedscale_SDR')
+        # image_transformed_fixed = self.transforms_fixed(im_fixedscale_SDR_uint8)
+        # im_trainval_SDR = self.transforms_resize(im_fixedscale_SDR_uint8) # not necessarily \in [0., 1.] [!!!!]
+        # # print(im_trainval_SDR.shape, type(im_trainval_SDR), torch.max(im_trainval_SDR), torch.min(im_trainval_SDR), torch.mean(im_trainval_SDR))
+        # im_fixedscale_SDR = im_fixedscale_SDR_uint8.astype(np.float32) / 255.
+        # if self.if_extra_op:
+        #     im_fixedscale_SDR = self.extra_op(im_fixedscale_SDR, name='im_fixedscale_SDR')
 
-        im_trainval = im_trainval_SDR # [3, 240, 320], tensor, not in [0., 1.]
-        # print(torch.max(im_trainval), torch.min(im_trainval))
+        # im_trainval = im_trainval_SDR # [3, 240, 320], tensor, not in [0., 1.]
+        # # print(torch.max(im_trainval), torch.min(im_trainval))
 
-        batch_dict.update({'image_path': str(png_image_path), 'brdf_loss_mask': torch.from_numpy(brdf_loss_mask)})
+        # batch_dict.update({'image_path': str(png_image_path), 'brdf_loss_mask': torch.from_numpy(brdf_loss_mask)})
 
         if self.opt.cfg.DATA.if_load_png_not_hdr:
             hdr_scale = 1.

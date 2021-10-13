@@ -274,7 +274,8 @@ class renderingLayer():
             envR, envC = self.imHeight, self.imWidth
 
         # print(normalPred.shape, diffusePred.shape, roughPred.shape)
-        assert normalPred.shape[-2:] == diffusePred.shape[-2:] == roughPred.shape[-2:]
+        if diffusePred is not None and roughPred is not None:
+            assert normalPred.shape[-2:] == diffusePred.shape[-2:] == roughPred.shape[-2:]
         
         # print(normalPred.shape)
         normalPred = F.adaptive_avg_pool2d(normalPred, (envR, envC) )
