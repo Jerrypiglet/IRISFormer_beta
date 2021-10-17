@@ -478,7 +478,7 @@ def vis_layout_emitter(labels_dict, output_dict, data_batch, opt, time_meters=No
         else:
             hdr_scale = 1.
             env_scale = 1.
-        scene_box = Box(image, None, cam_K, gt_cam_R, pre_cam_R, gt_layout_full, pre_layout_full, gt_boxes, pre_boxes, gt_meshes, pre_meshes, \
+        scene_box = Box(image, cam_K, gt_cam_R, pre_cam_R, gt_layout_full, pre_layout_full, gt_boxes, pre_boxes, gt_meshes, pre_meshes, \
             opt=opt, dataset='OR', description=save_prefix, if_mute_print=True, OR=opt.cfg.MODEL_LAYOUT_EMITTER.data.OR, \
             emitter2wall_assign_info_list_gt = emitter2wall_assign_info_list_gt, 
             emitters_obj_list_gt = emitters_obj_list_gt, 

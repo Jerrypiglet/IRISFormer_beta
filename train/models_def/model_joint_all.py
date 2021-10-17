@@ -431,7 +431,6 @@ class Model_Joint(nn.Module):
                         self.turn_off_names(['LAYOUT_EMITTER_NET_fc'])
                         freeze_bn_in_module(self.LAYOUT_EMITTER_NET_fc)
                         
-
             if 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
                 if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
                     # --- lightAccuNet
@@ -593,7 +592,7 @@ class Model_Joint(nn.Module):
                 # layout w/ wo/ V1 emitters
                 if if_layout or if_vanilla_emitter:
                     if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder:
-                        x1, x2, x3, x4, x5, x6 = self.LAYOUT_EMITTER_NET_encoder(input_dict['input_batch_brdf'])
+                        x1, x2, x3, x4, x5, x6, _ = self.LAYOUT_EMITTER_NET_encoder(input_dict['input_batch_brdf'])
                         encoder_outputs = {'x1': x1, 'x2': x2, 'x3': x3, 'x4': x4, 'x5': x5, 'x6': x6}
                     else:
                         encoder_outputs = return_dict_brdf['encoder_outputs']
@@ -1323,7 +1322,7 @@ class Model_Joint(nn.Module):
             # print(axisPred_ori.shape, lambPred_ori.shape, weightPred_ori.shape)
 
         # if_print = self.cfg.MODEL_LIGHT.DPT_baseline.enable
-        if_print = True
+        if_print = False
 
         if self.opt.is_master and if_print:
             print('--(unet) weight', torch.max(weightPred_ori), torch.min(weightPred_ori), torch.median(weightPred_ori), weightPred_ori.shape)

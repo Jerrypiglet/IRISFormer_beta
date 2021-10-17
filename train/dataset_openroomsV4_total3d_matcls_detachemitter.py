@@ -443,7 +443,7 @@ class openrooms(data.Dataset):
             sem_seg_dict = self.load_semseg(im_fixedscale_SDR_uint8, semseg_label_path)
             batch_dict.update(sem_seg_dict)
 
-        # ====== matseg =====
+        # ====== matcls =====
         if self.opt.cfg.DATA.load_matcls_gt and (not self.opt.cfg.DATASET.if_no_gt_semantics):
             scene_matcls_Path = Path(self.cfg.DATASET.matpart_path) / meta_split / scene_name
             mat_cls_dict = self.load_mat_cls(frame_info=(scene_matcls_Path, frame_id), if_gen_on_the_fly=False, if_validate=True)

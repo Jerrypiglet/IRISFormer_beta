@@ -1066,7 +1066,7 @@ class Box(Scene3D):
                         # intensity_scalelog = 5. 
                         light_axis_length_vis = intensity_scalelog + 2.
                         light_axis_end = light_axis / np.linalg.norm(light_axis) * light_axis_length_vis * scale_emitter_length + light_center
-                        print(light_axis, light_center, light_axis_end)
+                        # print(light_axis, light_center, light_axis_end)
                         # light_axis_end = light_axis / np.linalg.norm(light_axis) * 5 + light_center
                         a_light = Arrow3D([light_center[0], light_axis_end[0]], [light_center[1], light_axis_end[1]], [light_center[2], light_axis_end[2]], if_swap_yz=True, mutation_scale=20,
                             lw=2, arrowstyle="-|>", facecolor=intensity_scaled, edgecolor='k')

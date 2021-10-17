@@ -37,7 +37,6 @@ class decoder_layout_emitter(nn.Module):
             self.ROLL_BIN = len(bin['roll_bin'])
             self.LO_ORI_BIN = len(bin['layout_ori_bin'])
 
-
             # fc for camera
             self.fc_layout_1 = nn.Linear(backbone_out_dim, 1024)
             self.fc_layout_2 = nn.Linear(1024, (self.PITCH_BIN + self.ROLL_BIN) * 2)
@@ -52,7 +51,6 @@ class decoder_layout_emitter(nn.Module):
             # for layout centroid and coefficients
             self.fc_layout_5 = nn.Linear(1024, 512)
             self.fc_layout_6 = nn.Linear(512, 6)
-
 
         # ======== emitter
         if self.if_emitter_vanilla_fc:
@@ -84,21 +82,20 @@ class decoder_layout_emitter(nn.Module):
 
 
     def forward(self, input_feats_dict):
-
         # ==== backend & fc feats
         # for x in input_feats_dict:
         #     print(x, input_feats_dict[x].shape)
         # torch.Size([8, 3, 480, 640]) x5 torch.Size([8, 512, 15, 20])
         x = input_feats_dict['x4']
-        # print(x.shape)
+        # print(x.shape) # torch.Size([2, 256, 16, 20])
         x = F.relu(self.gn5(self.conv5(self.pad5(x))), True)
-        # print(x.shape)
+        # print(x.shape) # torch.Size([2, 256, 8, 10])
         x = F.relu(self.gn6(self.conv6(self.pad6(x))), True)
-        # print(x.shape)
+        # print(x.shape) # torch.Size([2, 512, 4, 5])
         x = F.relu(self.gn7(self.conv7(self.pad7(x))), True)
-        # print(x.shape)
+        # print(x.shape) # torch.Size([2, 1024, 2, 2])
         x = self.avg_pool(x)
-        # print(x.shape)
+        # print(x.shape) # torch.Size([2, 1024, 1, 1])
         x = x.reshape((x.shape[0], -1))
 
         # ==== emitter & layout est

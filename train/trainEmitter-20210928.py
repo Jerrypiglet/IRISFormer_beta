@@ -333,12 +333,12 @@ transforms_val_resize = get_transform_resize('val', opt)
 openrooms_to_use = openrooms
 make_data_loader_to_use = make_data_loader
 
-if opt.cfg.DATASET.if_pickle:
-    openrooms_to_use = openrooms_pickle
-if opt.cfg.DATASET.if_binary:
-    assert False, 'not supporting image resizing'
-    openrooms_to_use = openrooms_binary
-    make_data_loader_to_use = make_data_loader_binary
+# if opt.cfg.DATASET.if_pickle:
+#     openrooms_to_use = openrooms_pickle
+# if opt.cfg.DATASET.if_binary:
+#     assert False, 'not supporting image resizing'
+#     openrooms_to_use = openrooms_binary
+    # make_data_loader_to_use = make_data_loader_binary
     
 print('+++++++++openrooms_to_use', openrooms_to_use)
 
