@@ -40,6 +40,10 @@ import torchvision.transforms as tfv_transform
 import warnings
 warnings.filterwarnings("ignore")
 
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
+
+
 rel_cfg = Relation_Config()
 d_model = int(rel_cfg.d_g/4)
 

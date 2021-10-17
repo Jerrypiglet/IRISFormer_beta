@@ -549,6 +549,8 @@ def set_up_folders(opt):
         if os.path.isdir(opt.summary_path_task):
             if 'POD' in opt.task_name:
                 print('====opt.summary_path_task exists! %s'%opt.summary_path_task)
+                if opt.resume != 'resume':
+                    raise RuntimeError('====opt.summary_path_task exists! %s'%opt.summary_path_task)
                 if_delete = 'n'
                 # opt.resume = opt.task_name
                 # print(green('Resuming task %s'%opt.resume))

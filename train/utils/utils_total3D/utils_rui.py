@@ -40,7 +40,9 @@ def clip(subjectPolygon, clipPolygon):
       cp1 = cp2
    return(outputList)
 
-def vis_cube_plt(Xs, ax, color=None, linestyle='-', label=None, if_face_idx_text=False, if_vertex_idx_text=False, text_shift=[0., 0., 0.], fontsize_scale=1., highlight_faces=[]):
+def vis_cube_plt(Xs, ax, color=None, linestyle='-', label=None, if_face_idx_text=False, if_vertex_idx_text=False, text_shift=[0., 0., 0.], fontsize_scale=1., highlight_faces=[], if_swap_yz=False):
+   if if_swap_yz:
+      Xs = np.hstack([Xs[:, 0:1], -Xs[:, 2:3], Xs[:, 1:2]])
    # https://stackoverflow.com/questions/11140163/plotting-a-3d-cube-a-sphere-and-a-vector-in-matplotlib
    index1 = [0, 1, 2, 3, 0, 4, 5, 6, 7, 4]
    index2 = [[1, 5], [2, 6], [3, 7]]
@@ -79,28 +81,35 @@ def vis_cube_plt(Xs, ax, color=None, linestyle='-', label=None, if_face_idx_text
 from matplotlib.patches import FancyArrowPatch
 from mpl_toolkits.mplot3d import proj3d
 class Arrow3D(FancyArrowPatch):
-    def __init__(self, xs, ys, zs, *args, **kwargs):
-        FancyArrowPatch.__init__(self, (0, 0), (0, 0), *args, **kwargs)
-        self._verts3d = xs, ys, zs
+   def __init__(self, xs, ys, zs, if_swap_yz, *args, **kwargs):
+      FancyArrowPatch.__init__(self, (0, 0), (0, 0), *args, **kwargs)
+      if if_swap_yz:
+         ys, zs = [-zs[0], -zs[1]], ys
+      self._verts3d = xs, ys, zs
 
-    def draw(self, renderer):
-        xs3d, ys3d, zs3d = self._verts3d
-        xs, ys, zs = proj3d.proj_transform(xs3d, ys3d, zs3d, renderer.M)
-        self.set_positions((xs[0], ys[0]), (xs[1], ys[1]))
-        FancyArrowPatch.draw(self, renderer)
+   def draw(self, renderer):
+      xs3d, ys3d, zs3d = self._verts3d
+      xs, ys, zs = proj3d.proj_transform(xs3d, ys3d, zs3d, renderer.M)
+      self.set_positions((xs[0], ys[0]), (xs[1], ys[1]))
+      FancyArrowPatch.draw(self, renderer)
         
-def vis_axis(ax):
-    for vec, tag, tag_loc in zip([([0, 1], [0, 0], [0, 0]), ([0, 0], [0, 1], [0, 0]), ([0, 0], [0, 0], [0, 1])], [r'$X_w$', r'$Y_w$', r'$Z_w$'], [[1, 0, 0], [0, 1, 0], [0, 0, 1]]):
-        a = Arrow3D(vec[0], vec[1], vec[2], mutation_scale=20,
-                lw=1, arrowstyle="->", color="k")
-        ax.text3D(tag_loc[0], tag_loc[1], tag_loc[2], tag)
-        ax.add_artist(a)
+def vis_axis(ax, if_swap_yz=False):
+   for vec, tag, tag_loc in zip([([0, 1], [0, 0], [0, 0]), ([0, 0], [0, 1], [0, 0]), ([0, 0], [0, 0], [0, 1])], [r'$X_w$', r'$Y_w$', r'$Z_w$'], [[1, 0, 0], [0, 1, 0], [0, 0, 1]]):
+      if if_swap_yz:
+         tag_loc = [tag_loc[0], -tag_loc[2], tag_loc[1]]
 
-def vis_axis_xyz(ax, x, y, z, origin=[0., 0., 0.], suffix='_w', color='k'):
-    for vec, tag, tag_loc in zip([([origin[0], (origin+x)[0]], [origin[1], (origin+x)[1]], [origin[2], (origin+x)[2]]), \
-       ([origin[0], (origin+y)[0]], [origin[1], (origin+y)[1]], [origin[2], (origin+y)[2]]), \
-          ([origin[0], (origin+z)[0]], [origin[1], (origin+z)[1]], [origin[2], (origin+z)[2]])], [r'$X%s$'%suffix, r'$Y%s$'%suffix, r'$Z%s$'%suffix], [origin+x, origin+y, origin+z]):
-        a = Arrow3D(vec[0], vec[1], vec[2], mutation_scale=20,
-                lw=1, arrowstyle="->", color=color)
-        ax.text3D(tag_loc[0], tag_loc[1], tag_loc[2], tag, color=color)
-        ax.add_artist(a)
+      a = Arrow3D(vec[0], vec[1], vec[2], if_swap_yz=if_swap_yz, mutation_scale=20, lw=1, arrowstyle="->", color="k")
+      ax.text3D(tag_loc[0], tag_loc[1], tag_loc[2], tag)
+      ax.add_artist(a)
+
+def vis_axis_xyz(ax, x, y, z, origin=[0., 0., 0.], suffix='_w', color='k', if_swap_yz=False):
+   for vec, tag, tag_loc in zip([([origin[0], (origin+x)[0]], [origin[1], (origin+x)[1]], [origin[2], (origin+x)[2]]), \
+      ([origin[0], (origin+y)[0]], [origin[1], (origin+y)[1]], [origin[2], (origin+y)[2]]), \
+      ([origin[0], (origin+z)[0]], [origin[1], (origin+z)[1]], [origin[2], (origin+z)[2]])], [r'$X%s$'%suffix, r'$Y%s$'%suffix, r'$Z%s$'%suffix], [origin+x, origin+y, origin+z]):
+         if if_swap_yz:
+            tag_loc = [tag_loc[0], -tag_loc[2], tag_loc[1]]
+   
+         a = Arrow3D(vec[0], vec[1], vec[2], if_swap_yz=if_swap_yz, mutation_scale=20,
+                 lw=1, arrowstyle="->", color=color)
+         ax.text3D(tag_loc[0], tag_loc[1], tag_loc[2], tag, color=color)
+         ax.add_artist(a)

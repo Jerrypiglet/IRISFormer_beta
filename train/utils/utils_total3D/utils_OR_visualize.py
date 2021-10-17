@@ -335,7 +335,7 @@ class Box(Scene3D):
                     a = Arrow3D([origin_show[0], origin_show[0]+axis_single[0]*weight_single_vis], 
                                 [origin_show[1], origin_show[1]+axis_single[1]*weight_single_vis], 
                                 [origin_show[2], origin_show[2]+axis_single[2]*weight_single_vis], \
-                                mutation_scale=20, lw=1, arrowstyle="->", color="b")
+                                if_swap_yz=False, mutation_scale=20, lw=1, arrowstyle="->", color="b")
                     ax_3d.add_artist(a)
 
 
@@ -940,6 +940,7 @@ class Box(Scene3D):
                 assert len(obj_paths)==len(vtk_objects.keys())
                 self.valid_bbox_meshes_dict[current_type]['vtk_objs'] = vtk_objects
 
+
     def draw_3D_scene_plt(self, vis_type = 'prediction', if_save = True, save_path='', fig_or_ax=[None, None],  which_to_vis='cell_info', \
             if_show_emitter=True, if_show_objs=True, if_show_objs_axes=False, if_show_layout_axes=True, if_return_cells_vis_info=False, hide_cells=False, if_show_cell_normals=False, if_show_cell_meshgrid=False, hide_random_id=True, scale_emitter_length=1., \
             if_debug=False, if_dump_to_mesh=False, fig_scale=1., pickle_id=0, \
@@ -964,8 +965,13 @@ class Box(Scene3D):
                 # ax_3d_GT = fig.gca(projection='3d')
             ax_3d_GT.set_proj_type('ortho')
             ax_3d_GT.set_aspect("auto")
-            ax_3d_GT.view_init(elev=-42, azim=111)
+            # ax_3d_GT.view_init(elev=42, azim=111)
+            ax_3d_GT.view_init(elev=9, azim=120)
             ax_3d_GT.set_title('GT')
+            ax_3d_GT.set_xlabel('x')
+            ax_3d_GT.set_ylabel('y')
+            ax_3d_GT.set_zlabel('z')
+
 
         if 'prediction' in figs_to_draw:
             if if_new_fig:
@@ -973,7 +979,7 @@ class Box(Scene3D):
                 # ax_3d_PRED = fig.gca(projection='3d')
             ax_3d_PRED.set_proj_type('ortho')
             ax_3d_PRED.set_aspect("auto")
-            ax_3d_PRED.view_init(elev=-42, azim=111)
+            ax_3d_PRED.view_init(elev=42, azim=111)
             ax_3d_PRED.set_title('PRED')
 
         # === draw layout, camera and axis
@@ -998,26 +1004,25 @@ class Box(Scene3D):
             cam_up = cam_yaxis
             cam_origin = np.zeros_like(cam_up)
             cam_lookat = cam_origin + cam_xaxis
-            vis_axis_xyz(ax_3d, cam_xaxis.flatten(), cam_yaxis.flatten(), cam_zaxis.flatten(), cam_origin.flatten(), suffix='_c')
-            a = Arrow3D([cam_origin[0][0], cam_lookat[0][0]*2-cam_origin[0][0]], [cam_origin[1][0], cam_lookat[1][0]*2-cam_origin[1][0]], [cam_origin[2][0], cam_lookat[2][0]*2-cam_origin[2][0]], mutation_scale=20,
+            vis_axis_xyz(ax_3d, cam_xaxis.flatten(), cam_yaxis.flatten(), cam_zaxis.flatten(), cam_origin.flatten(), suffix='_c', if_swap_yz=True)
+            a = Arrow3D([cam_origin[0][0], cam_lookat[0][0]*2-cam_origin[0][0]], [cam_origin[1][0], cam_lookat[1][0]*2-cam_origin[1][0]], [cam_origin[2][0], cam_lookat[2][0]*2-cam_origin[2][0]], if_swap_yz=True, mutation_scale=20,
                             lw=1, arrowstyle="->", color="b")
             ax_3d.add_artist(a)
-            a_up = Arrow3D([cam_origin[0][0], cam_origin[0][0]+cam_up[0][0]], [cam_origin[1][0], cam_origin[1][0]+cam_up[1][0]], [cam_origin[2][0], cam_origin[2][0]+cam_up[2][0]], mutation_scale=20,
+            a_up = Arrow3D([cam_origin[0][0], cam_origin[0][0]+cam_up[0][0]], [cam_origin[1][0], cam_origin[1][0]+cam_up[1][0]], [cam_origin[2][0], cam_origin[2][0]+cam_up[2][0]], if_swap_yz=True, mutation_scale=20,
                             lw=1, arrowstyle="->", color="r")
-            # ic(cam_origin, cam_up)
             ax_3d.add_artist(a_up)
-            vis_axis(ax_3d)
+            vis_axis(ax_3d, if_swap_yz=True)
 
             # === draw layout
             assert layout is not None
-            vis_cube_plt(layout['bdb3D'], ax_3d, 'k', '--', if_face_idx_text=True, if_vertex_idx_text=True, highlight_faces=[0]) # highlight ceiling (face 0) edges
+            vis_cube_plt(layout['bdb3D'], ax_3d, 'k', '--', if_face_idx_text=True, if_vertex_idx_text=True, highlight_faces=[0], if_swap_yz=True) # highlight ceiling (face 0) edges
             if if_show_layout_axes:
                 centroid, basis = layout['centroid'], layout['basis']
                 for axis_idx, color, axis_name in zip([0, 1, 2], ['r', 'g', 'b'], ['x', 'y', 'z']):
-                    a_x = Arrow3D([centroid[0], centroid[0]+basis[axis_idx][0]], [centroid[1], centroid[1]+basis[axis_idx][1]], [centroid[2], centroid[2]+basis[axis_idx][2]], mutation_scale=1,
+                    a_x = Arrow3D([centroid[0], centroid[0]+basis[axis_idx][0]], [centroid[1], centroid[1]+basis[axis_idx][1]], [centroid[2], centroid[2]+basis[axis_idx][2]], if_swap_yz=True, mutation_scale=1,
                             lw=2, arrowstyle="Simple", color=color)
                     ax_3d.add_artist(a_x)
-                    ax_3d.text3D(centroid[0]+basis[axis_idx][0], centroid[1]+basis[axis_idx][1], centroid[2]+basis[axis_idx][2], axis_name, color=color, fontsize=10*fig_scale)
+                    ax_3d.text3D(centroid[0]+basis[axis_idx][0], -centroid[2]-basis[axis_idx][2], centroid[1]+basis[axis_idx][1], axis_name, color=color, fontsize=10*fig_scale)
 
             # === draw emitters
             if self.emitters_obj_list_gt is not None and if_show_emitter:
@@ -1037,7 +1042,7 @@ class Box(Scene3D):
 
                     # print('---', emitter_dict['random_id'])
                     obj_label_show = cat_name if hide_random_id else cat_name+'-'+ emitter_dict['random_id']
-                    vis_cube_plt(emitter_dict['obj_box_3d'], ax_3d, cat_color, linestyle, obj_label_show)
+                    vis_cube_plt(emitter_dict['obj_box_3d'], ax_3d, cat_color, linestyle, obj_label_show, if_swap_yz=True)
 
                     vis_emitter_part = True
                     if emitter_dict['emitter_prop']['if_lit_up'] and emitter_dict['emitter_prop']['obj_type'] == 'window':
@@ -1061,8 +1066,9 @@ class Box(Scene3D):
                         # intensity_scalelog = 5. 
                         light_axis_length_vis = intensity_scalelog + 2.
                         light_axis_end = light_axis / np.linalg.norm(light_axis) * light_axis_length_vis * scale_emitter_length + light_center
+                        print(light_axis, light_center, light_axis_end)
                         # light_axis_end = light_axis / np.linalg.norm(light_axis) * 5 + light_center
-                        a_light = Arrow3D([light_center[0], light_axis_end[0]], [light_center[1], light_axis_end[1]], [light_center[2], light_axis_end[2]], mutation_scale=20,
+                        a_light = Arrow3D([light_center[0], light_axis_end[0]], [light_center[1], light_axis_end[1]], [light_center[2], light_axis_end[2]], if_swap_yz=True, mutation_scale=20,
                             lw=2, arrowstyle="-|>", facecolor=intensity_scaled, edgecolor='k')
                         ax_3d.add_artist(a_light)
 
@@ -1132,12 +1138,12 @@ class Box(Scene3D):
                 bdb3d_corners = get_corners_of_bb3d_no_index(basis, coeffs, centroid)
 
                 color = [x/255. for x in self.color_palette[class_id]]
-                vis_cube_plt(bdb3d_corners, ax_3d, color, linestyle, self.classes[class_id])
+                vis_cube_plt(bdb3d_corners, ax_3d, color, linestyle, self.classes[class_id], if_swap_yz=True)
                 # print('Showing obj', self.classes[class_id])
                 
                 if if_show_objs_axes:
                     for axis_idx, color, axis_name in zip([0, 1, 2], ['r', 'g', 'b'], ['x', 'y', 'z']):
-                        a_x = Arrow3D([centroid[0], centroid[0]+basis[axis_idx][0]], [centroid[1], centroid[1]+basis[axis_idx][1]], [centroid[2], centroid[2]+basis[axis_idx][2]], mutation_scale=1,
+                        a_x = Arrow3D([centroid[0], centroid[0]+basis[axis_idx][0]], [centroid[1], centroid[1]+basis[axis_idx][1]], [centroid[2], centroid[2]+basis[axis_idx][2]], if_swap_yz=True, mutation_scale=1,
                                 lw=1, arrowstyle="Simple", color=color)
                         ax_3d.add_artist(a_x)
 
@@ -1228,9 +1234,11 @@ class Box(Scene3D):
                         # print(verts, np.array(verts).shape)
                         # [0].shape, cell_vis['extra_info']['cell_center'].shape)
                         if cell_info['obj_type'] != 'null':
-                            verts = (np.array(verts).squeeze().T - cell_vis['extra_info']['cell_center']) * (cell_vis['alpha']/2.+0.5) + cell_vis['extra_info']['cell_center']
-                            verts = [(verts.T).tolist()]
-                            poly = Poly3DCollection(verts, facecolor=intensity_color, edgecolor=color)
+                            verts = (np.array(verts).squeeze().T - cell_vis['extra_info']['cell_center']) * (cell_vis['alpha']/2.+0.5) + cell_vis['extra_info']['cell_center'] # (3, N)
+                            verts_swap = np.vstack([verts[0:1, :], -verts[2:3, :], verts[1:2, :]])
+                            # verts_swap = verts
+                            verts_swap = [(verts_swap.T).tolist()]
+                            poly = Poly3DCollection(verts_swap, facecolor=intensity_color, edgecolor=color)
 
                             if if_debug:
                                 if current_type == 'GT' and cell_info['obj_type'] == 'window':
@@ -1238,7 +1246,9 @@ class Box(Scene3D):
                                     print(wall_idx, i, j)
 
                         else:
-                            poly = Poly3DCollection(verts, facecolor=color)
+                            verts_swap = np.vstack([verts[0:1, :], -verts[2:3, :], verts[1:2, :]])
+                            # verts_swap = verts
+                            poly = Poly3DCollection(verts_swap, facecolor=color)
 
                     cell_vis.update({'poly': poly})
 
@@ -1302,7 +1312,7 @@ class Box(Scene3D):
                                 # light_end = cell_center + normal_outside
                                 # print(cell_center, light_dir)
                                 # print(extra_info['emitter_info'])
-                                a = Arrow3D([cell_center[0], light_end[0]], [cell_center[1], light_end[1]], [cell_center[2], light_end[2]], mutation_scale=20,
+                                a = Arrow3D([cell_center[0], light_end[0]], [cell_center[1], light_end[1]], [cell_center[2], light_end[2]], if_swap_yz=True, mutation_scale=20,
                                     lw=1, arrowstyle="-|>", facecolor=extra_info['emitter_info']['intensity_scaled01'], edgecolor='grey')
                                 if current_type == 'GT':
                                     ax_3d_GT.add_artist(a)
@@ -1311,7 +1321,7 @@ class Box(Scene3D):
 
                                 if if_show_cell_normals and normal_outside is not None: # visualize the normals of cells: https://i.imgur.com/aoJszVa.png
                                     normal_end = cell_center + normal_outside * 10.
-                                    a = Arrow3D([cell_center[0], normal_end[0]], [cell_center[1], normal_end[1]], [cell_center[2], normal_end[2]], mutation_scale=20,
+                                    a = Arrow3D([cell_center[0], normal_end[0]], [cell_center[1], normal_end[1]], [cell_center[2], normal_end[2]], if_swap_yz=True, mutation_scale=20,
                                         lw=1, arrowstyle="->", edgecolor='k')
                                     if current_type == 'GT':
                                         ax_3d_GT.add_artist(a)
@@ -1322,7 +1332,7 @@ class Box(Scene3D):
                                     for ii in range(self.envHeight):
                                         for jj in range(self.envWidth):
                                             meshgrid_end = cell_center + emitter_outdirs_meshgrid_Total3D_outside_abs[ii, jj].flatten()*2
-                                            a = Arrow3D([cell_center[0], meshgrid_end[0]], [cell_center[1], meshgrid_end[1]], [cell_center[2], meshgrid_end[2]], mutation_scale=20,
+                                            a = Arrow3D([cell_center[0], meshgrid_end[0]], [cell_center[1], meshgrid_end[1]], [cell_center[2], meshgrid_end[2]], if_swap_yz=True, mutation_scale=20,
                                                 lw=1, arrowstyle="->", edgecolor='k')
                                             if current_type == 'GT':
                                                 ax_3d_GT.add_artist(a)
@@ -1344,13 +1354,15 @@ class Box(Scene3D):
                 for jj in np.arange(0, points_backproj.shape[1], 10):
                     p = points_backproj[ii, jj]
                     color = (points_backproj_color[ii, jj]).astype(np.float32) / 255.
-                    ax_3d_GT.scatter3D(p[0], p[1], p[2], color=color)
+                    # ax_3d_GT.scatter3D(p[0], p[1], p[2], color=color)
+                    ax_3d_GT.scatter3D(p[0], -p[2], p[1], color=color)
 
 
         if fig_or_ax == [None, None]    :
             return fig, return_dict, [ax_3d_GT, ax_3d_PRED, [cells_vis_info_list_pred, cells_vis_info_list_GT]]
         else:
             return ax_3d, return_dict, [ax_3d_GT, ax_3d_PRED, [cells_vis_info_list_pred, cells_vis_info_list_GT]]
+
 
     def draw_all_cells(self, ax_3d, layout, lightnet_array_GT, current_type='GT', alpha=0.5, if_debug=False, highlight_cells=[]):
         assert lightnet_array_GT.shape == (6, self.grid_size, self.grid_size, 3)
@@ -1962,3 +1974,418 @@ class Box(Scene3D):
         return return_dict
             
 
+
+    def draw_3D_scene_plt_ori(self, vis_type = 'prediction', if_save = True, save_path='', fig_or_ax=[None, None],  which_to_vis='cell_info', \
+            if_show_emitter=True, if_show_objs=True, if_show_objs_axes=False, if_show_layout_axes=True, if_return_cells_vis_info=False, hide_cells=False, if_show_cell_normals=False, if_show_cell_meshgrid=False, hide_random_id=True, scale_emitter_length=1., \
+            if_debug=False, if_dump_to_mesh=False, fig_scale=1., pickle_id=0, \
+            points_backproj=None, points_backproj_color=None):
+        assert vis_type in ['prediction', 'GT', 'both']
+        figs_to_draw = {'prediction': ['prediction'], 'GT': ['GT'],'both': ['prediction', 'GT']}
+        figs_to_draw = figs_to_draw[vis_type]
+        cells_vis_info_list_pred = []
+        cells_vis_info_list_GT = []
+
+        return_dict = {}
+
+        ax_3d_GT, ax_3d_PRED = fig_or_ax[0], fig_or_ax[1]
+
+        if_new_fig = ax_3d_GT is None and ax_3d_PRED is None
+        if if_new_fig:
+            fig = plt.figure(figsize=(15*fig_scale, 8*fig_scale )) if vis_type=='both' else plt.figure(figsize=(12*fig_scale, 12*fig_scale ))
+
+        if 'GT' in figs_to_draw:
+            if if_new_fig:
+                ax_3d_GT = fig.add_subplot(121, projection='3d') if vis_type=='both' else fig.add_subplot(111, projection='3d')
+                # ax_3d_GT = fig.gca(projection='3d')
+            ax_3d_GT.set_proj_type('ortho')
+            ax_3d_GT.set_aspect("auto")
+            # ax_3d_GT.view_init(elev=-42, azim=111)
+            ax_3d_GT.view_init(elev=0., azim=91)
+            ax_3d_GT.set_title('GT')
+            ax_3d_GT.set_xlabel('x')
+            ax_3d_GT.set_ylabel('y')
+            ax_3d_GT.set_zlabel('z')
+
+        if 'prediction' in figs_to_draw:
+            if if_new_fig:
+                ax_3d_PRED = fig.add_subplot(122, projection='3d') if vis_type=='both' else fig.add_subplot(111, projection='3d')
+                # ax_3d_PRED = fig.gca(projection='3d')
+            ax_3d_PRED.set_proj_type('ortho')
+            ax_3d_PRED.set_aspect("auto")
+            ax_3d_PRED.view_init(elev=-42, azim=111)
+            ax_3d_PRED.set_title('PRED')
+
+        # === draw layout, camera and axis
+
+        if vis_type == 'prediction':
+            axes = [ax_3d_PRED]
+            boxes = [self.pred_layout]
+            cam_Rs = [self.pred_cam_R]
+        elif vis_type == 'GT':
+            axes = [ax_3d_GT]
+            boxes = [self.gt_layout]
+            cam_Rs = [self.gt_cam_R]
+        elif vis_type == 'both':
+            axes = [ax_3d_PRED, ax_3d_GT]
+            boxes = [self.pred_layout, self.gt_layout]
+            cam_Rs = [self.pred_cam_R, self.gt_cam_R]
+
+        for ax_3d, layout, cam_R in zip(axes, boxes, cam_Rs):
+            if ax_3d is None:
+                continue
+            cam_xaxis, cam_yaxis, cam_zaxis = np.split(cam_R, 3, axis=1)
+            cam_up = cam_yaxis
+            cam_origin = np.zeros_like(cam_up)
+            cam_lookat = cam_origin + cam_xaxis
+            vis_axis_xyz(ax_3d, cam_xaxis.flatten(), cam_yaxis.flatten(), cam_zaxis.flatten(), cam_origin.flatten(), suffix='_c')
+            a = Arrow3D([cam_origin[0][0], cam_lookat[0][0]*2-cam_origin[0][0]], [cam_origin[1][0], cam_lookat[1][0]*2-cam_origin[1][0]], [cam_origin[2][0], cam_lookat[2][0]*2-cam_origin[2][0]], if_swap_yz=False, mutation_scale=20,
+                            lw=1, arrowstyle="->", color="b")
+            ax_3d.add_artist(a)
+            a_up = Arrow3D([cam_origin[0][0], cam_origin[0][0]+cam_up[0][0]], [cam_origin[1][0], cam_origin[1][0]+cam_up[1][0]], [cam_origin[2][0], cam_origin[2][0]+cam_up[2][0]], if_swap_yz=False, mutation_scale=20,
+                            lw=1, arrowstyle="->", color="r")
+            ax_3d.add_artist(a_up)
+            vis_axis(ax_3d)
+
+            # === draw layout
+            assert layout is not None
+            vis_cube_plt(layout['bdb3D'], ax_3d, 'k', '--', if_face_idx_text=True, if_vertex_idx_text=True, highlight_faces=[0]) # highlight ceiling (face 0) edges
+            if if_show_layout_axes:
+                centroid, basis = layout['centroid'], layout['basis']
+                for axis_idx, color, axis_name in zip([0, 1, 2], ['r', 'g', 'b'], ['x', 'y', 'z']):
+                    a_x = Arrow3D([centroid[0], centroid[0]+basis[axis_idx][0]], [centroid[1], centroid[1]+basis[axis_idx][1]], [centroid[2], centroid[2]+basis[axis_idx][2]], if_swap_yz=False, mutation_scale=1,
+                            lw=2, arrowstyle="Simple", color=color)
+                    ax_3d.add_artist(a_x)
+                    ax_3d.text3D(centroid[0]+basis[axis_idx][0], centroid[1]+basis[axis_idx][1], centroid[2]+basis[axis_idx][2], axis_name, color=color, fontsize=10*fig_scale)
+
+            # === draw emitters
+            if self.emitters_obj_list_gt is not None and if_show_emitter:
+                for obj_idx, emitter_dict in enumerate(self.emitters_obj_list_gt):
+                    #     cat_id, cat_name, cat_color = emitter_dict['catInt_%s'%OR], emitter_dict['catStr_%s'%OR], emitter_dict['catColor_%s'%OR]
+                    # else:
+                    cat_id, cat_name, cat_color = emitter_dict['cat_id'], emitter_dict['cat_name'], emitter_dict['cat_color']
+                    # cat_id, cat_name, cat_color = 1, 'emitter', [0., 1., 0.]
+                    if emitter_dict['emitter_prop']['if_lit_up']:
+                        cat_name = cat_name + '***'
+                    else:
+                        cat_name = cat_name + '*--'
+                    linestyle = '-.'
+
+                    if cat_id == 0:
+                        continue
+
+                    # print('---', emitter_dict['random_id'])
+                    obj_label_show = cat_name if hide_random_id else cat_name+'-'+ emitter_dict['random_id']
+                    vis_cube_plt(emitter_dict['obj_box_3d'], ax_3d, cat_color, linestyle, obj_label_show)
+
+                    vis_emitter_part = True
+                    if emitter_dict['emitter_prop']['if_lit_up'] and emitter_dict['emitter_prop']['obj_type'] == 'window':
+                        intensity = emitter_dict['emitter_prop']['emitter_rgb_float']
+                        scale = max(intensity) / 255.
+                        intensity_scaled = [np.clip(x / scale / 255., 0., 1.) for x in intensity]
+                        intensity_scalelog = np.array(intensity).flatten()
+                        intensity_scalelog = np.log(np.clip(np.linalg.norm(intensity_scalelog) + 1., 1., np.inf)) / 3. + 0.5 # add 0.5 for vis (otherwise could be too short)
+                        # print(intensity, scale, intensity_scaled)
+
+                        if 'light_world_total3d_centeraxis' in emitter_dict: # in total3d generated emitter pickles
+                            light_center = emitter_dict['light_world_total3d_centeraxis'][0].flatten()
+                            if vis_emitter_part:
+                                light_center = np.mean(emitter_dict['bdb3D_emitter_part'], 0).flatten()
+                            light_axis = emitter_dict['light_world_total3d_centeraxis'][1].flatten()
+                        else: # in RAW frame_dict
+                            light_center = emitter_dict['emitter_prop']['light_center_world'].flatten()
+                            if vis_emitter_part:
+                                light_center = np.mean(emitter_dict['bdb3D_emitter_part'], 0).flatten()
+                            light_axis = emitter_dict['emitter_prop']['light_axis_world'].flatten()
+                        # intensity_scalelog = 5. 
+                        light_axis_length_vis = intensity_scalelog + 2.
+                        light_axis_end = light_axis / np.linalg.norm(light_axis) * light_axis_length_vis * scale_emitter_length + light_center
+                        # light_axis_end = light_axis / np.linalg.norm(light_axis) * 5 + light_center
+                        a_light = Arrow3D([light_center[0], light_axis_end[0]], [light_center[1], light_axis_end[1]], [light_center[2], light_axis_end[2]], if_swap_yz=False, mutation_scale=20,
+                            lw=2, arrowstyle="-|>", facecolor=intensity_scaled, edgecolor='k')
+                        ax_3d.add_artist(a_light)
+
+        if fig_or_ax != [None, None]:
+            for ax_3d in [ax_3d_GT, ax_3d_PRED]:
+                if ax_3d is not None:
+                    ax_3d.set_box_aspect([1,1,1])
+                    set_axes_equal(ax_3d) # IMPORTANT - this is also required
+            return
+
+        # === draw objs
+        cell_info_grid_dict = {'GT': self.cell_info_grid_GT, 'prediction': self.cell_info_grid_PRED}
+        if vis_type == 'prediction':
+            layout_list = [self.pred_layout]
+            boxes_list = [self.pre_boxes]
+            cam_Rs = [self.pred_cam_R]
+            colors = [[1., 0., 0.]]
+            types = ['prediction']
+            line_widths = [5]
+            linestyles = ['-']
+            fontsizes = [15]
+            ax_3ds = [ax_3d_PRED]
+            cells_vis_info_lists = [cells_vis_info_list_pred]
+        elif vis_type == 'both':
+            layout_list = [self.pred_layout, self.gt_layout]
+            boxes_list = [self.pre_boxes, self.gt_boxes]
+            cam_Rs = [self.pred_cam_R, self.gt_cam_R]    
+            colors = [[1., 0., 0.], [0., 0., 1.]]
+            types = ['prediction', 'GT']
+            line_widths = [5, 3]
+            linestyles = ['-', '--']
+            fontsizes = [15, 12]
+            ax_3ds = [ax_3d_PRED, ax_3d_GT]
+            cells_vis_info_lists = [cells_vis_info_list_pred, cells_vis_info_list_GT]
+        elif vis_type == 'GT':
+            layout_list = [self.gt_layout]
+            boxes_list = [self.gt_boxes]
+            cam_Rs = [self.gt_cam_R]
+            colors = [[0., 0., 1.]]
+            types = ['GT']
+            line_widths = [3]
+            linestyles = ['--']
+            fontsizes = [12]
+            ax_3ds = [ax_3d_GT]
+            cells_vis_info_lists = [cells_vis_info_list_GT]
+        else:
+            assert False, 'not valid Type!'
+
+        for boxes, cam_R, line_width, linestyle, fontsize, current_type, ax_3d in zip(boxes_list, cam_Rs, line_widths, linestyles, fontsizes, types, ax_3ds):
+            if boxes is None or not(if_show_objs):
+                continue
+            
+            if self.valid_bbox_idxes_dict[current_type] == []:
+                self.postprocess_objs(split_type=current_type)
+            valid_bbox_idxes = self.valid_bbox_idxes_dict[current_type]
+
+            for bbox_idx, (coeffs, centroid, class_id, basis) in enumerate(zip(boxes['coeffs'], boxes['centroid'], boxes['class_id'], boxes['basis'])):
+                # if class_id != 21: 
+                #     continue
+
+                # if random_id != 'XRZ7U':
+                #     continue
+
+                if bbox_idx not in valid_bbox_idxes:
+                    continue
+
+                bdb3d_corners = get_corners_of_bb3d_no_index(basis, coeffs, centroid)
+
+                color = [x/255. for x in self.color_palette[class_id]]
+                vis_cube_plt(bdb3d_corners, ax_3d, color, linestyle, self.classes[class_id])
+                # print('Showing obj', self.classes[class_id])
+                
+                if if_show_objs_axes:
+                    for axis_idx, color, axis_name in zip([0, 1, 2], ['r', 'g', 'b'], ['x', 'y', 'z']):
+                        a_x = Arrow3D([centroid[0], centroid[0]+basis[axis_idx][0]], [centroid[1], centroid[1]+basis[axis_idx][1]], [centroid[2], centroid[2]+basis[axis_idx][2]], if_swap_yz=False, mutation_scale=1,
+                                lw=1, arrowstyle="Simple", color=color)
+                        ax_3d.add_artist(a_x)
+
+        # if not if_show_emitter:
+        #     return None, None
+
+        # === draw emitter patches
+        # if_vis_lightnet_cells = lightnet_array_GT is not None
+        # if if_vis_lightnet_cells:
+        #     assert lightnet_array_GT.shape == (6, self.grid_size, self.grid_size, 3)
+        if self.emitter2wall_assign_info_list_gt is not None and not hide_cells:
+
+            # basis_indexes = [(1, 0, 2, 3), (4, 5, 7, 6), (0, 1, 4, 5), (1, 5, 2, 6), (3, 2, 7, 6), (4, 0, 7, 3)]
+            # constant_axes = [1, 1, 2, 0, 2, 0]
+            # self.faces_v_indexes = [(3, 2, 0), (7, 6, 4), (4, 5, 0), (6, 2, 5), (7, 6, 3), (7, 3, 4)]
+            # self.faces_v_indexes = [(3, 2, 0), (7, 4, 6), (4, 0, 5), (6, 5, 2), (7, 6, 3), (7, 3, 4)]
+
+
+            # face_belong_idx_list = [x['face_belong_idx'] for x in self.emitter2wall_assign_info_list_gt]
+
+            for color, current_type, layout, cells_vis_info_list in zip(colors, types, layout_list, cells_vis_info_lists):
+                # layout_basis_dict = {'x': layout['basis'][0], 'y': layout['basis'][1], 'z': layout['basis'][2], '-x': -layout['basis'][0], '-y': -layout['basis'][1], '-z': -layout['basis'][2]}
+                # layout_coeffs_dict = {'x': layout['coeffs'][0], 'y': layout['coeffs'][1], 'z': layout['coeffs'][2], '-x': layout['coeffs'][0], '-y': layout['coeffs'][1], '-z': layout['coeffs'][2]}
+
+                if current_type == 'GT':
+                    assert self.emitter_cls_prob_GT is not None
+                    if self.emitter_cls_prob_GT is not None:
+                        emitter_cls_prob = self.emitter_cls_prob_GT
+                else:
+                    emitter_cls_prob = self.emitter_cls_prob_PRED
+                    emitter_cls_prob = np.clip(emitter_cls_prob, 0., 1.)
+                
+                assert which_to_vis in ['cell_info', 'cell_prob'], 'Illegal which_to_vis: '+which_to_vis
+                cell_info_grid = cell_info_grid_dict[current_type]
+                if cell_info_grid is None: continue
+                assert which_to_vis == 'cell_info', 'others not supported for now!'
+
+                for cell_info in cell_info_grid:
+                    wall_idx, i, j = cell_info['wallidx_i_j']
+
+                    if self.if_index_faces_with_basis:
+                        layout_info_dict = self.layout_info_dict[current_type][str(wall_idx)]
+                        basis_1_unit = layout_info_dict['basis_1_unit']
+                        basis_2_unit = layout_info_dict['basis_2_unit']
+                        basis_3_unit = layout_info_dict['basis_3_unit']
+                        normal_outside = layout_info_dict['normal_outside']
+                        origin_0 = layout_info_dict['origin_0']
+                        basis_1 = layout_info_dict['basis_1']
+                        basis_2 = layout_info_dict['basis_2']
+                        basis_3 = layout_info_dict['basis_3']
+                    else:
+                        origin_v1_v2 = self.faces_v_indexes[wall_idx]
+                        basis_1 = (layout[origin_v1_v2[1]] - layout[origin_v1_v2[0]]) / self.grid_size
+                        basis_2 = (layout[origin_v1_v2[2]] - layout[origin_v1_v2[0]]) / self.grid_size
+                        origin_0 = layout[origin_v1_v2[0]]
+                        basis_1_unit = basis_1 / np.linalg.norm(basis_1)
+                        basis_2_unit = basis_2 / np.linalg.norm(basis_2)
+                        normal_outside = -np.cross(basis_1_unit, basis_2_unit)
+                    
+                    x_ij = basis_1 * i + basis_2 * j + origin_0
+                    x_i1j = basis_1 * (i+1) + basis_2 * j + origin_0
+                    x_i1j1 = basis_1 * (i+1) + basis_2 * (j+1) + origin_0
+                    x_ij1 = basis_1 * i + basis_2 * (j+1) + origin_0
+                    verts = [[list(x_ij), list(x_i1j), list(x_i1j1), list(x_ij1)]]
+
+                    if which_to_vis == 'cell_info' and cell_info['obj_type'] is None:
+                        continue
+
+                    intensity = cell_info['emitter_info']['intensity']
+                    intensity_color = [np.clip(x/(max(intensity)+1e-5), 0., 1.) for x in intensity]
+                    # ic(intensity_color, intensity)
+
+                    if which_to_vis == 'cell_info':
+                        if cell_info['obj_type'] == 'window':
+                            color = 'g'
+                            # color = intensity
+                        elif cell_info['obj_type'] == 'obj':
+                            color = 'b'
+                            # color = intensity
+                        elif cell_info['obj_type'] == 'null':
+                            color = 'm'
+                        else:
+                            raise ValueError('Invalid: cell_info-obj_type: ' + cell_info['obj_type'])
+
+                        cell_vis = {'alpha': cell_info['light_ratio'], 'color': color, 'idxes': (wall_idx, i, j), 'intensity_color': intensity_color, 'extra_info': cell_info}
+                        cell_vis['extra_info'].update({'cell_center': np.mean(np.array(verts).squeeze(), 0).reshape((3, 1)), 'verts': verts, 'normal_outside': normal_outside})
+                        # print(cell_info['light_ratio'], cell_info['obj_type'])
+                        # print(verts, np.array(verts).shape)
+                        # [0].shape, cell_vis['extra_info']['cell_center'].shape)
+                        if cell_info['obj_type'] != 'null':
+                            verts = (np.array(verts).squeeze().T - cell_vis['extra_info']['cell_center']) * (cell_vis['alpha']/2.+0.5) + cell_vis['extra_info']['cell_center']
+                            verts = [(verts.T).tolist()]
+                            poly = Poly3DCollection(verts, facecolor=intensity_color, edgecolor=color)
+
+                            if if_debug:
+                                if current_type == 'GT' and cell_info['obj_type'] == 'window':
+                                    # ic('------')
+                                    print(wall_idx, i, j)
+
+                        else:
+                            poly = Poly3DCollection(verts, facecolor=color)
+
+                    cell_vis.update({'poly': poly})
+
+                    if if_return_cells_vis_info:
+                        cells_vis_info_list.append(cell_vis)
+
+                    # draw emitter polys, directions
+                    alpha = np.clip(cell_vis['alpha'], 0., 1.)
+                    if alpha > 1e-4:
+                        # alpha = alpha / 2. + 0.5
+                        alpha = 1.
+                    if color == 'm':
+                        # alpha = alpha / 4.
+                        alpha = 0.
+
+                    if_draw_cell = alpha != 0
+
+                    if if_draw_cell:
+                        cell_vis['poly'].set_alpha(alpha / 1.2)
+                        if current_type == 'GT':
+                            ax_3d_GT.add_collection3d(cell_vis['poly'])
+                        else:
+                            ax_3d_PRED.add_collection3d(cell_vis['poly'])
+
+
+                        if cell_vis['extra_info'] is not None:
+                            extra_info = cell_vis['extra_info']
+                            if extra_info and extra_info['obj_type'] == 'window':
+                                # normal_outside = extra_info['emitter_info']['normal_outside']
+                                # checking meshgrid and normal from LightAccuNet against normal from Layout
+                                if 'emitter_outdirs_meshgrid_Total3D_outside_abs' in extra_info['emitter_info']:
+                                    emitter_outdirs_meshgrid_Total3D_outside_abs = extra_info['emitter_info']['emitter_outdirs_meshgrid_Total3D_outside_abs']
+                                    assert emitter_outdirs_meshgrid_Total3D_outside_abs.shape==(self.envHeight, self.envWidth, 3)
+                                    for ii in range(self.envHeight):
+                                        for jj in range(self.envWidth):
+                                            dot_prod = np.dot(normal_outside.flatten(), emitter_outdirs_meshgrid_Total3D_outside_abs[ii, jj].flatten())
+                                            assert dot_prod >= 0
+                                if 'normal_outside_Total3D_single' in extra_info['emitter_info']:
+                                    assert np.amax(np.abs(extra_info['emitter_info']['normal_outside_Total3D_single'] - normal_outside)) < 1e-3
+
+                                if 'light_dir_abs' in extra_info['emitter_info']:
+                                    light_dir_abs = extra_info['emitter_info']['light_dir_abs']
+                                else:
+                                    light_dir_offset = extra_info['emitter_info']['light_dir_offset']
+                                    light_dir_abs = light_dir_offset + normal_outside
+                                light_dir_abs = light_dir_abs / (np.linalg.norm(light_dir_abs)+1e-6)
+
+                                cell_center = extra_info['cell_center'].flatten()
+
+
+                                if 'intensity_scalelog' in extra_info['emitter_info']:
+                                    intensity_scalelog = extra_info['emitter_info']['intensity_scalelog'] / 3. + 0.5 # add 1. for vis (otherwise could be too short)
+                                else:
+                                    # print('2')
+                                    # print(extra_info['emitter_info'].keys())
+                                    intensity = extra_info['emitter_info']['intensity_scale255'] * np.array(extra_info['emitter_info']['intensity_scaled01']) * 255.
+                                    intensity_scalelog = np.log(np.clip(np.linalg.norm(intensity.flatten()) + 1., 1., np.inf)) / 3. + 0.5 # add 1. for vis (otherwise could be too short)
+
+                                cell_dir_length = intensity_scalelog
+                                light_end = cell_center + light_dir_abs * cell_dir_length
+                                # light_end = cell_center + normal_outside
+                                # print(cell_center, light_dir)
+                                # print(extra_info['emitter_info'])
+                                a = Arrow3D([cell_center[0], light_end[0]], [cell_center[1], light_end[1]], [cell_center[2], light_end[2]], if_swap_yz=False, mutation_scale=20,
+                                    lw=1, arrowstyle="-|>", facecolor=extra_info['emitter_info']['intensity_scaled01'], edgecolor='grey')
+                                if current_type == 'GT':
+                                    ax_3d_GT.add_artist(a)
+                                else:
+                                    ax_3d_PRED.add_artist(a)
+
+                                if if_show_cell_normals and normal_outside is not None: # visualize the normals of cells: https://i.imgur.com/aoJszVa.png
+                                    normal_end = cell_center + normal_outside * 10.
+                                    a = Arrow3D([cell_center[0], normal_end[0]], [cell_center[1], normal_end[1]], [cell_center[2], normal_end[2]], if_swap_yz=False, mutation_scale=20,
+                                        lw=1, arrowstyle="->", edgecolor='k')
+                                    if current_type == 'GT':
+                                        ax_3d_GT.add_artist(a)
+                                    else:
+                                        ax_3d_PRED.add_artist(a)
+
+                                if if_show_cell_meshgrid and 'emitter_outdirs_meshgrid_Total3D_outside_abs' in extra_info['emitter_info']: # visualize the meshgrid of outer hemisphere of cells: https://i.imgur.com/aoJszVa.png
+                                    for ii in range(self.envHeight):
+                                        for jj in range(self.envWidth):
+                                            meshgrid_end = cell_center + emitter_outdirs_meshgrid_Total3D_outside_abs[ii, jj].flatten()*2
+                                            a = Arrow3D([cell_center[0], meshgrid_end[0]], [cell_center[1], meshgrid_end[1]], [cell_center[2], meshgrid_end[2]], if_swap_yz=False, mutation_scale=20,
+                                                lw=1, arrowstyle="->", edgecolor='k')
+                                            if current_type == 'GT':
+                                                ax_3d_GT.add_artist(a)
+                                            else:
+                                                ax_3d_PRED.add_artist(a)
+
+                                            # if normal_outside is not None:
+                                            #     dot_prod = np.dot(normal_outside.flatten(), emitter_outdirs_meshgrid_Total3D_outside_abs[ii, jj].flatten())
+                                                # assert dot_prod >= 0
+
+        for ax_3d in [ax_3d_GT, ax_3d_PRED]:
+            if ax_3d is not None:
+                ax_3d.set_box_aspect([1,1,1])
+                set_axes_equal(ax_3d) # IMPORTANT - this is also required
+
+
+        if points_backproj is not None:
+            for ii in np.arange(0, points_backproj.shape[0], 10):
+                for jj in np.arange(0, points_backproj.shape[1], 10):
+                    p = points_backproj[ii, jj]
+                    color = (points_backproj_color[ii, jj]).astype(np.float32) / 255.
+                    ax_3d_GT.scatter3D(p[0], p[1], p[2], color=color)
+
+
+        if fig_or_ax == [None, None]    :
+            return fig, return_dict, [ax_3d_GT, ax_3d_PRED, [cells_vis_info_list_pred, cells_vis_info_list_GT]]
+        else:
+            return ax_3d, return_dict, [ax_3d_GT, ax_3d_PRED, [cells_vis_info_list_pred, cells_vis_info_list_GT]]
