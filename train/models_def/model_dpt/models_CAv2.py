@@ -61,17 +61,17 @@ class DPT_CAv2(BaseModel):
             "vitl16_384": 24,
         }
 
-        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers == -1:
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers == -1:
             self.output_hooks = hooks_dict[backbone]
             self.num_layers = num_layers_dict[backbone]
         else:
-            assert self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers in [4, 8, 12]
+            assert self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers in [4, 8, 12]
             self.output_hooks = {
                 "4": [0, 1, 2, 3],
                 "8": [0, 1, 4, 7],
                 "12": [0, 1, 8, 11],
-            }[str(self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers)]
-            self.num_layers = self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers
+            }[str(self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers)]
+            self.num_layers = self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers
 
         # Instantiate backbone and reassemble blocks
         self.pretrained, self.scratch = _make_encoder_CAv2(
@@ -156,7 +156,7 @@ class DPT_CAv2(BaseModel):
                     # print(layer_idx, in_c, out_c, token_c, token_later_dims)
                     module_dict_ca['layer_%d_cac'%layer_idx] = CrossAttention_CAv2(opt, token_c, input_dims=in_c, output_dims=out_c, norm_layer_1d=norm_layer_1d)
 
-        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers != -1:
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers != -1:
             for layer_idx in range(len(self.pretrained.model.blocks)):
                 if layer_idx >= self.num_layers:
                     self.pretrained.model.blocks[layer_idx] = nn.Identity()
@@ -229,7 +229,7 @@ def get_BRDFNet_DPT_CAv2(opt, model_path, modalities=[]):
             opt=opt, 
             modality=modality, 
             path=model_path,
-            backbone="vitb_rn50_384" if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers == -1 else "vitb_rn50_384_N_layers", 
+            backbone="vitb_rn50_384" if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers == -1 else "vitb_rn50_384_N_layers", 
             non_negative=True if opt.cfg.MODEL_BRDF.DPT_baseline.modality in ['de'] else False,
             enable_attention_hooks=opt.cfg.MODEL_BRDF.DPT_baseline.if_enable_attention_hooks,
             readout=opt.cfg.MODEL_BRDF.DPT_baseline.readout, 

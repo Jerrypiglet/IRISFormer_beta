@@ -415,7 +415,7 @@ def forward_flex_CAv2(self, opt, x_input, pretrained_activations=[], input_dict_
     if_print = False
 
     for idx, blk in enumerate(self.blocks):
-        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers!=-1 and idx >= opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers:
+        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers!=-1 and idx >= opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers:
             continue
         
         # if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg:

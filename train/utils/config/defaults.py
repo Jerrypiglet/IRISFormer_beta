@@ -280,7 +280,7 @@ _C.MODEL_BRDF.DPT_baseline.feat_proj_channels = -1
 _C.MODEL_BRDF.DPT_baseline.patch_size = 16
 
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid = CN()
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers = -1 # only support 4 outout layers to avoid drastic changes to original DPT
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers = -1 # only support 4 outout layers to avoid drastic changes to original DPT
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr = False # faster: 1e-4, backbone: 1e-5
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.yogo_lr = False # use yogo scheduler and optimizer
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels = 768
@@ -473,6 +473,20 @@ _C.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder = True
 # _C.MODEL_LAYOUT_EMITTER.layout.if_fully_differentiable = False # get rid of argmax in layout est -> bbox; not implememted yet
 _C.MODEL_LAYOUT_EMITTER.layout.if_estcls_in_loss = False
 # _C.MODEL_LAYOUT_EMITTER.layout.if_argmax_in_results = True
+
+_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline = CN()
+_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.enable = False
+_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_pos_embed = True
+_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.model = 'dpt_hybrid'
+_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.readout = 'project'
+_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_imagenet_backbone = True
+_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.patch_size = 16
+_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_share_encoder = True
+
+_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.dpt_hybrid = CN()
+_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.dpt_hybrid.N_layers_encoder = 6
+_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.dpt_hybrid.N_layers_decoder = 6
+
 
 _C.MODEL_LAYOUT_EMITTER.mesh = CN()
 _C.MODEL_LAYOUT_EMITTER.mesh.tmn_subnetworks = 2

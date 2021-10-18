@@ -189,8 +189,8 @@ def set_up_envs(opt):
 
         if 'CAv2' in opt.cfg.MODEL_BRDF.DPT_baseline.model:
             opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA = True
-            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers == -1:
-                opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers = 12
+            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers == -1:
+                opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers = 12
             
             assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type in ['double', 'single', 'full'] # [single, double, full] of resnet
             opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.im_feat_init_c = {'double': 256, 'single': 64, 'full': 768}[opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type]

@@ -84,20 +84,20 @@ def get_transform_resize(split, opt):
     #     if_pad = True
 
     if split == 'train':
+        transform_resize_list_train = []
+        if opt.cfg.DATA.if_augment_train:
+            transform_resize_list_train = [
+                # transform.RandScale([opt.semseg_configs.scale_min, opt.semseg_configs.scale_max]),
+                # transform.RandRotate([opt.semseg_configs.rotate_min, opt.semseg_configs.rotate_max], padding=mean, ignore_label=opt.semseg_configs.ignore_label),
+                # transform.RandomGaussianBlur(),
+                # transform.RandomHorizontalFlip(),
+            ]
+            assert False, 'Not implemented!'
         transform_resize_list_train = [
             transform.Resize((opt.cfg.DATA.im_width, opt.cfg.DATA.im_height)), 
             transform.ToTensor(),
             transform.Normalize(mean=mean, std=std)
         ]
-        if opt.cfg.DATA.if_augment_train:
-            # transform_resize_list_train = [
-            #     transform.RandScale([opt.semseg_configs.scale_min, opt.semseg_configs.scale_max]),
-            #     transform.RandRotate([opt.semseg_configs.rotate_min, opt.semseg_configs.rotate_max], padding=mean, ignore_label=opt.semseg_configs.ignore_label),
-            #     transform.RandomGaussianBlur(),
-            #     transform.RandomHorizontalFlip(),
-
-            # ]
-            assert False, 'Not implemented!'
         if opt.if_pad:
             transform_resize_list_train.insert(1, opt.pad_op)
         if opt.if_resize:

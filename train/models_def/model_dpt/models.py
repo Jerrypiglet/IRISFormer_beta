@@ -62,17 +62,18 @@ class DPT(BaseModel):
             "vitl16_384": 24,
         }
 
-        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers == -1:
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers == -1:
             self.output_hooks = hooks_dict[backbone]
             self.num_layers = num_layers_dict[backbone]
         else:
-            assert self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers in [4, 8, 12]
+            assert self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers in [4, 6, 8, 12]
             self.output_hooks = {
                 "4": [0, 1, 2, 3],
+                "6": [0, 1, 3, 5],
                 "8": [0, 1, 4, 7],
                 "12": [0, 1, 8, 11],
-            }[str(self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers)]
-            self.num_layers = self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers
+            }[str(self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers)]
+            self.num_layers = self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers
 
         # Instantiate backbone and reassemble blocks
         self.pretrained, self.scratch = _make_encoder(
@@ -118,7 +119,7 @@ class DPT(BaseModel):
             for layer_idx in range(len(self.pretrained.model.blocks)):
                 module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
 
-        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers != -1:
+        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers != -1:
             for layer_idx in range(len(self.pretrained.model.blocks)):
                 if layer_idx >= self.num_layers:
                     self.pretrained.model.blocks[layer_idx] = nn.Identity()

@@ -260,7 +260,7 @@ def forward_flex(self, opt, cfg_DPT, x, input_dict_extra={}):
     x = self.pos_drop(x)
 
     for idx, blk in enumerate(self.blocks):
-        if cfg_DPT.dpt_hybrid.keep_N_layers!=-1 and idx >= cfg_DPT.dpt_hybrid.keep_N_layers:
+        if cfg_DPT.dpt_hybrid.N_layers!=-1 and idx >= cfg_DPT.dpt_hybrid.N_layers:
             continue
 
         x = blk(x)

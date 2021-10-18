@@ -48,11 +48,13 @@ def _make_encoder(
         )  # ViT-H/16 - 85.0% Top1 (backbone)
     elif backbone == "vitb_rn50_384_N_layers":
         pretrained = _make_pretrained_vitb_rn50_384(
+            cfg_DPT, 
             use_pretrained,
             hooks=hooks,
             use_vit_only=use_vit_only,
             use_readout=use_readout,
             enable_attention_hooks=enable_attention_hooks,
+            in_chans=in_chans
         )
         scratch = _make_scratch(
             [256, 512, 768, 768], features, groups=groups, expand=expand

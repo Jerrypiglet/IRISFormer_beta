@@ -41,6 +41,9 @@ from models_def.model_dpt.models_SSN_yogoUnet_N_layers import DPTBRDFModel_SSN_y
 from models_def.model_dpt.transforms import Resize as dpt_Resize
 from models_def.model_dpt.transforms import NormalizeImage as dpt_NormalizeImage
 from models_def.model_dpt.transforms import PrepareForNet as dpt_PrepareForNet
+
+from models_def.model_dpt.models_ViT import get_LayoutNet_ViT
+from models_def.model_dpt.blocks_ViT import forward_vit_ViT
 from torchvision.transforms import Compose
 import cv2
 import time
@@ -158,10 +161,10 @@ class Model_Joint(nn.Module):
                         opt=opt, 
                         model_path=model_path, 
                         modalities=self.opt.cfg.MODEL_BRDF.enable_list, 
-                        backbone="vitb_rn50_384" if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers == -1 else "vitb_rn50_384_N_layers"
+                        backbone="vitb_rn50_384" if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers == -1 else "vitb_rn50_384_N_layers"
                     )
                 elif model_type=='dpt_hybrid_CAv2':
-                    assert self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers != -1
+                    assert self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers != -1
                     assert self.opt.cfg.MODEL_BRDF.DPT_baseline.modality == 'enabled', 'only support this mode for now; choose modes in MODEL_BRDF.enable_list'
                     self.BRDF_Net = get_BRDFNet_DPT_CAv2(
                         opt=opt, 
@@ -350,7 +353,7 @@ class Model_Joint(nn.Module):
                         SGNum=opt.cfg.MODEL_LIGHT.SGNum, 
                         model_path=None, 
                         modalities=opt.cfg.MODEL_LIGHT.enable_list, 
-                        backbone="vitb_rn50_384" if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.keep_N_layers == -1 else "vitb_rn50_384_N_layers"
+                        backbone="vitb_rn50_384" if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers == -1 else "vitb_rn50_384_N_layers"
                     )
                 elif model_type=='dpt_base':
                     self.LIGHT_Net = get_LightNet_DPT(
@@ -414,22 +417,32 @@ class Model_Joint(nn.Module):
 
             # the vanilla emitter/layout model: full FC, adapted from Total3D
             if_vanilla_emitter = 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list and not(self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable)
+            assert not if_vanilla_emitter, 'disabled before introducing layout-DPT'
             if_layout = 'lo' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list
 
             if if_layout or if_vanilla_emitter:
-                if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder:
-                    self.LAYOUT_EMITTER_NET_encoder = models_brdf.encoder0(opt, cascadeLevel = 0, in_channels = 3, encoder_exclude = ['x5', 'x6'])
-                    if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_freeze:
-                        self.turn_off_names(['LAYOUT_EMITTER_NET_encoder'])
-                        freeze_bn_in_module(self.LAYOUT_EMITTER_NET_encoder)
+                if self.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.enable:
+                    self.LAYOUT_EMITTER_NET = get_LayoutNet_ViT(
+                        opt=opt, 
+                        modalities=self.cfg.MODEL_LAYOUT_EMITTER.enable_list, 
+                        backbone="vitb_rn50_384_N_layers", 
+                        N_layers_encoder = self.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.dpt_hybrid.N_layers_encoder, 
+                        N_layers_decoder = self.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.dpt_hybrid.N_layers_decoder
+                    )
+                else:
+                    if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder:
+                        self.LAYOUT_EMITTER_NET_encoder = models_brdf.encoder0(opt, cascadeLevel = 0, in_channels = 3, encoder_exclude = ['x5', 'x6'])
+                        if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_freeze:
+                            self.turn_off_names(['LAYOUT_EMITTER_NET_encoder'])
+                            freeze_bn_in_module(self.LAYOUT_EMITTER_NET_encoder)
 
-                self.LAYOUT_EMITTER_NET_fc = models_layout_emitter.decoder_layout_emitter(opt, if_layout=if_layout, if_emitter_vanilla_fc=if_vanilla_emitter)
-                if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_freeze:
-                    self.turn_off_names(['LAYOUT_EMITTER_NET_fc'])
-                    freeze_bn_in_module(self.LAYOUT_EMITTER_NET_fc)
-                    if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_freeze_cls_heads:
+                    self.LAYOUT_EMITTER_NET_fc = models_layout_emitter.decoder_layout_emitter(opt, if_layout=if_layout, if_emitter_vanilla_fc=if_vanilla_emitter)
+                    if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_freeze:
                         self.turn_off_names(['LAYOUT_EMITTER_NET_fc'])
                         freeze_bn_in_module(self.LAYOUT_EMITTER_NET_fc)
+                        if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_freeze_cls_heads:
+                            self.turn_off_names(['LAYOUT_EMITTER_NET_fc'])
+                            freeze_bn_in_module(self.LAYOUT_EMITTER_NET_fc)
                         
             if 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
                 if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
@@ -591,13 +604,29 @@ class Model_Joint(nn.Module):
 
                 # layout w/ wo/ V1 emitters
                 if if_layout or if_vanilla_emitter:
-                    if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder:
-                        x1, x2, x3, x4, x5, x6, _ = self.LAYOUT_EMITTER_NET_encoder(input_dict['input_batch_brdf'])
-                        encoder_outputs = {'x1': x1, 'x2': x2, 'x3': x3, 'x4': x4, 'x5': x5, 'x6': x6}
+                    if self.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.enable:
+                        assert self.opt.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_share_encoder
+                        input_dict_extra = {}
+                        return_dicts = {}
+
+                        module_hooks_dict = {}
+                        input_dict_extra['shared_encoder_outputs'] = forward_vit_ViT(
+                            self.opt, self.opt.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline, self.LAYOUT_EMITTER_NET.shared_encoder, 
+                            input_dict['input_batch_brdf'], input_dict_extra={**input_dict_extra, **module_hooks_dict})
+
+                        modalities = ['lo']
+                        for modality in modalities:
+                            return_dicts[modality] = self.LAYOUT_EMITTER_NET[modality].forward(None, input_dict_extra=input_dict_extra)
+                        output_dict = return_dicts['lo']
+
                     else:
-                        encoder_outputs = return_dict_brdf['encoder_outputs']
-                    output_dict = self.LAYOUT_EMITTER_NET_fc(input_feats_dict=encoder_outputs)
-                    return_dict_layout_emitter.update(output_dict)
+                        if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder:
+                            x1, x2, x3, x4, x5, x6, _ = self.LAYOUT_EMITTER_NET_encoder(input_dict['input_batch_brdf'])
+                            encoder_outputs = {'x1': x1, 'x2': x2, 'x3': x3, 'x4': x4, 'x5': x5, 'x6': x6}
+                        else:
+                            encoder_outputs = return_dict_brdf['encoder_outputs']
+                        output_dict = self.LAYOUT_EMITTER_NET_fc(input_feats_dict=encoder_outputs)
+                        return_dict_layout_emitter.update(output_dict)
 
                 # V2, V3
                 if 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list and self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:

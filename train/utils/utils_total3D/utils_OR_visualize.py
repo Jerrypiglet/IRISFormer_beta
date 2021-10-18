@@ -257,7 +257,6 @@ class Box(Scene3D):
 
         # return inv_cam_R_transform_pre, inv_transform_matrix_post
 
-
     def sample_points(self, sample_every=10, ):
         uu, vv = np.meshgrid(np.arange(0, self.im_W, sample_every), np.arange(0, self.im_H, sample_every))
         z = - self._depth_map[vv, uu]
@@ -337,7 +336,6 @@ class Box(Scene3D):
                                 [origin_show[2], origin_show[2]+axis_single[2]*weight_single_vis], \
                                 if_swap_yz=False, mutation_scale=20, lw=1, arrowstyle="->", color="b")
                     ax_3d.add_artist(a)
-
 
     def draw_projected_depth(self, type = 'prediction', return_plt = False, if_save = True, save_path='', if_vis=True, if_use_plt=False, fig_or_ax=None, cam_K_override=None, if_original_lim=True, override_img=None):
         if cam_K_override is not None:
@@ -493,7 +491,6 @@ class Box(Scene3D):
         print('XML written to %s'%str(target_xml_file))
         return target_xml_file
 
-
     def convert_objs_to_mesh(self, split_type='prediction', if_dump_to_mesh=True, if_transform_to_RAW=True, rec_root=None):
         assert split_type in ['prediction', 'GT']
         current_type = split_type
@@ -547,7 +544,6 @@ class Box(Scene3D):
                 else:
                     rec_root = addShape(rec_root, obj_id, str(obj_path), None, scaleValue=1.)
 
-
     def convert_lamps_to_mesh(self, split_type='prediction', if_dump_to_mesh=True, if_transform_to_RAW=True, rec_root=None):
         assert split_type in ['prediction', 'GT']
         current_type = split_type
@@ -599,7 +595,6 @@ class Box(Scene3D):
             print('[Lamp params] for wall %d:'%wall_idx, intensity)
             if rec_root is not None:
                 rec_root = addAreaLight(rec_root, 'lamp_cell_on%d_%d'%(wall_idx, cell_idx), str(obj_path), rgbColor=intensity)
-
 
     def get_cell_centers(self, split_type='prediction', if_transform_to_RAW=True):
         assert split_type in ['prediction', 'GT']
@@ -966,7 +961,7 @@ class Box(Scene3D):
             ax_3d_GT.set_proj_type('ortho')
             ax_3d_GT.set_aspect("auto")
             # ax_3d_GT.view_init(elev=42, azim=111)
-            ax_3d_GT.view_init(elev=9, azim=120)
+            ax_3d_GT.view_init(elev=90, azim=120)
             ax_3d_GT.set_title('GT')
             ax_3d_GT.set_xlabel('x')
             ax_3d_GT.set_ylabel('y')
