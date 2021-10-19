@@ -481,7 +481,8 @@ _C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.model = 'dpt_hybrid'
 _C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.readout = 'project'
 _C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_imagenet_backbone = True
 _C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.patch_size = 16
-_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_share_encoder = True
+_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_share_encoder_over_modalities = True
+_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_share_decoder_over_heads = True
 
 _C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.dpt_hybrid = CN()
 _C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.dpt_hybrid.N_layers_encoder = 6

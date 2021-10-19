@@ -10,7 +10,7 @@ import torch
 
 # ======= total3d
 
-def get_rotation_matix_result(bins_tensor, pitch_cls_result, pitch_reg_result, roll_cls_result, roll_reg_result, if_differentiable=False, if_input_after_argmax=False):
+def get_rotation_matix_result(bins_tensor, pitch_cls_result, pitch_reg_result, roll_cls_result, roll_reg_result, if_differentiable=False, if_input_after_argmax=False, if_reg_from_gt_cls=False):
     '''
     get rotation matrix from predicted camera pitch, roll angles.
     '''
@@ -22,17 +22,24 @@ def get_rotation_matix_result(bins_tensor, pitch_cls_result, pitch_reg_result, r
         pitch_cls = torch.argmax(pitch_cls_result, 1)
         roll_cls = torch.argmax(roll_cls_result, 1)
 
-    pitch_result = torch.gather(pitch_reg_result, 1,
-                              pitch_cls.view(pitch_cls.size(0), 1).expand(pitch_cls.size(0), 1)).squeeze(1)
-    roll_result = torch.gather(roll_reg_result, 1,
-                               roll_cls.view(roll_cls.size(0), 1).expand(roll_cls.size(0), 1)).squeeze(1)
+    if if_reg_from_gt_cls:
+        pitch_result = pitch_reg_result
+        roll_result = roll_reg_result
+    else:
+        pitch_result = torch.gather(pitch_reg_result, 1,
+                                pitch_cls.view(pitch_cls.size(0), 1).expand(pitch_cls.size(0), 1)).squeeze(1)
+        roll_result = torch.gather(roll_reg_result, 1,
+                                roll_cls.view(roll_cls.size(0), 1).expand(roll_cls.size(0), 1)).squeeze(1)
+
     if if_differentiable:
         pitch = num_from_bins_differentiable(bins_tensor['pitch_bin'], pitch_cls_result, pitch_result)
         roll = num_from_bins_differentiable(bins_tensor['roll_bin'], roll_cls_result, roll_result)
     else:
         pitch = num_from_bins(bins_tensor['pitch_bin'], pitch_cls, pitch_result)
         roll = num_from_bins(bins_tensor['roll_bin'], roll_cls, roll_result)
+
     cam_R = R_from_yaw_pitch_roll(torch.zeros_like(pitch), pitch, roll)
+    
     return cam_R
 
 def get_rotation_matrix_gt(bins_tensor, pitch_cls_gt, pitch_reg_gt, roll_cls_gt, roll_reg_gt):

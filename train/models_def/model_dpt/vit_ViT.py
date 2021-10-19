@@ -80,19 +80,6 @@ class Transpose(nn.Module):
         return x
 
 
-def forward_vit_ViT(opt, cfg_DPT, pretrained, x, input_dict_extra={}):
-    b, c, h, w = x.shape
-
-    glob, extra_output_dict = pretrained.model.forward_flex(opt, cfg_DPT, x, input_dict_extra=input_dict_extra)
-
-    layer_1 = pretrained.activations["1"]
-    layer_2 = pretrained.activations["2"]
-    layer_3 = pretrained.activations["3"]
-    layer_4 = pretrained.activations["4"]
-    
-    return layer_1, layer_2, layer_3, layer_4
-
-
 def _resize_pos_embed(self, posemb, gs_h, gs_w): # original at https://github.com/rwightman/pytorch-image-models/blob/72b227dcf57c0c62291673b96bdc06576bb90457/timm/models/vision_transformer.py#L481
     posemb_tok, posemb_grid = (
         posemb[:, : self.start_index],
@@ -109,8 +96,25 @@ def _resize_pos_embed(self, posemb, gs_h, gs_w): # original at https://github.co
 
     return posemb
 
+def forward_vit_ViT(opt, cfg_DPT, pretrained, x):
+    # b, c, h, w = x.shape
+    # print(type(opt))
+    # print(type(cfg_DPT))
+    # print(type(pretrained))
+    # print(type(x))
+    # print(pretrained.model.forward_flex)
 
-def forward_flex(self, opt, cfg_DPT, x, input_dict_extra={}):
+    glob, extra_output_dict = pretrained.model.forward_flex(opt, cfg_DPT, x)
+
+    layer_1 = pretrained.activations["1"]
+    layer_2 = pretrained.activations["2"]
+    layer_3 = pretrained.activations["3"]
+    layer_4 = pretrained.activations["4"]
+    
+    return layer_1, layer_2, layer_3, layer_4
+
+
+def forward_flex_encoder(self, opt, cfg_DPT, x):
     b, c, h, w = x.shape
 
     pos_embed = self._resize_pos_embed(
@@ -152,26 +156,21 @@ def forward_flex(self, opt, cfg_DPT, x, input_dict_extra={}):
     #         continue
         x = blk(x)
         
+
+    return x, {}
+
+def forward_flex_decoder(self, opt, cfg_DPT, x):
+    for idx, blk in enumerate(self.blocks):
+        # print(idx, x.shape)
+        x = blk(x)
+
     x = self.norm(x)
 
     return x, {}
 
-
-def forward_flex_decoder(self, opt, cfg_DPT, x, input_dict_extra={}):
-
-    B = x.shape[0]
-
-    for idx, blk in enumerate(self.blocks):
-        x = blk(x)
-
-    return x, {}
-
-
 def _make_vit_b_rn50_backbone_ViT(
     cfg_DPT, 
     model,
-    features=[256, 512, 768, 768],
-    size=[384, 384],
     hooks=[0, 1, 8, 11],
     vit_features=768,
     start_index=1,
@@ -188,11 +187,12 @@ def _make_vit_b_rn50_backbone_ViT(
     pretrained.model.blocks[hooks[3]].register_forward_hook(get_activation("4"))
 
     if enable_attention_hooks:
-        pretrained.model.blocks[2].attn.register_forward_hook(get_attention("attn_1"))
-        pretrained.model.blocks[5].attn.register_forward_hook(get_attention("attn_2"))
-        pretrained.model.blocks[8].attn.register_forward_hook(get_attention("attn_3"))
-        pretrained.model.blocks[11].attn.register_forward_hook(get_attention("attn_4"))
-        pretrained.attention = attention
+        assert False
+        # pretrained.model.blocks[2].attn.register_forward_hook(get_attention("attn_1"))
+        # pretrained.model.blocks[5].attn.register_forward_hook(get_attention("attn_2"))
+        # pretrained.model.blocks[8].attn.register_forward_hook(get_attention("attn_3"))
+        # pretrained.model.blocks[11].attn.register_forward_hook(get_attention("attn_4"))
+        # pretrained.attention = attention
 
     pretrained.activations = activations
 
@@ -203,7 +203,7 @@ def _make_vit_b_rn50_backbone_ViT(
     if if_transformer_only:
         pretrained.model.forward_flex = types.MethodType(forward_flex_decoder, pretrained.model)
     else:
-        pretrained.model.forward_flex = types.MethodType(forward_flex, pretrained.model)
+        pretrained.model.forward_flex = types.MethodType(forward_flex_encoder, pretrained.model)
 
     # We inject this function into the VisionTransformer instances so that
     # we can use it with interpolated position embeddings without modifying the library source.
@@ -227,6 +227,7 @@ def _make_pretrained_vitb_rn50_384_ViT(
 
     model = timm.create_model("vit_base_resnet50_384", pretrained=pretrained, in_chans=in_chans)
 
+
     if num_layers < 8:
         for layer_idx in range(len(model.blocks)):
             if layer_idx >= num_layers:
@@ -235,20 +236,24 @@ def _make_pretrained_vitb_rn50_384_ViT(
     model_re = _make_vit_b_rn50_backbone_ViT(
         cfg_DPT, 
         model,
-        features=[256, 512, 768, 768],
-        size=[384, 384],
+        # size=[384, 384],
         hooks=hooks,
         enable_attention_hooks=enable_attention_hooks,
         if_transformer_only=if_transformer_only
     )
+
+    # model_re.model.norm = nn.Identity()
+    model_re.model.head = nn.Identity()
     
     if if_transformer_only:
+        # model_rere = nn.Module()
+        # model_rere.model = nn.Module()
+        # model_rere.model.blocks = model_re.model.blocks
+        # model_rere.model.forward_flex = types.MethodType(model_re.model.forward_flex, model_rere.model)
+        # return model_rere
+        model_re.model.patch_embed = nn.Identity()
         # model_re.model.cls_token = nn.Identity()
         # model_re.model.pos_embed = nn.Identity()
-        # model_re.model.patch_embed = nn.Identity()
-        model_rere = nn.Module()
-        model_rere.model = nn.Module()
-        model_rere.model.blocks = model_re.model.blocks
-        return model_rere
+        return model_re
     else:
         return model_re

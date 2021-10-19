@@ -27,6 +27,7 @@
 			"**/Checkpoint/**": true,
 			"**/.vscode/**": true,
 			"**/__pycache__/**": true,
+			"**/third_parties_outside/**": true,
 			"**/third_parties_outside/adobe_svbrdf-master/**": true,
 			"**/third_parties_outside/apex/**": true,
 			"**/third_parties_outside/DPT/**": true,

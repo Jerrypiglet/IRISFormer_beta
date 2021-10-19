@@ -87,7 +87,18 @@ def PoseLoss(opt, pred_dict, gt_dict, bins_tensor, cls_reg_ratio):
             pred_dict['lo_coeffs_result'], if_differentiable=False, if_input_after_argmax=True)
 
     # layout bounding box corner loss
-    lo_corner_loss = cls_reg_ratio * reg_criterion(lo_bdb3D_result, gt_dict['lo_bdb3D'])
+    if opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_train_with_reindexed:
+        lo_corner_loss = cls_reg_ratio * reg_criterion(lo_bdb3D_result, gt_dict['lo_bdb3D_reindexed'])
+    else:
+        lo_corner_loss = cls_reg_ratio * reg_criterion(lo_bdb3D_result, gt_dict['lo_bdb3D'])
+
+    # print(gt_dict['pitch_cls'], gt_dict['pitch_reg'])
+    # print(gt_dict['roll_cls'], gt_dict['roll_reg'])
+    # print(gt_dict['lo_ori_cls'], gt_dict['lo_ori_reg'])
+    # print(gt_dict['lo_centroid'])
+    # print(gt_dict['lo_coeffs'])
+    # print(gt_dict['lo_bdb3D'])
+
 
     layout_losses_dict = {'loss_layout-pitch_cls':pitch_cls_loss, 'loss_layout-pitch_reg':pitch_reg_loss,
             'loss_layout-roll_cls':roll_cls_loss, 'loss_layout-roll_reg':roll_reg_loss,

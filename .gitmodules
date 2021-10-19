@@ -25,3 +25,6 @@
 [submodule "third_parties_outside/Swin-Transformer-Semantic-Segmentation"]
 	path = third_parties_outside/Swin-Transformer-Semantic-Segmentation
 	url = https://github.com/SwinTransformer/Swin-Transformer-Semantic-Segmentation.git
+[submodule "third_parties_outside/vit-pytorch"]
+	path = third_parties_outside/vit-pytorch
+	url = https://github.com/lucidrains/vit-pytorch.git

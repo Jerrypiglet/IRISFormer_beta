@@ -65,7 +65,7 @@ def get_corners_of_bb3d(basis, coeffs, centroid):
 
     return corners
 
-def get_layout_bdb_sunrgbd(bins_tensor, lo_ori_reg, lo_ori_cls_result, centroid_reg, coeffs_reg, if_return_full=False, if_differentiable=False, if_input_after_argmax=False):
+def get_layout_bdb_sunrgbd(bins_tensor, lo_ori_reg, lo_ori_cls_result, centroid_reg, coeffs_reg, if_return_full=False, if_differentiable=False, if_input_after_argmax=False, if_ori_reg_from_gt_cls=False):
     """
     get the eight corners of 3D bounding box
     :param bins_tensor:
@@ -81,7 +81,13 @@ def get_layout_bdb_sunrgbd(bins_tensor, lo_ori_reg, lo_ori_cls_result, centroid_
     else:
         lo_ori_cls = torch.argmax(lo_ori_cls_result, dim=1)
 
-    ori_reg = torch.gather(lo_ori_reg, 1, lo_ori_cls.view(lo_ori_cls.size(0), 1).expand(lo_ori_cls.size(0), 1)).squeeze(1)
+    if if_ori_reg_from_gt_cls:
+        ori_reg = lo_ori_reg
+    else:
+        ori_reg = torch.gather(lo_ori_reg, 1, lo_ori_cls.view(lo_ori_cls.size(0), 1).expand(lo_ori_cls.size(0), 1)).squeeze(1)
+
+    # print(lo_ori_cls, ori_reg, lo_ori_cls.shape, ori_reg.shape) # tensor([1], device='cuda:0') tensor([0.0027], device='cuda:0') torch.Size([1]) torch.Size([1])
+
     if if_differentiable:
         ori = num_from_bins_differentiable(bins_tensor['layout_ori_bin'], lo_ori_cls_result, ori_reg)
     else:
@@ -92,6 +98,8 @@ def get_layout_bdb_sunrgbd(bins_tensor, lo_ori_reg, lo_ori_cls_result, centroid_
     centroid_reg = centroid_reg + bins_tensor['layout_centroid_avg']
 
     coeffs_reg = (coeffs_reg + 1) * bins_tensor['layout_coeffs_avg']
+
+    # print(bins_tensor['layout_coeffs_avg'], bins_tensor['layout_centroid_avg'])
 
     bdb = get_corners_of_bb3d(basis, coeffs_reg, centroid_reg)
 

@@ -55,6 +55,11 @@ def get_labels_dict_layout_emitter(labels_dict_input, data_batch, opt):
             lo_bdb3D_reindexed = data_batch['layout_reindexed']['bdb3D'].float().cuda(non_blocking=True)
             lo_bdb3D_full = data_batch['layout_']
 
+        # print(data_batch['layout_reindexed']['coeffs_reg'].float().detach().numpy())
+        # print(data_batch['layout_']['coeffs_reg'].float().detach().numpy())
+        print(data_batch['layout_reindexed']['ori_reg'].float().detach().numpy())
+        print(data_batch['layout_']['ori_reg'].float().detach().numpy())
+
         # cam_K = data_batch['camera']['K'].float().cuda(non_blocking=True)
         cam_K_scaled = data_batch['camera']['K_scaled'].float().cuda(non_blocking=True)
 
@@ -206,6 +211,7 @@ def vis_layout_emitter(labels_dict, output_dict, data_batch, opt, time_meters=No
     
     if if_est_layout:
         pred_dict_lo = output_dict['layout_est_result']
+        # print(pred_dict_lo['lo_ori_reg_result'], pred_dict_lo['lo_ori_cls_result'], pred_dict_lo['lo_ori_reg_result'].shape, pred_dict_lo['lo_ori_cls_result'].shape)
         lo_bdb3D_out, basis_out, coeffs_out, centroid_out = get_layout_bdb_sunrgbd(opt.bins_tensor, pred_dict_lo['lo_ori_reg_result'],
                                             pred_dict_lo['lo_ori_cls_result'],
                                             pred_dict_lo['lo_centroid_result'],
@@ -219,6 +225,22 @@ def vis_layout_emitter(labels_dict, output_dict, data_batch, opt, time_meters=No
                                     pred_dict_lo['roll_cls_result'], pred_dict_lo['roll_reg_result'], \
                                     # if_differentiable=not opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_argmax_in_results)
                                     if_differentiable=opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_differentiable_layout_input)
+
+        # [DEBUG] Switch to GT to validate GT
+        # pred_dict_lo = labels_dict['layout_labels']
+        # # print(pred_dict_lo['lo_ori_reg'], pred_dict_lo['lo_ori_cls'], pred_dict_lo['lo_ori_reg'].shape, pred_dict_lo['lo_ori_cls'].shape)
+        # lo_bdb3D_out, basis_out, coeffs_out, centroid_out = get_layout_bdb_sunrgbd(opt.bins_tensor, pred_dict_lo['lo_ori_reg'],
+        #                                     pred_dict_lo['lo_ori_cls'],
+        #                                     pred_dict_lo['lo_centroid'],
+        #                                     pred_dict_lo['lo_coeffs'], 
+        #                                     if_return_full=True, if_ori_reg_from_gt_cls=True, 
+        #                                     if_input_after_argmax=True, 
+        #                                     if_differentiable=opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_differentiable_layout_input)
+        # cam_R_out = get_rotation_matix_result(opt.bins_tensor,
+        #                             pred_dict_lo['pitch_cls'], pred_dict_lo['pitch_reg'],
+        #                             pred_dict_lo['roll_cls'], pred_dict_lo['roll_reg'], \
+        #                             if_input_after_argmax=True, if_reg_from_gt_cls=True, 
+        #                             if_differentiable=opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_differentiable_layout_input)
 
     if if_est_object:
         pred_dict_ob = output_dict['object_est_result']

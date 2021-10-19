@@ -65,13 +65,18 @@ import torch.nn.functional as F
 class MLP(nn.Module):
     """ Very simple multi-layer perceptron (also called FFN)"""
 
-    def __init__(self, input_dim, hidden_dim, output_dim, num_layers):
+    def __init__(self, input_dim, hidden_dim, output_dim, num_layers, if_layer_norm=False):
         super().__init__()
         self.num_layers = num_layers
+        self.if_layer_norm = if_layer_norm
         h = [hidden_dim] * (num_layers - 1)
         self.layers = nn.ModuleList(nn.Linear(n, k) for n, k in zip([input_dim] + h, h + [output_dim]))
+        if self.if_layer_norm:
+            self.layer_norms = nn.ModuleList(nn.LayerNorm(n) for n, _ in zip([input_dim] + h, h + [output_dim]))
 
     def forward(self, x):
         for i, layer in enumerate(self.layers):
             x = F.relu(layer(x)) if i < self.num_layers - 1 else layer(x)
+            if self.if_layer_norm and i < self.num_layers - 1:
+                x = self.layer_norms(i)(x)
         return x

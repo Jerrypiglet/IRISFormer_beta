@@ -605,20 +605,20 @@ class Model_Joint(nn.Module):
                 # layout w/ wo/ V1 emitters
                 if if_layout or if_vanilla_emitter:
                     if self.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.enable:
-                        assert self.opt.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_share_encoder
+                        assert self.opt.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_share_encoder_over_modalities
+                        # module_hooks_dict = {}
                         input_dict_extra = {}
                         return_dicts = {}
 
-                        module_hooks_dict = {}
+                        # print(input_dict['input_batch_brdf'].shape)
                         input_dict_extra['shared_encoder_outputs'] = forward_vit_ViT(
                             self.opt, self.opt.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline, self.LAYOUT_EMITTER_NET.shared_encoder, 
-                            input_dict['input_batch_brdf'], input_dict_extra={**input_dict_extra, **module_hooks_dict})
+                            input_dict['input_batch_brdf'])
 
                         modalities = ['lo']
                         for modality in modalities:
                             return_dicts[modality] = self.LAYOUT_EMITTER_NET[modality].forward(None, input_dict_extra=input_dict_extra)
                         output_dict = return_dicts['lo']
-
                     else:
                         if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder:
                             x1, x2, x3, x4, x5, x6, _ = self.LAYOUT_EMITTER_NET_encoder(input_dict['input_batch_brdf'])
@@ -626,7 +626,8 @@ class Model_Joint(nn.Module):
                         else:
                             encoder_outputs = return_dict_brdf['encoder_outputs']
                         output_dict = self.LAYOUT_EMITTER_NET_fc(input_feats_dict=encoder_outputs)
-                        return_dict_layout_emitter.update(output_dict)
+                    
+                    return_dict_layout_emitter.update(output_dict)
 
                 # V2, V3
                 if 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list and self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
