@@ -72,11 +72,11 @@ class MLP(nn.Module):
         h = [hidden_dim] * (num_layers - 1)
         self.layers = nn.ModuleList(nn.Linear(n, k) for n, k in zip([input_dim] + h, h + [output_dim]))
         if self.if_layer_norm:
-            self.layer_norms = nn.ModuleList(nn.LayerNorm(n) for n, _ in zip([input_dim] + h, h + [output_dim]))
+            self.layer_norms = nn.ModuleList(nn.LayerNorm(k) for n, k in zip([input_dim] + h, h + [output_dim]))
 
     def forward(self, x):
         for i, layer in enumerate(self.layers):
             x = F.relu(layer(x)) if i < self.num_layers - 1 else layer(x)
             if self.if_layer_norm and i < self.num_layers - 1:
-                x = self.layer_norms(i)(x)
+                x = self.layer_norms[i](x)
         return x

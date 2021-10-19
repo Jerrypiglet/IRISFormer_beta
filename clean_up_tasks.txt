@@ -1080,3 +1080,6 @@ zz-torch-job-gpu20211018-015910-6ljmf
 20211018-174251
 20211018-201935
 zz-torch-job-gpu20211018-181531-mdp2p
+zz-torch-job-gpu20211019-015627-f2tmf
+zz-torch-job-gpu20211019-020543-jrhb2
+zz-torch-job-gpu20211019-022002-rrrpw
