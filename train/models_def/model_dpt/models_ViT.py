@@ -8,6 +8,7 @@ from .blocks_ViT import (
     _make_encoder_ViT,
     _make_decoder_ViT,
     forward_vit_ViT,
+    MLP
 )
 
 class ViT(BaseModel):
@@ -23,7 +24,7 @@ class ViT(BaseModel):
         in_chans=3, 
         N_layers_encoder=6, 
         N_layers_decoder=6,
-        heads = [], 
+        head_names = [], 
         pool = 'cls' # pool strategy in the end: 'cls' or 'mean'
     ):
 
@@ -36,6 +37,7 @@ class ViT(BaseModel):
         self.N_layers_encoder = N_layers_encoder
         self.N_layers_decoder = N_layers_decoder
         self.pool = pool
+        self.head_names = head_names
 
         assert backbone == "vitb_rn50_384_N_layers"
         assert self.N_layers_encoder in [4, 6, 8]
@@ -69,9 +71,9 @@ class ViT(BaseModel):
                 in_chans = in_chans, 
             )
         else:
-            assert heads != []
+            assert self.head_names != []
             module_dict = {}
-            for head_name in heads:
+            for head_name in self.head_names:
                 module_dict[head_name] = _make_decoder_ViT(
                     cfg_DPT = cfg_ViT, 
                     backbone = backbone,
@@ -91,36 +93,46 @@ class ViT(BaseModel):
         #     x.contiguous(memory_format=torch.channels_last)
         
         if self.cfg_ViT.if_share_encoder_over_modalities:
-            _, _, _, layer_4 = input_dict_extra['shared_encoder_outputs']
+            _, _, _, layer_4_encoder = input_dict_extra['shared_encoder_outputs']
         else:
-            _, _, _, layer_4 = forward_vit_ViT(self.opt, self.cfg_ViT, self.encoder, x)
+            _, _, _, layer_4_encoder = forward_vit_ViT(self.opt, self.cfg_ViT, self.encoder, x)
     
         # print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape) # torch.Size([16, 301, 768]) torch.Size([16, 301, 768]) torch.Size([16, 301, 768]) torch.Size([16, 301, 768])
-        x = layer_4
-        # print(x.shape)
 
         if self.cfg_ViT.if_share_decoder_over_heads:
             # x = self.decoder()
-            _, _, _, layer_4 = forward_vit_ViT(self.opt, self.cfg_ViT, self.decoder, x)
+            _, _, _, layer_4_decoder = forward_vit_ViT(self.opt, self.cfg_ViT, self.decoder, layer_4_encoder)
+            x = layer_4_decoder
+            # print(x.shape)
+            x = x.mean(dim = 1) if self.pool == 'mean' else x[:, 0]
+            # print(x.shape)
+            return x
         else:
-            assert False
+            return_dict = {}
+            for head_name in self.head_names:
+                _, _, _, layer_4_decoder = forward_vit_ViT(self.opt, self.cfg_ViT, self.decoder[head_name], layer_4_encoder)
+                x = layer_4_decoder
+                # print(x.shape)
+                x = x.mean(dim = 1) if self.pool == 'mean' else x[:, 0]
+                # print(x.shape)
+                return_dict[head_name] = x
+            return return_dict
 
-        x = layer_4
-        # print(x.shape)
-        x = x.mean(dim = 1) if self.pool == 'mean' else x[:, 0]
-        # print(x.shape)
-
-        return x
 
 def get_LayoutNet_ViT(opt, backbone, N_layers_encoder, N_layers_decoder, modalities=[]):
     assert all([x in ['lo', 'ob'] for x in modalities])
-    # heads_dict = {
-    #     'lo': 
-    #         ['pitch_reg', 
-    #         'pitch_cls', 
-    #         'roll_reg', 
-    #         'roll_cls']
-    # }
+    head_names_dict = {
+        'lo': ['cam', 'lo'
+            # 'pitch_reg', 
+            # 'roll_reg', 
+            # 'pitch_cls', 
+            # 'roll_cls', 
+            # 'lo_ori_reg', 
+            # 'lo_ori_cls', 
+            # 'lo_centroid', 
+            # 'lo_coeffs', 
+            ]
+        }
 
     module_dict = {}
     for modality in modalities:
@@ -136,7 +148,8 @@ def get_LayoutNet_ViT(opt, backbone, N_layers_encoder, N_layers_decoder, modalit
             cfg_ViT=opt.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline, 
             N_layers_encoder=N_layers_encoder, 
             N_layers_decoder=N_layers_decoder, 
-            heads=[]
+            head_names=head_names_dict[modality], 
+            pool=opt.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.pool
         )
 
     if opt.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_share_encoder_over_modalities:
@@ -156,15 +169,19 @@ class ViTLayoutModel(ViT):
     def __init__(
         self, 
         opt, 
+        cfg_ViT, 
         modality='lo', 
         N_layers_encoder=6, 
         N_layers_decoder=6, 
+        pool='cls', 
+        head_names=[], 
         skip_keys=[], keep_keys=[], **kwargs
     ):
         features = kwargs["features"] if "features" in kwargs else 256
 
         self.modality = modality
         assert modality in ['lo', 'ob'], 'Invalid modality: %s'%modality
+        assert pool in ['mean', 'cls']
         # self.out_channels = {'al': 3, 'de': 1, 'ro': 1}[modality]
 
         # head = nn.Sequential(
@@ -183,10 +200,15 @@ class ViTLayoutModel(ViT):
         # # if self.if_batch_norm:
         # #     head.insert(3, nn.GroupNorm(num_groups=4, num_channels=32))
 
-        super().__init__(opt, **kwargs)
+        super().__init__(opt, cfg_ViT=cfg_ViT, head_names=head_names, pool=pool, N_layers_encoder=N_layers_encoder, N_layers_decoder=N_layers_decoder, **kwargs)
 
         if modality in ['lo']:
-            self.heads = decoder_layout_emitter_heads(opt, if_layout=True)
+            if opt.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_indept_MLP_heads:
+                self.heads = decoder_layout_emitter_heads_indeptMLP(opt, if_layout=True, 
+                if_two_decoders=not opt.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_share_decoder_over_heads, 
+                if_layer_norm=opt.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_indept_MLP_heads_if_layer_norm)
+            else:
+                self.heads = decoder_layout_emitter_heads(opt, if_layout=True, if_two_decoders=not opt.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_share_decoder_over_heads)
         else:
             assert False
 
@@ -199,12 +221,13 @@ class ViTLayoutModel(ViT):
         return x_out
 
 class decoder_layout_emitter_heads(nn.Module):
-    def __init__(self, opt, if_layout, if_emitter_vanilla_fc=False, backbone_out_dim=768):
+    def __init__(self, opt, if_layout, if_emitter_vanilla_fc=False, backbone_out_dim=768, if_two_decoders=False):
         super(decoder_layout_emitter_heads, self).__init__()
         self.opt = opt
         self.if_layout = if_layout
         self.if_emitter_vanilla_fc = if_emitter_vanilla_fc
         assert self.if_layout or self.if_emitter_vanilla_fc
+        self.if_two_decoders = if_two_decoders
 
         self.embed_dim = backbone_out_dim
         
@@ -287,7 +310,7 @@ class decoder_layout_emitter_heads(nn.Module):
         return_dict_layout = {}
         if self.if_layout:
             # branch for camera parameters
-            cam = self.fc_layout_1(x)
+            cam = self.fc_layout_1(x['cam'] if self.if_two_decoders else x)
             cam = self.relu_layout_1(cam)
             cam = self.dropout_layout_1(cam)
             cam = self.fc_layout_2(cam)
@@ -297,7 +320,7 @@ class decoder_layout_emitter_heads(nn.Module):
             roll_cls = cam[:, self.PITCH_BIN * 2 + self.ROLL_BIN: self.PITCH_BIN * 2 + self.ROLL_BIN * 2]
 
             # branch for layout orientation, centroid and coefficients
-            lo = self.fc_layout_layout(x)
+            lo = self.fc_layout_layout(x['lo'] if self.if_two_decoders else x)
             lo = self.relu_layout_1(lo)
             lo = self.dropout_layout_1(lo)
             # branch for layout orientation
@@ -315,6 +338,78 @@ class decoder_layout_emitter_heads(nn.Module):
             lo_ct = self.fc_layout_6(lo_ct)
             lo_centroid = lo_ct[:, :3]
             lo_coeffs = lo_ct[:, 3:]
+
+            # return pitch_reg, roll_reg, pitch_cls, roll_cls, lo_ori_reg, lo_ori_cls, lo_centroid, lo_coeffs
+            return_dict_layout.update({
+                'pitch_reg_result': pitch_reg, 
+                'roll_reg_result': roll_reg, 
+                'pitch_cls_result': pitch_cls, 
+                'roll_cls_result': roll_cls, 
+                'lo_ori_reg_result': lo_ori_reg, 
+                'lo_ori_cls_result': lo_ori_cls, 
+                'lo_centroid_result': lo_centroid, 
+                'lo_coeffs_result': lo_coeffs
+                })
+            
+        return_dict = {'layout_est_result': return_dict_layout, 'emitter_est_result': return_dict_emitter}
+
+        return return_dict
+
+class decoder_layout_emitter_heads_indeptMLP(nn.Module):
+    def __init__(self, opt, if_layout, if_emitter_vanilla_fc=False, backbone_out_dim=768, if_two_decoders=False, if_layer_norm=False):
+        super(decoder_layout_emitter_heads_indeptMLP, self).__init__()
+        self.opt = opt
+        self.if_layout = if_layout
+        self.if_emitter_vanilla_fc = if_emitter_vanilla_fc
+        assert self.if_layout or self.if_emitter_vanilla_fc
+        self.if_two_decoders = if_two_decoders
+
+        self.embed_dim = backbone_out_dim
+        
+        # ======== layout
+        # '''Module parameters'''
+        if self.if_layout:
+            self.bin = opt.dataset_config.bins
+            self.PITCH_BIN = len(self.bin['pitch_bin'])
+            self.ROLL_BIN = len(self.bin['roll_bin'])
+            self.LO_ORI_BIN = len(self.bin['layout_ori_bin'])
+
+            # fc for camera
+            self.pitch_reg_MLP = MLP(self.embed_dim, self.embed_dim//2, self.PITCH_BIN, num_layers=3, if_layer_norm=if_layer_norm)
+            self.pitch_cls_MLP = MLP(self.embed_dim, self.embed_dim//2, self.PITCH_BIN, num_layers=3, if_layer_norm=if_layer_norm)
+            self.roll_reg_MLP = MLP(self.embed_dim, self.embed_dim//2, self.ROLL_BIN, num_layers=3, if_layer_norm=if_layer_norm)
+            self.roll_cls_MLP = MLP(self.embed_dim, self.embed_dim//2, self.ROLL_BIN, num_layers=3, if_layer_norm=if_layer_norm)
+
+            # fc for layout
+            self.lo_ori_reg_MLP = MLP(self.embed_dim, self.embed_dim//2, self.LO_ORI_BIN, num_layers=3, if_layer_norm=if_layer_norm)
+            self.lo_ori_cls_MLP = MLP(self.embed_dim, self.embed_dim//2, self.LO_ORI_BIN, num_layers=3, if_layer_norm=if_layer_norm)
+            self.lo_centroid_MLP = MLP(self.embed_dim, self.embed_dim//2, 3, num_layers=3, if_layer_norm=if_layer_norm)
+            self.lo_coeffs_MLP = MLP(self.embed_dim, self.embed_dim//2, 3, num_layers=3, if_layer_norm=if_layer_norm)
+
+        # ======== emitter
+
+    def forward(self, x):
+        # ==== emitter & layout est
+        return_dict_emitter  = {}
+
+        # --- layout
+        return_dict_layout = {}
+        if self.if_layout:
+            # branch for camera parameters
+            x_cam = x['cam'] if self.if_two_decoders else x
+
+            pitch_reg = self.pitch_reg_MLP(x_cam)
+            pitch_cls = self.pitch_cls_MLP(x_cam)
+            roll_reg = self.roll_reg_MLP(x_cam)
+            roll_cls = self.roll_cls_MLP(x_cam)
+
+            # branch for layout orientation, centroid and coefficients
+            x_lo = x['lo'] if self.if_two_decoders else x
+
+            lo_ori_reg = self.lo_ori_reg_MLP(x_lo)
+            lo_ori_cls = self.lo_ori_cls_MLP(x_lo)
+            lo_centroid = self.lo_centroid_MLP(x_lo)
+            lo_coeffs = self.lo_coeffs_MLP(x_lo)
 
             # return pitch_reg, roll_reg, pitch_cls, roll_cls, lo_ori_reg, lo_ori_cls, lo_centroid, lo_coeffs
             return_dict_layout.update({

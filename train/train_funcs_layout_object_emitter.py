@@ -57,8 +57,8 @@ def get_labels_dict_layout_emitter(labels_dict_input, data_batch, opt):
 
         # print(data_batch['layout_reindexed']['coeffs_reg'].float().detach().numpy())
         # print(data_batch['layout_']['coeffs_reg'].float().detach().numpy())
-        print(data_batch['layout_reindexed']['ori_reg'].float().detach().numpy())
-        print(data_batch['layout_']['ori_reg'].float().detach().numpy())
+        # print(data_batch['layout_reindexed']['ori_reg'].float().detach().numpy())
+        # print(data_batch['layout_']['ori_reg'].float().detach().numpy())
 
         # cam_K = data_batch['camera']['K'].float().cuda(non_blocking=True)
         cam_K_scaled = data_batch['camera']['K_scaled'].float().cuda(non_blocking=True)

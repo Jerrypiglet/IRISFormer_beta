@@ -482,7 +482,10 @@ _C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.readout = 'project'
 _C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_imagenet_backbone = True
 _C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.patch_size = 16
 _C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_share_encoder_over_modalities = True
-_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_share_decoder_over_heads = True
+_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_share_decoder_over_heads = True # e.g. for layout estimation there are two heads: cam, lo. Set to True to use indept encoder for each
+_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_indept_MLP_heads = False
+_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_indept_MLP_heads_if_layer_norm = False
+_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.pool = 'mean'
 
 _C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.dpt_hybrid = CN()
 _C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.dpt_hybrid.N_layers_encoder = 6
