@@ -111,6 +111,7 @@ def set_up_envs(opt):
         opt.cfg.DATA.if_pad_to_32x = True
 
     if opt.cfg.DATA.if_pad_to_32x:
+        opt.cfg.DATA.load_masks = True
         im_width_pad_to = int(np.ceil(opt.cfg.DATA.im_width/32.)*32)
         im_height_pad_to = int(np.ceil(opt.cfg.DATA.im_height/32.)*32)
         im_pad_with = 0
@@ -125,6 +126,14 @@ def set_up_envs(opt):
         im_height_resize_to = int(np.ceil(opt.cfg.DATA.im_height/32.)*32)
         opt.if_resize = True
         opt.resize_op = transform.Resize_flexible((im_width_resize_to, im_height_resize_to))
+
+    # ====== MODEL_ALL =====
+    opt.cfg.MODEL_ALL.enable_list = [x for x in opt.cfg.MODEL_ALL.enable_list.split('_') if x != '']
+    if opt.cfg.MODEL_ALL.enable:
+        opt.cfg.DATA.load_brdf_gt = True
+        if 'lo' in opt.cfg.MODEL_ALL.enable_list:
+            opt.cfg.MODEL_LAYOUT_EMITTER.enable = True
+            opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = list(set(opt.cfg.MODEL_LAYOUT_EMITTER.enable_list_allowed) & set(opt.cfg.MODEL_ALL.enable_list))
 
     # ====== GMM =====
     if opt.cfg.MODEL_GMM.enable:
@@ -216,7 +225,11 @@ def set_up_envs(opt):
         opt.cfg.DATA.load_detectron_gt = True
 
     # ====== layout, emitters, objs, meshes =====
-    opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.split('_')
+    if isinstance(opt.cfg.MODEL_LAYOUT_EMITTER.enable_list, str):
+        opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.split('_')
+
+    opt.dataset_config = Dataset_Config('OR', OR=opt.cfg.MODEL_LAYOUT_EMITTER.data.OR, version=opt.cfg.MODEL_LAYOUT_EMITTER.data.version, opt=opt)
+    opt.bins_tensor = to_dict_tensor(opt.dataset_config.bins, if_cuda=True)
 
     if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
         if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
@@ -266,8 +279,6 @@ def set_up_envs(opt):
         assert opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type in ['cell_prob', 'wall_prob', 'cell_info']
 
 
-        opt.dataset_config = Dataset_Config('OR', OR=opt.cfg.MODEL_LAYOUT_EMITTER.data.OR, version=opt.cfg.MODEL_LAYOUT_EMITTER.data.version, opt=opt)
-        opt.bins_tensor = to_dict_tensor(opt.dataset_config.bins, if_cuda=True)
 
         if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
             if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V3':
@@ -362,12 +373,11 @@ def set_up_envs(opt):
             opt.cfg.MODEL_BRDF.loss_list += opt.cfg.MODEL_BRDF.enable_list
         ic(opt.cfg.DATA.load_brdf_gt)
 
-
-
     # ===== check if flags are legal =====
     check_if_in_list(opt.cfg.DATA.data_read_list, opt.cfg.DATA.data_read_list_allowed)
     check_if_in_list(opt.cfg.MODEL_BRDF.enable_list, opt.cfg.MODEL_BRDF.enable_list_allowed)
     check_if_in_list(opt.cfg.MODEL_BRDF.loss_list, opt.cfg.MODEL_BRDF.enable_list_allowed)
+    check_if_in_list(opt.cfg.MODEL_ALL.enable_list, opt.cfg.MODEL_ALL.enable_list_allowed)
 
     check_if_in_list(opt.cfg.MODEL_LAYOUT_EMITTER.enable_list, opt.cfg.MODEL_LAYOUT_EMITTER.enable_list_allowed)
     check_if_in_list(opt.cfg.MODEL_LAYOUT_EMITTER.loss_list, opt.cfg.MODEL_LAYOUT_EMITTER.enable_list_allowed)

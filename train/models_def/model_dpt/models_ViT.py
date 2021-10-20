@@ -396,7 +396,7 @@ class decoder_layout_emitter_heads_indeptMLP(nn.Module):
         return_dict_layout = {}
         if self.if_layout:
             # branch for camera parameters
-            x_cam = x['cam'] if self.if_two_decoders else x
+            x_cam = x['camera'] if self.if_two_decoders else x
 
             pitch_reg = self.pitch_reg_MLP(x_cam)
             pitch_cls = self.pitch_cls_MLP(x_cam)
@@ -404,7 +404,7 @@ class decoder_layout_emitter_heads_indeptMLP(nn.Module):
             roll_cls = self.roll_cls_MLP(x_cam)
 
             # branch for layout orientation, centroid and coefficients
-            x_lo = x['lo'] if self.if_two_decoders else x
+            x_lo = x['layout'] if self.if_two_decoders else x
 
             lo_ori_reg = self.lo_ori_reg_MLP(x_lo)
             lo_ori_cls = self.lo_ori_cls_MLP(x_lo)

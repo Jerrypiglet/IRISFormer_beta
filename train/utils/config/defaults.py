@@ -180,6 +180,7 @@ _C.DATA.if_resize_to_32x = False # does not work for semantics (e.g. matseg)
 _C.DATA.load_semseg_gt = False
 _C.DATA.load_matseg_gt = False
 _C.DATA.load_brdf_gt = False
+_C.DATA.load_masks = False
 _C.DATA.load_light_gt = False
 _C.DATA.load_layout_emitter_gt = False
 _C.DATA.data_read_list = ''
@@ -482,15 +483,14 @@ _C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.readout = 'project'
 _C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_imagenet_backbone = True
 _C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.patch_size = 16
 _C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_share_encoder_over_modalities = True
-_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_share_decoder_over_heads = True # e.g. for layout estimation there are two heads: cam, lo. Set to True to use indept encoder for each
+_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_share_decoder_over_heads = False # e.g. for layout estimation there are two heads: cam, lo. Set to True to use indept encoder for each
 _C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_indept_MLP_heads = False
 _C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_indept_MLP_heads_if_layer_norm = False
-_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.pool = 'mean'
+_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.ViT_pool = 'mean'
 
 _C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.dpt_hybrid = CN()
 _C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.dpt_hybrid.N_layers_encoder = 6
 _C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.dpt_hybrid.N_layers_decoder = 6
-
 
 _C.MODEL_LAYOUT_EMITTER.mesh = CN()
 _C.MODEL_LAYOUT_EMITTER.mesh.tmn_subnetworks = 2
@@ -604,6 +604,28 @@ _C.MODEL_SEMSEG.pretrained_pth = 'exp/openrooms/pspnet50V3_2gpu_100k/model/train
 _C.MODEL_SEMSEG.semseg_ignore_label = 0
 _C.MODEL_SEMSEG.semseg_classes = 46
 _C.MODEL_SEMSEG.pspnet_version = 50 # [50, 101]
+
+# ===== everything model
+_C.MODEL_ALL = CN()
+_C.MODEL_ALL.enable = False # enable model / modules
+_C.MODEL_ALL.enable_list = '' # enable model / modules
+_C.MODEL_ALL.enable_list_allowed = ['al', 'no', 'de', 'ro', 'lo', 'li']
+_C.MODEL_ALL.loss_list = ''
+
+_C.MODEL_ALL.ViT_baseline = CN()
+_C.MODEL_ALL.ViT_baseline.enable = True # enable model / modules
+_C.MODEL_ALL.ViT_baseline.if_pos_embed = True
+_C.MODEL_ALL.ViT_baseline.readout = 'project'
+_C.MODEL_ALL.ViT_baseline.if_imagenet_backbone = True
+_C.MODEL_ALL.ViT_baseline.patch_size = 16
+_C.MODEL_ALL.ViT_baseline.if_share_encoder_over_modalities = True
+# _C.MODEL_ALL.ViT_baseline.if_share_decoder_over_heads = False # e.g. for layout estimation there are two heads: cam, lo. Set to True to use indept encoder for each
+_C.MODEL_ALL.ViT_baseline.if_indept_MLP_heads = False
+_C.MODEL_ALL.ViT_baseline.if_indept_MLP_heads_if_layer_norm = False
+_C.MODEL_ALL.ViT_baseline.ViT_pool = 'mean'
+_C.MODEL_ALL.ViT_baseline.N_layers_encoder = 6
+_C.MODEL_ALL.ViT_baseline.N_layers_decoder = 6
+
 
 # ===== solver
 

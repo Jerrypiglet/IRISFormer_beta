@@ -97,21 +97,12 @@ def _resize_pos_embed(self, posemb, gs_h, gs_w): # original at https://github.co
     return posemb
 
 def forward_vit_ViT(opt, cfg_DPT, pretrained, x):
-    # b, c, h, w = x.shape
-    # print(type(opt))
-    # print(type(cfg_DPT))
-    # print(type(pretrained))
-    # print(type(x))
-    # print(pretrained.model.forward_flex)
-
-    glob, extra_output_dict = pretrained.model.forward_flex(opt, cfg_DPT, x)
+    x_out, extra_output_dict = pretrained.model.forward_flex(opt, cfg_DPT, x)
 
     layer_1 = pretrained.activations["1"]
     layer_2 = pretrained.activations["2"]
-    layer_3 = pretrained.activations["3"]
-    layer_4 = pretrained.activations["4"]
     
-    return layer_1, layer_2, layer_3, layer_4
+    return x_out, (layer_1, layer_2)
 
 
 def forward_flex_encoder(self, opt, cfg_DPT, x):
@@ -171,7 +162,7 @@ def forward_flex_decoder(self, opt, cfg_DPT, x):
 def _make_vit_b_rn50_backbone_ViT(
     cfg_DPT, 
     model,
-    hooks=[0, 1, 8, 11],
+    hooks=[0, 1],
     vit_features=768,
     start_index=1,
     enable_attention_hooks=False,
@@ -180,11 +171,12 @@ def _make_vit_b_rn50_backbone_ViT(
     pretrained = nn.Module()
 
     pretrained.model = model
-
+    
+    assert len(hooks) == 2, 'Only 2 hooks supported'
     pretrained.model.blocks[hooks[0]].register_forward_hook(get_activation("1"))
     pretrained.model.blocks[hooks[1]].register_forward_hook(get_activation("2"))
-    pretrained.model.blocks[hooks[2]].register_forward_hook(get_activation("3"))
-    pretrained.model.blocks[hooks[3]].register_forward_hook(get_activation("4"))
+    # pretrained.model.blocks[hooks[2]].register_forward_hook(get_activation("3"))
+    # pretrained.model.blocks[hooks[3]].register_forward_hook(get_activation("4"))
 
     if enable_attention_hooks:
         assert False

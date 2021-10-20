@@ -233,9 +233,14 @@ if opt.is_master:
 
 # >>>>>>>>>>>>> MODEL AND OPTIMIZER
 from models_def.model_joint_all import Model_Joint as the_model
+from models_def.model_joint_all_ViT import Model_Joint_ViT as the_model_ViT
 # build model
 # model = MatSeg_BRDF(opt, logger)
-model = the_model(opt, logger)
+if opt.cfg.MODEL_ALL.enable:
+    model = the_model_ViT(opt, logger)
+else:
+    model = the_model(opt, logger)
+
 if opt.distributed: # https://github.com/dougsouza/pytorch-sync-batchnorm-example # export NCCL_LL_THRESHOLD=0
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 model.to(opt.device)

@@ -142,6 +142,7 @@ class openrooms(data.Dataset):
 
         if_load_immask = self.opt.cfg.DATA.load_brdf_gt and (not self.opt.cfg.DATASET.if_no_gt_semantics)
         if_load_immask = if_load_immask or self.opt.cfg.MODEL_MATSEG.enable
+        if_load_immask = if_load_immask or self.opt.cfg.DATA.load_masks
         # if_load_immask = False
         self.opt.if_load_immask = if_load_immask
 
