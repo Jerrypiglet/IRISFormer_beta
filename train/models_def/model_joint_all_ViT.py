@@ -42,18 +42,18 @@ from models_def.model_dpt.transforms import Resize as dpt_Resize
 from models_def.model_dpt.transforms import NormalizeImage as dpt_NormalizeImage
 from models_def.model_dpt.transforms import PrepareForNet as dpt_PrepareForNet
 
-from models_def.model_dpt.models_ViT import get_LayoutNet_ViT
-from models_def.model_dpt.blocks_ViT import forward_vit_ViT
-from torchvision.transforms import Compose
-import cv2
-import time
+# from models_def.model_dpt.models_ViT import get_LayoutNet_ViT
+# from models_def.model_dpt.blocks_ViT import forward_vit_ViT
+# from torchvision.transforms import Compose
+# import cv2
+# import time
 
 from icecream import ic
 
-from models_def.model_dpt.blocks import forward_vit
+# from models_def.model_dpt.blocks import forward_vit
 import torch.utils.checkpoint as cp
 
-from models_def.model_dpt.models_multi_head_ViT_DPT import get_ModelAll_ViT
+from models_def.model_dpt.models_multi_head_ViT_DPT import ModelAll_ViT
 
 class Model_Joint_ViT(nn.Module):
     def __init__(self, opt, logger):
@@ -64,7 +64,7 @@ class Model_Joint_ViT(nn.Module):
 
         assert self.opt.cfg.MODEL_ALL.ViT_baseline.enable
 
-        self.MODEL_ALL = get_ModelAll_ViT(
+        self.MODEL_ALL = ModelAll_ViT(
             opt=opt, 
             modalities=self.cfg.MODEL_ALL.enable_list, 
             backbone="vitb_rn50_384_N_layers", 
@@ -75,20 +75,49 @@ class Model_Joint_ViT(nn.Module):
     def forward(self, input_dict):
         assert self.opt.cfg.MODEL_ALL.ViT_baseline.if_share_encoder_over_modalities
         # module_hooks_dict = {}
-        input_dict_extra = {}
-        output_dict = {}
+        # input_dict_extra = {}
+        # output_dict = {}
 
         # print(input_dict['input_batch_brdf'].shape)
-        input_dict_extra['shared_encoder_outputs'] = forward_vit_ViT(
-            self.opt, self.opt.cfg.MODEL_ALL.ViT_baseline, self.MODEL_ALL.shared_encoder, 
-            input_dict['input_batch_brdf'])
+        # input_dict_extra['shared_encoder_outputs'] = forward_vit_ViT(
+        #     self.opt, self.opt.cfg.MODEL_ALL.ViT_baseline, self.MODEL_ALL.shared_encoder, 
+        #     input_dict['input_batch_brdf'])
+
+        output_dict_model_all = self.MODEL_ALL(input_dict['input_batch_brdf'])
+
+        return_dict = {}
 
         modalities = self.opt.cfg.MODEL_ALL.enable_list
         for modality in modalities:
-            return_dict = self.MODEL_ALL[modality].forward(None, input_dict_extra=input_dict_extra)
-            output_dict.update(return_dict)
+            # vit_out = self.MODEL_ALL[modality].forward(None, input_dict_extra=input_dict_extra)
+            vit_out = output_dict_model_all[modality]
 
-        return output_dict
+            if modality == 'al':
+                albedoPred = 0.5 * (vit_out + 1)
+                input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
+                albedoPred = torch.clamp(albedoPred, 0, 1)
+                albedoPred_aligned = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
+                        input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
+                albedoPred_aligned = torch.clamp(albedoPred_aligned, 0, 1)
+                return_dict.update({'albedoPred': albedoPred, 'albedoPred_aligned': albedoPred_aligned})
+            elif modality == 'de':
+                depthPred = vit_out
+                depthPred_aligned = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
+                        input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
+                return_dict.update({'depthPred': depthPred, 'depthPred_aligned': depthPred_aligned})
+            elif modality == 'ro':
+                roughPred = vit_out
+                return_dict.update({'roughPred': roughPred})
+            elif modality == 'no':
+                normalPred = vit_out
+                return_dict.update({'normalPred': normalPred})
+            elif modality == 'lo':
+                # return_dict.update({'layout_est_result': vit_out})
+                return_dict.update(vit_out) # {'layout_est_result':...
+            else:
+                assert False, 'Unsupported modality: %s'%modality
+
+        return return_dict
 
     def print_net(self):
         count_grads = 0

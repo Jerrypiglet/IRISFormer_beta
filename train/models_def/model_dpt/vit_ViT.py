@@ -96,14 +96,21 @@ def _resize_pos_embed(self, posemb, gs_h, gs_w): # original at https://github.co
 
     return posemb
 
-def forward_vit_ViT(opt, cfg_DPT, pretrained, x):
-    x_out, extra_output_dict = pretrained.model.forward_flex(opt, cfg_DPT, x)
+def forward_vit_ViT_encoder(opt, cfg_DPT, pretrained, x):
+    x_out = pretrained.model.forward_flex(opt, cfg_DPT, x)
 
     layer_1 = pretrained.activations["1"]
     layer_2 = pretrained.activations["2"]
     
     return x_out, (layer_1, layer_2)
 
+def forward_vit_ViT_decoder(opt, cfg_DPT, pretrained, x):
+    x_out = pretrained.model.forward_flex(opt, cfg_DPT, x)
+
+    layer_1 = pretrained.activations["1"]
+    layer_2 = pretrained.activations["2"]
+    
+    return x_out, (layer_1, layer_2)
 
 def forward_flex_encoder(self, opt, cfg_DPT, x):
     b, c, h, w = x.shape
@@ -148,7 +155,7 @@ def forward_flex_encoder(self, opt, cfg_DPT, x):
         x = blk(x)
         
 
-    return x, {}
+    return x
 
 def forward_flex_decoder(self, opt, cfg_DPT, x):
     for idx, blk in enumerate(self.blocks):
@@ -157,7 +164,7 @@ def forward_flex_decoder(self, opt, cfg_DPT, x):
 
     x = self.norm(x)
 
-    return x, {}
+    return x
 
 def _make_vit_b_rn50_backbone_ViT(
     cfg_DPT, 
@@ -166,15 +173,25 @@ def _make_vit_b_rn50_backbone_ViT(
     vit_features=768,
     start_index=1,
     enable_attention_hooks=False,
-    if_transformer_only=False
+    if_decoder=False
 ):
     pretrained = nn.Module()
 
     pretrained.model = model
     
-    assert len(hooks) == 2, 'Only 2 hooks supported'
-    pretrained.model.blocks[hooks[0]].register_forward_hook(get_activation("1"))
-    pretrained.model.blocks[hooks[1]].register_forward_hook(get_activation("2"))
+    if if_decoder:
+        assert len(hooks) == 2, 'Only 2 hooks supported'
+        pretrained.model.blocks[hooks[0]].register_forward_hook(get_activation("1"))
+        pretrained.model.blocks[hooks[1]].register_forward_hook(get_activation("2"))
+    else:
+        # DPT-hybrid setting
+        pretrained.model.patch_embed.backbone.stages[0].register_forward_hook(
+            get_activation("1")
+        )
+        pretrained.model.patch_embed.backbone.stages[1].register_forward_hook(
+            get_activation("2")
+        )
+
     # pretrained.model.blocks[hooks[2]].register_forward_hook(get_activation("3"))
     # pretrained.model.blocks[hooks[3]].register_forward_hook(get_activation("4"))
 
@@ -192,7 +209,7 @@ def _make_vit_b_rn50_backbone_ViT(
     pretrained.model.patch_size = [cfg_DPT.patch_size]*2
     # We inject this function into the VisionTransformer instances so that
     # we can use it with interpolated position embeddings without modifying the library source.
-    if if_transformer_only:
+    if if_decoder:
         pretrained.model.forward_flex = types.MethodType(forward_flex_decoder, pretrained.model)
     else:
         pretrained.model.forward_flex = types.MethodType(forward_flex_encoder, pretrained.model)
@@ -213,9 +230,9 @@ def _make_pretrained_vitb_rn50_384_ViT(
     num_layers=8, 
     enable_attention_hooks=False,
     in_chans=3, 
-    if_transformer_only=False
+    if_decoder=False
 ):
-    print('========= [_make_pretrained_vitb_rn50_384] pretrained', pretrained, if_transformer_only) # /home/ruizhu/anaconda3/envs/py38/lib/python3.8/site-packages/timm/models/vision_transformer.py, L570
+    print('========= [_make_pretrained_vitb_rn50_384] pretrained', pretrained, if_decoder) # /home/ruizhu/anaconda3/envs/py38/lib/python3.8/site-packages/timm/models/vision_transformer.py, L570
 
     model = timm.create_model("vit_base_resnet50_384", pretrained=pretrained, in_chans=in_chans)
 
@@ -231,13 +248,13 @@ def _make_pretrained_vitb_rn50_384_ViT(
         # size=[384, 384],
         hooks=hooks,
         enable_attention_hooks=enable_attention_hooks,
-        if_transformer_only=if_transformer_only
+        if_decoder=if_decoder
     )
 
     # model_re.model.norm = nn.Identity()
     model_re.model.head = nn.Identity()
     
-    if if_transformer_only:
+    if if_decoder:
         # model_rere = nn.Module()
         # model_rere.model = nn.Module()
         # model_rere.model.blocks = model_re.model.blocks

@@ -1014,9 +1014,16 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
 
                         if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
                             output_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'layout') + '.png')
-                            fig_2d, _ = scene_box.draw_projected_layout(draw_mode, return_plt=True, if_use_plt=True) # with plt plotting
-                            fig_2d.savefig(str(output_path))
-                            plt.close(fig_2d)
+                            fig_2d, ax_2d, _ = scene_box.draw_projected_layout(draw_mode, return_plt=True, if_use_plt=True) # with plt plotting
+                            # fig_2d.savefig(str(output_path))
+                            # plt.close(fig_2d)
+                            fig_2d.tight_layout(pad=0)
+                            ax_2d.margins(0) # To remove the huge white borders
+                            fig_2d.canvas.draw()
+                            image_from_plot = np.frombuffer(fig_2d.canvas.tostring_rgb(), dtype=np.uint8)
+                            image_from_plot = image_from_plot.reshape(fig_2d.canvas.get_width_height()[::-1] + (3,))
+                            writer.add_image('VAL_layout_PRED/%d'%(sample_idx), image_from_plot, tid, dataformats='HWC')
+
                             
                         pickle_save_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'layout_info') + '.pickle')
                         save_dict = {'rgb_img_path': data_batch['image_path'][sample_idx_batch],  'bins_tensor': opt.bins_tensor}

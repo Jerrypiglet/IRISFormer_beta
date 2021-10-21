@@ -24,7 +24,7 @@ def set_up_envs(opt):
     opt.cfg.PATH.root = opt.cfg.PATH.root_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.PATH.root_local
     if opt.if_cluster:
         # opt.cfg.TRAINING.MAX_CKPT_KEEP = -1
-        opt.if_save_pickles = True
+        opt.if_save_pickles = False
 
     if opt.cfg.DATASET.if_quarter and not opt.if_cluster:
         opt.cfg.DATASET.dataset_path_local = opt.cfg.DATASET.dataset_path_local_quarter
@@ -128,12 +128,17 @@ def set_up_envs(opt):
         opt.resize_op = transform.Resize_flexible((im_width_resize_to, im_height_resize_to))
 
     # ====== MODEL_ALL =====
+    if opt.cfg.MODEL_ALL.ViT_baseline.if_share_pretrained_over_BRDF_modalities:
+        assert opt.cfg.MODEL_ALL.ViT_baseline.if_share_decoder_over_BRDF_modalities
     opt.cfg.MODEL_ALL.enable_list = [x for x in opt.cfg.MODEL_ALL.enable_list.split('_') if x != '']
     if opt.cfg.MODEL_ALL.enable:
         opt.cfg.DATA.load_brdf_gt = True
         if 'lo' in opt.cfg.MODEL_ALL.enable_list:
             opt.cfg.MODEL_LAYOUT_EMITTER.enable = True
             opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = list(set(opt.cfg.MODEL_LAYOUT_EMITTER.enable_list_allowed) & set(opt.cfg.MODEL_ALL.enable_list))
+        if any(x in opt.cfg.MODEL_ALL.enable_list for x in ['al', 'ro', 'de', 'no'] if x != ''):
+            opt.cfg.MODEL_BRDF.enable = True
+            opt.cfg.MODEL_BRDF.enable_list = list(set(opt.cfg.MODEL_BRDF.enable_list_allowed) & set(opt.cfg.MODEL_ALL.enable_list))
 
     # ====== GMM =====
     if opt.cfg.MODEL_GMM.enable:
@@ -151,7 +156,8 @@ def set_up_envs(opt):
 
 
     # ====== BRDF =====
-    opt.cfg.MODEL_BRDF.enable_list = [x for x in opt.cfg.MODEL_BRDF.enable_list.split('_') if x != '']
+    if isinstance(opt.cfg.MODEL_BRDF.enable_list, str):
+        opt.cfg.MODEL_BRDF.enable_list = [x for x in opt.cfg.MODEL_BRDF.enable_list.split('_') if x != '']
     opt.cfg.MODEL_BRDF.loss_list = [x for x in opt.cfg.MODEL_BRDF.loss_list.split('_') if x != '']
 
     assert opt.cfg.MODEL_BRDF.depth_activation in ['sigmoid', 'relu', 'midas']

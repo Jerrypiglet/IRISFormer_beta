@@ -226,8 +226,8 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
                     invd_gt = 1./(input_dict['depthBatch'].squeeze(1)+1.)
                     loss = midas_loss_func(invd_pred, invd_gt, mask=input_dict['segAllBatch'].squeeze())
                 else:
-                    print('-', torch.max(input_dict['depthBatch']), torch.min(input_dict['depthBatch']), torch.median(input_dict['depthBatch']))
-                    print('--', torch.max(depthPreds[n]), torch.min(depthPreds[n]), torch.median(depthPreds[n]))
+                    print('-depth gt', torch.max(input_dict['depthBatch']), torch.min(input_dict['depthBatch']), torch.median(input_dict['depthBatch']))
+                    print('--depth pred', torch.max(depthPreds[n]), torch.min(depthPreds[n]), torch.median(depthPreds[n]))
 
                     loss =  torch.sum( (torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) )
                         * ( torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum 

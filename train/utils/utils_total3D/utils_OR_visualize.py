@@ -1514,9 +1514,9 @@ class Box(Scene3D):
                 print("[draw_projected_layout] Returned.")
             if if_use_plt:
                 if fig_or_ax is None:
-                    return fig_2d, bdb2D_from_3D
+                    return fig_2d, ax_2d, bdb2D_from_3D
                 else:
-                    return ax_2d, bdb2D_from_3D
+                    return None, ax_2d, bdb2D_from_3D
             else:
                 return img_map, bdb2D_from_3D
         else:

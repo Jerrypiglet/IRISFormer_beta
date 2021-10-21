@@ -249,6 +249,7 @@ _C.MODEL_BRDF.DPT_baseline = CN()
 _C.MODEL_BRDF.DPT_baseline.enable = False
 _C.MODEL_BRDF.DPT_baseline.if_share_patchembed = False
 _C.MODEL_BRDF.DPT_baseline.if_share_pretrained = False
+_C.MODEL_BRDF.DPT_baseline.if_share_decoder_over_heads = True # [always True] used in constructing MODEL_ALL (ViT); currently treating each modality (e.g. albedo, roughness) as one decoder with one head
 
 _C.MODEL_BRDF.DPT_baseline.if_SGD = False
 _C.MODEL_BRDF.DPT_baseline.if_pos_embed = False
@@ -619,6 +620,8 @@ _C.MODEL_ALL.ViT_baseline.readout = 'project'
 _C.MODEL_ALL.ViT_baseline.if_imagenet_backbone = True
 _C.MODEL_ALL.ViT_baseline.patch_size = 16
 _C.MODEL_ALL.ViT_baseline.if_share_encoder_over_modalities = True
+_C.MODEL_ALL.ViT_baseline.if_share_decoder_over_BRDF_modalities = False
+_C.MODEL_ALL.ViT_baseline.if_share_pretrained_over_BRDF_modalities = False
 # _C.MODEL_ALL.ViT_baseline.if_share_decoder_over_heads = False # e.g. for layout estimation there are two heads: cam, lo. Set to True to use indept encoder for each
 _C.MODEL_ALL.ViT_baseline.if_indept_MLP_heads = False
 _C.MODEL_ALL.ViT_baseline.if_indept_MLP_heads_if_layer_norm = False

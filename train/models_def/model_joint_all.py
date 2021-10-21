@@ -43,7 +43,7 @@ from models_def.model_dpt.transforms import NormalizeImage as dpt_NormalizeImage
 from models_def.model_dpt.transforms import PrepareForNet as dpt_PrepareForNet
 
 from models_def.model_dpt.models_ViT import get_LayoutNet_ViT
-from models_def.model_dpt.blocks_ViT import forward_vit_ViT
+from models_def.model_dpt.blocks_ViT import forward_vit_ViT_encoder
 from torchvision.transforms import Compose
 import cv2
 import time
@@ -611,7 +611,7 @@ class Model_Joint(nn.Module):
                         return_dicts = {}
 
                         # print(input_dict['input_batch_brdf'].shape)
-                        input_dict_extra['shared_encoder_outputs'] = forward_vit_ViT(
+                        input_dict_extra['shared_encoder_outputs'] = forward_vit_ViT_encoder(
                             self.opt, self.opt.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline, self.LAYOUT_EMITTER_NET.shared_encoder, 
                             input_dict['input_batch_brdf'])
 

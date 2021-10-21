@@ -601,13 +601,13 @@ class decoder0(nn.Module):
         # torch.Size([2, 1024, 7, 10]) torch.Size([2, 512, 7, 10]) torch.Size([2, 256, 15, 20]) torch.Size([2, 256, 30, 40]) torch.Size([2, 128, 60, 80]) torch.Size([2, 64, 120, 160]) torch.Size([2, 64, 240, 320]) torch.Size([2, 3, 240, 320])
 
 
-        if self.mode == 0:
+        if self.mode == 0: # modality='al'
             x_out = torch.clamp(1.01 * torch.tanh(x_orig ), -1, 1)
-        elif self.mode == 1:
+        elif self.mode == 1: # modality='no'
             x_orig = torch.clamp(1.01 * torch.tanh(x_orig ), -1, 1)
             norm = torch.sqrt(torch.sum(x_orig * x_orig, dim=1).unsqueeze(1) ).expand_as(x_orig)
             x_out = x_orig / torch.clamp(norm, min=1e-6)
-        elif self.mode == 2:
+        elif self.mode == 2: # modality='ro'
             x_orig = torch.clamp(1.01 * torch.tanh(x_orig ), -1, 1)
             x_out = torch.mean(x_orig, dim=1).unsqueeze(1)
         elif self.mode == 3:

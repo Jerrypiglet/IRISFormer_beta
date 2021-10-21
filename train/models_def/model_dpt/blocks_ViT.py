@@ -5,7 +5,12 @@ from .vit_ViT import (
     _make_pretrained_vitb_rn50_384_ViT,
     # _make_pretrained_vitl16_384,
     # _make_pretrained_vitb16_384,
-    forward_vit_ViT,
+    forward_vit_ViT_encoder,
+    forward_vit_ViT_decoder,
+)
+from .vit import (
+    get_readout_oper, 
+    Transpose
 )
 
 
@@ -50,7 +55,7 @@ def _make_decoder_ViT(
             hooks=hooks,
             enable_attention_hooks=enable_attention_hooks,
             in_chans=in_chans, 
-            if_transformer_only=True
+            if_decoder=True
         )
     else:
         print(f"Backbone '{backbone}' not implemented")
@@ -80,3 +85,55 @@ class MLP(nn.Module):
             if self.if_layer_norm and i < self.num_layers - 1:
                 x = self.layer_norms[i](x)
         return x
+
+def _make_pretrained(
+        size=[384, 384],
+        features=[256, 512, 768, 768],
+        vit_features=768,
+        use_readout="ignore",
+        start_index=1,
+    ):
+    readout_oper = get_readout_oper(vit_features, features, use_readout, start_index)
+
+    pretrained = nn.Module()
+    pretrained.act_postprocess1 = nn.Sequential(
+        nn.Identity(), nn.Identity(), nn.Identity()
+    )
+    pretrained.act_postprocess2 = nn.Sequential(
+        nn.Identity(), nn.Identity(), nn.Identity()
+    )
+    
+    pretrained.act_postprocess3 = nn.Sequential(
+        readout_oper[2],
+        Transpose(1, 2),
+        nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
+        nn.Conv2d(
+            in_channels=vit_features,
+            out_channels=features[2],
+            kernel_size=1,
+            stride=1,
+            padding=0,
+        ),
+    )
+
+    pretrained.act_postprocess4 = nn.Sequential(
+        readout_oper[3],
+        Transpose(1, 2),
+        nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
+        nn.Conv2d(
+            in_channels=vit_features,
+            out_channels=features[3],
+            kernel_size=1,
+            stride=1,
+            padding=0,
+        ),
+        nn.Conv2d(
+            in_channels=features[3],
+            out_channels=features[3],
+            kernel_size=3,
+            stride=2,
+            padding=1,
+        ),
+    )
+
+    return pretrained
