@@ -196,7 +196,7 @@ class ModelAll_ViT(torch.nn.Module):
             for modality in modalities:
                 module_dict[modality].encoder = nn.Identity()
 
-        if any([x in ['al', 'no', 'de', 'ro'] for x in list(head_names_dict.keys())]):
+        if any([x in ['al', 'no', 'de', 'ro'] for x in modalities]):
             modalities_BRDF = list(set(['al', 'no', 'de', 'ro']) & set(modalities))
             if opt.cfg.MODEL_ALL.ViT_baseline.if_share_decoder_over_BRDF_modalities:
                 module_dict['shared_BRDF_decoder'] = module_dict[modalities_BRDF[0]].decoder
