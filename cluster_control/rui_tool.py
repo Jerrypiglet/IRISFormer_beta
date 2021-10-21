@@ -195,8 +195,11 @@ def create(args):
             s_split.pop(start_index)
         insert_index = s_split.index('--if_cluster')
         s_split.insert(insert_index+1, '--reset_latest_ckpt')
+        s_split.insert(insert_index+1, '--resume resume')
         command_str = ' '.join(s_split)
+        command_str = command_str.replace('&& &&', '&&')
         yaml_content['spec']['template']['spec']['containers'][0]['args'][0] = command_str
+
         tmp_yaml_filaname = tmp_yaml_filaname.replace('.yaml', '-RE.yaml')
         dump_yaml(tmp_yaml_filaname, yaml_content)
         print('============ YAML file dumped to %s'%tmp_yaml_filaname)

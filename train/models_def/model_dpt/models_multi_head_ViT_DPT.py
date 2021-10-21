@@ -311,7 +311,9 @@ class DPTBRDFModel(Transformer_Hybrid_Encoder_Decoder):
             nn.BatchNorm2d(32) if self.if_batch_norm else nn.Identity(),
             nn.ReLU(True),
             nn.Conv2d(32, self.out_channels, kernel_size=1, stride=1, padding=0),
-            nn.ReLU(True) if non_negative else nn.Identity(),
+            # nn.ReLU(True) if non_negative else nn.Identity(),
+            nn.Tanh() if non_negative else nn.Identity(),
+
         )
         self.scratch.output_conv = output_head
 
@@ -384,6 +386,8 @@ class DPTBRDFModel(Transformer_Hybrid_Encoder_Decoder):
         elif self.modality == 'de':
             '''
             where x_out is disparity (inversed * baseline)'''
+            print(torch.max(x_out), torch.min(x_out), torch.median(x_out))
+            x_out = 0.5 * (x_out + 1) # [-1, 1] -> [0, 1]
             x_out = self.scale * x_out + self.shift
             x_out[x_out < 1e-8] = 1e-8
             x_out = 1.0 / x_out
