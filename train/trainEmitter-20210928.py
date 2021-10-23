@@ -677,7 +677,7 @@ else:
                     loss_keys_print.append('loss_semseg-aux') 
 
             if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
-                if not opt.cfg.MODEL_BRDF.if_freeze:
+                if not (opt.cfg.MODEL_BRDF.if_freeze or opt.cfg.MODEL_LIGHT.freeze_BRDF_Net):
                     loss_keys_backward.append('loss_brdf-ALL')
                     loss_keys_print.append('loss_brdf-ALL')
                 if 'al' in opt.cfg.MODEL_BRDF.enable_list and 'al' in opt.cfg.MODEL_BRDF.loss_list:

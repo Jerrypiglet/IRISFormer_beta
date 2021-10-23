@@ -139,6 +139,11 @@ def set_up_envs(opt):
         if any(x in opt.cfg.MODEL_ALL.enable_list for x in ['al', 'ro', 'de', 'no'] if x != ''):
             opt.cfg.MODEL_BRDF.enable = True
             opt.cfg.MODEL_BRDF.enable_list = list(set(opt.cfg.MODEL_BRDF.enable_list_allowed) & set(opt.cfg.MODEL_ALL.enable_list))
+        if 'li' in opt.cfg.DATA.data_read_list:
+            opt.cfg.DATA.load_light_gt = True
+            opt.cfg.MODEL_LIGHT.enable = True
+            opt.cfg.MODEL_LIGHT.use_GT_brdf = True
+        
 
     # ====== GMM =====
     if opt.cfg.MODEL_GMM.enable:

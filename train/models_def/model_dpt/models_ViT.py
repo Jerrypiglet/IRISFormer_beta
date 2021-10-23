@@ -44,9 +44,9 @@ class ViT(BaseModel):
         assert self.N_layers_encoder in [4, 6, 8]
         assert self.N_layers_decoder in [4, 6, 8]
         self.output_hooks_dict = {
-            "4": [0, 1, 2, 3],
-            "6": [0, 1, 3, 5],
-            "8": [0, 1, 4, 7],
+            # "4": [0, 1, 2, 3],
+            "6": [[0, 1], [3, 5]],
+            # "8": [0, 1, 4, 7],
             # "12": [0, 1, 8, 11],
         }
 
@@ -56,7 +56,7 @@ class ViT(BaseModel):
             backbone = backbone,
             use_pretrained = if_imagenet_backbone,  # Set to true of you want to train from scratch, uses ImageNet weights
             num_layers = int(self.N_layers_encoder), 
-            hooks = self.output_hooks_dict[str(self.N_layers_encoder)],
+            hooks = self.output_hooks_dict[str(self.N_layers_encoder)][0],
             enable_attention_hooks = enable_attention_hooks,
             in_chans = in_chans
         )
@@ -67,7 +67,7 @@ class ViT(BaseModel):
                 backbone = backbone,
                 use_pretrained = if_imagenet_backbone,  # Set to true of you want to train from scratch, uses ImageNet weights
                 num_layers = int(self.N_layers_decoder), 
-                hooks = self.output_hooks_dict[str(self.N_layers_decoder)],
+                hooks = self.output_hooks_dict[str(self.N_layers_decoder)][1],
                 enable_attention_hooks = enable_attention_hooks,
                 in_chans = in_chans, 
             )
@@ -80,7 +80,7 @@ class ViT(BaseModel):
                     backbone = backbone,
                     use_pretrained = if_imagenet_backbone,  # Set to true of you want to train from scratch, uses ImageNet weights
                     num_layers = int(self.N_layers_decoder), 
-                    hooks = self.output_hooks_dict[str(self.N_layers_decoder)],
+                    hooks = self.output_hooks_dict[str(self.N_layers_decoder)][1],
                     enable_attention_hooks = enable_attention_hooks,
                     in_chans = in_chans, 
                 )
@@ -94,16 +94,16 @@ class ViT(BaseModel):
         #     x.contiguous(memory_format=torch.channels_last)
         
         if self.cfg_ViT.if_share_encoder_over_modalities:
-            _, _, _, layer_4_encoder = input_dict_extra['shared_encoder_outputs']
+            x_out_encoder, (_, _) = input_dict_extra['shared_encoder_outputs']
         else:
-            _, _, _, layer_4_encoder = forward_vit_ViT_encoder(self.opt, self.cfg_ViT, self.encoder, x)
+            x_out_encoder, (_, _) = forward_vit_ViT_encoder(self.opt, self.cfg_ViT, self.encoder, x)
     
         # print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape) # torch.Size([16, 301, 768]) torch.Size([16, 301, 768]) torch.Size([16, 301, 768]) torch.Size([16, 301, 768])
 
         if self.cfg_ViT.if_share_decoder_over_heads:
             # x = self.decoder()
-            _, _, _, layer_4_decoder = forward_vit_ViT_decoder(self.opt, self.cfg_ViT, self.decoder, layer_4_encoder)
-            x = layer_4_decoder
+            x_out_decoder, (_, _) = forward_vit_ViT_decoder(self.opt, self.cfg_ViT, self.decoder, x_out_encoder)
+            x = x_out_decoder
             # print(x.shape)
             x = x.mean(dim = 1) if self.pool == 'mean' else x[:, 0]
             # print(x.shape)
@@ -111,8 +111,8 @@ class ViT(BaseModel):
         else:
             return_dict = {}
             for head_name in self.head_names:
-                _, _, _, layer_4_decoder = forward_vit_ViT_decoder(self.opt, self.cfg_ViT, self.decoder[head_name], layer_4_encoder)
-                x = layer_4_decoder
+                x_out_decoder, (_, _) = forward_vit_ViT_decoder(self.opt, self.cfg_ViT, self.decoder[head_name], x_out_encoder)
+                x = x_out_decoder
                 # print(x.shape)
                 x = x.mean(dim = 1) if self.pool == 'mean' else x[:, 0]
                 # print(x.shape)
@@ -123,7 +123,7 @@ class ViT(BaseModel):
 def get_LayoutNet_ViT(opt, backbone, N_layers_encoder, N_layers_decoder, modalities=[]):
     assert all([x in ['lo', 'ob'] for x in modalities])
     head_names_dict = {
-        'lo': ['cam', 'lo'
+        'lo': ['camera', 'layout'
             # 'pitch_reg', 
             # 'roll_reg', 
             # 'pitch_cls', 
@@ -150,7 +150,7 @@ def get_LayoutNet_ViT(opt, backbone, N_layers_encoder, N_layers_decoder, modalit
             N_layers_encoder=N_layers_encoder, 
             N_layers_decoder=N_layers_decoder, 
             head_names=head_names_dict[modality], 
-            pool=opt.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.pool
+            pool=opt.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.ViT_pool
         )
 
     if opt.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_share_encoder_over_modalities:
@@ -311,7 +311,7 @@ class decoder_layout_emitter_heads(nn.Module):
         return_dict_layout = {}
         if self.if_layout:
             # branch for camera parameters
-            cam = self.fc_layout_1(x['cam'] if self.if_two_decoders else x)
+            cam = self.fc_layout_1(x['camera'] if self.if_two_decoders else x)
             cam = self.relu_layout_1(cam)
             cam = self.dropout_layout_1(cam)
             cam = self.fc_layout_2(cam)
@@ -321,7 +321,7 @@ class decoder_layout_emitter_heads(nn.Module):
             roll_cls = cam[:, self.PITCH_BIN * 2 + self.ROLL_BIN: self.PITCH_BIN * 2 + self.ROLL_BIN * 2]
 
             # branch for layout orientation, centroid and coefficients
-            lo = self.fc_layout_layout(x['lo'] if self.if_two_decoders else x)
+            lo = self.fc_layout_layout(x['layout'] if self.if_two_decoders else x)
             lo = self.relu_layout_1(lo)
             lo = self.dropout_layout_1(lo)
             # branch for layout orientation

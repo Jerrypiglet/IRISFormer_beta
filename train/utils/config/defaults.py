@@ -184,7 +184,7 @@ _C.DATA.load_masks = False
 _C.DATA.load_light_gt = False
 _C.DATA.load_layout_emitter_gt = False
 _C.DATA.data_read_list = ''
-_C.DATA.data_read_list_allowed = ['al', 'no', 'de', 'ro', \
+_C.DATA.data_read_list_allowed = ['al', 'no', 'de', 'ro', 'li', \
     'lo', 'em', 'ob', 'mesh']
 _C.DATA.load_matcls_gt = False
 _C.DATA.load_detectron_gt = False
@@ -406,6 +406,8 @@ _C.MODEL_LIGHT.DPT_baseline.enable_as_single_est = False
 _C.MODEL_LIGHT.DPT_baseline.enable_as_single_est_modality = 'weight'
 _C.MODEL_LIGHT.DPT_baseline.enable_as_single_est_freeze_LightNet = False
 
+_C.MODEL_LIGHT.DPT_baseline.if_share_decoder_over_heads = True # [always True] used in constructing MODEL_ALL (ViT); currently treating each modality (e.g. albedo, roughness) as one decoder with one head
+
 _C.MODEL_LIGHT.DPT_baseline.dpt_hybrid = CN() # share with MODEL_BRDF
 
 _C.MODEL_LIGHT.DPT_baseline.swin = CN()
@@ -619,7 +621,8 @@ _C.MODEL_ALL.ViT_baseline.if_pos_embed = True
 _C.MODEL_ALL.ViT_baseline.readout = 'project'
 _C.MODEL_ALL.ViT_baseline.if_imagenet_backbone = True
 _C.MODEL_ALL.ViT_baseline.patch_size = 16
-_C.MODEL_ALL.ViT_baseline.if_share_encoder_over_modalities = True
+_C.MODEL_ALL.ViT_baseline.if_share_encoder_over_modalities_stage0 = True # brdf + lo
+_C.MODEL_ALL.ViT_baseline.if_share_encoder_over_modalities_stage1 = True # lightnet
 _C.MODEL_ALL.ViT_baseline.if_share_decoder_over_BRDF_modalities = False
 _C.MODEL_ALL.ViT_baseline.if_share_pretrained_over_BRDF_modalities = False
 # _C.MODEL_ALL.ViT_baseline.if_share_decoder_over_heads = False # e.g. for layout estimation there are two heads: cam, lo. Set to True to use indept encoder for each
