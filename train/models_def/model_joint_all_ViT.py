@@ -1,3 +1,4 @@
+from math import e
 import torch
 import torch.nn as nn
 
@@ -137,7 +138,11 @@ class Model_Joint_ViT(nn.Module):
                 albedoPred_aligned = torch.clamp(albedoPred_aligned, 0, 1)
                 return_dict.update({'albedoPred': albedoPred, 'albedoPred_aligned': albedoPred_aligned})
             elif modality == 'de':
-                depthPred = vit_out
+                if self.opt.cfg.MODEL_BRDF.loss.depth.if_use_Zhengqin_loss:
+                    depthPred = vit_out
+                elif self.opt.cfg.MODEL_BRDF.loss.depth.if_use_midas_loss:
+                    return_dict.update({'depthInvPred': vit_out})
+                    depthPred = 1. / (vit_out + 1e-8)
                 depthPred_aligned = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
                         input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
                 return_dict.update({'depthPred': depthPred, 'depthPred_aligned': depthPred_aligned})

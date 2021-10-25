@@ -164,3 +164,24 @@ def make_dataset(opt, split, task, data_root=None, data_list=None, logger=None):
 
     else:
         return image_label_list, meta_split_scene_name_frame_id_list, all_scenes
+
+def make_dataset_real(opt, data_root, data_list, logger=None):
+    split = 'test_real'
+
+    if not os.path.isfile(data_list):
+        raise (RuntimeError("Image list file do not exist: " + data_list + "\n"))
+    if logger is None:
+        logger = basic_logger()
+
+    list_read = open(data_list).readlines()
+    logger.info("Totally {} samples in {} set.".format(len(list_read), split))
+    logger.info("Starting Checking image&label pair {} list...".format(split))
+
+    image_list = []
+    for line in list_read:
+        line = line.strip()
+        image_path = Path(data_root) / line
+        image_list.append(image_path)
+
+    return image_list
+

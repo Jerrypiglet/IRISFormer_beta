@@ -26,6 +26,9 @@ def set_up_envs(opt):
         # opt.cfg.TRAINING.MAX_CKPT_KEEP = -1
         opt.if_save_pickles = False
 
+    # if opt.cfg.DEBUG.if_test_real:
+        
+
     if opt.cfg.DATASET.if_quarter and not opt.if_cluster:
         opt.cfg.DATASET.dataset_path_local = opt.cfg.DATASET.dataset_path_local_quarter
     opt.cfg.DATASET.dataset_path = opt.cfg.DATASET.dataset_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.dataset_path_local
@@ -118,14 +121,16 @@ def set_up_envs(opt):
         pad_option = opt.cfg.DATA.pad_option
         assert pad_option in ['const', 'reflect']
         opt.if_pad = True
-        opt.pad_op = transform.Pad([im_height_pad_to, im_width_pad_to], padding_with=im_pad_with, pad_option=pad_option)
+        if not opt.cfg.DEBUG.if_test_real: # if True, should pad indeptly for each sample
+            opt.pad_op = transform.Pad([im_height_pad_to, im_width_pad_to], padding_with=im_pad_with, pad_option=pad_option)
         opt.cfg.DATA.im_width_padded = im_width_pad_to
         opt.cfg.DATA.im_height_padded = im_height_pad_to
     if opt.cfg.DATA.if_resize_to_32x:
         im_width_resize_to = int(np.ceil(opt.cfg.DATA.im_width/32.)*32)
         im_height_resize_to = int(np.ceil(opt.cfg.DATA.im_height/32.)*32)
         opt.if_resize = True
-        opt.resize_op = transform.Resize_flexible((im_width_resize_to, im_height_resize_to))
+        if not opt.cfg.DEBUG.if_test_real: # if True, should pad indeptly for each sample
+            opt.resize_op = transform.Resize_flexible((im_width_resize_to, im_height_resize_to))
 
     # ====== MODEL_ALL =====
     if opt.cfg.MODEL_ALL.ViT_baseline.if_share_pretrained_over_BRDF_modalities:
@@ -166,6 +171,8 @@ def set_up_envs(opt):
     opt.cfg.MODEL_BRDF.loss_list = [x for x in opt.cfg.MODEL_BRDF.loss_list.split('_') if x != '']
 
     assert opt.cfg.MODEL_BRDF.depth_activation in ['sigmoid', 'relu', 'midas']
+    assert opt.cfg.MODEL_BRDF.loss.depth.if_use_midas_loss or opt.cfg.MODEL_BRDF.loss.depth.if_use_Zhengqin_loss
+    assert not(opt.cfg.MODEL_BRDF.loss.depth.if_use_midas_loss and opt.cfg.MODEL_BRDF.loss.depth.if_use_Zhengqin_loss)
     
     # ====== DPT =====
     opt.cfg.MODEL_LIGHT.DPT_baseline.dpt_hybrid = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid

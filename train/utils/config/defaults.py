@@ -56,6 +56,7 @@ _C.PATH.pretrained_cluster = ['/ruidata/semanticInverse/pretrained', '/home/ruzh
 
 _C.DEBUG = CN()
 _C.DEBUG.if_dump_anything = False
+_C.DEBUG.if_test_real = False
 _C.DEBUG.if_dump_shadow_renderer = False
 _C.DEBUG.if_dump_perframe_BRDF = False
 
@@ -71,6 +72,9 @@ _C.DATASET.dataset_path_local = '/home/ruizhu/Documents/Projects/semanticInverse
 _C.DATASET.dataset_path_local_quarter = '/ruidata/openrooms_raw_quarter'
 _C.DATASET.dataset_path_cluster = ['/siggraphasia20dataset/code/Routine/DatasetCreation/', '', '/datasets_mount/']
 _C.DATASET.dataset_path_binary = ''
+
+_C.DATASET.real_images_root_path = '/home/ruizhu/Documents/Projects/semanticInverse'
+_C.DATASET.real_images_list_path = 'data/list_real_20.txt'
 
 _C.DATASET.dataset_path_binary_local = '/newfoundland2/ruizhu/ORfull-seq-240x320'
 # _C.DATASET.dataset_path_binary_local = '/newfoundland2/ruizhu/ORfull-seq-240x320-albedoInOneFile'
@@ -235,15 +239,18 @@ _C.MODEL_BRDF.semseg_PPM = True
 _C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240/%s0_13.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
 # _C.MODEL_BRDF.pretrained_pth_name = ''
 _C.MODEL_BRDF.encoder_exclude = '' # e.g. 'x4_x5
-_C.MODEL_BRDF.use_scale_aware_depth = True
-_C.MODEL_BRDF.depth_activation = 'relu'
 _C.MODEL_BRDF.use_scale_aware_albedo = True # [default: False] set to False to use **scale-invariant** loss for albedo
 _C.MODEL_BRDF.loss = CN()
-_C.MODEL_BRDF.loss.if_use_midas_loss_depth = False
 _C.MODEL_BRDF.loss.if_use_reg_loss_depth = False
 _C.MODEL_BRDF.loss.reg_loss_depth_weight = 0.5
 _C.MODEL_BRDF.loss.if_use_reg_loss_albedo = False
 _C.MODEL_BRDF.loss.reg_loss_albedo_weight = 0.5
+
+_C.MODEL_BRDF.use_scale_aware_depth = True
+_C.MODEL_BRDF.depth_activation = 'relu'
+_C.MODEL_BRDF.loss.depth = CN() # ONLY works for MODEL_ALL (DPT) for now
+_C.MODEL_BRDF.loss.depth.if_use_midas_loss = False # DPT: scale-invariant loss on inv depth; relu
+_C.MODEL_BRDF.loss.depth.if_use_Zhengqin_loss = True # tanh + loss on depth
 
 _C.MODEL_BRDF.DPT_baseline = CN()
 _C.MODEL_BRDF.DPT_baseline.enable = False

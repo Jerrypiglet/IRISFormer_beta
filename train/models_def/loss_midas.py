@@ -3,6 +3,7 @@ combine:
 - https://gist.github.com/ranftlr/1d6194db2e1dffa0a50c9b0a9549cbd2
 - https://gist.github.com/dvdhfnr/732c26b61a0e63a0abc8a5d769dbebd0
 '''
+from math import e
 import torch
 import torch.nn as nn
 
@@ -147,7 +148,11 @@ class GradientLoss(nn.Module):
     def forward(self, prediction, target, mask):
         total = 0
 
-        assert len(prediction.shape)==len(target.shape)==4
+        # assert len(prediction.shape)==len(target.shape)==4
+        if len(prediction.shape)==3:
+            prediction = prediction.unsqueeze(1)
+        if len(target.shape)==3:
+            target = target.unsqueeze(1)
         if len(mask.shape)==3:
             mask = mask.unsqueeze(1)
         elif len(mask.shape)!=4:
@@ -166,7 +171,7 @@ class GradientLoss(nn.Module):
 
 
 class ScaleAndShiftInvariantLoss(nn.Module):
-    def __init__(self, alpha=0.5, scales=4, reduction='batch-based', loss_method='TrimmedMAELoss'):
+    def __init__(self, alpha=0.5, scales=4, reduction='batch-based', loss_method='MSELoss', if_scale_aware=False):
         super().__init__()
 
         self.__loss_method = loss_method
@@ -176,8 +181,10 @@ class ScaleAndShiftInvariantLoss(nn.Module):
         self.__regularization_loss = GradientLoss(scales=scales, reduction=reduction)
         self.__alpha = alpha
 
+        self.if_scale_aware = if_scale_aware
 
-        self.__prediction_ssi = None
+
+        # self.__prediction_ssi = None
 
     def forward(self, prediction, target, mask=None):
         assert len(prediction.shape)==3
@@ -187,27 +194,31 @@ class ScaleAndShiftInvariantLoss(nn.Module):
         if mask is None:
             mask = torch.ones_like(target, dtype=target.dtype).cuda()
             
-        print(prediction.shape, torch.mean(prediction), torch.median(prediction), torch.max(prediction), torch.min(prediction))
-        print(target.shape, torch.mean(target), torch.median(target), torch.max(target), torch.min(target))
-        print(mask.shape, torch.mean(mask), torch.median(mask), torch.max(mask), torch.min(mask))
+        # print(prediction.shape, torch.mean(prediction), torch.median(prediction), torch.max(prediction), torch.min(prediction))
+        # print(target.shape, torch.mean(target), torch.median(target), torch.max(target), torch.min(target))
+        # print(mask.shape, torch.mean(mask), torch.median(mask), torch.max(mask), torch.min(mask))
 
         if self.__loss_method =='MSELoss':
-            scale, shift = compute_scale_and_shift(prediction, target, mask)
-            # print(scale)
-            # print(shift)
-            self.__prediction_ssi = scale.view(-1, 1, 1) * prediction + shift.view(-1, 1, 1)
-            total = self.__data_loss(self.__prediction_ssi, target, mask)
+            if self.if_scale_aware:
+                scale, shift = compute_scale_and_shift(prediction, target, mask)
+                # print(scale)
+                # print(shift)
+                __prediction_ssi = scale.view(-1, 1, 1) * prediction + shift.view(-1, 1, 1)
+            else:
+                __prediction_ssi = prediction
+            total = self.__data_loss(__prediction_ssi, target, mask)
         elif self.__loss_method == 'TrimmedMAELoss':
-            self.__prediction_ssi = normalize_prediction_robust(prediction, mask)
+            assert not self.if_scale_aware
+            __prediction_ssi = normalize_prediction_robust(prediction, mask)
             target_ = normalize_prediction_robust(target, mask)
-            total = self.__data_loss(self.__prediction_ssi, target_, mask)
+            total = self.__data_loss(__prediction_ssi, target_, mask)
 
         if self.__alpha > 0:
-            total += self.__alpha * self.__regularization_loss(self.__prediction_ssi, target, mask)
+            total += self.__alpha * self.__regularization_loss(__prediction_ssi, target, mask)
 
         return total
 
-    def __get_prediction_ssi(self):
-        return self.__prediction_ssi
+    # def __get_prediction_ssi(self):
+    #     return self.__prediction_ssi
 
-    prediction_ssi = property(__get_prediction_ssi)
+    # prediction_ssi = property(__get_prediction_ssi)

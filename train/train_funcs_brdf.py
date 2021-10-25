@@ -208,22 +208,28 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
 
         if 'de' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
             depthPreds = []
+            depthInvPreds = []
             if opt.cfg.MODEL_BRDF.use_scale_aware_depth:
                 depthPred = output_dict['depthPred']
             else:
                 depthPred = output_dict['depthPred_aligned']
 
+            if opt.cfg.MODEL_BRDF.loss.depth.if_use_midas_loss:
+                depthInvPred = output_dict['depthInvPred']
+
             depthPreds.append(depthPred )
             # if (not opt.cfg.DATASET.if_no_gt_semantics):
             loss_dict['loss_brdf-depth'] = []
             for n in range(0, len(depthPreds ) ):
-                if opt.cfg.MODEL_BRDF.loss.if_use_midas_loss_depth:
+                if opt.cfg.MODEL_BRDF.loss.depth.if_use_midas_loss:
+                    assert opt.cfg.MODEL_ALL.ViT_baseline.enable, 'only works for MODEL_ALL (DPT) for now, which predicts inverse depth'
                     # alpha = 0.5 if (tid!=-1 and tid>100) else 0.
                     # alpha = 0.
                     alpha = 0.5
-                    midas_loss_func = ScaleAndShiftInvariantLoss(alpha=alpha)
-                    invd_pred = 1./(depthPreds[n].squeeze(1)+1.)
-                    invd_gt = 1./(input_dict['depthBatch'].squeeze(1)+1.)
+                    midas_loss_func = ScaleAndShiftInvariantLoss(alpha=alpha, loss_method='MSELoss', if_scale_aware=opt.cfg.MODEL_BRDF.use_scale_aware_depth)
+                    # invd_pred = 1./(depthPreds[n].squeeze(1) + 1e-6)
+                    invd_pred = depthInvPred.squeeze(1)
+                    invd_gt = 1./(input_dict['depthBatch'].squeeze(1) + 1e-8)
                     loss = midas_loss_func(invd_pred, invd_gt, mask=input_dict['segAllBatch'].squeeze())
                 else:
                     print('-depth gt', torch.max(input_dict['depthBatch']), torch.min(input_dict['depthBatch']), torch.median(input_dict['depthBatch']))
