@@ -280,6 +280,12 @@ class Model_Joint_ViT(nn.Module):
     def freeze_BRDF(self):
         self.turn_off_names(['shared_encoder_stage0'])
         freeze_bn_in_module(self.MODEL_ALL._.shared_encoder_stage0)
+        if self.opt.cfg.MODEL_ALL.ViT_baseline.if_share_decoder_over_BRDF_modalities:
+            self.turn_off_names(['shared_BRDF_decoder'])
+            freeze_bn_in_module(self.MODEL_ALL._.shared_BRDF_decoder)
+        if self.opt.cfg.MODEL_ALL.ViT_baseline.if_share_pretrained_over_BRDF_modalities:
+            self.turn_off_names(['shared_BRDF_pretrained'])
+            freeze_bn_in_module(self.MODEL_ALL._.shared_BRDF_pretrained)
         if 'al' in self.modalities_stage0:
             self.turn_off_names(['_.al'])
             freeze_bn_in_module(self.MODEL_ALL._['al'])

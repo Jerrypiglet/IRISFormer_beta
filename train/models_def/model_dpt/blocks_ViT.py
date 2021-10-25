@@ -7,6 +7,7 @@ from .vit_ViT import (
     # _make_pretrained_vitb16_384,
     forward_vit_ViT_encoder,
     forward_vit_ViT_decoder,
+    forward_DPT_pretrained
 )
 from .vit import (
     get_readout_oper, 

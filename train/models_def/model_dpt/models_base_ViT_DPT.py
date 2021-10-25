@@ -68,6 +68,7 @@ class Transformer_Hybrid_Encoder_Decoder(BaseModel):
         #     "8": [0, 1, 4, 7],
         # }
         self.output_hooks_dict = {
+            "4": [[0, 1], [2, 3]],
             "6": [[0, 1], [3, 5]],
         }
 

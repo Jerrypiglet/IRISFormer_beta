@@ -254,6 +254,7 @@ _C.MODEL_BRDF.DPT_baseline.if_share_decoder_over_heads = True # [always True] us
 _C.MODEL_BRDF.DPT_baseline.if_SGD = False
 _C.MODEL_BRDF.DPT_baseline.if_pos_embed = False
 _C.MODEL_BRDF.DPT_baseline.if_batch_norm = True # in DPT output head
+_C.MODEL_BRDF.DPT_baseline.if_batch_norm_depth_override = True # in DPT output head
 _C.MODEL_BRDF.DPT_baseline.if_vis_CA_proj_coef = False
 _C.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_affinity = False
 _C.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_gt_matseg = False

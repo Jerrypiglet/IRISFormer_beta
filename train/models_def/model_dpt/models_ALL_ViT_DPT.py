@@ -2,6 +2,7 @@ import struct
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+
 from utils.utils_misc import *
 
 from .base_model import BaseModel
@@ -15,6 +16,7 @@ from .blocks_ViT import (
     _make_decoder_ViT,
     forward_vit_ViT_encoder,
     forward_vit_ViT_decoder,
+    forward_DPT_pretrained
     # _make_pretrained
 )
 # from .blocks import (
@@ -123,6 +125,12 @@ class ModelAll_ViT(torch.nn.Module):
                 module_dict['shared_BRDF_decoder'] = module_dict[modalities_BRDF[0]].decoder
                 for modality in modalities_BRDF:
                     module_dict[modality].decoder = nn.Identity()
+            if opt.cfg.MODEL_ALL.ViT_baseline.if_share_pretrained_over_BRDF_modalities:
+                assert opt.cfg.MODEL_ALL.ViT_baseline.if_share_decoder_over_BRDF_modalities
+                module_dict['shared_BRDF_pretrained'] = module_dict[modalities_BRDF[0]].pretrained
+                self.unflatten = module_dict[modalities_BRDF[0]].unflatten
+                for modality in modalities_BRDF:
+                    module_dict[modality].pretrained = nn.Identity()
 
         self._ = torch.nn.ModuleDict(module_dict)
         
@@ -138,6 +146,13 @@ class ModelAll_ViT(torch.nn.Module):
             input_dict_extra['shared_BRDF_decoder_outputs'] = forward_vit_ViT_decoder(
                 self.opt, self.opt.cfg.MODEL_ALL.ViT_baseline, self._.shared_BRDF_decoder, 
                 input_dict_extra['shared_encoder_outputs'][0])
+
+        if self.opt.cfg.MODEL_ALL.ViT_baseline.if_share_pretrained_over_BRDF_modalities:
+            (_layer_1, _layer_2) = input_dict_extra['shared_encoder_outputs'][1]
+            (_layer_3, _layer_4) = input_dict_extra['shared_BRDF_decoder_outputs'][1]
+            input_dict_extra['shared_BRDF_pretrained_outputs'] = forward_DPT_pretrained(
+                self.opt, self.opt.cfg.MODEL_ALL.ViT_baseline, self._.shared_BRDF_pretrained, self.unflatten, 
+                (_layer_1, _layer_2, _layer_3, _layer_4))
 
         output_dict = {}
         for modality in self.modalities_stage0:

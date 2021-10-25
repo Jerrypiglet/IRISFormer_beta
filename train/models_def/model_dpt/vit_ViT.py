@@ -96,6 +96,33 @@ def _resize_pos_embed(self, posemb, gs_h, gs_w): # original at https://github.co
 
     return posemb
 
+def forward_DPT_pretrained(opt, cfg_DPT, pretrained, unflatten, layers_out):
+    layer_1, layer_2, layer_3, layer_4 = layers_out[0], layers_out[1], layers_out[2], layers_out[3]
+
+    layer_1 = pretrained.act_postprocess1[0:2](layer_1)
+    layer_2 = pretrained.act_postprocess2[0:2](layer_2)
+    layer_3 = pretrained.act_postprocess3[0:2](layer_3)
+    layer_4 = pretrained.act_postprocess4[0:2](layer_4)
+
+    if layer_1.ndim == 3:
+        assert False, 'should be ResNet feats in DPT-hybrid setting!'
+        layer_1 = unflatten(layer_1)
+    if layer_2.ndim == 3:
+        assert False, 'should be ResNet feats in DPT-hybrid setting!'
+        layer_2 = unflatten(layer_2)
+    if layer_3.ndim == 3:
+        layer_3 = unflatten(layer_3)
+    if layer_4.ndim == 3:
+        layer_4 = unflatten(layer_4)
+
+    layer_1 = pretrained.act_postprocess1[3:](layer_1)
+    layer_2 = pretrained.act_postprocess2[3:](layer_2)
+    layer_3 = pretrained.act_postprocess3[3:](layer_3)
+    layer_4 = pretrained.act_postprocess4[3:](layer_4)
+
+    return layer_1, layer_2, layer_3, layer_4
+
+
 def forward_vit_ViT_encoder(opt, cfg_DPT, pretrained, x):
     x_out = pretrained.model.forward_flex(opt, cfg_DPT, x)
 
