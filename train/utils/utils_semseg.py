@@ -140,9 +140,9 @@ def get_transform_matseg(split, opt):
             transform.ToTensor(),
             transform.Normalize(mean=mean, std=std)
         ]
-        if opt.if_pad:
+        if opt.if_pad and opt.pad_op is not None:
             transform_semseg_list_train.insert(1, opt.pad_op)
-        if opt.if_resize:
+        if opt.if_resize and opt.resize_op is not None:
             transform_semseg_list_train.insert(1, opt.resize_op)
 
         train_transform = transform.Compose(transform_semseg_list_train)

@@ -123,6 +123,8 @@ def set_up_envs(opt):
         opt.if_pad = True
         if not opt.cfg.DEBUG.if_test_real: # if True, should pad indeptly for each sample
             opt.pad_op = transform.Pad([im_height_pad_to, im_width_pad_to], padding_with=im_pad_with, pad_option=pad_option)
+        else:
+            opt.pad_op = None
         opt.cfg.DATA.im_width_padded = im_width_pad_to
         opt.cfg.DATA.im_height_padded = im_height_pad_to
     if opt.cfg.DATA.if_resize_to_32x:
@@ -131,13 +133,22 @@ def set_up_envs(opt):
         opt.if_resize = True
         if not opt.cfg.DEBUG.if_test_real: # if True, should pad indeptly for each sample
             opt.resize_op = transform.Resize_flexible((im_width_resize_to, im_height_resize_to))
+        else:
+            opt.resize_op = None
+
+    opt.cfg.DATA.load_brdf_gt = False
+    if opt.cfg.DEBUG.if_test_real:
+        opt.cfg.DATA.load_light_gt = False
+        opt.cfg.DATA.data_read_list = ''
+
 
     # ====== MODEL_ALL =====
     if opt.cfg.MODEL_ALL.ViT_baseline.if_share_pretrained_over_BRDF_modalities:
         assert opt.cfg.MODEL_ALL.ViT_baseline.if_share_decoder_over_BRDF_modalities
     opt.cfg.MODEL_ALL.enable_list = [x for x in opt.cfg.MODEL_ALL.enable_list.split('_') if x != '']
     if opt.cfg.MODEL_ALL.enable:
-        opt.cfg.DATA.load_brdf_gt = True
+        if not opt.cfg.DEBUG.if_test_real:
+            opt.cfg.DATA.load_brdf_gt = True
         if 'lo' in opt.cfg.MODEL_ALL.enable_list:
             opt.cfg.MODEL_LAYOUT_EMITTER.enable = True
             opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = list(set(opt.cfg.MODEL_LAYOUT_EMITTER.enable_list_allowed) & set(opt.cfg.MODEL_ALL.enable_list))
@@ -145,9 +156,10 @@ def set_up_envs(opt):
             opt.cfg.MODEL_BRDF.enable = True
             opt.cfg.MODEL_BRDF.enable_list = list(set(opt.cfg.MODEL_BRDF.enable_list_allowed) & set(opt.cfg.MODEL_ALL.enable_list))
         if 'li' in opt.cfg.DATA.data_read_list:
-            opt.cfg.DATA.load_light_gt = True
+            if not opt.cfg.DEBUG.if_test_real:
+                opt.cfg.DATA.load_light_gt = True
+                opt.cfg.MODEL_LIGHT.use_GT_brdf = True
             opt.cfg.MODEL_LIGHT.enable = True
-            opt.cfg.MODEL_LIGHT.use_GT_brdf = True
         
 
     # ====== GMM =====
@@ -335,9 +347,10 @@ def set_up_envs(opt):
 
     # ====== per-pixel lighting =====
     if opt.cfg.MODEL_LIGHT.enable:
-        opt.cfg.DATA.load_light_gt = True
         opt.cfg.DATA.load_brdf_gt = True
-        opt.cfg.DATA.data_read_list += 'al_no_de_ro'.split('_')
+        if not opt.cfg.DEBUG.if_test_real:
+            opt.cfg.DATA.load_light_gt = True
+            opt.cfg.DATA.data_read_list += 'al_no_de_ro'.split('_')
         if opt.cfg.MODEL_LIGHT.use_GT_brdf and opt.cfg.MODEL_BRDF.enable:
             opt.cfg.MODEL_LIGHT.freeze_BRDF_Net = True
             opt.cfg.MODEL_BRDF.if_freeze = True
@@ -385,11 +398,11 @@ def set_up_envs(opt):
 
     # ic(opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders)
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
+        # if not opt.cfg.DEBUG.if_test_real:
         opt.cfg.DATA.load_brdf_gt = True
         opt.depth_metrics = ['abs_rel', 'sq_rel', 'rmse', 'rmse_log', 'a1', 'a2', 'a3']
         if not opt.cfg.MODEL_LIGHT.freeze_BRDF_Net:
             opt.cfg.MODEL_BRDF.loss_list += opt.cfg.MODEL_BRDF.enable_list
-        ic(opt.cfg.DATA.load_brdf_gt)
 
     # ===== check if flags are legal =====
     check_if_in_list(opt.cfg.DATA.data_read_list, opt.cfg.DATA.data_read_list_allowed)

@@ -23,11 +23,7 @@ import torch.multiprocessing
 torch.multiprocessing.set_sharing_strategy('file_system')
 
 # from dataset_openroomsV4_total3d_matcls_ import openrooms, collate_fn_OR
-from dataset_openrooms_OR_scanNetPose_light_20210928 import openrooms, collate_fn_OR
-# from dataset_openrooms_OR_scanNetPose_binary_tables_ import openrooms_binary
-# from dataset_openrooms_OR_scanNetPose_pickle import openrooms_pickle
-from utils.utils_dataloader_binary import make_data_loader_binary
-import torch.distributed as dist
+from dataset_openrooms_OR_scanNetPose_light_20210928_real import openrooms, collate_fn_OR
 from train_funcs_detectron import gather_lists
 
 
@@ -338,13 +334,6 @@ transforms_val_resize = get_transform_resize('val', opt)
 openrooms_to_use = openrooms
 make_data_loader_to_use = make_data_loader
 
-# if opt.cfg.DATASET.if_pickle:
-#     openrooms_to_use = openrooms_pickle
-# if opt.cfg.DATASET.if_binary:
-#     assert False, 'not supporting image resizing'
-#     openrooms_to_use = openrooms_binary
-    # make_data_loader_to_use = make_data_loader_binary
-    
 print('+++++++++openrooms_to_use', openrooms_to_use)
 
 if opt.if_train:
@@ -365,12 +354,6 @@ if opt.if_train:
 )
 if opt.cfg.MODEL_SEMSEG.enable:
     opt.semseg_colors = brdf_dataset_train.semseg_colors
-
-# if 'mini' in opt.cfg.DATASET.dataset_path:
-#     print('=====!!!!===== mini: brdf_dataset_val = brdf_dataset_train')
-#     brdf_dataset_val = brdf_dataset_train
-#     brdf_dataset_val_vis = brdf_dataset_train
-# else:
 
 if opt.if_val:
     brdf_dataset_val = openrooms_to_use(opt, 

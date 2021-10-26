@@ -21,8 +21,12 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
     # print(torch.max(input_dict['imBatch']), torch.min(input_dict['imBatch']), '+++')
 
     input_dict['brdf_loss_mask'] = data_batch['brdf_loss_mask'].cuda(non_blocking=True).contiguous()
+    if opt.cfg.DEBUG.if_test_real:
+        input_dict['pad_mask'] = data_batch['pad_mask'].cuda(non_blocking=True).contiguous()
+        input_dict['im_h_resized_to'] = data_batch['im_h_resized_to']
+        input_dict['im_w_resized_to'] = data_batch['im_w_resized_to']
 
-    if_load_mask = opt.cfg.DATA.load_brdf_gt
+    if_load_mask = opt.cfg.DATA.load_brdf_gt and not opt.cfg.DEBUG.if_test_real
     
     if opt.cfg.DATA.load_brdf_gt:
         # Load data from cpu to gpu
@@ -64,6 +68,7 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
             input_dict['segBRDFBatch'] = torch.ones((im_cpu.shape[0], 1, im_cpu.shape[2], im_cpu.shape[3]), dtype=torch.float32).cuda(non_blocking=True)
             input_dict['segAllBatch'] = input_dict['segBRDFBatch']
 
+        # print(input_dict['segBRDFBatch'].shape, input_dict['brdf_loss_mask'].shape)
         input_dict['segBRDFBatch'] = input_dict['segBRDFBatch'] * input_dict['brdf_loss_mask'].unsqueeze(1)
         input_dict['segAllBatch'] = input_dict['segAllBatch'] * input_dict['brdf_loss_mask'].unsqueeze(1)
 

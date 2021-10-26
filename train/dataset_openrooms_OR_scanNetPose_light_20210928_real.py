@@ -106,39 +106,43 @@ class openrooms(data.Dataset):
         frame_info = {'index': index, 'png_image_path': png_image_path}
         batch_dict = {'image_index': index}
 
-        mask_pad = np.zeros((self.im_height_padded, self.im_width_padded), dtype=np.uint8)
+        pad_mask = np.zeros((self.im_height_padded, self.im_width_padded), dtype=np.uint8)
 
         hdr_scale = 1.
         # Read PNG image
         image = Image.open(str(png_image_path))
         im_fixedscale_SDR_uint8 = np.array(image)
-        im_h, im_w = float(im_fixedscale_SDR_uint8.shape[0]), float(im_fixedscale_SDR_uint8.shape[1])
-        if im_h / im_w < float(self.im_height_padded) / float(self.im_width_padded):
-            im_w_padded = self.im_width_padded
-            im_h_padded = int(im_h / im_w * im_w_padded)
-            assert im_h_padded < self.im_height_padded
-            mask_pad[:im_h_padded, :] = 1
-        else:
-            im_h_padded = self.im_height_padded
-            im_w_padded = int(im_w / im_h * im_h_padded)
-            assert im_w_padded < self.im_width_padded
-            mask_pad[:im_w_padded, :] = 1
-        im_fixedscale_SDR_uint8 = cv2.resize(im_fixedscale_SDR_uint8, (im_w_padded, im_h_padded), interpolation = cv2.INTER_AREA )
+        im_h, im_w = im_fixedscale_SDR_uint8.shape[0], im_fixedscale_SDR_uint8.shape[1]
+        if float(im_h) / float(im_w) < float(self.im_height_padded) / float(self.im_width_padded): # flatter
+            im_w_resized_to = self.im_width_padded
+            im_h_resized_to = int(float(im_h) / float(im_w) * im_w_resized_to)
+            assert im_h_resized_to <= self.im_height_padded
+            pad_mask[:im_w_resized_to, :] = 1
+        else: # taller
+            im_h_resized_to = self.im_height_padded
+            im_w_resized_to = int(float(im_w) / float(im_h) * im_h_resized_to)
+            assert im_w_resized_to <= self.im_width_padded
+            pad_mask[:im_w_resized_to, :] = 1
+
+        im_fixedscale_SDR_uint8 = cv2.resize(im_fixedscale_SDR_uint8, (im_w_resized_to, im_h_resized_to), interpolation = cv2.INTER_AREA )
+        # print(im_w_resized_to, im_h_resized_to, im_w, im_h)
         assert self.opt.cfg.DATA.pad_option == 'const'
-        im_fixedscale_SDR_uint8 = cv2.copyMakeBorder(im_fixedscale_SDR_uint8, 0, im_h_padded, 0, im_w_padded, cv2.BORDER_CONSTANT, value=0)
+        im_fixedscale_SDR_uint8 = cv2.copyMakeBorder(im_fixedscale_SDR_uint8, 0, self.im_height_padded-im_h_resized_to, 0, self.im_width_padded-im_w_resized_to, cv2.BORDER_CONSTANT, value=0)
+        # print(im_fixedscale_SDR_uint8.shape, pad_mask.shape)
         im_fixedscale_SDR = im_fixedscale_SDR_uint8.astype(np.float32) / 255.
+        im_fixedscale_SDR = im_fixedscale_SDR.transpose(2, 0, 1)
         im_fixedscale_HDR = im_fixedscale_SDR ** 2.2
 
         # image_transformed_fixed = self.transforms_fixed(im_fixedscale_SDR_uint8)
         # im_trainval_SDR = self.transforms_resize(im_fixedscale_SDR_uint8) # not necessarily \in [0., 1.] [!!!!]; already padded
         # # print(im_trainval_SDR.shape, type(im_trainval_SDR), torch.max(im_trainval_SDR), torch.min(im_trainval_SDR), torch.mean(im_trainval_SDR))
-        im_trainval = im_fixedscale_HDR # channel first for training
+        im_trainval_SDR = torch.from_numpy(im_fixedscale_SDR)
+        im_trainval = torch.from_numpy(im_fixedscale_HDR) # channel first for training
 
-
-
-        batch_dict.update({'image_path': str(png_image_path), 'mask_pad': mask_pad})
+        batch_dict.update({'image_path': str(png_image_path), 'pad_mask': pad_mask, 'brdf_loss_mask': pad_mask})
+        batch_dict.update({'im_w_resized_to': im_w_resized_to, 'im_h_resized_to': im_h_resized_to})
         # batch_dict.update({'hdr_scale': hdr_scale, 'image_transformed_fixed': image_transformed_fixed, 'im_trainval': im_trainval, 'im_trainval_SDR': im_trainval_SDR, 'im_fixedscale_SDR': im_fixedscale_SDR, 'im_fixedscale_SDR_uint8': im_fixedscale_SDR_uint8})
-        batch_dict.update({'hdr_scale': hdr_scale, 'im_trainval': im_trainval})
+        batch_dict.update({'hdr_scale': hdr_scale, 'im_trainval': im_trainval, 'im_trainval_SDR': im_trainval_SDR, 'im_fixedscale_SDR': im_trainval_SDR})
 
         return batch_dict
 
@@ -235,8 +239,10 @@ def collate_fn_OR(batch):
         else:
             try:
                 collated_batch[key] = default_collate([elem[key] for elem in batch])
-            except:
-                print('[!!!!] Type error in collate_fn_OR: ', key)
+            except RuntimeError as e:
+                print('[!!!!] Type error in collate_fn_OR: ', key, e)
+                # print(type(batch[0][key]))
+                # print(batch[0][key].dtype)
 
     if 'boxes_batch' in batch[0]:
         interval_list = [elem['boxes_batch']['patch'].shape[0] for elem in batch]
