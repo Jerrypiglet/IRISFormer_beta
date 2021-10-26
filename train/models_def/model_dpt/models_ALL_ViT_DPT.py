@@ -137,10 +137,10 @@ class ModelAll_ViT(torch.nn.Module):
     def forward_brdf(self, x_stage0):
         input_dict_extra = {}
 
-        assert self.opt.cfg.MODEL_ALL.ViT_baseline.if_share_encoder_over_modalities_stage0
-        input_dict_extra['shared_encoder_outputs'] = forward_vit_ViT_encoder(
-            self.opt, self.opt.cfg.MODEL_ALL.ViT_baseline, self._.shared_encoder_stage0, 
-            x_stage0)
+        if self.opt.cfg.MODEL_ALL.ViT_baseline.if_share_encoder_over_modalities_stage0:
+            input_dict_extra['shared_encoder_outputs'] = forward_vit_ViT_encoder(
+                self.opt, self.opt.cfg.MODEL_ALL.ViT_baseline, self._.shared_encoder_stage0, 
+                x_stage0)
 
         if self.opt.cfg.MODEL_ALL.ViT_baseline.if_share_decoder_over_BRDF_modalities:
             input_dict_extra['shared_BRDF_decoder_outputs'] = forward_vit_ViT_decoder(
@@ -156,7 +156,7 @@ class ModelAll_ViT(torch.nn.Module):
 
         output_dict = {}
         for modality in self.modalities_stage0:
-            output_dict[modality] = self._[modality].forward(None, input_dict_extra=input_dict_extra)
+            output_dict[modality] = self._[modality].forward(x_stage0, input_dict_extra=input_dict_extra)
 
         return output_dict
 

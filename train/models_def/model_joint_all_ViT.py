@@ -106,7 +106,7 @@ class Model_Joint_ViT(nn.Module):
         #     self.opt, self.opt.cfg.MODEL_ALL.ViT_baseline, self.MODEL_ALL.shared_encoder, 
         #     input_dict['input_batch_brdf'])
         if self.if_BRDF:
-            assert self.opt.cfg.MODEL_ALL.ViT_baseline.if_share_encoder_over_modalities_stage0
+            # assert self.opt.cfg.MODEL_ALL.ViT_baseline.if_share_encoder_over_modalities_stage0
             x_stage0 = input_dict['input_batch_brdf']
             return_dict_brdf = self.forward_brdf(x_stage0, input_dict)
             output_dict.update(return_dict_brdf)
