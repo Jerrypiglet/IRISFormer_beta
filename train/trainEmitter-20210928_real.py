@@ -98,7 +98,7 @@ parser.add_argument('--epoch_start', type=int, default=-1)
 # debug
 # parser.add_argument("--mini_val", type=str2bool, nargs='?', const=True, default=False)
 # to get rid of
-parser.add_argument('--test_real', action='store_true', help='')
+# parser.add_argument('--test_real', action='store_true', help='')
 
 parser.add_argument('--skip_keys', nargs='+', help='Skip those keys in the model', required=False)
 parser.add_argument('--replaced_keys', nargs='+', help='Replace those keys in the model', required=False)

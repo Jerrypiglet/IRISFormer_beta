@@ -98,7 +98,7 @@ class BRDFplusSemSeg(nn.Module):
         depthPred = 0.5 * (self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_guide=input_dict_guide) + 1)
         # print(torch.min(depthPred), torch.max(depthPred), torch.mean(depthPred), torch.median(depthPred))
 
-        # if not self.opt.test_real:
+        # if not self.opt.cfg.DEBUG.if_test_real:
         input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
         albedoPred = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
                 input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)

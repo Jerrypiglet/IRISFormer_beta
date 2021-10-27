@@ -602,7 +602,7 @@ def _make_pretrained_vitb_rn50_384(
     model = timm.create_model("vit_base_resnet50_384", pretrained=pretrained, in_chans=in_chans)
 
     hooks = [0, 1, 8, 11] if hooks == None else hooks
-    return _make_vit_bß_rn50_backbone(
+    return _make_vit_b_rn50_backbone(
         cfg_DPT, 
         model,
         features=[256, 512, 768, 768],

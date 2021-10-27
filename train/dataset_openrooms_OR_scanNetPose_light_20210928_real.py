@@ -131,7 +131,12 @@ class openrooms(data.Dataset):
         # print(im_fixedscale_SDR_uint8.shape, pad_mask.shape)
         im_fixedscale_SDR = im_fixedscale_SDR_uint8.astype(np.float32) / 255.
         im_fixedscale_SDR = im_fixedscale_SDR.transpose(2, 0, 1)
+
+        # [HDR]
         im_fixedscale_HDR = im_fixedscale_SDR ** 2.2
+
+        # [PNG]
+        im_fixedscale_HDR = (im_fixedscale_SDR - 0.5) / 0.5
 
         # image_transformed_fixed = self.transforms_fixed(im_fixedscale_SDR_uint8)
         # im_trainval_SDR = self.transforms_resize(im_fixedscale_SDR_uint8) # not necessarily \in [0., 1.] [!!!!]; already padded
@@ -142,7 +147,7 @@ class openrooms(data.Dataset):
         batch_dict.update({'image_path': str(png_image_path), 'pad_mask': pad_mask, 'brdf_loss_mask': pad_mask})
         batch_dict.update({'im_w_resized_to': im_w_resized_to, 'im_h_resized_to': im_h_resized_to})
         # batch_dict.update({'hdr_scale': hdr_scale, 'image_transformed_fixed': image_transformed_fixed, 'im_trainval': im_trainval, 'im_trainval_SDR': im_trainval_SDR, 'im_fixedscale_SDR': im_fixedscale_SDR, 'im_fixedscale_SDR_uint8': im_fixedscale_SDR_uint8})
-        batch_dict.update({'hdr_scale': hdr_scale, 'im_trainval': im_trainval, 'im_trainval_SDR': im_trainval_SDR, 'im_fixedscale_SDR': im_trainval_SDR})
+        batch_dict.update({'hdr_scale': hdr_scale, 'im_trainval': im_trainval, 'im_trainval_SDR': im_trainval_SDR, 'im_fixedscale_SDR': im_trainval_SDR.permute(1, 2, 0)}) # im_fixedscale_SDR for Tensorboard logging
 
         return batch_dict
 

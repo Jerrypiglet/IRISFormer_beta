@@ -171,7 +171,6 @@ class Model_Joint_ViT(nn.Module):
 
     def forward_light(self, input_dict, return_dict_brdf={}):
         im_h, im_w = self.cfg.DATA.im_height, self.cfg.DATA.im_width
-        assert self.cfg.DATA.pad_option == 'const'
 
         # Normalize Albedo and depth
         if 'al' in self.modalities_stage0:

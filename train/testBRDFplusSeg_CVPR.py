@@ -315,7 +315,7 @@ if opt.cfg.MODEL_SEMSEG.enable:
     #         imWidth = opt.cfg.DATA.im_width, imHeight = opt.cfg.DATA.im_height,
     #         cascadeLevel = opt.cascadeLevel, split = 'test', phase = 'TEST')
 
-if opt.test_real:
+if opt.cfg.DEBUG.if_test_real:
     brdf_dataset_val = openrooms_real( opt.data_root, transforms, opt, opt.real_list, 
             imWidth = opt.cfg.DATA.im_width, imHeight = opt.cfg.DATA.im_height,)
     brdf_dataset_val_vis = openrooms_real( opt.data_root, transforms, opt, opt.real_list, 
@@ -423,7 +423,7 @@ val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid}
 if opt.if_vis:
     vis_val_epoch_joint(brdf_loader_val_vis, model, bin_mean_shift, val_params)
     synchronize()                
-if opt.if_val and not opt.test_real:
+if opt.if_val and not opt.cfg.DEBUG.if_test_real:
     val_epoch_joint(brdf_loader_val, model, bin_mean_shift, val_params)
 
 

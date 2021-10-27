@@ -51,9 +51,12 @@ def vis_disp_colormap(disp_array, file=None, normalize=True, min_and_scale=None,
     if normalize:
         if min_and_scale is None:
             depth_min = np.amin(disp_array[valid_mask])
+            # print(np.amax(disp_array), np.amin(disp_array))
             disp_array -= depth_min
             depth_scale = 1./(1e-6+np.amax(disp_array[valid_mask]))
+            # print(depth_min, depth_scale)
             disp_array = disp_array * depth_scale
+            # print(np.amax(disp_array), np.amin(disp_array))
             min_and_scale = [depth_min, depth_scale]
         else:
             disp_array -= min_and_scale[0]

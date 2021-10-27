@@ -70,6 +70,7 @@ class Transformer_Hybrid_Encoder_Decoder(BaseModel):
         self.output_hooks_dict = {
             "4": [[0, 1], [2, 3]],
             "6": [[0, 1], [3, 5]],
+            # "6": [[0, 1], [2, 5]], # fixed wrong hooks
         }
 
         # Instantiate backbone and reassemble blocks

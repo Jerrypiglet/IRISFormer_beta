@@ -156,7 +156,7 @@ def get_labels_dict_joint(data_batch, opt):
     # labels_dict = {**labels_dict_matseg, **labels_dict_brdf}
     return labels_dict
 
-def forward_joint(is_train, labels_dict, model, opt, time_meters, if_vis=False, tid=-1):
+def forward_joint(is_train, labels_dict, model, opt, time_meters, if_vis=False, if_loss=True, tid=-1):
     # forward model + compute losses
 
     # Forward model
@@ -178,7 +178,7 @@ def forward_joint(is_train, labels_dict, model, opt, time_meters, if_vis=False, 
         time_meters['ts'] = time.time()
     
     if opt.cfg.MODEL_BRDF.enable:
-        output_dict, loss_dict = postprocess_brdf(labels_dict, output_dict, loss_dict, opt, time_meters, tid=tid)
+        output_dict, loss_dict = postprocess_brdf(labels_dict, output_dict, loss_dict, opt, time_meters, tid=tid, if_loss=if_loss)
         time_meters['loss_brdf'].update(time.time() - time_meters['ts'])
         time_meters['ts'] = time.time()
 
@@ -614,7 +614,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
     model.eval()
     opt.if_vis_debug_pac = True
 
-    if opt.test_real:
+    if opt.cfg.DEBUG.if_test_real:
         if opt.cfg.MODEL_MATCLS.enable:
             matcls_results_path = opt.cfg.MODEL_MATCLS.real_images_list.replace('.txt', '-results.txt')
             f_matcls_results = open(matcls_results_path, 'w')
@@ -676,7 +676,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
             #     print(input_dict['im_paths'])
 
             # ======= Forward
-            output_dict, _ = forward_joint(False, input_dict, model, opt, time_meters, if_vis=True)
+            output_dict, _ = forward_joint(False, input_dict, model, opt, time_meters, if_vis=True, if_loss=False)
 
             # synchronize()
             
@@ -1207,7 +1207,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     mat_sup_pred = mat_sup_pred.item()
                     im_path = data_batch['image_path'][sample_idx_batch]
 
-                    if not opt.test_real:
+                    if not opt.cfg.DEBUG.if_test_real:
                         summary_cat = torch.cat([mats_pred_vis, mats_gt_vis], 1).permute(1, 2, 0)
                     else:
                         summary_cat = mats_pred_vis.permute(1, 2, 0) # not showing GT if GT label is 0
@@ -1219,7 +1219,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                         mat_mask = mat_mask.permute(1, 2, 0).cpu().float()
                         matmask_overlay = im_single * mat_mask + im_single * 0.2 * (1. - mat_mask)
                         writer.add_image('VAL_matcls_matmask-overlay/%d'%(sample_idx), matmask_overlay, tid, dataformats='HWC')
-                        if opt.test_real and opt.cfg.MODEL_MATCLS.enable:
+                        if opt.cfg.DEBUG.if_test_real and opt.cfg.MODEL_MATCLS.enable:
                             f_matcls_results.write(' '.join([im_path, opt.matG1Dict[mat_pred+1], opt.valid_sup_classes_dict[mat_sup_pred]]))
                             f_matcls_results.write('\n')
                     
@@ -1338,7 +1338,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                 if 'al' in opt.cfg.MODEL_BRDF.enable_list:
                     # if (not opt.cfg.DATASET.if_no_gt_semantics):
                     albedoPreds_list.append(output_dict['albedoPreds'][n])
-                    albedoPreds_aligned_list.append(output_dict['albedoPreds_aligned'][n])
+                    if not opt.cfg.DEBUG.if_test_real:
+                        albedoPreds_aligned_list.append(output_dict['albedoPreds_aligned'][n])
                 if 'no' in opt.cfg.MODEL_BRDF.enable_list:
                     # if (not opt.cfg.DATASET.if_no_gt_semantics):
                     normalPreds_list.append(output_dict['normalPreds'][n])
@@ -1453,9 +1454,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
         depthOut = 1 / torch.clamp(depthBatch_vis + 1, 1e-6, 10) * segAllBatch_vis.expand_as(depthBatch_vis) # invert the gt depth just for visualization purposes!
         depth_gt_batch_vis_sdr = ( depthOut*segAllBatch_vis.expand_as(depthBatch_vis) ).data
 
-    if not opt.test_real and opt.is_master:
-        vutils.save_image(im_batch_vis_sdr,
-                '{0}/{1}_im.png'.format(opt.summary_vis_path_task, tid) )
+    vutils.save_image(im_batch_vis_sdr,
+            '{0}/{1}_im.png'.format(opt.summary_vis_path_task, tid) )
+    if not opt.cfg.DEBUG.if_test_real and opt.is_master:
         if 'al' in opt.cfg.DATA.data_read_list:
             vutils.save_image(albedo_gt_batch_vis_sdr,
                 '{0}/{1}_albedoGt.png'.format(opt.summary_vis_path_task, tid) )
@@ -1480,7 +1481,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
     # print('++++', rough_gt_batch_vis_sdr_numpy.shape, depth_gt_batch_vis_sdr_numpy.shape, albedo_gt_batch_vis_sdr_numpy.shape, albedo_gt_batch_vis_sdr_numpy.dtype)
     # print(np.amax(albedo_gt_batch_vis_sdr_numpy), np.amin(albedo_gt_batch_vis_sdr_numpy), np.mean(albedo_gt_batch_vis_sdr_numpy))
     depth_min_and_scale_list = []
-    if not opt.test_real and opt.is_master:
+    if not opt.cfg.DEBUG.if_test_real and opt.is_master:
         for sample_idx in range(im_batch_vis_sdr.shape[0]):
             writer.add_image('VAL_brdf-segBRDF_GT/%d'%sample_idx, segBRDFBatch_vis[sample_idx].cpu().detach().numpy().squeeze(), tid, dataformats='HW')
             segAll = segAllBatch_vis[sample_idx].cpu().detach().numpy().squeeze()
@@ -1498,11 +1499,12 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
 
 
     ## ---- ESTs
-    if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
-
+    # if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
+    if opt.cfg.MODEL_BRDF.enable:
         if 'al' in opt.cfg.MODEL_BRDF.enable_list:
             albedoPreds_vis = torch.cat(albedoPreds_list)
-            albedoPreds_aligned_vis = torch.cat(albedoPreds_aligned_list)
+            if not opt.cfg.DEBUG.if_test_real:
+                albedoPreds_aligned_vis = torch.cat(albedoPreds_aligned_list)
 
         if 'no' in opt.cfg.MODEL_BRDF.enable_list:
             normalPreds_vis = torch.cat(normalPreds_list)
@@ -1544,12 +1546,14 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
         # ==== Preds
         if 'al' in opt.cfg.MODEL_BRDF.enable_list:
             albedo_pred_batch_vis_sdr = ( (albedoPreds_vis ) ** (1.0/2.2) ).data
-            albedo_pred_aligned_batch_vis_sdr = ( (albedoPreds_aligned_vis ) ** (1.0/2.2) ).data
+            if not opt.cfg.DEBUG.if_test_real:
+                albedo_pred_aligned_batch_vis_sdr = ( (albedoPreds_aligned_vis ) ** (1.0/2.2) ).data
             if opt.is_master:
                 vutils.save_image(albedo_pred_batch_vis_sdr,
                         '{0}/{1}_albedoPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
-                vutils.save_image(albedo_pred_aligned_batch_vis_sdr,
-                        '{0}/{1}_albedoPred_aligned_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
+                if not opt.cfg.DEBUG.if_test_real:
+                    vutils.save_image(albedo_pred_aligned_batch_vis_sdr,
+                            '{0}/{1}_albedoPred_aligned_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
         if 'no' in opt.cfg.MODEL_BRDF.enable_list:
             normal_pred_batch_vis_sdr = ( 0.5*(normalPreds_vis + 1) ).data
             if opt.is_master:
@@ -1564,13 +1568,25 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
         if 'de' in opt.cfg.MODEL_BRDF.enable_list:
             depthOut = 1 / torch.clamp(depthPreds_vis + 1, 1e-6, 10) * segAllBatch_vis.expand_as(depthPreds_vis)
             depth_pred_batch_vis_sdr = ( depthOut * segAllBatch_vis.expand_as(depthPreds_vis) ).data
+
+            depthOut_colored_single_numpy_list = []
+            for depthPreds_vis_single_numpy in depthOut.cpu().detach().numpy():
+                depthOut_colored_single_numpy_list.append(vis_disp_colormap(depthPreds_vis_single_numpy.squeeze(), normalize=True)[0])
+            depthOut_colored_batch = np.stack(depthOut_colored_single_numpy_list).transpose(0, 3, 1, 2).astype(np.float32) / 255.
+            # print(depthOut_colored_batch.shape, segAllBatch_vis.cpu().detach().numpy().shape)
+            depth_pred_batch_vis_sdr_colored = ( torch.from_numpy(depthOut_colored_batch).cuda() * segAllBatch_vis.expand_as(depthPreds_vis) ).data
+            # depth_pred_batch_vis_sdr_colored = depthOut_colored_batch * segAllBatch_vis.cpu().detach().numpy()
             if opt.is_master:
                 vutils.save_image(depth_pred_batch_vis_sdr,
-                        '{0}/{1}_depthPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
+                    '{0}/{1}_depthPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
+                vutils.save_image(depth_pred_batch_vis_sdr_colored,
+                    '{0}/{1}_depthPred_colored_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
+
 
         if 'al' in opt.cfg.MODEL_BRDF.enable_list:
             albedo_pred_batch_vis_sdr_numpy = albedo_pred_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
-            albedo_pred_aligned_batch_vis_sdr_numpy = albedo_pred_aligned_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
+            if not opt.cfg.DEBUG.if_test_real:
+                albedo_pred_aligned_batch_vis_sdr_numpy = albedo_pred_aligned_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
         if 'no' in opt.cfg.MODEL_BRDF.enable_list:
             normal_pred_batch_vis_sdr_numpy = normal_pred_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
         if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
@@ -1581,30 +1597,36 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
             for sample_idx in tqdm(range(im_batch_vis_sdr.shape[0])):
                 if 'al' in opt.cfg.MODEL_BRDF.enable_list:
                     writer.add_image('VAL_brdf-albedo_PRED/%d'%sample_idx, albedo_pred_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
-                    writer.add_image('VAL_brdf-albedo_scaleAligned_PRED/%d'%sample_idx, albedo_pred_aligned_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
+                    if not opt.cfg.DEBUG.if_test_real:
+                        writer.add_image('VAL_brdf-albedo_scaleAligned_PRED/%d'%sample_idx, albedo_pred_aligned_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                     if opt.cfg.DEBUG.if_dump_perframe_BRDF:
                         Image.fromarray((albedo_pred_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8)).save('{0}/{1}_albedoPred_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
-                        Image.fromarray((albedo_gt_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8)).save('{0}/{1}_albedoGt_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
+                        if not opt.cfg.DEBUG.if_test_real:
+                            Image.fromarray((albedo_gt_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8)).save('{0}/{1}_albedoGt_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
                 if 'no' in opt.cfg.MODEL_BRDF.enable_list:
                     writer.add_image('VAL_brdf-normal_PRED/%d'%sample_idx, normal_pred_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                     if opt.cfg.DEBUG.if_dump_perframe_BRDF:
                         Image.fromarray((normal_pred_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8)).save('{0}/{1}_normalPred_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
-                        Image.fromarray((normal_gt_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8)).save('{0}/{1}_normalGt_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
+                        if not opt.cfg.DEBUG.if_test_real:
+                            Image.fromarray((normal_gt_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8)).save('{0}/{1}_normalGt_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
                 if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
                     writer.add_image('VAL_brdf-rough_PRED/%d'%sample_idx, rough_pred_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                     if opt.cfg.DEBUG.if_dump_perframe_BRDF:
                         Image.fromarray((rough_pred_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8).squeeze()).save('{0}/{1}_roughPred_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
-                        Image.fromarray((rough_gt_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8).squeeze()).save('{0}/{1}_roughGt_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
+                        if not opt.cfg.DEBUG.if_test_real:
+                            Image.fromarray((rough_gt_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8).squeeze()).save('{0}/{1}_roughGt_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
                 if 'de' in opt.cfg.MODEL_BRDF.enable_list:
-                    depth_normalized_pred, _ = vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True, min_and_scale=depth_min_and_scale_list[sample_idx])
-                    writer.add_image('VAL_brdf-depth_syncScale_PRED/%d'%sample_idx, depth_normalized_pred, tid, dataformats='HWC')
+                    if not opt.cfg.DEBUG.if_test_real:
+                        depth_normalized_pred, _ = vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True, min_and_scale=depth_min_and_scale_list[sample_idx])
+                        writer.add_image('VAL_brdf-depth_syncScale_PRED/%d'%sample_idx, depth_normalized_pred, tid, dataformats='HWC')
                     depth_not_normalized_pred = vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True)[0]
                     writer.add_image('VAL_brdf-depth_PRED/%d'%sample_idx, depth_not_normalized_pred, tid, dataformats='HWC')
                     if opt.cfg.DEBUG.if_dump_perframe_BRDF:
-                        Image.fromarray((depth_normalized_pred).astype(np.uint8)).save('{0}/{1}_depthPred_syncScale_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
                         Image.fromarray((depth_not_normalized_pred).astype(np.uint8)).save('{0}/{1}_depthPred_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
-                        depth_normalized_gt, _ = vis_disp_colormap(depth_gt_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True)
-                        Image.fromarray((depth_normalized_gt).astype(np.uint8)).save('{0}/{1}_depthGt_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
+                        if not opt.cfg.DEBUG.if_test_real:
+                            Image.fromarray((depth_normalized_pred).astype(np.uint8)).save('{0}/{1}_depthPred_syncScale_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
+                            depth_normalized_gt, _ = vis_disp_colormap(depth_gt_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True)
+                            Image.fromarray((depth_normalized_gt).astype(np.uint8)).save('{0}/{1}_depthGt_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
 
                     pickle_save_path = Path(opt.summary_vis_path_task) / ('results_depth_%d.pickle'%sample_idx)
                     save_dict = {'depthPreds_vis': depthPreds_vis[sample_idx].detach().cpu().squeeze().numpy()}

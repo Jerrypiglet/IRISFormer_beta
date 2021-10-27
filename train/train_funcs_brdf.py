@@ -143,7 +143,7 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
 
     return input_batch, input_dict, preBatchDict
 
-def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_module_list=[], tid=-1):
+def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_module_list=[], tid=-1, if_loss=True):
     if opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
         opt.albeW, opt.normW, opt.rougW, opt.deptW = opt.cfg.MODEL_BRDF.albedoWeight, opt.cfg.MODEL_BRDF.normalWeight, opt.cfg.MODEL_BRDF.roughWeight, opt.cfg.MODEL_BRDF.depthWeight
 
@@ -163,53 +163,59 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
             else:
                 albedoPred = output_dict['albedoPred_aligned']
             albedoPreds.append(albedoPred ) 
-            # if (not opt.cfg.DATASET.if_no_gt_semantics):
-            loss_dict['loss_brdf-albedo'] = []
-            assert len(albedoPreds) == 1
-            for n in range(0, len(albedoPreds) ):
-                loss = torch.sum( (albedoPreds[n] - input_dict['albedoBatch'])
-                    * (albedoPreds[n] - input_dict['albedoBatch']) * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch'] ) ) / pixelObjNum / 3.0
-                loss_dict['loss_brdf-albedo'].append(loss)
 
-                if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_albedo:
-                    reg_loss = regularization_loss(albedoPreds[n], input_dict['albedoBatch'], input_dict['segBRDFBatch'].squeeze(1))
-                    loss_dict['loss_brdf-albedo-reg'] = opt.cfg.MODEL_BRDF.loss.reg_loss_albedo_weight * reg_loss
-                    loss_dict['loss_brdf-ALL'] += 4 * opt.albeW * loss_dict['loss_brdf-albedo-reg']
-
-            loss_dict['loss_brdf-ALL'] += 4 * opt.albeW * loss_dict['loss_brdf-albedo'][-1]
-            # output_dict.update({'mat_seg-albedoPreds': albedoPreds})
-            loss_dict['loss_brdf-albedo'] = loss_dict['loss_brdf-albedo'][-1]
             output_dict['albedoPreds'] = [output_dict['albedoPred']]
-            output_dict['albedoPreds_aligned'] = [output_dict['albedoPred_aligned']]
+            if not opt.cfg.DEBUG.if_test_real:
+                output_dict['albedoPreds_aligned'] = [output_dict['albedoPred_aligned']]
+            # if (not opt.cfg.DATASET.if_no_gt_semantics):
+            if if_loss:
+                loss_dict['loss_brdf-albedo'] = []
+                assert len(albedoPreds) == 1
+                for n in range(0, len(albedoPreds) ):
+                    loss = torch.sum( (albedoPreds[n] - input_dict['albedoBatch'])
+                        * (albedoPreds[n] - input_dict['albedoBatch']) * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch'] ) ) / pixelObjNum / 3.0
+                    loss_dict['loss_brdf-albedo'].append(loss)
+
+                    if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_albedo:
+                        reg_loss = regularization_loss(albedoPreds[n], input_dict['albedoBatch'], input_dict['segBRDFBatch'].squeeze(1))
+                        loss_dict['loss_brdf-albedo-reg'] = opt.cfg.MODEL_BRDF.loss.reg_loss_albedo_weight * reg_loss
+                        loss_dict['loss_brdf-ALL'] += 4 * opt.albeW * loss_dict['loss_brdf-albedo-reg']
+
+                loss_dict['loss_brdf-ALL'] += 4 * opt.albeW * loss_dict['loss_brdf-albedo'][-1]
+                # output_dict.update({'mat_seg-albedoPreds': albedoPreds})
+                loss_dict['loss_brdf-albedo'] = loss_dict['loss_brdf-albedo'][-1]
 
         if 'no' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
             normalPreds = []
             normalPred = output_dict['normalPred']
             normalPreds.append(normalPred )
-            # if (not opt.cfg.DATASET.if_no_gt_semantics):
-            loss_dict['loss_brdf-normal'] = []
-            for n in range(0, len(normalPreds) ):
-                loss_dict['loss_brdf-normal'].append( torch.sum( (normalPreds[n] - input_dict['normalBatch'])
-                    * (normalPreds[n] - input_dict['normalBatch']) * input_dict['segAllBatch'].expand_as(input_dict['normalBatch']) ) / pixelAllNum / 3.0)
-            loss_dict['loss_brdf-ALL'] += opt.normW * loss_dict['loss_brdf-normal'][-1]
-            # output_dict.update({'mat_seg-normalPreds': normalPreds})
-            loss_dict['loss_brdf-normal'] = loss_dict['loss_brdf-normal'][-1]
             output_dict['normalPreds'] = normalPreds
+
+            # if (not opt.cfg.DATASET.if_no_gt_semantics):
+            if if_loss:
+                loss_dict['loss_brdf-normal'] = []
+                for n in range(0, len(normalPreds) ):
+                    loss_dict['loss_brdf-normal'].append( torch.sum( (normalPreds[n] - input_dict['normalBatch'])
+                        * (normalPreds[n] - input_dict['normalBatch']) * input_dict['segAllBatch'].expand_as(input_dict['normalBatch']) ) / pixelAllNum / 3.0)
+                loss_dict['loss_brdf-ALL'] += opt.normW * loss_dict['loss_brdf-normal'][-1]
+                # output_dict.update({'mat_seg-normalPreds': normalPreds})
+                loss_dict['loss_brdf-normal'] = loss_dict['loss_brdf-normal'][-1]
 
         if 'ro' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
             roughPreds = []
             roughPred = output_dict['roughPred']
             roughPreds.append(roughPred )
-            # if (not opt.cfg.DATASET.if_no_gt_semantics):
-            loss_dict['loss_brdf-rough'] = []
-            for n in range(0, len(roughPreds) ):
-                loss_dict['loss_brdf-rough'].append( torch.sum( (roughPreds[n] - input_dict['roughBatch'])
-                    * (roughPreds[n] - input_dict['roughBatch']) * input_dict['segBRDFBatch'] ) / pixelObjNum )
-            loss_dict['loss_brdf-ALL'] += opt.rougW * loss_dict['loss_brdf-rough'][-1]
-            # output_dict.update({'mat_seg-roughPreds': roughPreds}) 
-            loss_dict['loss_brdf-rough'] = loss_dict['loss_brdf-rough'][-1]
-            loss_dict['loss_brdf-rough-paper'] = loss_dict['loss_brdf-rough'] / 4.
             output_dict['roughPreds'] = roughPreds
+            # if (not opt.cfg.DATASET.if_no_gt_semantics):
+            if if_loss:
+                loss_dict['loss_brdf-rough'] = []
+                for n in range(0, len(roughPreds) ):
+                    loss_dict['loss_brdf-rough'].append( torch.sum( (roughPreds[n] - input_dict['roughBatch'])
+                        * (roughPreds[n] - input_dict['roughBatch']) * input_dict['segBRDFBatch'] ) / pixelObjNum )
+                loss_dict['loss_brdf-ALL'] += opt.rougW * loss_dict['loss_brdf-rough'][-1]
+                # output_dict.update({'mat_seg-roughPreds': roughPreds}) 
+                loss_dict['loss_brdf-rough'] = loss_dict['loss_brdf-rough'][-1]
+                loss_dict['loss_brdf-rough-paper'] = loss_dict['loss_brdf-rough'] / 4.
 
         if 'de' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
             depthPreds = []
@@ -217,44 +223,46 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
             if opt.cfg.MODEL_BRDF.use_scale_aware_depth:
                 depthPred = output_dict['depthPred']
             else:
-                depthPred = output_dict['depthPred_aligned']
+                if not opt.cfg.DEBUG.if_test_real:
+                    depthPred = output_dict['depthPred_aligned']
 
             if opt.cfg.MODEL_BRDF.loss.depth.if_use_midas_loss:
                 depthInvPred = output_dict['depthInvPred']
-
             depthPreds.append(depthPred )
-            # if (not opt.cfg.DATASET.if_no_gt_semantics):
-            loss_dict['loss_brdf-depth'] = []
-            for n in range(0, len(depthPreds ) ):
-                if opt.cfg.MODEL_BRDF.loss.depth.if_use_midas_loss:
-                    assert opt.cfg.MODEL_ALL.ViT_baseline.enable, 'only works for MODEL_ALL (DPT) for now, which predicts inverse depth'
-                    # alpha = 0.5 if (tid!=-1 and tid>100) else 0.
-                    # alpha = 0.
-                    alpha = 0.5
-                    midas_loss_func = ScaleAndShiftInvariantLoss(alpha=alpha, loss_method='MSELoss', if_scale_aware=opt.cfg.MODEL_BRDF.use_scale_aware_depth)
-                    # invd_pred = 1./(depthPreds[n].squeeze(1) + 1e-6)
-                    invd_pred = depthInvPred.squeeze(1)
-                    invd_gt = 1./(input_dict['depthBatch'].squeeze(1) + 1e-8)
-                    loss = midas_loss_func(invd_pred, invd_gt, mask=input_dict['segAllBatch'].squeeze())
-                else:
-                    print('-depth gt', torch.max(input_dict['depthBatch']), torch.min(input_dict['depthBatch']), torch.median(input_dict['depthBatch']))
-                    print('--depth pred', torch.max(depthPreds[n]), torch.min(depthPreds[n]), torch.median(depthPreds[n]))
-
-                    loss =  torch.sum( (torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) )
-                        * ( torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum 
-                    if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_depth:
-                        reg_loss = regularization_loss(depthPreds[n], input_dict['depthBatch'], input_dict['segAllBatch'].squeeze())
-                        # print(reg_loss.item(), loss.item())
-                        loss_dict['loss_brdf-depth-reg'] = opt.cfg.MODEL_BRDF.loss.reg_loss_depth_weight * reg_loss
-                        loss_dict['loss_brdf-ALL'] += opt.deptW * loss_dict['loss_brdf-depth-reg']
-
-                loss_dict['loss_brdf-depth'].append(loss)
-            loss_dict['loss_brdf-ALL'] += opt.deptW * loss_dict['loss_brdf-depth'][-1]
-            # output_dict.update({'mat_seg-depthPreds': depthPreds})
-            loss_dict['loss_brdf-depth'] = loss_dict['loss_brdf-depth'][-1]
-            loss_dict['loss_brdf-depth-paper'] = torch.sum( (torch.log(depthPreds[-1]+0.001) - torch.log(input_dict['depthBatch']+0.001) )
-                * ( torch.log(depthPreds[-1]+0.001) - torch.log(input_dict['depthBatch']+0.001) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum
             output_dict['depthPreds'] = depthPreds
+
+            # if (not opt.cfg.DATASET.if_no_gt_semantics):
+            if if_loss:
+                loss_dict['loss_brdf-depth'] = []
+                for n in range(0, len(depthPreds ) ):
+                    if opt.cfg.MODEL_BRDF.loss.depth.if_use_midas_loss:
+                        assert opt.cfg.MODEL_ALL.ViT_baseline.enable, 'only works for MODEL_ALL (DPT) for now, which predicts inverse depth'
+                        # alpha = 0.5 if (tid!=-1 and tid>100) else 0.
+                        # alpha = 0.
+                        alpha = 0.5
+                        midas_loss_func = ScaleAndShiftInvariantLoss(alpha=alpha, loss_method='MSELoss', if_scale_aware=opt.cfg.MODEL_BRDF.use_scale_aware_depth)
+                        # invd_pred = 1./(depthPreds[n].squeeze(1) + 1e-6)
+                        invd_pred = depthInvPred.squeeze(1)
+                        invd_gt = 1./(input_dict['depthBatch'].squeeze(1) + 1e-8)
+                        loss = midas_loss_func(invd_pred, invd_gt, mask=input_dict['segAllBatch'].squeeze())
+                    else:
+                        print('-depth gt', torch.max(input_dict['depthBatch']), torch.min(input_dict['depthBatch']), torch.median(input_dict['depthBatch']))
+                        print('--depth pred', torch.max(depthPreds[n]), torch.min(depthPreds[n]), torch.median(depthPreds[n]))
+
+                        loss =  torch.sum( (torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) )
+                            * ( torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum 
+                        if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_depth:
+                            reg_loss = regularization_loss(depthPreds[n], input_dict['depthBatch'], input_dict['segAllBatch'].squeeze())
+                            # print(reg_loss.item(), loss.item())
+                            loss_dict['loss_brdf-depth-reg'] = opt.cfg.MODEL_BRDF.loss.reg_loss_depth_weight * reg_loss
+                            loss_dict['loss_brdf-ALL'] += opt.deptW * loss_dict['loss_brdf-depth-reg']
+
+                    loss_dict['loss_brdf-depth'].append(loss)
+                loss_dict['loss_brdf-ALL'] += opt.deptW * loss_dict['loss_brdf-depth'][-1]
+                # output_dict.update({'mat_seg-depthPreds': depthPreds})
+                loss_dict['loss_brdf-depth'] = loss_dict['loss_brdf-depth'][-1]
+                loss_dict['loss_brdf-depth-paper'] = torch.sum( (torch.log(depthPreds[-1]+0.001) - torch.log(input_dict['depthBatch']+0.001) )
+                    * ( torch.log(depthPreds[-1]+0.001) - torch.log(input_dict['depthBatch']+0.001) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum
 
     if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
         semsegPred = output_dict['semseg_pred']

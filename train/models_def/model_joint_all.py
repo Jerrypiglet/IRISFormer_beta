@@ -770,22 +770,26 @@ class Model_Joint(nn.Module):
                 albedoPred = 0.5 * (dpt_prediction + 1)
                 # if (not self.opt.cfg.DATASET.if_no_gt_semantics):
                 # print(input_dict['segBRDFBatch'].shape, input_dict['albedoBatch'].shape)
-                input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
                 albedoPred = torch.clamp(albedoPred, 0, 1)
+                return_dict.update({'albedoPred': albedoPred})
                 # if not self.cfg.MODEL_BRDF.use_scale_aware_albedo:
                 # print(input_dict['segBRDFBatch'].shape, albedoPred.shape)
-                albedoPred_aligned = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
-                        input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
-                albedoPred_aligned = torch.clamp(albedoPred_aligned, 0, 1)
-                return_dict.update({'albedoPred': albedoPred, 'albedoPred_aligned': albedoPred_aligned})
+                if not self.opt.cfg.DEBUG.if_test_real:
+                    input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
+                    albedoPred_aligned = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
+                            input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
+                    albedoPred_aligned = torch.clamp(albedoPred_aligned, 0, 1)
+                    return_dict.update({'albedoPred_aligned': albedoPred_aligned})
             elif modality == 'de':
                 # if self.cfg.MODEL_BRDF.use_scale_aware_depth:
                 depthPred = dpt_prediction
+                return_dict.update({'depthPred': depthPred})
                 # else:
                 # depthPred = 0.5 * (dpt_prediction + 1) # [-1, 1] -> [0, 1]
-                depthPred_aligned = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
-                        input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
-                return_dict.update({'depthPred': depthPred, 'depthPred_aligned': depthPred_aligned})
+                if not self.opt.cfg.DEBUG.if_test_real:
+                    depthPred_aligned = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
+                            input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
+                    return_dict.update({'depthPred_aligned': depthPred_aligned})
             elif modality == 'ro':
                 roughPred = dpt_prediction
                 return_dict.update({'roughPred': roughPred})

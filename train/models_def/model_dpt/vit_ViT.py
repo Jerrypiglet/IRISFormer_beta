@@ -259,12 +259,13 @@ def _make_pretrained_vitb_rn50_384_ViT(
     in_chans=3, 
     if_decoder=False
 ):
-    print('========= [_make_pretrained_vitb_rn50_384] pretrained', pretrained, if_decoder) # /home/ruizhu/anaconda3/envs/py38/lib/python3.8/site-packages/timm/models/vision_transformer.py, L570
+    print('========= [_make_pretrained_vitb_rn50_384] pretrained', pretrained, if_decoder, hooks, num_layers) # /home/ruizhu/anaconda3/envs/py38/lib/python3.8/site-packages/timm/models/vision_transformer.py, L570
 
     model = timm.create_model("vit_base_resnet50_384", pretrained=pretrained, in_chans=in_chans)
+    # print(model)
 
 
-    if num_layers < 8:
+    if num_layers < 12:
         for layer_idx in range(len(model.blocks)):
             if layer_idx >= num_layers:
                 model.blocks[layer_idx] = nn.Identity()

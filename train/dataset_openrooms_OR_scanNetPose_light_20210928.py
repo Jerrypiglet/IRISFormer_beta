@@ -174,14 +174,14 @@ class openrooms(data.Dataset):
 
 
         # assert self.opt.cfg.DATA.if_load_png_not_hdr
-        if self.opt.cfg.DATA.if_load_png_not_hdr:
-            if png_image_path.exists():
-                # png_image_path.unlink()
-                # self.convert_write_png(hdr_image_path, seg, str(png_image_path))
-                pass
-            else:
-                # self.convert_write_png(hdr_image_path, seg, str(png_image_path))
-                pass
+        # if self.opt.cfg.DATA.if_load_png_not_hdr:
+        #     if png_image_path.exists():
+        #         # png_image_path.unlink()
+        #         # self.convert_write_png(hdr_image_path, seg, str(png_image_path))
+        #         pass
+        #     else:
+        #         # self.convert_write_png(hdr_image_path, seg, str(png_image_path))
+        #         pass
 
         # Read PNG image
         # image = Image.open(str(png_image_path))
