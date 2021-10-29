@@ -1005,7 +1005,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
                         patch_flattened = data_batch['boxes_batch']['patch'] # [B, 3, ?, ?]
                         patch_batch = [patch_flattened[x[0]:x[1]].numpy() for x in data_batch['obj_split'].cpu().numpy()] # [[?, 3, D, D], [?, 3, D, D], ...]
-                        # print([x.shape[0] for x in patch_batch], data_batch['obj_split'].cpu().numpy(), patch_flattened.shape)
+                        # [x.shape[0] for x in patch_batch], data_batch['obj_split'].cpu().numpy(), patch_flattened.shape)
                         # print([[x[0], x[1]] for x in data_batch['obj_split'].cpu().numpy()])
                         assert sum([x.shape[0] for x in patch_batch])==patch_flattened.shape[0]
 

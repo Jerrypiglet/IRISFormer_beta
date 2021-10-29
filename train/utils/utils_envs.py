@@ -138,7 +138,7 @@ def set_up_envs(opt):
         else:
             opt.resize_op = None
 
-    opt.cfg.DATA.load_brdf_gt = False
+    # opt.cfg.DATA.load_brdf_gt = False
     if opt.cfg.DEBUG.if_test_real:
         opt.cfg.DATA.load_light_gt = False
         opt.cfg.DATA.data_read_list = ''

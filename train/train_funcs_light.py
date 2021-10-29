@@ -111,7 +111,7 @@ def postprocess_light(input_dict, output_dict, loss_dict, opt, time_meters):
         / output_dict['pixelNum_render'] / 3.0
     loss_dict['loss_light-renderErr'] = renderErr
 
-    print(opt.renderWeight, opt.reconstWeight)
+    # print(opt.renderWeight, opt.reconstWeight)
     loss_dict['loss_light-ALL'] = opt.renderWeight * renderErr + opt.reconstWeight * reconstErr
     # loss_dict['loss_light-ALL'] = opt.renderWeight * renderErr
 

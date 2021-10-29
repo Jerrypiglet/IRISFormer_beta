@@ -153,7 +153,6 @@ class Model_Joint_ViT(nn.Module):
                     return_dict.update({'depthInvPred': vit_out})
                     depthPred = 1. / (vit_out + 1e-8)
                 return_dict.update({'depthPred': depthPred})
-                print(self.load_brdf_gt)
                 if (not self.opt.cfg.DEBUG.if_test_real) and self.load_brdf_gt:
                     depthPred_aligned = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
                             input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
