@@ -39,9 +39,13 @@ class ModelAll_ViT(torch.nn.Module):
     ViT/DPT for multiple modalities
     '''
     def __init__(
-        self, opt, backbone, 
-        N_layers_encoder_stage0, N_layers_decoder_stage0, 
-        N_layers_encoder_stage1, N_layers_decoder_stage1, 
+        self, 
+        opt, 
+        backbone, 
+        N_layers_encoder_stage0, 
+        N_layers_decoder_stage0, 
+        N_layers_encoder_stage1, 
+        N_layers_decoder_stage1, 
         modalities=[]):
 
         super(ModelAll_ViT, self).__init__()

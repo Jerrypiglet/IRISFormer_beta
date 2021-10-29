@@ -477,7 +477,7 @@ for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         loss_keys_backward = []
         if opt.cfg.MODEL_SEG.enable:
             loss_keys_backward.append('loss_mat_seg-ALL')
-        if opt.cfg.MODEL_BRDF.enable:
+        if opt.cfg.MODEL_BRDF.enable and opt.cfg.DATA.load_brdf_gt:
             loss_keys_backward.append('loss_brdf-ALL')
         if opt.cfg.MODEL_SEMSEG.enable and not opt.cfg.MODEL_SEMSEG.if_freeze:
             loss_keys_backward.append('loss_semseg-ALL')

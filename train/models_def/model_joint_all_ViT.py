@@ -74,7 +74,10 @@ class Model_Joint_ViT(nn.Module):
         self.modalities_stage1 = list(set(self.modalities) & set(['axis', 'lamb', 'weight']))
         self.if_BRDF = self.modalities_stage0 != []
         self.if_Light = self.modalities_stage1 != []
+        self.load_brdf_gt = self.opt.cfg.DATA.load_brdf_gt
+        self.use_GT_brdf = self.opt.cfg.MODEL_LIGHT.use_GT_brdf
 
+        print('====self.modalities', self.modalities)
         self.MODEL_ALL = ModelAll_ViT(
             opt=opt, 
             modalities=self.modalities.copy(), 
@@ -96,7 +99,6 @@ class Model_Joint_ViT(nn.Module):
 
             if self.cfg.MODEL_LIGHT.freeze_BRDF_Net and self.if_BRDF:
                 self.freeze_BRDF()
-
 
     def forward(self, input_dict):
         # module_hooks_dict = {}
@@ -138,7 +140,7 @@ class Model_Joint_ViT(nn.Module):
                 albedoPred = 0.5 * (vit_out + 1)
                 albedoPred = torch.clamp(albedoPred, 0, 1)
                 return_dict.update({'albedoPred': albedoPred})
-                if not self.opt.cfg.DEBUG.if_test_real:
+                if (not self.opt.cfg.DEBUG.if_test_real) and self.load_brdf_gt:
                     input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
                     albedoPred_aligned = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
                             input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
@@ -151,7 +153,8 @@ class Model_Joint_ViT(nn.Module):
                     return_dict.update({'depthInvPred': vit_out})
                     depthPred = 1. / (vit_out + 1e-8)
                 return_dict.update({'depthPred': depthPred})
-                if not self.opt.cfg.DEBUG.if_test_real:
+                print(self.load_brdf_gt)
+                if (not self.opt.cfg.DEBUG.if_test_real) and self.load_brdf_gt:
                     depthPred_aligned = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
                             input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
                     return_dict.update({'depthPred_aligned': depthPred_aligned})
@@ -175,22 +178,22 @@ class Model_Joint_ViT(nn.Module):
         im_h, im_w = self.cfg.DATA.im_height, self.cfg.DATA.im_width
 
         # Normalize Albedo and depth
-        if 'al' in self.modalities_stage0:
+        if 'al' in self.modalities_stage0 and not self.use_GT_brdf:
             albedoInput = return_dict_brdf['albedoPred'].detach().clone()
         else:
             albedoInput = input_dict['albedoBatch'].detach().clone()
 
-        if 'de' in self.modalities_stage0:
+        if 'de' in self.modalities_stage0 and not self.use_GT_brdf:
             depthInput = return_dict_brdf['depthPred'].detach().clone()
         else:
             depthInput = input_dict['depthBatch'].detach().clone()
 
-        if 'no' in self.modalities_stage0:
+        if 'no' in self.modalities_stage0 and not self.use_GT_brdf:
             normalInput = return_dict_brdf['normalPred'].detach().clone()
         else:
             normalInput = input_dict['normalBatch'].detach().clone()
 
-        if 'ro' in self.modalities_stage0:
+        if 'ro' in self.modalities_stage0 and not self.use_GT_brdf:
             roughInput = return_dict_brdf['roughPred'].detach().clone()
         else:
             roughInput = input_dict['roughBatch'].detach().clone()

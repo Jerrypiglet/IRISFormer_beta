@@ -10,6 +10,8 @@ from models_def.loss_midas import ScaleAndShiftInvariantLoss, GradientLoss
 
 regularization_loss = GradientLoss(scales=4, reduction='batch-based')
 
+# def get_im_input(data_batch, opt, return_input_batch_as_list=False)
+
 def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
     input_dict = {}
     
@@ -26,7 +28,8 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
         input_dict['im_h_resized_to'] = data_batch['im_h_resized_to']
         input_dict['im_w_resized_to'] = data_batch['im_w_resized_to']
 
-    if_load_mask = opt.cfg.DATA.load_brdf_gt and not opt.cfg.DEBUG.if_test_real
+    # if_load_mask = opt.cfg.DATA.load_brdf_gt and not opt.cfg.DEBUG.if_test_real
+    if_load_mask = not opt.cfg.DEBUG.if_test_real
     
     if opt.cfg.DATA.load_brdf_gt:
         # Load data from cpu to gpu
@@ -49,28 +52,28 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
                 depth_cpu_next = data_batch['depth_next']
                 input_dict['depthBatch_next'] = depth_cpu_next.cuda(non_blocking=True)
 
-        # if (not opt.cfg.DATASET.if_no_gt_semantics):
-        if if_load_mask:
-            if 'mask' in data_batch:
-                mask_cpu = data_batch['mask'].permute(0, 3, 1, 2) # [b, 3, h, w]
-                input_dict['maskBatch'] = mask_cpu.cuda(non_blocking=True)
+    # if (not opt.cfg.DATASET.if_no_gt_semantics):
+    if if_load_mask:
+        if 'mask' in data_batch:
+            mask_cpu = data_batch['mask'].permute(0, 3, 1, 2) # [b, 3, h, w]
+            input_dict['maskBatch'] = mask_cpu.cuda(non_blocking=True)
 
-            segArea_cpu = data_batch['segArea']
-            segEnv_cpu = data_batch['segEnv']
-            segObj_cpu = data_batch['segObj']
+        segArea_cpu = data_batch['segArea']
+        segEnv_cpu = data_batch['segEnv']
+        segObj_cpu = data_batch['segObj']
 
-            seg_cpu = torch.cat([segArea_cpu, segEnv_cpu, segObj_cpu], dim=1 )
-            segBatch = seg_cpu.cuda(non_blocking=True)
+        seg_cpu = torch.cat([segArea_cpu, segEnv_cpu, segObj_cpu], dim=1 )
+        segBatch = seg_cpu.cuda(non_blocking=True)
 
-            input_dict['segBRDFBatch'] = segBatch[:, 2:3, :, :]
-            input_dict['segAllBatch'] = segBatch[:, 0:1, :, :]  + segBatch[:, 2:3, :, :]
-        else:
-            input_dict['segBRDFBatch'] = torch.ones((im_cpu.shape[0], 1, im_cpu.shape[2], im_cpu.shape[3]), dtype=torch.float32).cuda(non_blocking=True)
-            input_dict['segAllBatch'] = input_dict['segBRDFBatch']
+        input_dict['segBRDFBatch'] = segBatch[:, 2:3, :, :]
+        input_dict['segAllBatch'] = segBatch[:, 0:1, :, :]  + segBatch[:, 2:3, :, :]
+    else:
+        input_dict['segBRDFBatch'] = torch.ones((im_cpu.shape[0], 1, im_cpu.shape[2], im_cpu.shape[3]), dtype=torch.float32).cuda(non_blocking=True)
+        input_dict['segAllBatch'] = input_dict['segBRDFBatch']
 
-        # print(input_dict['segBRDFBatch'].shape, input_dict['brdf_loss_mask'].shape)
-        input_dict['segBRDFBatch'] = input_dict['segBRDFBatch'] * input_dict['brdf_loss_mask'].unsqueeze(1)
-        input_dict['segAllBatch'] = input_dict['segAllBatch'] * input_dict['brdf_loss_mask'].unsqueeze(1)
+    # print(input_dict['segBRDFBatch'].shape, input_dict['brdf_loss_mask'].shape)
+    input_dict['segBRDFBatch'] = input_dict['segBRDFBatch'] * input_dict['brdf_loss_mask'].unsqueeze(1)
+    input_dict['segAllBatch'] = input_dict['segAllBatch'] * input_dict['brdf_loss_mask'].unsqueeze(1)
 
 
     if opt.cfg.DATA.load_semseg_gt:
@@ -125,21 +128,21 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
 
             renderedImBatch = diffusePreBatch + specularPreBatch
 
-        # if opt.cascadeLevel == 0:
-        assert opt.cascadeLevel == 0
-        input_batch = [input_dict['imBatch']]
-        if opt.ifMatMapInput:
-            input_batch.append(input_dict['matAggreMapBatch'])
-        if not return_input_batch_as_list:
-            input_batch = torch.cat(input_batch, 1)
+    # if opt.cascadeLevel == 0:
+    assert opt.cascadeLevel == 0
+    input_batch = [input_dict['imBatch']]
+    if opt.ifMatMapInput:
+        input_batch.append(input_dict['matAggreMapBatch'])
+    if not return_input_batch_as_list:
+        input_batch = torch.cat(input_batch, 1)
 
-        # elif opt.cascadeLevel > 0:
-        #     input_batch = torch.cat([input_dict['imBatch'], albedoPreBatch,
-        #         normalPreBatch, roughPreBatch, depthPreBatch,
-        #         diffusePreBatch, specularPreBatch], dim=1)
+    # elif opt.cascadeLevel > 0:
+    #     input_batch = torch.cat([input_dict['imBatch'], albedoPreBatch,
+    #         normalPreBatch, roughPreBatch, depthPreBatch,
+    #         diffusePreBatch, specularPreBatch], dim=1)
 
-        #     preBatchDict.update({'albedoPreBatch': albedoPreBatch, 'normalPreBatch': normalPreBatch, 'roughPreBatch': roughPreBatch, 'depthPreBatch': depthPreBatch, 'diffusePreBatch': diffusePreBatch, 'specularPreBatch': specularPreBatch})
-        #     preBatchDict['renderedImBatch'] = renderedImBatch
+    #     preBatchDict.update({'albedoPreBatch': albedoPreBatch, 'normalPreBatch': normalPreBatch, 'roughPreBatch': roughPreBatch, 'depthPreBatch': depthPreBatch, 'diffusePreBatch': diffusePreBatch, 'specularPreBatch': specularPreBatch})
+    #     preBatchDict['renderedImBatch'] = renderedImBatch
 
     return input_batch, input_dict, preBatchDict
 
@@ -153,7 +156,7 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
         if opt.cfg.MODEL_LIGHT.enable:
             extra_dict = []
 
-        if opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
+        if opt.cfg.MODEL_BRDF.enable_BRDF_decoders and if_loss:
             loss_dict['loss_brdf-ALL'] = 0.
 
         if 'al' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
@@ -165,7 +168,7 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
             albedoPreds.append(albedoPred ) 
 
             output_dict['albedoPreds'] = [output_dict['albedoPred']]
-            if not opt.cfg.DEBUG.if_test_real:
+            if (not opt.cfg.DEBUG.if_test_real) and opt.cfg.DATA.load_brdf_gt:
                 output_dict['albedoPreds_aligned'] = [output_dict['albedoPred_aligned']]
             # if (not opt.cfg.DATASET.if_no_gt_semantics):
             if if_loss:
@@ -223,7 +226,7 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
             if opt.cfg.MODEL_BRDF.use_scale_aware_depth:
                 depthPred = output_dict['depthPred']
             else:
-                if not opt.cfg.DEBUG.if_test_real:
+                if (not opt.cfg.DEBUG.if_test_real) and opt.cfg.DATA.load_brdf_gt:
                     depthPred = output_dict['depthPred_aligned']
 
             if opt.cfg.MODEL_BRDF.loss.depth.if_use_midas_loss:

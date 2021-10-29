@@ -150,8 +150,8 @@ def set_up_envs(opt):
     opt.cfg.MODEL_ALL.enable_list = [x for x in opt.cfg.MODEL_ALL.enable_list.split('_') if x != '']
     if opt.cfg.MODEL_ALL.enable:
         assert opt.cfg.MODEL_ALL.ViT_baseline.depth.activation in ['tanh', 'relu']
-        if not opt.cfg.DEBUG.if_test_real:
-            opt.cfg.DATA.load_brdf_gt = True
+        # if not opt.cfg.DEBUG.if_test_real:
+        #     opt.cfg.DATA.load_brdf_gt = True
         if 'lo' in opt.cfg.MODEL_ALL.enable_list:
             opt.cfg.MODEL_LAYOUT_EMITTER.enable = True
             opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = list(set(opt.cfg.MODEL_LAYOUT_EMITTER.enable_list_allowed) & set(opt.cfg.MODEL_ALL.enable_list))
@@ -161,7 +161,7 @@ def set_up_envs(opt):
         if 'li' in opt.cfg.DATA.data_read_list:
             if not opt.cfg.DEBUG.if_test_real:
                 opt.cfg.DATA.load_light_gt = True
-                opt.cfg.MODEL_LIGHT.use_GT_brdf = True
+                # opt.cfg.MODEL_LIGHT.use_GT_brdf = True
             opt.cfg.MODEL_LIGHT.enable = True
         
 
@@ -350,11 +350,13 @@ def set_up_envs(opt):
 
     # ====== per-pixel lighting =====
     if opt.cfg.MODEL_LIGHT.enable:
-        opt.cfg.DATA.load_brdf_gt = True
-        if not opt.cfg.DEBUG.if_test_real:
-            opt.cfg.DATA.load_light_gt = True
-            opt.cfg.DATA.data_read_list += 'al_no_de_ro'.split('_')
+        # opt.cfg.DATA.load_brdf_gt = True
+        # if not opt.cfg.DEBUG.if_test_real:
+            # opt.cfg.DATA.load_light_gt = True
+            # if opt.cfg.DATA.load_light_gt:
+            #     opt.cfg.DATA.data_read_list += 'al_no_de_ro'.split('_')
         if opt.cfg.MODEL_LIGHT.use_GT_brdf and opt.cfg.MODEL_BRDF.enable:
+            opt.cfg.DATA.load_brdf_gt = True
             opt.cfg.MODEL_LIGHT.freeze_BRDF_Net = True
             opt.cfg.MODEL_BRDF.if_freeze = True
         #     opt.cfg.MODEL_BRDF.enable = False
@@ -402,7 +404,7 @@ def set_up_envs(opt):
     # ic(opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders)
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
         # if not opt.cfg.DEBUG.if_test_real:
-        opt.cfg.DATA.load_brdf_gt = True
+        # opt.cfg.DATA.load_brdf_gt = True
         opt.depth_metrics = ['abs_rel', 'sq_rel', 'rmse', 'rmse_log', 'a1', 'a2', 'a3']
         if not opt.cfg.MODEL_LIGHT.freeze_BRDF_Net:
             opt.cfg.MODEL_BRDF.loss_list += opt.cfg.MODEL_BRDF.enable_list
