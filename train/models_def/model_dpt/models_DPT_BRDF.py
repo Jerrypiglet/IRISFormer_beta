@@ -67,6 +67,7 @@ class DPTBRDFModel(Transformer_Hybrid_Encoder_Decoder):
         self.scratch.output_conv = output_head
 
         self.pretrained = _make_pretrained(
+            cfg_DPT=cfg_DPT, 
             size=[opt.cfg.DATA.im_height_padded, opt.cfg.DATA.im_width_padded],
             features=[256, 512, 768, 768],
             use_readout=DPT_readout,
@@ -100,10 +101,10 @@ class DPTBRDFModel(Transformer_Hybrid_Encoder_Decoder):
             layer_4 = self.pretrained.act_postprocess4[0:2](layer_4)
             # print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape)
             if layer_1.ndim == 3:
-                assert False, 'should be ResNet feats in DPT-hybrid setting!'
+                # assert False, 'should be ResNet feats in DPT-hybrid setting!'
                 layer_1 = self.unflatten(layer_1)
             if layer_2.ndim == 3:
-                assert False, 'should be ResNet feats in DPT-hybrid setting!'
+                # assert False, 'should be ResNet feats in DPT-hybrid setting!'
                 layer_2 = self.unflatten(layer_2)
             if layer_3.ndim == 3:
                 layer_3 = self.unflatten(layer_3)
@@ -141,9 +142,14 @@ class DPTBRDFModel(Transformer_Hybrid_Encoder_Decoder):
             where x_out is disparity (inversed * baseline)'''
 
             if self.opt.cfg.MODEL_BRDF.loss.depth.if_use_Zhengqin_loss:
-                print(torch.max(x_out), torch.min(x_out), torch.median(x_out), self.non_negative, self.if_batch_norm)
-                x_out = torch.tanh(x_out)
-                x_out = 0.5 * (x_out + 1) # [-1, 1] -> [0, 1]
+                # print(torch.max(x_out), torch.min(x_out), torch.median(x_out), self.non_negative, self.if_batch_norm)
+                if self.opt.cfg.MODEL_ALL.ViT_baseline.depth.activation == 'tanh':
+                    x_out = torch.tanh(x_out)
+                    x_out = 0.5 * (x_out + 1) # [-1, 1] -> [0, 1]
+                elif self.opt.cfg.MODEL_ALL.ViT_baseline.depth.activation == 'relu':
+                    x_out = torch.relu(x_out)
+                else:
+                    assert False
                 x_out = self.scale * x_out + self.shift
                 # x_out[x_out < 1e-8] = 1e-8
                 x_out = 1.0 / (x_out + 1e-8)

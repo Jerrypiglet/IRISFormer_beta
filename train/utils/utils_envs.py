@@ -26,7 +26,9 @@ def set_up_envs(opt):
         # opt.cfg.TRAINING.MAX_CKPT_KEEP = -1
         opt.if_save_pickles = False
 
-    # if opt.cfg.DEBUG.if_test_real:
+    if opt.cfg.DEBUG.if_test_real:
+        opt.cfg.DEBUG.if_dump_perframe_BRDF = True
+        opt.cfg.TEST.vis_max_samples = 20000
         
 
     if opt.cfg.DATASET.if_quarter and not opt.if_cluster:
@@ -147,6 +149,7 @@ def set_up_envs(opt):
         assert opt.cfg.MODEL_ALL.ViT_baseline.if_share_decoder_over_BRDF_modalities
     opt.cfg.MODEL_ALL.enable_list = [x for x in opt.cfg.MODEL_ALL.enable_list.split('_') if x != '']
     if opt.cfg.MODEL_ALL.enable:
+        assert opt.cfg.MODEL_ALL.ViT_baseline.depth.activation in ['tanh', 'relu']
         if not opt.cfg.DEBUG.if_test_real:
             opt.cfg.DATA.load_brdf_gt = True
         if 'lo' in opt.cfg.MODEL_ALL.enable_list:
@@ -515,7 +518,7 @@ def set_up_logger(opt):
         # logger.info(config_str)
     printer = printer(opt.rank, debug=opt.debug)
 
-    if opt.is_master and 'tmp' not in opt.task_name:
+    if opt.is_master and 'tmp' not in opt.task_name and not opt.cfg.DEBUG.if_test_real:
         exclude_list = ['apex', 'logs_bkg', 'archive', 'train_cifar10_py', 'train_mnist_tf', 'utils_external', 'build/'] + \
             ['Summary', 'Summary_vis', 'Checkpoint', 'logs', '__pycache__', 'snapshots', '.vscode', '.ipynb_checkpoints', 'azureml-setup', 'azureml_compute_logs']
         # if opt.if_cluster:

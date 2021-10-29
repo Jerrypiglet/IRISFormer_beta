@@ -630,6 +630,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
     roughBatch_list = []
     depthBatch_list = []
     imBatch_list = []
+    imBatch_vis_list = []
     segAllBatch_list = []
     segBRDFBatch_list = []
     
@@ -1318,6 +1319,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
             # print(((input_dict['albedoBatch'] ) ** (1.0/2.2) ).data.shape) # [b, 3, h, w]
             im_paths_list.append(input_dict['im_paths'])
             imBatch_list.append(input_dict['imBatch'])
+            imBatch_vis_list.append(data_batch['im_fixedscale_SDR'])
             segAllBatch_list.append(input_dict['segAllBatch'])
             segBRDFBatch_list.append(input_dict['segBRDFBatch'])
             if 'al' in opt.cfg.DATA.data_read_list:
@@ -1433,14 +1435,15 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
         # if (not opt.cfg.DATASET.if_no_gt_semantics):
         depthBatch_vis = torch.cat(depthBatch_list)
 
-    imBatch_vis = torch.cat(imBatch_list)
+    imBatch_vis = torch.cat(imBatch_vis_list)
     segAllBatch_vis = torch.cat(segAllBatch_list)
     segBRDFBatch_vis = torch.cat(segBRDFBatch_list)
 
     print('Saving vis to ', '{0}'.format(opt.summary_vis_path_task, tid))
     # Save the ground truth and the input
     # albedoBatch_vis_sdr = ( (albedoBatch_vis ) ** (1.0/2.2) ).data # torch.Size([16, 3, 192, 256]) 
-    im_batch_vis_sdr = ( (imBatch_vis)**(1.0/2.2) ).data
+    # im_batch_vis_sdr = ( (imBatch_vis)**(1.0/2.2) ).data
+    im_batch_vis_sdr = (imBatch_vis ).data.permute(0, 3, 1, 2)
 
     ## ---- GTs
     # if (not opt.cfg.DATASET.if_no_gt_semantics):
@@ -1544,26 +1547,27 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
         #             '{0}/{1}_depthPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
 
         # ==== Preds
+        # print(opt.cfg.MODEL_BRDF.enable_list, '>>>>>>>>', n, albedoPreds_vis.shape)
         if 'al' in opt.cfg.MODEL_BRDF.enable_list:
             albedo_pred_batch_vis_sdr = ( (albedoPreds_vis ) ** (1.0/2.2) ).data
             if not opt.cfg.DEBUG.if_test_real:
                 albedo_pred_aligned_batch_vis_sdr = ( (albedoPreds_aligned_vis ) ** (1.0/2.2) ).data
             if opt.is_master:
                 vutils.save_image(albedo_pred_batch_vis_sdr,
-                        '{0}/{1}_albedoPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
+                        '{0}/{1}_albedoPred.png'.format(opt.summary_vis_path_task, tid) )
                 if not opt.cfg.DEBUG.if_test_real:
                     vutils.save_image(albedo_pred_aligned_batch_vis_sdr,
-                            '{0}/{1}_albedoPred_aligned_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
+                            '{0}/{1}_albedoPred_aligned.png'.format(opt.summary_vis_path_task, tid) )
         if 'no' in opt.cfg.MODEL_BRDF.enable_list:
             normal_pred_batch_vis_sdr = ( 0.5*(normalPreds_vis + 1) ).data
             if opt.is_master:
                 vutils.save_image(normal_pred_batch_vis_sdr,
-                        '{0}/{1}_normalPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
+                        '{0}/{1}_normalPred.png'.format(opt.summary_vis_path_task, tid) )
         if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
             rough_pred_batch_vis_sdr = ( 0.5*(roughPreds_vis + 1) ).data
             if opt.is_master:
                 vutils.save_image(rough_pred_batch_vis_sdr,
-                        '{0}/{1}_roughPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
+                        '{0}/{1}_roughPred.png'.format(opt.summary_vis_path_task, tid) )
             # print(torch.min(1 / torch.clamp(depthPreds_vis + 1, 1e-6, 10)), torch.max(1 / torch.clamp(depthPreds_vis + 1, 1e-6, 10)), torch.mean(1 / torch.clamp(depthPreds_vis + 1, 1e-6, 10)), torch.median(1 / torch.clamp(depthPreds_vis + 1, 1e-6, 10)))
         if 'de' in opt.cfg.MODEL_BRDF.enable_list:
             depthOut = 1 / torch.clamp(depthPreds_vis + 1, 1e-6, 10) * segAllBatch_vis.expand_as(depthPreds_vis)

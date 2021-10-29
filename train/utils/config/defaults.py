@@ -295,6 +295,10 @@ _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr = False # faster: 1e-4, backbone: 
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.yogo_lr = False # use yogo scheduler and optimizer
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels = 768
 
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.depth = CN()
+_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.depth.activation = 'tanh'
+
+
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA = CN()
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA = False # use Cross Attention instead of assembling
 # _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_recompute_C = False # recompute tokens from im_feat then feed to next transformer; not applicable to CAv2
@@ -625,6 +629,7 @@ _C.MODEL_ALL.loss_list = ''
 
 _C.MODEL_ALL.ViT_baseline = CN()
 _C.MODEL_ALL.ViT_baseline.enable = True # enable model / modules
+# _C.MODEL_ALL.ViT_baseline.use_vit_only = False # only works for hybrid (which is the case here)
 _C.MODEL_ALL.ViT_baseline.if_pos_embed = True
 _C.MODEL_ALL.ViT_baseline.readout = 'project'
 _C.MODEL_ALL.ViT_baseline.if_imagenet_backbone = True
@@ -639,6 +644,9 @@ _C.MODEL_ALL.ViT_baseline.if_indept_MLP_heads_if_layer_norm = False
 _C.MODEL_ALL.ViT_baseline.ViT_pool = 'mean'
 _C.MODEL_ALL.ViT_baseline.N_layers_encoder = 6
 _C.MODEL_ALL.ViT_baseline.N_layers_decoder = 6
+
+_C.MODEL_ALL.ViT_baseline.depth = CN()
+_C.MODEL_ALL.ViT_baseline.depth.activation = 'tanh'
 
 
 # ===== solver

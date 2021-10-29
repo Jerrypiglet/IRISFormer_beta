@@ -88,6 +88,7 @@ class MLP(nn.Module):
         return x
 
 def _make_pretrained(
+        cfg_DPT, 
         size=[384, 384],
         features=[256, 512, 768, 768],
         vit_features=768,
@@ -97,17 +98,65 @@ def _make_pretrained(
     readout_oper = get_readout_oper(vit_features, features, use_readout, start_index)
 
     pretrained = nn.Module()
-    pretrained.act_postprocess1 = nn.Sequential(
-        nn.Identity(), nn.Identity(), nn.Identity()
-    )
-    pretrained.act_postprocess2 = nn.Sequential(
-        nn.Identity(), nn.Identity(), nn.Identity()
-    )
+
+    if cfg_DPT.use_vit_only:
+        pretrained.act_postprocess1 = nn.Sequential(
+            readout_oper[0],
+            Transpose(1, 2),
+            nn.Unflatten(2, torch.Size([size[0] // cfg_DPT.patch_size, size[1] // cfg_DPT.patch_size])),
+            nn.Conv2d(
+                in_channels=vit_features,
+                out_channels=features[0],
+                kernel_size=1,
+                stride=1,
+                padding=0,
+            ),
+            nn.ConvTranspose2d(
+                in_channels=features[0],
+                out_channels=features[0],
+                kernel_size=4,
+                stride=4,
+                padding=0,
+                bias=True,
+                dilation=1,
+                groups=1,
+            ),
+        )
+
+        pretrained.act_postprocess2 = nn.Sequential(
+            readout_oper[1],
+            Transpose(1, 2),
+            nn.Unflatten(2, torch.Size([size[0] // cfg_DPT.patch_size, size[1] // cfg_DPT.patch_size])),
+            nn.Conv2d(
+                in_channels=vit_features,
+                out_channels=features[1],
+                kernel_size=1,
+                stride=1,
+                padding=0,
+            ),
+            nn.ConvTranspose2d(
+                in_channels=features[1],
+                out_channels=features[1],
+                kernel_size=2,
+                stride=2,
+                padding=0,
+                bias=True,
+                dilation=1,
+                groups=1,
+            ),
+        )
+    else:
+        pretrained.act_postprocess1 = nn.Sequential(
+            nn.Identity(), nn.Identity(), nn.Identity()
+        )
+        pretrained.act_postprocess2 = nn.Sequential(
+            nn.Identity(), nn.Identity(), nn.Identity()
+        )
     
     pretrained.act_postprocess3 = nn.Sequential(
         readout_oper[2],
         Transpose(1, 2),
-        nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
+        nn.Unflatten(2, torch.Size([size[0] // cfg_DPT.patch_size, size[1] // cfg_DPT.patch_size])),
         nn.Conv2d(
             in_channels=vit_features,
             out_channels=features[2],
@@ -120,7 +169,7 @@ def _make_pretrained(
     pretrained.act_postprocess4 = nn.Sequential(
         readout_oper[3],
         Transpose(1, 2),
-        nn.Unflatten(2, torch.Size([size[0] // 16, size[1] // 16])),
+        nn.Unflatten(2, torch.Size([size[0] // cfg_DPT.patch_size, size[1] // cfg_DPT.patch_size])),
         nn.Conv2d(
             in_channels=vit_features,
             out_channels=features[3],

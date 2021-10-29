@@ -104,11 +104,13 @@ def forward_DPT_pretrained(opt, cfg_DPT, pretrained, unflatten, layers_out):
     layer_3 = pretrained.act_postprocess3[0:2](layer_3)
     layer_4 = pretrained.act_postprocess4[0:2](layer_4)
 
+    # print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape, )
+
     if layer_1.ndim == 3:
-        assert False, 'should be ResNet feats in DPT-hybrid setting!'
+        # assert False, 'should be ResNet feats in DPT-hybrid setting!'
         layer_1 = unflatten(layer_1)
     if layer_2.ndim == 3:
-        assert False, 'should be ResNet feats in DPT-hybrid setting!'
+        # assert False, 'should be ResNet feats in DPT-hybrid setting!'
         layer_2 = unflatten(layer_2)
     if layer_3.ndim == 3:
         layer_3 = unflatten(layer_3)
@@ -205,8 +207,8 @@ def _make_vit_b_rn50_backbone_ViT(
     pretrained = nn.Module()
 
     pretrained.model = model
-    
-    if if_decoder:
+
+    if if_decoder or (not if_decoder and cfg_DPT.use_vit_only):
         assert len(hooks) == 2, 'Only 2 hooks supported'
         pretrained.model.blocks[hooks[0]].register_forward_hook(get_activation("1"))
         pretrained.model.blocks[hooks[1]].register_forward_hook(get_activation("2"))

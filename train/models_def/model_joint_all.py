@@ -215,15 +215,24 @@ class Model_Joint(nn.Module):
                         keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
                     )
                 elif model_type=='dpt_large':
-                    self.BRDF_Net = DPTBRDFModel(
+                    # self.BRDF_Net = DPTBRDFModel(
+                    #     opt=opt, 
+                    #     cfg_DPT=opt.cfg.MODEL_BRDF.DPT_baseline, 
+                    #     modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
+                    #     path=model_path,
+                    #     backbone="vitl16_384",
+                    #     non_negative=if_non_negative,
+                    #     enable_attention_hooks=False,
+                    #     skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
+                    # )
+                    assert self.opt.cfg.MODEL_BRDF.DPT_baseline.modality == 'enabled', 'only support this mode for now; choose modes in MODEL_BRDF.enable_list'
+                    self.BRDF_Net = get_BRDFNet_DPT(
                         opt=opt, 
-                        modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
-                        path=model_path,
-                        backbone="vitl16_384",
-                        non_negative=if_non_negative,
-                        enable_attention_hooks=False,
-                        skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
+                        model_path=model_path, 
+                        modalities=self.opt.cfg.MODEL_BRDF.enable_list, 
+                        backbone="vitl16_384"
                     )
+
                 elif model_type=='dpt_base':
                     # self.BRDF_Net = DPTBRDFModel(
                     #     opt=opt, 
@@ -793,6 +802,9 @@ class Model_Joint(nn.Module):
             elif modality == 'ro':
                 roughPred = dpt_prediction
                 return_dict.update({'roughPred': roughPred})
+            elif modality == 'no':
+                normalPred = dpt_prediction
+                return_dict.update({'normalPred': normalPred})
             else:
                 assert False, 'Unsupported modality: %s'%modality
 

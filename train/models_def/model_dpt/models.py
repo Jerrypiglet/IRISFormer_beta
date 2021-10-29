@@ -163,7 +163,7 @@ class DPT(BaseModel):
         return out
 
 def get_BRDFNet_DPT(opt, model_path, backbone, modalities=[]):
-    assert all([x in ['al', 'ro'] for x in modalities])
+    assert all([x in ['al', 'ro', 'de', 'no'] for x in modalities])
 
     module_dict = {}
     for modality in modalities:
@@ -201,8 +201,8 @@ class DPTBRDFModel(DPT):
         features = kwargs["features"] if "features" in kwargs else 256
 
         self.modality = modality
-        assert modality in ['al', 'de', 'ro'], 'Invalid modality: %s'%modality
-        self.out_channels = {'al': 3, 'de': 1, 'ro': 1}[modality]
+        assert modality in ['al', 'de', 'ro', 'no'], 'Invalid modality: %s'%modality
+        self.out_channels = {'al': 3, 'de': 1, 'ro': 1, 'no': 3}[modality]
 
         self.scale = scale
         self.shift = shift
@@ -219,7 +219,7 @@ class DPTBRDFModel(DPT):
             nn.Conv2d(32, self.out_channels, kernel_size=1, stride=1, padding=0),
             # nn.BatchNorm2d(self.out_channels) if self.if_batch_norm else nn.Identity(),
             # nn.GroupNorm(self.out_channels) if self.if_batch_norm else nn.Identity(),
-            nn.ReLU(True) if non_negative else nn.Identity(),
+            # nn.ReLU(True) if non_negative else nn.Identity(),
             nn.Identity(),
         )
         # if self.if_batch_norm:
@@ -247,13 +247,24 @@ class DPTBRDFModel(DPT):
             where x_out is disparity (inversed * baseline)'''
             # x_out = torch.clamp(x_out, 1e-8, 100)
             # print('[DPTBRDFModel - x_out]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
+            if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.depth.activation == 'tanh':
+                x_out = torch.tanh(x_out)
+                x_out = 0.5 * (x_out + 1) # [-1, 1] -> [0, 1]
+            elif self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.depth.activation == 'relu':
+                x_out = torch.relu(x_out)
+            else:
+                assert False
+
             x_out = self.scale * x_out + self.shift
             x_out[x_out < 1e-8] = 1e-8
             x_out = 1.0 / x_out
             # x_out = torch.clip(x_out*5000., 1e-6, 2000000.)
             # print('[DPTBRDFModel - x_out 3]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
             # pass
-
+        elif self.modality == 'no':
+            x_out = torch.clamp(1.01 * torch.tanh(x_out ), -1, 1)
+            norm = torch.sqrt(torch.sum(x_out * x_out, dim=1).unsqueeze(1) ).expand_as(x_out)
+            x_out = x_out / torch.clamp(norm, min=1e-6)
         return x_out, {}
 
 
