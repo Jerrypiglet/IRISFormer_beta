@@ -39,7 +39,10 @@ class ModelAll_ViT(torch.nn.Module):
     ViT/DPT for multiple modalities
     '''
     def __init__(
-        self, opt, backbone, N_layers_encoder, N_layers_decoder, modalities=[]):
+        self, opt, backbone, 
+        N_layers_encoder_stage0, N_layers_decoder_stage0, 
+        N_layers_encoder_stage1, N_layers_decoder_stage1, 
+        modalities=[]):
 
         super(ModelAll_ViT, self).__init__()
 
@@ -65,8 +68,8 @@ class ModelAll_ViT(torch.nn.Module):
                     backbone=backbone, 
                     if_imagenet_backbone=opt.cfg.MODEL_ALL.ViT_baseline.if_imagenet_backbone, 
                     if_share_encoder_over_modalities=opt.cfg.MODEL_ALL.ViT_baseline.if_share_encoder_over_modalities_stage0, 
-                    N_layers_encoder=N_layers_encoder, 
-                    N_layers_decoder=N_layers_decoder, 
+                    N_layers_encoder=N_layers_encoder_stage0, 
+                    N_layers_decoder=N_layers_decoder_stage0, 
                     head_names=head_names_dict[modality], 
                     ViT_pool=opt.cfg.MODEL_ALL.ViT_baseline.ViT_pool
                 )
@@ -81,8 +84,8 @@ class ModelAll_ViT(torch.nn.Module):
                     expand=False,
                     if_imagenet_backbone=opt.cfg.MODEL_BRDF.DPT_baseline.if_imagenet_backbone, 
                     if_share_encoder_over_modalities=opt.cfg.MODEL_ALL.ViT_baseline.if_share_encoder_over_modalities_stage0, 
-                    N_layers_encoder=N_layers_encoder, 
-                    N_layers_decoder=N_layers_decoder, 
+                    N_layers_encoder=N_layers_encoder_stage0, 
+                    N_layers_decoder=N_layers_decoder_stage0, 
                     non_negative=True if modality in ['de'] else False,
                     # enable_attention_hooks=opt.cfg.MODEL_BRDF.DPT_baseline.if_enable_attention_hooks,
                     DPT_readout=opt.cfg.MODEL_BRDF.DPT_baseline.readout, 
@@ -99,8 +102,8 @@ class ModelAll_ViT(torch.nn.Module):
                     expand=False,
                     if_imagenet_backbone=opt.cfg.MODEL_LIGHT.DPT_baseline.if_imagenet_backbone, 
                     if_share_encoder_over_modalities=opt.cfg.MODEL_ALL.ViT_baseline.if_share_encoder_over_modalities_stage1, 
-                    N_layers_encoder=N_layers_encoder, 
-                    N_layers_decoder=N_layers_decoder, 
+                    N_layers_encoder=N_layers_encoder_stage1, 
+                    N_layers_decoder=N_layers_decoder_stage1, 
                     in_chans=opt.cfg.MODEL_LIGHT.DPT_baseline.in_channels, 
                     if_upscale_last_layer=False, 
                 )

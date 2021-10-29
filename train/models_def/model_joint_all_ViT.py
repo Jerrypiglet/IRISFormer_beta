@@ -79,8 +79,10 @@ class Model_Joint_ViT(nn.Module):
             opt=opt, 
             modalities=self.modalities.copy(), 
             backbone="vitb_rn50_384_N_layers", 
-            N_layers_encoder = self.cfg.MODEL_ALL.ViT_baseline.N_layers_encoder, 
-            N_layers_decoder = self.cfg.MODEL_ALL.ViT_baseline.N_layers_decoder
+            N_layers_encoder_stage0 = self.cfg.MODEL_ALL.ViT_baseline.N_layers_encoder_stage0, 
+            N_layers_decoder_stage0 = self.cfg.MODEL_ALL.ViT_baseline.N_layers_decoder_stage0, 
+            N_layers_encoder_stage1 = self.cfg.MODEL_ALL.ViT_baseline.N_layers_encoder_stage1, 
+            N_layers_decoder_stage1 = self.cfg.MODEL_ALL.ViT_baseline.N_layers_decoder_stage1
         )
 
         if self.if_Light:

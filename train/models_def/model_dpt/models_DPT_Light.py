@@ -68,6 +68,7 @@ class DPTLightModel(Transformer_Hybrid_Encoder_Decoder):
         self.scratch.output_conv = output_head
 
         self.pretrained = _make_pretrained(
+            cfg_DPT=cfg_DPT, 
             size=[opt.cfg.DATA.im_height_padded, opt.cfg.DATA.im_width_padded],
             features=[256, 512, 768, 768],
             use_readout=DPT_readout,

@@ -418,9 +418,11 @@ _C.MODEL_LIGHT.DPT_baseline.enable_as_single_est = False
 _C.MODEL_LIGHT.DPT_baseline.enable_as_single_est_modality = 'weight'
 _C.MODEL_LIGHT.DPT_baseline.enable_as_single_est_freeze_LightNet = False
 
+_C.MODEL_LIGHT.DPT_baseline.use_vit_only = False
+
 _C.MODEL_LIGHT.DPT_baseline.if_share_decoder_over_heads = True # [always True] used in constructing MODEL_ALL (ViT); currently treating each modality (e.g. albedo, roughness) as one decoder with one head
 
-_C.MODEL_LIGHT.DPT_baseline.dpt_hybrid = CN() # share with MODEL_BRDF
+# _C.MODEL_LIGHT.DPT_baseline.dpt_hybrid = CN() # share with MODEL_BRDF
 
 _C.MODEL_LIGHT.DPT_baseline.swin = CN()
 _C.MODEL_LIGHT.DPT_baseline.swin.patch_size = 4
@@ -642,8 +644,10 @@ _C.MODEL_ALL.ViT_baseline.if_share_pretrained_over_BRDF_modalities = False
 _C.MODEL_ALL.ViT_baseline.if_indept_MLP_heads = False
 _C.MODEL_ALL.ViT_baseline.if_indept_MLP_heads_if_layer_norm = False
 _C.MODEL_ALL.ViT_baseline.ViT_pool = 'mean'
-_C.MODEL_ALL.ViT_baseline.N_layers_encoder = 6
-_C.MODEL_ALL.ViT_baseline.N_layers_decoder = 6
+_C.MODEL_ALL.ViT_baseline.N_layers_encoder_stage0 = 4
+_C.MODEL_ALL.ViT_baseline.N_layers_decoder_stage0 = 4
+_C.MODEL_ALL.ViT_baseline.N_layers_encoder_stage1 = 6
+_C.MODEL_ALL.ViT_baseline.N_layers_decoder_stage1 = 6
 
 _C.MODEL_ALL.ViT_baseline.depth = CN()
 _C.MODEL_ALL.ViT_baseline.depth.activation = 'tanh'
