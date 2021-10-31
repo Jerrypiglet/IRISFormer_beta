@@ -28,8 +28,8 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
         input_dict['im_h_resized_to'] = data_batch['im_h_resized_to']
         input_dict['im_w_resized_to'] = data_batch['im_w_resized_to']
 
-    # if_load_mask = opt.cfg.DATA.load_brdf_gt and not opt.cfg.DEBUG.if_test_real
-    if_load_mask = not opt.cfg.DEBUG.if_test_real
+    if_load_mask = opt.cfg.DATA.load_brdf_gt and (not opt.cfg.DATASET.if_no_gt_BRDF)
+    # if_load_mask = opt.cfg.DATASET.if_no_gt_BRDF
     
     if opt.cfg.DATA.load_brdf_gt:
         # Load data from cpu to gpu
@@ -168,7 +168,7 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
             albedoPreds.append(albedoPred ) 
 
             output_dict['albedoPreds'] = [output_dict['albedoPred']]
-            if (not opt.cfg.DEBUG.if_test_real) and opt.cfg.DATA.load_brdf_gt:
+            if (not opt.cfg.DATASET.if_no_gt_BRDF) and opt.cfg.DATA.load_brdf_gt:
                 output_dict['albedoPreds_aligned'] = [output_dict['albedoPred_aligned']]
             # if (not opt.cfg.DATASET.if_no_gt_semantics):
             if if_loss:
@@ -226,7 +226,7 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
             if opt.cfg.MODEL_BRDF.use_scale_aware_depth:
                 depthPred = output_dict['depthPred']
             else:
-                if (not opt.cfg.DEBUG.if_test_real) and opt.cfg.DATA.load_brdf_gt:
+                if (not opt.cfg.DATASET.if_no_gt_BRDF) and opt.cfg.DATA.load_brdf_gt:
                     depthPred = output_dict['depthPred_aligned']
 
             if opt.cfg.MODEL_BRDF.loss.depth.if_use_midas_loss:

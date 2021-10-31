@@ -104,7 +104,7 @@ def forward_DPT_pretrained(opt, cfg_DPT, pretrained, unflatten, layers_out):
     layer_3 = pretrained.act_postprocess3[0:2](layer_3)
     layer_4 = pretrained.act_postprocess4[0:2](layer_4)
 
-    # print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape, )
+    # print(layer_1.shape, layer_2.shape, layer_3.shape, layer_4.shape, ) # torch.Size([2, 256, 64, 80]) torch.Size([2, 512, 32, 40]) torch.Size([2, 768, 320]) torch.Size([2, 768, 320])
 
     if layer_1.ndim == 3:
         # assert False, 'should be ResNet feats in DPT-hybrid setting!'

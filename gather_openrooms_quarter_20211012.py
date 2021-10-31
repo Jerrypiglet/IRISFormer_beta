@@ -14,9 +14,11 @@ def return_percent(list_in, percent=1.):
 
 if_cluster = False
 
-DEST_PATH = Path('/ruidata/openrooms_raw_quarter')
+# DEST_PATH = Path('/ruidata/openrooms_raw_quarter')
+DEST_PATH = Path('/ruidata/openrooms_raw_BRDF')
 LIST_path = Path('/home/ruizhu/Documents/Projects/semanticInverse/train/data/openrooms/list_OR_V4full/list')
-PERCENT = 0.25
+# PERCENT = 0.25
+PERCENT = 1
 
 dataset_path_dict = {}
 if if_cluster:

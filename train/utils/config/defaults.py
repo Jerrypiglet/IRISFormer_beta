@@ -57,9 +57,9 @@ _C.PATH.pretrained_cluster = ['/ruidata/semanticInverse/pretrained', '/home/ruzh
 _C.DEBUG = CN()
 _C.DEBUG.if_dump_anything = False
 _C.DEBUG.if_test_real = False
+_C.DEBUG.if_iiw = False
 _C.DEBUG.if_dump_shadow_renderer = False
 _C.DEBUG.if_dump_perframe_BRDF = False
-
 # ===== dataset
 
 _C.DATASET = CN()
@@ -75,6 +75,11 @@ _C.DATASET.dataset_path_binary = ''
 
 _C.DATASET.real_images_root_path = '/home/ruizhu/Documents/Projects/semanticInverse'
 _C.DATASET.real_images_list_path = 'data/list_real_20.txt'
+
+_C.DATASET.iiw_path = ''
+_C.DATASET.iiw_path_local = '/ruidata/iiw-dataset/data'
+_C.DATASET.iiw_path_cluster = ['', '', '']
+_C.DATASET.iiw_list_path = 'data/iiw/list'
 
 _C.DATASET.dataset_path_binary_local = '/newfoundland2/ruizhu/ORfull-seq-240x320'
 # _C.DATASET.dataset_path_binary_local = '/newfoundland2/ruizhu/ORfull-seq-240x320-albedoInOneFile'
@@ -165,6 +170,9 @@ _C.DATASET.if_val_dist = True
 _C.DATASET.if_no_gt_semantics = False
 _C.DATASET.if_quarter = False
 
+_C.DATASET.if_no_gt_BRDF = False
+
+
 # ===== data loading configs
 
 _C.DATA = CN()
@@ -174,7 +182,7 @@ _C.DATA.if_also_load_next_frame = False # load next frame (only png supported) i
 _C.DATA.if_augment_train = False
 _C.DATA.im_height = 240
 _C.DATA.im_width = 320
-_C.DATA.im_height_padded = 240
+_C.DATA.im_height_padded = 256
 _C.DATA.im_width_padded = 320
 _C.DATA.im_height_ori = 480
 _C.DATA.im_width_ori = 640
@@ -193,6 +201,15 @@ _C.DATA.data_read_list_allowed = ['al', 'no', 'de', 'ro', 'li', \
 _C.DATA.load_matcls_gt = False
 _C.DATA.load_detectron_gt = False
 _C.DATA.load_cam_pose = False
+
+_C.DATA.iiw = CN()
+_C.DATA.iiw.im_height = 341
+_C.DATA.iiw.im_width = 512
+# _C.DATA.iiw.im_height_padded = 352
+# _C.DATA.iiw.im_width_padded = 512
+_C.DATA.iiw.im_height_padded = 256
+_C.DATA.iiw.im_width_padded = 320
+
 
 # ===== GMM
 _C.MODEL_GMM = CN()

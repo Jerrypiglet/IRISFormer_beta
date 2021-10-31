@@ -118,7 +118,7 @@ class Model_Joint_ViT(nn.Module):
             return_dict_brdf = {}
 
         if self.if_Light:
-            if self.opt.cfg.DEBUG.if_test_real:
+            if self.opt.cfg.DATASET.if_no_gt_BRDF:
                 return_dict_light = self.forward_light_real(input_dict, return_dict_brdf)
             else:
                 return_dict_light = self.forward_light(input_dict, return_dict_brdf)
@@ -140,7 +140,7 @@ class Model_Joint_ViT(nn.Module):
                 albedoPred = 0.5 * (vit_out + 1)
                 albedoPred = torch.clamp(albedoPred, 0, 1)
                 return_dict.update({'albedoPred': albedoPred})
-                if (not self.opt.cfg.DEBUG.if_test_real) and self.load_brdf_gt:
+                if (not self.opt.cfg.DATASET.if_no_gt_BRDF) and self.load_brdf_gt:
                     input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
                     albedoPred_aligned = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
                             input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
@@ -153,7 +153,7 @@ class Model_Joint_ViT(nn.Module):
                     return_dict.update({'depthInvPred': vit_out})
                     depthPred = 1. / (vit_out + 1e-8)
                 return_dict.update({'depthPred': depthPred})
-                if (not self.opt.cfg.DEBUG.if_test_real) and self.load_brdf_gt:
+                if (not self.opt.cfg.DATASET.if_no_gt_BRDF) and self.load_brdf_gt:
                     depthPred_aligned = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
                             input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
                     return_dict.update({'depthPred_aligned': depthPred_aligned})

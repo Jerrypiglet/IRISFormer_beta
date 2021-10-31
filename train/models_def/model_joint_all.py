@@ -783,7 +783,7 @@ class Model_Joint(nn.Module):
                 return_dict.update({'albedoPred': albedoPred})
                 # if not self.cfg.MODEL_BRDF.use_scale_aware_albedo:
                 # print(input_dict['segBRDFBatch'].shape, albedoPred.shape)
-                if not self.opt.cfg.DEBUG.if_test_real:
+                if not self.opt.cfg.DATASET.if_no_gt_BRDF:
                     input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
                     albedoPred_aligned = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
                             input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
@@ -795,7 +795,7 @@ class Model_Joint(nn.Module):
                 return_dict.update({'depthPred': depthPred})
                 # else:
                 # depthPred = 0.5 * (dpt_prediction + 1) # [-1, 1] -> [0, 1]
-                if not self.opt.cfg.DEBUG.if_test_real:
+                if not self.opt.cfg.DATASET.if_no_gt_BRDF:
                     depthPred_aligned = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
                             input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
                     return_dict.update({'depthPred_aligned': depthPred_aligned})

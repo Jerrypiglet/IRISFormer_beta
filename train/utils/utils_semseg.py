@@ -33,7 +33,7 @@ def intersectionAndUnionGPU(output, target, K, ignore_index=255):
     return area_intersection, area_union, area_target
 
 
-def get_transform_semseg(split, opt):
+def get_transform_semseg(split, opt, pad_op_override=None):
     assert split in ['train', 'val', 'test']
     value_scale = 255
     mean = [0.485, 0.456, 0.406]
@@ -62,7 +62,7 @@ def get_transform_semseg(split, opt):
         val_transform = transform.Compose(transform_semseg_list_val)
     return val_transform
 
-def get_transform_resize(split, opt):
+def get_transform_resize(split, opt, pad_op_override=None, if_gamma_to_hdr=False):
     assert split in ['train', 'val', 'test']
     value_scale = 255
     # mean = [0.485, 0.456, 0.406]
@@ -99,7 +99,7 @@ def get_transform_resize(split, opt):
             transform.Normalize(mean=mean, std=std)
         ]
         if opt.if_pad:
-            transform_resize_list_train.insert(1, opt.pad_op)
+            transform_resize_list_train.insert(1, opt.pad_op if pad_op_override is None else pad_op_override)
         if opt.if_resize:
             transform_resize_list_train.insert(1, opt.resize_op)
 
@@ -112,7 +112,7 @@ def get_transform_resize(split, opt):
             transform.Normalize(mean=mean, std=std)
             ]
         if opt.if_pad:
-            transform_resize_list_val.insert(1, opt.pad_op)
+            transform_resize_list_val.insert(1, opt.pad_op if pad_op_override is None else pad_op_override)
         if opt.if_resize:
             transform_resize_list_val.insert(1, opt.resize_op)
 
@@ -120,7 +120,7 @@ def get_transform_resize(split, opt):
     return val_transform
 
 
-def get_transform_matseg(split, opt):
+def get_transform_matseg(split, opt, pad_op_override=None):
     assert split in ['train', 'val', 'test']
     value_scale = 255
     mean = [0.485, 0.456, 0.406]
@@ -140,8 +140,9 @@ def get_transform_matseg(split, opt):
             transform.ToTensor(),
             transform.Normalize(mean=mean, std=std)
         ]
-        if opt.if_pad and opt.pad_op is not None:
-            transform_semseg_list_train.insert(1, opt.pad_op)
+        pad_op = opt.pad_op if pad_op_override is None else pad_op_override
+        if opt.if_pad and pad_op is not None:
+            transform_semseg_list_train.insert(1, opt.pad_op if pad_op_override is None else pad_op_override)
         if opt.if_resize and opt.resize_op is not None:
             transform_semseg_list_train.insert(1, opt.resize_op)
 
@@ -154,7 +155,7 @@ def get_transform_matseg(split, opt):
             transform.Normalize(mean=mean, std=std)
             ]
         if opt.if_pad:
-            transform_semseg_list_val.insert(1, opt.pad_op)
+            transform_semseg_list_val.insert(1, opt.pad_op if pad_op_override is None else pad_op_override)
         if opt.if_resize:
             transform_semseg_list_val.insert(1, opt.resize_op)
 
