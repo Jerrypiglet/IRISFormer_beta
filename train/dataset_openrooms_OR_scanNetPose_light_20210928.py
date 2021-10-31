@@ -352,7 +352,7 @@ class openrooms(data.Dataset):
     def load_brdf_lighting(self, hdr_image_path, if_load_immask, mask_path, mask, seg, seg_ori, hdr_scale, frame_info):
         batch_dict_brdf = {}
         # Get paths for BRDF params
-        # print(self.cfg.DATA.data_read_list)
+        # print(self.cfg.DATA.load_brdf_gt, self.cfg.DATA.data_read_list)
         if self.cfg.DATA.load_brdf_gt:
             if 'al' in self.cfg.DATA.data_read_list:
                 albedo_path = hdr_image_path.replace('im_', 'imbaseColor_').replace('rgbe', 'png').replace('hdr', 'png')

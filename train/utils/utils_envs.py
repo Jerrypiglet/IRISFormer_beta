@@ -149,7 +149,7 @@ def set_up_envs(opt):
         assert opt.cfg.MODEL_ALL.ViT_baseline.if_share_decoder_over_BRDF_modalities
     opt.cfg.MODEL_ALL.enable_list = [x for x in opt.cfg.MODEL_ALL.enable_list.split('_') if x != '']
     if opt.cfg.MODEL_ALL.enable:
-        assert opt.cfg.MODEL_ALL.ViT_baseline.depth.activation in ['tanh', 'relu']
+        assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.depth.activation in ['tanh', 'relu']
         # if not opt.cfg.DEBUG.if_test_real:
         #     opt.cfg.DATA.load_brdf_gt = True
         if 'lo' in opt.cfg.MODEL_ALL.enable_list:

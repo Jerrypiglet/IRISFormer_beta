@@ -143,16 +143,18 @@ class DPTBRDFModel(Transformer_Hybrid_Encoder_Decoder):
 
             if self.opt.cfg.MODEL_BRDF.loss.depth.if_use_Zhengqin_loss:
                 # print(torch.max(x_out), torch.min(x_out), torch.median(x_out), self.non_negative, self.if_batch_norm)
-                if self.opt.cfg.MODEL_ALL.ViT_baseline.depth.activation == 'tanh':
+                if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.depth.activation == 'tanh':
                     x_out = torch.tanh(x_out)
                     x_out = 0.5 * (x_out + 1) # [-1, 1] -> [0, 1]
-                elif self.opt.cfg.MODEL_ALL.ViT_baseline.depth.activation == 'relu':
+                elif self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.depth.activation == 'relu':
                     x_out = torch.relu(x_out)
                 else:
                     assert False
                 x_out = self.scale * x_out + self.shift
                 # x_out[x_out < 1e-8] = 1e-8
-                x_out = 1.0 / (x_out + 1e-8)
+                # x_out = 1.0 / (x_out + 1e-8)
+                x_out[x_out < 1e-8] = 1e-8
+                x_out = 1.0 / x_out
             elif self.opt.cfg.MODEL_BRDF.loss.depth.if_use_midas_loss:
                 x_out = torch.relu(x_out)
             else:

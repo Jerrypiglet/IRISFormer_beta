@@ -523,7 +523,7 @@ if not opt.if_train:
             vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
         synchronize()
     if opt.if_val:
-        val_params.update({'detectron_dataset_name': 'val'})
+        val_params.update({'brdf_dataset_val': brdf_dataset_val, 'detectron_dataset_name': 'val'})
         with torch.no_grad():
             val_epoch_joint(brdf_loader_val, model, val_params)
 else:
@@ -772,12 +772,17 @@ else:
             loss.backward()
 
             if opt.is_master and tid % 100 == 0:
+                params_train_total = 0
+                params_not_train_total = 0
                 for name, param in model.named_parameters():
                     if param.grad is None:
                         if param.requires_grad==True:
                             print(name, '------!!!!!!!!!!!!')
+                            params_not_train_total += 1
                     else:
                         print(name, '☑')
+                        params_train_total += 1
+                logger.info('%d params received grad; %d params require grads but not received'%(params_train_total, params_not_train_total))
 
             # clip_to = 1.
             # torch.nn.utils.clip_grad_norm_(model.LAYOUT_EMITTER_NET_fc.parameters(), clip_to)

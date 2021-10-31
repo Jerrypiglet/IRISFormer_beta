@@ -238,7 +238,13 @@ class DPTBRDFModel(DPT):
         x_out = super().forward(x, input_dict_extra=input_dict_extra)
         # print('[DPTBRDFModel - x_out 1]', x_out.shape, torch.max(x_out), torch.min(x_out), torch.median(x_out)) # torch.Size([1, 3, 288, 384]) tensor(1.3311, device='cuda:0', dtype=torch.float16) tensor(-1.0107, device='cuda:0', dtype=torch.float16) tensor(-0.4836, device='cuda:0', dtype=torch.float16)
         if self.modality == 'al':
-            x_out = torch.clamp(1.01 * torch.tanh(x_out ), -1, 1)
+            if self.opt.is_master:
+                print(torch.max(x_out), torch.min(x_out), torch.median(x_out), torch.mean(x_out))
+            x_out = torch.tanh(x_out )
+            if self.opt.is_master:
+                print('->', torch.max(x_out), torch.min(x_out), torch.median(x_out), torch.mean(x_out))
+            x_out = torch.clamp(1.01 * x_out, -1, 1)
+
         elif self.modality == 'ro':
             x_out = torch.clamp(1.01 * torch.tanh(x_out ), -1, 1)
             x_out = torch.mean(x_out, dim=1, keepdim=True)

@@ -213,7 +213,7 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
     if_register_detectron_only = params_mis['if_register_detectron_only']
     ENABLE_SEMSEG = opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable
     ENABLE_MATSEG = opt.cfg.MODEL_MATSEG.enable
-    ENABLE_BRDF = opt.cfg.MODEL_BRDF.enable
+    ENABLE_BRDF = opt.cfg.MODEL_BRDF.enable and opt.cfg.DATA.load_brdf_gt
     ENABLE_LIGHT = opt.cfg.MODEL_LIGHT.enable
     ENABLE_MATCLS = opt.cfg.MODEL_MATCLS.enable
     if if_register_detectron_only:
