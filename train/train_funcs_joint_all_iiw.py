@@ -49,6 +49,8 @@ from contextlib import ExitStack, contextmanager
 from skimage.segmentation import mark_boundaries
 from skimage.transform import resize as scikit_resize
 
+from train_funcs_iiw import compute_whdr
+
 def get_time_meters_joint_iiw():
     time_meters = {}
     time_meters['ts'] = 0.
@@ -57,6 +59,12 @@ def get_time_meters_joint_iiw():
     time_meters['loss_iiw'] = AverageMeter()
     time_meters['backward'] = AverageMeter()    
     return time_meters
+
+def get_iiw_meters(opt):
+    iiw_meters = {}
+    WHDR_meter = AverageMeter('WHDR_meter')
+    iiw_meters.update({'WHDR_meter': WHDR_meter})
+    return iiw_meters
 
 def get_labels_dict_joint_iiw(data_batch, opt):
 
@@ -107,6 +115,8 @@ def val_epoch_joint_iiw(iiw_loader_val, model, params_mis):
     loss_meters = {loss_key: AverageMeter() for loss_key in loss_keys}
     time_meters = get_time_meters_joint_iiw()
 
+    iiw_meters = get_iiw_meters(opt)
+
     with torch.no_grad():
 
         iiw_dataset_val = params_mis['iiw_dataset_val']
@@ -133,12 +143,42 @@ def val_epoch_joint_iiw(iiw_loader_val, model, params_mis):
                 for loss_key in loss_dict_reduced:
                     loss_meters[loss_key].update(loss_dict_reduced[loss_key].item())
 
+            # ======= Metering
+            albedoPred_numpy = output_dict['albedoPred'].detach().cpu().numpy()
+            # print(np.amax(albedoPred_numpy), np.amin(albedoPred_numpy), np.median(albedoPred_numpy), np.mean(albedoPred_numpy))
+            judgements_list = input_dict['judgements']
+            im_h, im_w = input_dict['im_h_resized_to'].detach().cpu().numpy().flatten(), input_dict['im_w_resized_to'].detach().cpu().numpy().flatten()
+            albedoPred_list = [x[:, :h, :w] for x, h, w in zip(albedoPred_numpy, im_h, im_w)]
+            # print(im_h, im_w)
+            # print([x.shape for x in albedoPred_list])
+
+            assert len(judgements_list) == len(albedoPred_list)
+
+            if opt.distributed:
+                albedoPred_list_gathered = gather_lists([albedoPred_list], opt.num_gpus)
+                # albedoPred_list_all = np.concatenate(albedoPred_list_gathered)
+                albedoPred_list_all = [item for sublist in albedoPred_list_gathered for item in sublist]
+                judgements_list_gathered = gather_lists([judgements_list], opt.num_gpus)
+                judgements_list_all = [item for sublist in judgements_list_gathered for item in sublist]
+            else:
+                albedoPred_list_all = albedoPred_list
+                judgements_list_all = judgements_list
+
+            if opt.is_master:
+                for judgements, albedoPred_single in zip(judgements_list_all, albedoPred_list_all):
+                    whdr, _, _ = compute_whdr(albedoPred_single.transpose(1, 2, 0), judgements)
+                    iiw_meters['WHDR_meter'].update(whdr)
+
+
     if opt.is_master:
         for loss_key in loss_dict_reduced:
             writer.add_scalar('IIW_loss_val/%s'%loss_key, loss_meters[loss_key].avg, tid)
             logger.info('[IIW] Logged val loss for %s'%loss_key)
 
+        writer.add_scalar('VAL/IIW-WHDR', iiw_meters['WHDR_meter'].avg, tid)
+
     logger.info(red('[IIW] Evaluation timings: ' + time_meters_to_string(time_meters)))
+    print('[IIW-WHDR', opt.rank, iiw_meters['WHDR_meter'].avg)
 
 
 def vis_val_epoch_joint_iiw(iiw_loader_val, model, params_mis):

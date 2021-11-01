@@ -10,10 +10,10 @@ def get_labels_dict_iiw(data_batch, opt, return_input_batch_as_list=False):
     im_cpu = data_batch['im_trainval']
     input_dict['imBatch'] = im_cpu.cuda(non_blocking=True).contiguous()
 
-    if opt.cfg.DEBUG.if_test_real:
-        input_dict['pad_mask'] = data_batch['pad_mask'].cuda(non_blocking=True).contiguous()
-        input_dict['im_h_resized_to'] = data_batch['im_h_resized_to']
-        input_dict['im_w_resized_to'] = data_batch['im_w_resized_to']
+    # if opt.cfg.DEBUG.if_test_real:
+    input_dict['pad_mask'] = data_batch['pad_mask'].cuda(non_blocking=True).contiguous()
+    input_dict['im_h_resized_to'] = data_batch['im_h_resized_to']
+    input_dict['im_w_resized_to'] = data_batch['im_w_resized_to']
 
 
     assert opt.cascadeLevel == 0
@@ -23,7 +23,8 @@ def get_labels_dict_iiw(data_batch, opt, return_input_batch_as_list=False):
 
     eq = data_batch['eq']
     darker = data_batch['darker']
-    input_dict.update({'eq': eq, 'darker': darker})
+    judgements = data_batch['judgements']
+    input_dict.update({'eq': eq, 'darker': darker, 'judgements': judgements})
 
     # elif opt.cascadeLevel > 0:
     #     input_batch = torch.cat([input_dict['imBatch'], albedoPreBatch,
@@ -116,3 +117,67 @@ def BatchRankingLoss(albedoPred, eqPoint, eqWeight, darkerPoint, darkerWeight):
     darkerLoss = torch.mean(darkerWeight * torch.pow(F.relu(rf2 - rf1 + tau), 2) )
 
     return eqLoss, darkerLoss
+
+def compute_whdr(reflectance, judgements, delta=0.1):
+    points = judgements['intrinsic_points']
+    comparisons = judgements['intrinsic_comparisons']
+    id_to_points = {p['id']: p for p in points}
+    rows, cols = reflectance.shape[0:2]
+
+    # print('[compute_whdr]', rows, cols, reflectance.shape, np.amax(reflectance), np.amin(reflectance), np.median(reflectance))
+
+    error_sum = 0.0
+    error_equal_sum = 0.0
+    error_inequal_sum = 0.0
+
+    weight_sum = 0.0
+    weight_equal_sum = 0.0
+    weight_inequal_sum = 0.0
+
+    for c in comparisons:
+        # "darker" is "J_i" in our paper
+        darker = c['darker']
+        if darker not in ('1', '2', 'E'):
+            continue
+
+        # "darker_score" is "w_i" in our paper
+        weight = c['darker_score']
+        # print(weight)
+        if weight <= 0.0 or weight is None:
+            continue
+
+        point1 = id_to_points[c['point1']]
+        point2 = id_to_points[c['point2']]
+        if not point1['opaque'] or not point2['opaque']:
+            continue
+
+        # convert to grayscale and threshold
+        l1 = max(1e-10, np.mean(reflectance[int(point1['y'] * rows), int(point1['x'] * cols), ...]))
+        l2 = max(1e-10, np.mean(reflectance[int(point2['y'] * rows), int(point2['x'] * cols), ...]))
+
+        # convert algorithm value to the same units as human judgements
+        if l2 / l1 > 1.0 + delta:
+            alg_darker = '1'
+        elif l1 / l2 > 1.0 + delta:
+            alg_darker = '2'
+        else:
+            alg_darker = 'E'
+
+        if darker == 'E':
+            if darker != alg_darker:
+                error_equal_sum += weight
+            weight_equal_sum += weight
+        else:
+            if darker != alg_darker:
+                error_inequal_sum += weight
+            weight_inequal_sum += weight
+
+        if darker != alg_darker:
+            error_sum += weight
+        weight_sum += weight
+
+    if weight_sum != 0.:
+        # print(len(comparisons), l1, l2, error_sum, weight_sum)
+        return (error_sum / weight_sum), error_equal_sum/( weight_equal_sum + 1e-10), error_inequal_sum/(weight_inequal_sum + 1e-10)
+    else:
+        return None

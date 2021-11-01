@@ -188,7 +188,7 @@ class iiw(data.Dataset):
 
 
         batch_dict.update({'image_path': str(png_image_path), 'pad_mask': pad_mask, 'brdf_loss_mask': pad_mask})
-        # batch_dict.update({'im_w_resized_to': im_w_resized_to, 'im_h_resized_to': im_h_resized_to})
+        batch_dict.update({'im_w_resized_to': im_w_resized_to, 'im_h_resized_to': im_h_resized_to})
         batch_dict.update({'hdr_scale': hdr_scale, 'im_trainval': im_trainval, 'im_trainval_SDR': im_trainval_SDR, 'im_fixedscale_SDR': im_fixedscale_SDR.permute(1, 2, 0)}) # im_fixedscale_SDR for Tensorboard logging
 
         # load judgements labels
@@ -296,6 +296,7 @@ class iiw(data.Dataset):
         batch_dict.update({
                 'eq': {'point' : eqPoint, 'weight' : eqWeight, 'num': eqNum },
                 'darker': {'point' : darkerPoint, 'weight' : darkerWeight, 'num' : darkerNum },
+                'judgements': judgements
                 })
 
         return batch_dict
@@ -315,12 +316,12 @@ def collate_fn_iiw(batch):
     # iterate over keys
     # print(batch[0].keys())
     for key in batch[0]:
-        if key == 'boxes_batch':
+        if key == '':
             collated_batch[key] = dict()
             for subkey in batch[0][key]:
-                if subkey in ['bdb2D_full', 'bdb3D_full']: # lists of original & more information (e.g. color)
+                if subkey in []: # lists of original & more information (e.g. color)
                     continue
-                if subkey in ['mask', 'random_id', 'cat_name']: # list of lists
+                if subkey in []: # list of lists
                     tensor_batch = [elem[key][subkey] for elem in batch]
                 else:
                     list_of_tensor = [recursive_convert_to_torch(elem[key][subkey]) for elem in batch]
@@ -330,29 +331,13 @@ def collate_fn_iiw(batch):
                     except RuntimeError:
                         print(subkey, [x.shape for x in list_of_tensor])
                 collated_batch[key][subkey] = tensor_batch
-        elif key in ['frame_info', 'boxes_valid_list', 'emitter2wall_assign_info_list', 'emitters_obj_list', 'gt_layout_RAW', 'cell_info_grid', 'image_index', \
-                'gt_obj_path_alignedNew_normalized_list', 'gt_obj_path_alignedNew_original_list', \
-                'detectron_sample_dict', 'detectron_sample_dict', 'eq', 'darker']:
+        elif key in ['eq', 'darker', 'judgements']:
             collated_batch[key] = [elem[key] for elem in batch]
         else:
             try:
                 collated_batch[key] = default_collate([elem[key] for elem in batch])
             except RuntimeError as e:
                 print('[!!!!] Type error in collate_fn_OR: ', key, e)
-                # print(type(batch[0][key]))
-                # print(batch[0][key].dtype)
-
-    if 'boxes_batch' in batch[0]:
-        interval_list = [elem['boxes_batch']['patch'].shape[0] for elem in batch]
-        collated_batch['obj_split'] = torch.tensor([[sum(interval_list[:i]), sum(interval_list[:i+1])] for i in range(len(interval_list))])
-
-    # boxes_valid_list = [item for sublist in collated_batch['boxes_valid_list'] for item in sublist]
-    # boxes_valid_nums = [sum(x) for x in collated_batch['boxes_valid_list']]
-    # boxes_total_nums = [len(x) for x in collated_batch['boxes_valid_list']]
-    # if sum(boxes_valid_list)==0:
-    #     print(boxes_valid_nums, '/', boxes_total_nums, red(sum(boxes_valid_list)), '/', len(boxes_valid_list), boxes_valid_list)
-    # else:
-    #     print(boxes_valid_nums, '/', boxes_total_nums, sum(boxes_valid_list), '/', len(boxes_valid_list), boxes_valid_list)
 
     return collated_batch
 

@@ -504,7 +504,7 @@ class Model_Joint(nn.Module):
             self.DETECTRON = build_model(opt.cfg_detectron)
 
 
-    def forward(self, input_dict):
+    def forward(self, input_dict, if_has_gt_BRDF=True):
         return_dict = {}
         input_dict_guide = None
 
@@ -566,9 +566,9 @@ class Model_Joint(nn.Module):
                 input_dict_extra.update({'return_dict_matseg': return_dict_matseg})
 
             if self.cfg.MODEL_BRDF.DPT_baseline.enable:
-                return_dict_brdf = self.forward_brdf_DPT_baseline(input_dict, input_dict_extra=input_dict_extra)
+                return_dict_brdf = self.forward_brdf_DPT_baseline(input_dict, input_dict_extra=input_dict_extra, if_has_gt_BRDF=if_has_gt_BRDF)
             else:
-                return_dict_brdf = self.forward_brdf(input_dict, input_dict_extra=input_dict_extra)
+                return_dict_brdf = self.forward_brdf(input_dict, input_dict_extra=input_dict_extra, if_has_gt_BRDF=if_has_gt_BRDF)
         else:
             return_dict_brdf = {}
         return_dict.update(return_dict_brdf)
@@ -741,7 +741,7 @@ class Model_Joint(nn.Module):
         return_dict = self.BRDF_Net(img_batch)
         return return_dict
 
-    def forward_brdf_DPT_baseline(self, input_dict, input_dict_extra={}):
+    def forward_brdf_DPT_baseline(self, input_dict, input_dict_extra={}, if_has_gt_BRDF=True):
         return_dict = {}
         img_batch = input_dict['imBatch']
         input_dict_extra.update({'brdf_loss_mask': input_dict['brdf_loss_mask'], 'input_dict': input_dict})
@@ -826,7 +826,7 @@ class Model_Joint(nn.Module):
 
         return return_dict
 
-    def forward_brdf(self, input_dict, input_dict_extra={}):
+    def forward_brdf(self, input_dict, input_dict_extra={}, if_has_gt_BRDF=True):
         assert 'input_dict_guide' in input_dict_extra
         if 'input_dict_guide' in input_dict_extra:
             input_dict_guide = input_dict_extra['input_dict_guide']
@@ -896,13 +896,16 @@ class Model_Joint(nn.Module):
                 albedo_output = self.BRDF_Net['albedoDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_extra=input_dict_extra)
                 albedoPred = 0.5 * (albedo_output['x_out'] + 1)
                 # if (not self.opt.cfg.DATASET.if_no_gt_semantics):
-                input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
+                if if_has_gt_BRDF:
+                    input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
                 albedoPred = torch.clamp(albedoPred, 0, 1)
+                return_dict.update({'albedoPred': albedoPred})
                 # if not self.cfg.MODEL_BRDF.use_scale_aware_albedo:
-                albedoPred_aligned = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
-                        input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
-                albedoPred_aligned = torch.clamp(albedoPred_aligned, 0, 1)
-                return_dict.update({'albedoPred': albedoPred, 'albedoPred_aligned': albedoPred_aligned, 'albedo_extra_output_dict': albedo_output['extra_output_dict']})
+                if if_has_gt_BRDF:
+                    albedoPred_aligned = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
+                            input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
+                    albedoPred_aligned = torch.clamp(albedoPred_aligned, 0, 1)
+                    return_dict.update({'albedoPred_aligned': albedoPred_aligned, 'albedo_extra_output_dict': albedo_output['extra_output_dict']})
             if 'no' in self.cfg.MODEL_BRDF.enable_list:
                 normal_output = self.BRDF_Net['normalDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_extra=input_dict_extra)
                 normalPred = normal_output['x_out']
@@ -915,11 +918,12 @@ class Model_Joint(nn.Module):
                 depth_output = self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_extra=input_dict_extra)
                 depthPred = depth_output['x_out']
                 # if not self.cfg.MODEL_BRDF.use_scale_aware_depth:
-                depthPred_aligned = 0.5 * (depth_output['x_out'] + 1) # [-1, 1] -> [0, 1]
-                depthPred_aligned = models_brdf.LSregress(depthPred_aligned *  input_dict['segAllBatch'].expand_as(depthPred_aligned),
-                        input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred_aligned)
-
-                return_dict.update({'depthPred': depthPred, 'depthPred_aligned': depthPred_aligned, 'depth_extra_output_dict': depth_output['extra_output_dict']})
+                return_dict.update({'depthPred': depthPred})
+                if if_has_gt_BRDF:
+                    depthPred_aligned = 0.5 * (depth_output['x_out'] + 1) # [-1, 1] -> [0, 1]
+                    depthPred_aligned = models_brdf.LSregress(depthPred_aligned *  input_dict['segAllBatch'].expand_as(depthPred_aligned),
+                            input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred_aligned)
+                    return_dict.update({'depthPred_aligned': depthPred_aligned, 'depth_extra_output_dict': depth_output['extra_output_dict']})
 
 
             # print(x1.shape, x2.shape, x3.shape, x4.shape, x5.shape, x6.shape)

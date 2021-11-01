@@ -1,10 +1,10 @@
 clear; clc; close; 
 
-renderer = 'ENTER YOUR RENDERER HERE';
-pythonProgram = 'ENTER YOUR PYTHON PROGRAM HERE';
+renderer = 'optixRenderer';
+pythonProgram = '/home/ruizhu/anaconda3/envs/py38/bin/python';
 for n = 1 : 20
-
-root = ['Example', num2str(n)] ;
+n
+root = ['data/Example', num2str(n)] ;
 
 
 normalName = fullfile(root, 'normal.png');
@@ -17,7 +17,7 @@ meshInfoName = strrep(meshNewName, ['.', meshNewNameParts{end}], 'Init.mat');
 load(meshInfoName );
 
 for insertionId = 0 : 5
-
+insertionId
 originName = fullfile(root, 'im');
     
 for hehe = 0 : insertionId-1
@@ -27,6 +27,8 @@ originName = [originName, '.png'];
 
 cropInfo = strrep(originName, '.png', '_new.mat');
 if ~exist(cropInfo, 'file')
+    sprintf('.Mat file does not exist! Skipped')
+    sprintf(cropInfo)
     break;
 end
 load(cropInfo);

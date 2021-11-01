@@ -296,14 +296,22 @@ class Model_Joint_ViT(nn.Module):
     def forward_light_real(self, input_dict, return_dict_brdf={}):
         imBatch = input_dict['imBatch']
         assert imBatch.shape[0]==1
-        im_h, im_w = input_dict['im_h_resized_to'], input_dict['im_w_resized_to']
+
+        # im_h, im_w = input_dict['im_h_resized_to'], input_dict['im_w_resized_to']
+        im_h, im_w = self.cfg.DATA.im_height_padded, self.cfg.DATA.im_width_padded
+        renderLayer = models_light.renderingLayer(isCuda = self.opt.if_cuda, 
+            imWidth=self.opt.cfg.MODEL_LIGHT.envCol, imHeight=self.opt.cfg.MODEL_LIGHT.envRow, 
+            envWidth = self.cfg.DATA.im_width_padded//2, envHeight = self.cfg.DATA.im_height_padded//2)
+        output2env = models_light.output2env(isCuda = self.opt.if_cuda, 
+            envWidth = self.cfg.DATA.im_width_padded//2, envHeight = self.cfg.DATA.im_height_padded//2, SGNum = self.opt.cfg.MODEL_LIGHT.SGNum )
+
         # Normalize Albedo and depth
         albedoInput = return_dict_brdf['albedoPred'].detach().clone()
         depthInput = return_dict_brdf['depthPred'].detach().clone()
         normalInput = return_dict_brdf['normalPred'].detach().clone()
         roughInput = return_dict_brdf['roughPred'].detach().clone()
 
-        # segBRDFBatch = input_dict['segBRDFBatch']
+        segBRDFBatch = input_dict['segBRDFBatch']
         pad_mask = input_dict['pad_mask'].float()
 
         # albedoInput_masked = albedoInput * pad_mask.unsqueeze(1)
@@ -352,7 +360,7 @@ class Model_Joint_ViT(nn.Module):
         
         return_dict = {}
 
-        envmapsPredImage, axisPred, lambPred, weightPred = self.non_learnable_layers['output2env'].output2env(axisPred_ori, lambPred_ori, weightPred_ori, if_postprocessing=not self.cfg.MODEL_LIGHT.use_GT_light_sg)
+        envmapsPredImage, axisPred, lambPred, weightPred = output2env.output2env(axisPred_ori, lambPred_ori, weightPred_ori, if_postprocessing=not self.cfg.MODEL_LIGHT.use_GT_light_sg)
 
         # pixelNum_recon = max( (torch.sum(segEnvBatch ).cpu().data).item(), 1e-5)
         # if self.cfg.MODEL_LIGHT.use_GT_light_sg:
@@ -393,7 +401,8 @@ class Model_Joint_ViT(nn.Module):
 
         envmapsImage_input = envmapsPredImage
 
-        diffusePred, specularPred = self.non_learnable_layers['renderLayer'].forwardEnv(normalPred=normal_input.detach(), envmap=envmapsImage_input, diffusePred=albedoInput.detach(), roughPred=rough_input.detach())
+        print(normal_input.shape, envmapsImage_input.shape, albedoInput.shape, rough_input.shape, )
+        diffusePred, specularPred = renderLayer.forwardEnv(normalPred=normal_input.detach(), envmap=envmapsImage_input, diffusePred=albedoInput.detach(), roughPred=rough_input.detach())
 
         if self.cfg.MODEL_LIGHT.use_scale_aware_loss:
             diffusePredScaled, specularPredScaled = diffusePred, specularPred

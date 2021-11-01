@@ -38,7 +38,8 @@ for split in ['train', 'val']:
     for _ in frame_list_RAW:
         scene_name = _.strip().split(' ')[0]
         meta_split = _.strip().split(' ')[2].split('/')[0]
-        if 'xml1' in meta_split:
+        # if 'xml1' in meta_split:
+        if 'mainDiff' not in meta_split or 'xml1' not in meta_split:
             continue
         frame_id = int(_.strip().split(' ')[1])
         if 'scene' in scene_name:

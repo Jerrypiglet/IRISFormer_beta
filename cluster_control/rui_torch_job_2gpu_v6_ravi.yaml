@@ -89,10 +89,10 @@ spec:
                 operator: In
                 values:
                 - haosu
-              # - key: nautilus.io/group
-              #   operator: NotIn
-              #   values:
-              #   - k8s-haosu-21.sdsc.optiputer.net
+              - key: nautilus.io/group
+                operator: NotIn
+                values:
+                - k8s-haosu-21.sdsc.optiputer.net
               - key: gpu-type
                 operator: In
                 values:
