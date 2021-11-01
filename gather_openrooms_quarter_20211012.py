@@ -15,7 +15,8 @@ def return_percent(list_in, percent=1.):
 if_cluster = False
 
 # DEST_PATH = Path('/ruidata/openrooms_raw_quarter')
-DEST_PATH = Path('/ruidata/openrooms_raw_BRDF')
+# DEST_PATH = Path('/ruidata/openrooms_raw_BRDF')
+DEST_PATH = Path('/newdata/ruizhu/openrooms_raw_light')
 LIST_path = Path('/home/ruizhu/Documents/Projects/semanticInverse/train/data/openrooms/list_OR_V4full/list')
 # PERCENT = 0.25
 PERCENT = 1
@@ -37,6 +38,8 @@ for split in ['train', 'val']:
     for _ in frame_list_RAW:
         scene_name = _.strip().split(' ')[0]
         meta_split = _.strip().split(' ')[2].split('/')[0]
+        if 'xml1' in meta_split:
+            continue
         frame_id = int(_.strip().split(' ')[1])
         if 'scene' in scene_name:
             valid_frame_list_quarter.append([meta_split, scene_name, frame_id])
@@ -70,9 +73,33 @@ for split in ['train', 'val']:
 # print('====> mkdir for %d scenes...DONE. Took %.2f seconds'%(len(valid_scene_list_all), time.time() - tic))
 
 
+# label_names = [
+#     ['imnormal_%s.png', 'main'], 
+#     ['im_%s.hdr', 'ori'], 
+#     # ['imenv_%s.hdr', 'ori'], 
+#     # ['light_%s', ''], 
+#     # ['immatPartGlobal1_%s.npy', 'ori'], 
+#     # ['immatPartGlobal1Ids_%s.npy', 'ori'], 
+#     # ['immatPartGlobal2_%s.npy', 'ori'], 
+#     # ['immatPartGlobal2Ids_%s.npy', 'ori'], 
+#     # ['imsemLabel2_%s.npy', ''], 
+#     ['immask_%s.png', 'DiffMat'], 
+#     ['imdepth_%s.dat', 'main'], 
+#     # ['imsemLabel_%s.npy', ''], 
+#     ['imroughness_%s.png', 'DiffLight'], 
+#     # ['imshadingDirect_%s.rgbe', ''], 
+#     # ['imshading_%s.hdr', ''], 
+#     ['imbaseColor_%s.png', 'DiffLight'], 
+#     # ['imenvDirect_%s.hdr', ''], 
+#     ['imcadmatobj_%s.dat', 'main'], 
+#     # ['imsemLabel_%s.npy', 'main']
+#     # ['immatPart_%s.dat', ''], 
+#     # ['imsgEnv_%s.h5', 'ori'],
+# ]
+
 label_names = [
-    ['imnormal_%s.png', 'main'], 
-    ['im_%s.hdr', 'ori'], 
+    # ['imnormal_%s.png', 'main'], 
+    # ['im_%s.hdr', 'ori'], 
     ['imenv_%s.hdr', 'ori'], 
     # ['light_%s', ''], 
     # ['immatPartGlobal1_%s.npy', 'ori'], 
@@ -80,15 +107,15 @@ label_names = [
     # ['immatPartGlobal2_%s.npy', 'ori'], 
     # ['immatPartGlobal2Ids_%s.npy', 'ori'], 
     # ['imsemLabel2_%s.npy', ''], 
-    ['immask_%s.png', 'DiffMat'], 
-    ['imdepth_%s.dat', 'main'], 
+    # ['immask_%s.png', 'DiffMat'], 
+    # ['imdepth_%s.dat', 'main'], 
     # ['imsemLabel_%s.npy', ''], 
-    ['imroughness_%s.png', 'DiffLight'], 
+    # ['imroughness_%s.png', 'DiffLight'], 
     # ['imshadingDirect_%s.rgbe', ''], 
     # ['imshading_%s.hdr', ''], 
-    ['imbaseColor_%s.png', 'DiffLight'], 
+    # ['imbaseColor_%s.png', 'DiffLight'], 
     # ['imenvDirect_%s.hdr', ''], 
-    ['imcadmatobj_%s.dat', 'main'], 
+    # ['imcadmatobj_%s.dat', 'main'], 
     # ['imsemLabel_%s.npy', 'main']
     # ['immatPart_%s.dat', ''], 
     # ['imsgEnv_%s.h5', 'ori'],

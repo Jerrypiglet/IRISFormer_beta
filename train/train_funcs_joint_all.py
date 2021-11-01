@@ -156,7 +156,7 @@ def get_labels_dict_joint(data_batch, opt):
     # labels_dict = {**labels_dict_matseg, **labels_dict_brdf}
     return labels_dict
 
-def forward_joint(is_train, labels_dict, model, opt, time_meters, if_vis=False, if_loss=True, tid=-1):
+def forward_joint(is_train, labels_dict, model, opt, time_meters, if_vis=False, if_loss=True, tid=-1, loss_dict=None):
     # forward model + compute losses
 
     # Forward model
@@ -165,7 +165,8 @@ def forward_joint(is_train, labels_dict, model, opt, time_meters, if_vis=False, 
     time_meters['ts'] = time.time()
 
     # Post-processing and computing losses
-    loss_dict = {}
+    if loss_dict is None:
+        loss_dict = {}
 
     if opt.cfg.MODEL_SEMSEG.enable:
         output_dict, loss_dict = postprocess_semseg(labels_dict, output_dict, loss_dict, opt, time_meters)

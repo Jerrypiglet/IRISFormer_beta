@@ -30,7 +30,7 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
 
     if_load_mask = opt.cfg.DATA.load_brdf_gt and (not opt.cfg.DATASET.if_no_gt_BRDF)
     # if_load_mask = opt.cfg.DATASET.if_no_gt_BRDF
-    
+
     if opt.cfg.DATA.load_brdf_gt:
         # Load data from cpu to gpu
         if 'al' in opt.cfg.DATA.data_read_list:
@@ -249,11 +249,15 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
                         invd_gt = 1./(input_dict['depthBatch'].squeeze(1) + 1e-8)
                         loss = midas_loss_func(invd_pred, invd_gt, mask=input_dict['segAllBatch'].squeeze())
                     else:
-                        print('-depth gt', torch.max(input_dict['depthBatch']), torch.min(input_dict['depthBatch']), torch.median(input_dict['depthBatch']))
-                        print('--depth pred', torch.max(depthPreds[n]), torch.min(depthPreds[n]), torch.median(depthPreds[n]))
+                        # print('-depth gt', torch.max(input_dict['depthBatch']), torch.min(input_dict['depthBatch']), torch.median(input_dict['depthBatch']))
+                        # print('--depth pred', torch.max(depthPreds[n]), torch.min(depthPreds[n]), torch.median(depthPreds[n]))
 
-                        loss =  torch.sum( (torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) )
-                            * ( torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum 
+                        if opt.cfg.MODEL_BRDF.loss.depth.if_use_paper_loss:
+                            loss =  torch.sum( (torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+0.001) )
+                                * ( torch.log(depthPreds[n]+0.001) - torch.log(input_dict['depthBatch']+0.001) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum
+                        else:
+                            loss =  torch.sum( (torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) )
+                                * ( torch.log(depthPreds[n]+1) - torch.log(input_dict['depthBatch']+1) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum 
                         if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_depth:
                             reg_loss = regularization_loss(depthPreds[n], input_dict['depthBatch'], input_dict['segAllBatch'].squeeze())
                             # print(reg_loss.item(), loss.item())

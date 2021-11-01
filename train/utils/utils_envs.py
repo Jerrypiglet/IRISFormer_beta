@@ -29,7 +29,9 @@ def set_up_envs(opt):
     if opt.cfg.DEBUG.if_test_real:
         opt.cfg.DEBUG.if_dump_perframe_BRDF = True
         opt.cfg.TEST.vis_max_samples = 20000
-        
+
+    if opt.cfg.DEBUG.if_fast_BRDF_labels:
+        opt.cfg.DATASET.dataset_path_local = opt.cfg.DATASET.dataset_path_local_fast_BRDF
 
     if opt.cfg.DATASET.if_quarter and not opt.if_cluster:
         opt.cfg.DATASET.dataset_path_local = opt.cfg.DATASET.dataset_path_local_quarter
@@ -151,8 +153,8 @@ def set_up_envs(opt):
         opt.cfg.DATA.data_read_list = ''
         opt.cfg.DATASET.if_no_gt_BRDF = True
 
-    if opt.cfg.DEBUG.if_iiw:
-        opt.cfg.DATASET.if_no_gt_BRDF = True
+    # if opt.cfg.DEBUG.if_iiw:
+    #     opt.cfg.DATASET.if_no_gt_BRDF = True
 
 
     # ====== MODEL_ALL =====
@@ -369,6 +371,9 @@ def set_up_envs(opt):
         if opt.cfg.MODEL_LIGHT.use_GT_brdf and opt.cfg.MODEL_BRDF.enable:
             opt.cfg.DATA.load_brdf_gt = True
             opt.cfg.MODEL_LIGHT.freeze_BRDF_Net = True
+            opt.cfg.MODEL_BRDF.if_freeze = True
+
+        if opt.cfg.MODEL_LIGHT.freeze_BRDF_Net:
             opt.cfg.MODEL_BRDF.if_freeze = True
         #     opt.cfg.MODEL_BRDF.enable = False
         #     opt.cfg.MODEL_BRDF.enable_list = ''

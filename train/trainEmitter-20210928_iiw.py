@@ -61,6 +61,7 @@ parser.add_argument('--isFineTune', action='store_true', help='fine-tune the mod
 parser.add_argument("--if_train", type=str2bool, nargs='?', const=True, default=True)
 parser.add_argument("--if_val", type=str2bool, nargs='?', const=True, default=True)
 parser.add_argument("--if_vis", type=str2bool, nargs='?', const=True, default=True)
+parser.add_argument("--if_save", type=str2bool, nargs='?', const=True, default=True)
 parser.add_argument("--if_overfit_val", type=str2bool, nargs='?', const=True, default=False)
 parser.add_argument("--if_overfit_train", type=str2bool, nargs='?', const=True, default=False)
 parser.add_argument('--epochIdFineTune', type=int, default = 0, help='the training of epoch of the loaded model')
@@ -143,6 +144,10 @@ parser.add_argument('--cooldown-epochs', type=int, default=10, metavar='N',
 parser.add_argument('--decay-rate', '--dr', type=float, default=0.1, metavar='RATE',
                     help='LR decay rate (default: 0.1)')
 
+# The training weight on IIW
+parser.add_argument('--rankWeight', type=float, default=2.0, help='the weight of ranking')
+parser.add_argument("--if_train_OR", type=str2bool, nargs='?', const=True, default=True)
+parser.add_argument("--if_train_IIW", type=str2bool, nargs='?', const=True, default=True)
 
 parser.add_argument(
     "--config-file",
@@ -193,48 +198,6 @@ if opt.is_master:
     ic(opt.cfg)
 # <<<<<<<<<<<<< A bunch of modularised set-ups
 
-# >>>>>>>>>>>>> DETECTRON setups
-# import detectron2
-# from detectron2.utils.logger import setup_logger
-# from detectron2 import model_zoo
-# from detectron2.structures import BoxMode
-# from detectron2.engine import DefaultPredictor
-# from detectron2.config import get_cfg
-# from detectron2.utils.visualizer import Visualizer,ColorMode
-# from detectron2.evaluation import COCOEvaluator, inference_on_dataset
-# import os.path as osp
-# from detectron2.engine import DefaultTrainer
-# from detectron2.utils.events import EventStorage
-
-# cfg_detectron = get_cfg()
-
-# # detectron_configs = utils_config.load_cfg_from_cfg_file(os.path.join(pwdpath, opt.cfg.MODEL_detectron.config_file))
-# cfg_detectron.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_X_101_32x8d_FPN_3x.yaml"))
-# # cfg_detectron.DATASETS.TRAIN = ("light_train",)
-# # cfg_detectron.DATASETS.TEST = ("light_test", )
-# # cfg_detectron.DATALOADER.NUM_WORKERS = 2
-# cfg_detectron.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-InstanceSegmentation/mask_rcnn_X_101_32x8d_FPN_3x.yaml")  # Let training initialize from model zoo
-# cfg_detectron.SOLVER.IMS_PER_BATCH = 2
-# # cfg_detectron.SOLVER.BASE_LR = 0.001
-# # cfg_detectron.SOLVER.MAX_ITER = args.iter    
-# cfg_detectron.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 512   
-# # if(args.detect_4):
-# cfg_detectron.MODEL.ROI_HEADS.NUM_CLASSES = 45 # OR45: 45 (-1 for unlabelled)
-# # cfg_detectron.MODEL.TENSOR_MASK.MASK_LOSS_WEIGHT = 3
-# # cfg_detectron.SOLVER.WEIGHT_DECAY: 0.0001
-# cfg_detectron.MODEL.ROI_HEADS.NMS_THRESH_TEST: 0.7
-# # cfg_detectron.SOLVER.MOMENTUM: 0.9
-# cfg_detectron.SOLVER.LR_SCHEDULER_NAME="WarmupCosineLR"
-# # cfg_detectron.OUTPUT_DIR=outfiledir+'model_path/'
-# # False to include all empty image
-# cfg_detectron.DATALOADER.FILTER_EMPTY_ANNOTATIONS=False
-# cfg_detectron.INPUT.FORMAT = "RGB"
-
-# cfg_detectron = utils_config.merge_cfg_from_list(cfg_detectron, opt.params)
-# opt.cfg_detectron = cfg_detectron
-
-# <<<<<<<<<<<<< DETECTRON setups
-
 # >>>>>>>>>>>>> MODEL AND OPTIMIZER
 from models_def.model_joint_all import Model_Joint as the_model
 from models_def.model_joint_all_ViT import Model_Joint_ViT as the_model_ViT
@@ -270,23 +233,24 @@ if opt.cfg.SOLVER.method == 'adamw':
 
 # optimizer = optim.Adam(model.parameters(), lr=cfg.SOLVER.lr, betas=(0.5, 0.999) )
 if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
-    backbone_params = []
-    other_params = []
-    for k, v in model.named_parameters():
-        if 'backbone' in k:
-            backbone_params.append(v)
-            if opt.is_master:
-                print(k)
-        else:
-            other_params.append(v)
-    # my_list = ['BRDF_Net.pretrained.model.patch_embed.backbone']
-    # backbone_params = list(filter(lambda kv: kv[0] in my_list, model.named_parameters()))
-    # other_params = list(filter(lambda kv: kv[0] not in my_list, model.named_parameters()))
-    optimizer_backbone = optim.Adam(backbone_params, lr=1e-5, betas=(0.5, 0.999) )
-    optimizer_others = optim.Adam(other_params, lr=1e-4, betas=(0.5, 0.999) )
-    if opt.cfg.SOLVER.method == 'adamw':
-        optimizer_backbone = optim.AdamW(backbone_params, lr=1e-5, weight_decay=0.05)
-        optimizer_others = optim.AdamW(other_params, lr=1e-4, weight_decay=0.05)
+    assert False
+    # backbone_params = []
+    # other_params = []
+    # for k, v in model.named_parameters():
+    #     if 'backbone' in k:
+    #         backbone_params.append(v)
+    #         if opt.is_master:
+    #             print(k)
+    #     else:
+    #         other_params.append(v)
+    # # my_list = ['BRDF_Net.pretrained.model.patch_embed.backbone']
+    # # backbone_params = list(filter(lambda kv: kv[0] in my_list, model.named_parameters()))
+    # # other_params = list(filter(lambda kv: kv[0] not in my_list, model.named_parameters()))
+    # optimizer_backbone = optim.Adam(backbone_params, lr=1e-5, betas=(0.5, 0.999) )
+    # optimizer_others = optim.Adam(other_params, lr=1e-4, betas=(0.5, 0.999) )
+    # if opt.cfg.SOLVER.method == 'adamw':
+    #     optimizer_backbone = optim.AdamW(backbone_params, lr=1e-5, weight_decay=0.05)
+    #     optimizer_others = optim.AdamW(other_params, lr=1e-4, weight_decay=0.05)
 
 if opt.cfg.MODEL_BRDF.DPT_baseline.enable and opt.cfg.MODEL_BRDF.DPT_baseline.if_SGD:
     assert False, 'SGD disabled.'
@@ -302,13 +266,13 @@ if opt.cfg.SOLVER.if_warm_up:
     # https://github.com/microsoft/Cream/blob/2fb020852cb6ea77bb3409da5319891a132ac47f/iRPE/DeiT-with-iRPE/main.py
     from timm.scheduler import create_scheduler
     scheduler, _ = create_scheduler(opt, optimizer)
-    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
-        scheduler_backbone, _ = create_scheduler(opt, optimizer_backbone)
-        scheduler_others, _ = create_scheduler(opt, optimizer_others)
+    # if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
+    #     scheduler_backbone, _ = create_scheduler(opt, optimizer_backbone)
+    #     scheduler_others, _ = create_scheduler(opt, optimizer_others)
 
-if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.yogo_lr:
-    optimizer = optim.Adam(model.parameters(), lr=cfg.SOLVER.lr)
-    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100)
+# if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.yogo_lr:
+#     optimizer = optim.Adam(model.parameters(), lr=cfg.SOLVER.lr)
+#     scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100)
 
 # <<<<<<<<<<<<< MODEL AND OPTIMIZER
 
@@ -342,13 +306,6 @@ transforms_val_resize = get_transform_resize('val', opt)
 openrooms_to_use = openrooms
 make_data_loader_to_use = make_data_loader
 
-# if opt.cfg.DATASET.if_pickle:
-#     openrooms_to_use = openrooms_pickle
-# if opt.cfg.DATASET.if_binary:
-#     assert False, 'not supporting image resizing'
-#     openrooms_to_use = openrooms_binary
-    # make_data_loader_to_use = make_data_loader_binary
-    
 print('+++++++++openrooms_to_use', openrooms_to_use)
 
 if opt.if_train:
@@ -369,12 +326,6 @@ if opt.if_train:
 )
 if opt.cfg.MODEL_SEMSEG.enable:
     opt.semseg_colors = brdf_dataset_train.semseg_colors
-
-# if 'mini' in opt.cfg.DATASET.dataset_path:
-#     print('=====!!!!===== mini: brdf_dataset_val = brdf_dataset_train')
-#     brdf_dataset_val = brdf_dataset_train
-#     brdf_dataset_val_vis = brdf_dataset_train
-# else:
 
 if opt.if_val:
     brdf_dataset_val = openrooms_to_use(opt, 
@@ -600,20 +551,20 @@ checkpointer, tid_start, epoch_start = set_up_checkpointing(opt, model, optimize
 
 # >>>>>>>>>>>>> TRANING
 from train_funcs_joint_all import get_labels_dict_joint, val_epoch_joint, vis_val_epoch_joint, forward_joint, get_time_meters_joint
+from train_funcs_joint_all_iiw import get_labels_dict_joint_iiw, val_epoch_joint_iiw, vis_val_epoch_joint_iiw, forward_joint_iiw, get_time_meters_joint_iiw
 from train_funcs_dump import dump_joint
 
 tid = tid_start
-albedoErrsNpList = np.ones( [1, 1], dtype = np.float32 )
-normalErrsNpList = np.ones( [1, 1], dtype = np.float32 )
-roughErrsNpList= np.ones( [1, 1], dtype = np.float32 )
-depthErrsNpList = np.ones( [1, 1], dtype = np.float32 )
 
 ts_iter_end_start_list = []
 ts_iter_start_end_list = []
 num_mat_masks_MAX = 0
 
-model.train(not opt.cfg.MODEL_SEMSEG.fix_bn)
+model.train()
 synchronize()
+
+optimizer.zero_grad()
+
 
 # for epoch in list(range(opt.epochIdFineTune+1, opt.cfg.SOLVER.max_epoch)):
 # for epoch_0 in list(range(1, 2) ):
@@ -622,18 +573,28 @@ if not opt.if_train:
     val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift, 'if_register_detectron_only': False}
     if opt.if_vis:
         val_params.update({'batch_size_val_vis': batch_size_val_vis, 'detectron_dataset_name': 'vis'})
+        # with torch.no_grad():
+        #     vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
+        # synchronize()
+
         with torch.no_grad():
-            vis_val_epoch_joint(iiw_loader_val_vis, model, val_params)
+            vis_val_epoch_joint_iiw(iiw_loader_val_vis, model, val_params)
         synchronize()
+
     if opt.if_val:
-        val_params.update({'brdf_dataset_val': brdf_dataset_val, 'detectron_dataset_name': 'val'})
+        # val_params.update({'brdf_dataset_val': brdf_dataset_val, 'detectron_dataset_name': 'val'})
+        # with torch.no_grad():
+        #     val_epoch_joint(brdf_loader_val, model, val_params)
+
+        val_params.update({'iiw_dataset_val': iiw_dataset_val})
         with torch.no_grad():
-            val_epoch_joint(brdf_loader_val, model, val_params)
+            val_epoch_joint_iiw(iiw_loader_val, model, val_params)
 else:
     for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         epoch = epoch_0 + epoch_start
 
         time_meters = get_time_meters_joint()
+        time_meters_iiw = get_time_meters_joint_iiw()
 
         epochs_saved = []
 
@@ -659,39 +620,13 @@ else:
         count_samples_this_rank = 0
 
         # for i, data_batch in tqdm(enumerate(iiw_loader_train)):
-        # for i, (data_batch_iiw, data_batch) in tqdm(enumerate(zip(cycle(iiw_loader_train), brdf_loader_train))):
-        for i, data_batch in tqdm(enumerate(iiw_loader_train)):
-
-            if opt.cfg.DATASET.if_binary and opt.distributed:
-                count_samples_this_rank += len(data_batch['frame_info'])
-                count_samples_gathered = gather_lists([count_samples_this_rank], opt.num_gpus)
-                # print('->', i, opt.rank)
-                if opt.rank==0:
-                    print('-', count_samples_gathered, '-', len(brdf_dataset_train.scene_key_frame_id_list_this_rank))
-            
-                if max(count_samples_gathered)>=len(brdf_dataset_train.scene_key_frame_id_list_this_rank):
-                    break
-
+        for i, (data_batch_iiw, data_batch) in enumerate(zip(cycle(iiw_loader_train), brdf_loader_train)):
+        # for i, data_batch in tqdm(enumerate(iiw_loader_train)):
 
             if cfg.SOLVER.if_test_dataloader:
                 if i % 100 == 0:
                     print(data_batch.keys())
                     print(opt.task_name, 'On average: %.4f iter/s'%((len(tic_list)+1e-6)/(sum(tic_list)+1e-6)))
-                if opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs:
-                    # print(data_batch.keys())
-                    # print(data_batch['boxes_valid_list'])
-                    # print(data_batch['frame_info'])
-                    ic(data_batch['num_valid_boxes'])
-                    frame_info_list = data_batch['frame_info']
-                    boxes_valid_list_list = data_batch['boxes_valid_list']
-                    for frame_info, boxes_valid_list in zip(frame_info_list, boxes_valid_list_list):
-                        frame_key = '%s-%s-%d'%(frame_info['meta_split'], frame_info['scene_name'], frame_info['frame_id'])
-                        if frame_key in train_obj_dict:
-                            continue
-                        else:
-                            if sum(boxes_valid_list) == 0:
-                                print(sum(boxes_valid_list), boxes_valid_list)
-                            train_obj_dict[frame_key] = {'valid_obj_num': sum(boxes_valid_list), 'boxes_valid_list': boxes_valid_list}
                 tic_list.append(time.time()-tic)
                 tic = time.time()
                 continue
@@ -702,30 +637,41 @@ else:
             print((tid - tid_start) % opt.eval_every_iter, opt.eval_every_iter)
             if opt.eval_every_iter != -1 and (tid - tid_start) % opt.eval_every_iter == 0:
                 val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift, 'if_register_detectron_only': False}
+
                 if opt.if_vis:
                     val_params.update({'batch_size_val_vis': batch_size_val_vis, 'detectron_dataset_name': 'vis'})
+
                     with torch.no_grad():
                         if opt.cfg.DEBUG.if_dump_anything:
-                            dump_joint(iiw_loader_val_vis, model, val_params)
-                        vis_val_epoch_joint(iiw_loader_val_vis, model, val_params)
+                            dump_joint(brdf_loader_val_vis, model, val_params)
+                        vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
                     synchronize()                
+
+                    with torch.no_grad():
+                        vis_val_epoch_joint_iiw(iiw_loader_val_vis, model, val_params)
+                    synchronize()
+
                 if opt.if_val:
                     val_params.update({'brdf_dataset_val': brdf_dataset_val, 'detectron_dataset_name': 'val'})
+
                     with torch.no_grad():
                         val_epoch_joint(brdf_loader_val, model, val_params)
+                    synchronize()
+
+                    val_params.update({'iiw_dataset_val': iiw_dataset_val})
+                    with torch.no_grad():
+                        val_epoch_joint_iiw(iiw_loader_val, model, val_params)
+                    synchronize()
+
                 model.train(not cfg.MODEL_SEMSEG.fix_bn)
                 reset_tictoc = True
                 
                 synchronize()
 
             # Save checkpoint
-            if opt.save_every_iter != -1 and (tid - tid_start) % opt.save_every_iter == 0 and 'tmp' not in opt.task_name:
+            if opt.save_every_iter != -1 and (tid - tid_start) % opt.save_every_iter == 0 and 'tmp' not in opt.task_name and opt.if_save:
                 check_save(opt, tid, tid, epoch, checkpointer, epochs_saved, opt.checkpoints_path_task, logger)
                 reset_tictoc = True
-
-            # synchronize()
-
-            # torch.cuda.empty_cache()
 
             if reset_tictoc:
                 ts_iter_end = time.time()
@@ -733,185 +679,172 @@ else:
             if tid > 5:
                 ts_iter_end_start_list.append(ts_iter_start - ts_iter_end)
 
-            # if opt.ifDataloaderOnly:
-            #     continue
             if tid % opt.debug_every_iter == 0:
                 opt.if_vis_debug_pac = True
 
+            # ======================================================================= [OR] ============================================================================ #
 
-            # ======= Load data from cpu to gpu
+            if opt.if_train_OR:
+                # ======= Load data from cpu to gpu
 
-            labels_dict = get_labels_dict_joint(data_batch, opt)
-            # synchronize()
+                labels_dict = get_labels_dict_joint(data_batch, opt)
 
-            time_meters['data_to_gpu'].update(time.time() - ts_iter_start)
-            time_meters['ts'] = time.time()
+                time_meters['data_to_gpu'].update(time.time() - ts_iter_start)
+                time_meters['ts'] = time.time()
 
-            if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list or 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-                print('Valid objs num: ', [sum(x) for x in data_batch['boxes_valid_list']], 'Totasl objs num: ', [len(x) for x in data_batch['boxes_valid_list']])
+                # ======= Forward
+                # if 'dpt_hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
+                #     optimizer_backbone.zero_grad()
+                #     optimizer_others.zero_grad()
+                # else:
+                if opt.if_train_IIW:
+                    model.module.unfreeze_BRDF_except_albedo(if_print=False)
 
-            # ======= Forward
-            if 'dpt_hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
-                optimizer_backbone.zero_grad()
-                optimizer_others.zero_grad()
-            else:
                 optimizer.zero_grad()
-            output_dict, loss_dict = forward_joint(True, labels_dict, model, opt, time_meters, tid=tid)
-            # synchronize()
-            
-            # print('=======loss_dict', loss_dict)
-            loss_dict_reduced = reduce_loss_dict(loss_dict, mark=tid, logger=logger) # **average** over multi GPUs
-            time_meters['ts'] = time.time()
 
-            # ======= Backward
-            loss = 0.
-            loss_keys_backward = []
-            loss_keys_print = []
-            if opt.cfg.MODEL_MATSEG.enable and (not opt.cfg.MODEL_MATSEG.if_freeze):
-                #  and ((not opt.cfg.MODEL_MATSEG.freeze) or opt.cfg.MODEL_MATSEG.embed_dims <= 4):
-                loss_keys_backward.append('loss_matseg-ALL')
-                loss_keys_print.append('loss_matseg-ALL')
-                loss_keys_print.append('loss_matseg-pull')
-                loss_keys_print.append('loss_matseg-push')
-                loss_keys_print.append('loss_matseg-binary')
+                output_dict, loss_dict = forward_joint(True, labels_dict, model, opt, time_meters, tid=tid)
+                
+                # print('=======loss_dict', loss_dict)
+                loss_dict_reduced = reduce_loss_dict(loss_dict, mark=tid, logger=logger) # **average** over multi GPUs
+                time_meters['ts'] = time.time()
 
-            if (opt.cfg.MODEL_SEMSEG.enable and not opt.cfg.MODEL_SEMSEG.if_freeze) or (opt.cfg.MODEL_BRDF.enable_semseg_decoder):
-                loss_keys_backward.append('loss_semseg-ALL')
-                loss_keys_print.append('loss_semseg-ALL')
-                if opt.cfg.MODEL_SEMSEG.enable:
-                    loss_keys_print.append('loss_semseg-main') 
-                    loss_keys_print.append('loss_semseg-aux') 
+                # ======= Backward
+                loss = 0.
+                loss_keys_backward = []
+                loss_keys_print = []
 
-            if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
-                if not (opt.cfg.MODEL_BRDF.if_freeze or opt.cfg.MODEL_LIGHT.freeze_BRDF_Net):
-                    loss_keys_backward.append('loss_brdf-ALL')
-                    loss_keys_print.append('loss_brdf-ALL')
-                if 'al' in opt.cfg.MODEL_BRDF.enable_list and 'al' in opt.cfg.MODEL_BRDF.loss_list:
-                    loss_keys_print.append('loss_brdf-albedo') 
-                    if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_albedo:
-                        loss_keys_print.append('loss_brdf-albedo-reg') 
-                if 'no' in opt.cfg.MODEL_BRDF.enable_list and 'no' in opt.cfg.MODEL_BRDF.loss_list:
-                    loss_keys_print.append('loss_brdf-normal') 
-                if 'ro' in opt.cfg.MODEL_BRDF.enable_list and 'ro' in opt.cfg.MODEL_BRDF.loss_list:
-                    loss_keys_print.append('loss_brdf-rough') 
-                if 'de' in opt.cfg.MODEL_BRDF.enable_list and 'de' in opt.cfg.MODEL_BRDF.loss_list:
-                    loss_keys_print.append('loss_brdf-depth') 
-                    if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_depth:
-                        loss_keys_print.append('loss_brdf-depth-reg') 
+                if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
+                    if not (opt.cfg.MODEL_BRDF.if_freeze or opt.cfg.MODEL_LIGHT.freeze_BRDF_Net):
+                        loss_keys_backward.append('loss_brdf-ALL')
+                        loss_keys_print.append('loss_brdf-ALL')
+                    if 'al' in opt.cfg.MODEL_BRDF.enable_list and 'al' in opt.cfg.MODEL_BRDF.loss_list:
+                        loss_keys_print.append('loss_brdf-albedo') 
+                        if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_albedo:
+                            loss_keys_print.append('loss_brdf-albedo-reg') 
+                    if 'no' in opt.cfg.MODEL_BRDF.enable_list and 'no' in opt.cfg.MODEL_BRDF.loss_list:
+                        loss_keys_print.append('loss_brdf-normal') 
+                    if 'ro' in opt.cfg.MODEL_BRDF.enable_list and 'ro' in opt.cfg.MODEL_BRDF.loss_list:
+                        loss_keys_print.append('loss_brdf-rough') 
+                    if 'de' in opt.cfg.MODEL_BRDF.enable_list and 'de' in opt.cfg.MODEL_BRDF.loss_list:
+                        loss_keys_print.append('loss_brdf-depth') 
+                        if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_depth:
+                            loss_keys_print.append('loss_brdf-depth-reg') 
 
-            if opt.cfg.MODEL_LIGHT.enable:
-                if not opt.cfg.MODEL_LIGHT.if_freeze:
-                    loss_keys_backward.append('loss_light-ALL')
-                    loss_keys_print.append('loss_light-ALL')
+                for loss_key in loss_keys_backward:
+                    if loss_key in opt.loss_weight_dict:
+                        loss_dict[loss_key] = loss_dict[loss_key] * opt.loss_weight_dict[loss_key]
+                        print('Multiply loss %s by weight %.3f'%(loss_key, opt.loss_weight_dict[loss_key]))
+                loss = sum([loss_dict[loss_key] for loss_key in loss_keys_backward])
 
-            if opt.cfg.MODEL_MATCLS.enable:
-                loss_keys_backward.append('loss_matcls-ALL')
-                loss_keys_print.append('loss_matcls-ALL')
-                loss_keys_print.append('loss_matcls-cls')
-                if opt.cfg.MODEL_MATCLS.if_est_sup:
-                    loss_keys_print.append('loss_matcls-supcls')
+                if opt.is_master and tid % 20 == 0:
+                    print('----loss_dict', loss_dict.keys())
+                    print('----loss_keys_backward', loss_keys_backward)
 
+                loss.backward()
 
-            if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
-                if_use_layout_loss = 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list
-                if_use_object_loss = 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list
+                if opt.is_master and tid % 100 == 0:
+                    params_train_total = 0
+                    params_not_train_total = 0
+                    for name, param in model.named_parameters():
+                        if param.grad is None:
+                            if param.requires_grad==True:
+                                print('[OR]', name, '------!!!!!!!!!!!!')
+                                params_not_train_total += 1
+                        else:
+                            print('[OR]', name, '☑')
+                            params_train_total += 1
+                    logger.info('%d params received grad; %d params require grads but not received'%(params_train_total, params_not_train_total))
 
-                if if_use_layout_loss:
-                    if not opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_freeze:
-                        loss_keys_backward.append('loss_layout-ALL')
-                    loss_keys_print.append('loss_layout-ALL')
-                    loss_keys_print += ['loss_layout-pitch_cls', 
-                        'loss_layout-pitch_reg', 
-                        'loss_layout-roll_cls', 
-                        'loss_layout-roll_reg', 
-                        'loss_layout-lo_ori_cls', 
-                        'loss_layout-lo_ori_reg', 
-                        'loss_layout-lo_centroid', 
-                        'loss_layout-lo_coeffs', 
-                        'loss_layout-lo_corner', ]
-
-                if if_use_object_loss:
-                    loss_keys_backward.append('loss_object-ALL')
-                    loss_keys_print.append('loss_object-ALL')
-                if if_use_layout_loss and if_use_object_loss:
-                    loss_keys_backward.append('loss_joint-ALL')
-                    loss_keys_print.append('loss_joint-ALL')
-
-                if 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
-                    loss_keys_backward.append('loss_mesh-ALL')
-                    loss_keys_print.append('loss_mesh-ALL')
-                    if opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'SVRLoss':
-                        for loss_name in ['loss_mesh-chamfer', 'loss_mesh-face', 'loss_mesh-edge', 'loss_mesh-boundary']:
-                            loss_keys_print.append(loss_name)
-                        
-
-                if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
-                    if not opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_freeze:
-                        loss_keys_backward.append('loss_emitter-ALL')
-                    loss_keys_print.append('loss_emitter-ALL')
-                    loss_keys_print += ['loss_emitter-light_ratio', 
-                        'loss_emitter-cell_cls', 
-                        'loss_emitter-cell_axis', 
-                        'loss_emitter-cell_intensity', 
-                        'loss_emitter-cell_lamb'] 
-
-            if opt.cfg.MODEL_DETECTRON.enable:
-                loss_keys_backward.append('loss_detectron-ALL')
-                loss_keys_print += ['loss_detectron-ALL', 
-                    'loss_detectron-cls', 
-                    'loss_detectron-box_reg', 
-                    'loss_detectron-mask', 
-                    'loss_detectron-rpn_cls', 
-                    'loss_detectron-rpn_loc', ]
-
-            for loss_key in loss_keys_backward:
-                if loss_key in opt.loss_weight_dict:
-                    loss_dict[loss_key] = loss_dict[loss_key] * opt.loss_weight_dict[loss_key]
-                    print('Multiply loss %s by weight %.3f'%(loss_key, opt.loss_weight_dict[loss_key]))
-            loss = sum([loss_dict[loss_key] for loss_key in loss_keys_backward])
-
-            if opt.is_master and tid % 20 == 0:
-                print('----loss_dict', loss_dict.keys())
-                print('----loss_keys_backward', loss_keys_backward)
-
-            loss.backward()
-
-            if opt.is_master and tid % 100 == 0:
-                params_train_total = 0
-                params_not_train_total = 0
-                for name, param in model.named_parameters():
-                    if param.grad is None:
-                        if param.requires_grad==True:
-                            print(name, '------!!!!!!!!!!!!')
-                            params_not_train_total += 1
-                    else:
-                        print(name, '☑')
-                        params_train_total += 1
-                logger.info('%d params received grad; %d params require grads but not received'%(params_train_total, params_not_train_total))
-
-            # clip_to = 1.
-            # torch.nn.utils.clip_grad_norm_(model.LAYOUT_EMITTER_NET_fc.parameters(), clip_to)
-            # torch.nn.utils.clip_grad_norm_(model.LAYOUT_EMITTER_NET_encoder.parameters(), clip_to)
-            # print(model.LAYOUT_EMITTER_NET_fc.fc_layout_5.weight)
-            # print(model.LAYOUT_EMITTER_NET_fc.fc_layout_5.weight.grad)
-
-            if 'dpt_hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
-                optimizer_backbone.step()
-                optimizer_others.step()
-            else:
+                # if 'dpt_hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
+                #     optimizer_backbone.step()
+                #     optimizer_others.step()
+                # else:
                 optimizer.step()
-            time_meters['backward'].update(time.time() - time_meters['ts'])
-            time_meters['ts'] = time.time()
-            # synchronize()
+                time_meters['backward'].update(time.time() - time_meters['ts'])
+                time_meters['ts'] = time.time()
 
-            if opt.is_master:
-                loss_keys_print = [x for x in loss_keys_print if 'ALL' in x] + [x for x in loss_keys_print if 'ALL' not in x]
-                logger_str = 'Epoch %d - Tid %d -'%(epoch, tid) + ', '.join(['%s %.3f'%(loss_key, loss_dict_reduced[loss_key]) for loss_key in loss_keys_print])
-                logger.info(white_blue(logger_str))
 
-                for loss_key in loss_dict_reduced:
-                    writer.add_scalar('loss_train/%s'%loss_key, loss_dict_reduced[loss_key].item(), tid)
-                writer.add_scalar('training/epoch', epoch, tid)
+                if opt.is_master:
+                    loss_keys_print = [x for x in loss_keys_print if 'ALL' in x] + [x for x in loss_keys_print if 'ALL' not in x]
+                    logger_str = '[OR] Epoch %d - Tid %d -'%(epoch, tid) + ', '.join(['%s %.3f'%(loss_key, loss_dict_reduced[loss_key]) for loss_key in loss_keys_print])
+                    logger.info(white_blue(logger_str))
+
+                    for loss_key in loss_dict_reduced:
+                        writer.add_scalar('loss_train/%s'%loss_key, loss_dict_reduced[loss_key].item(), tid)
+                    writer.add_scalar('training/epoch', epoch, tid)
+
+            # ======================================================================= [IIW] ============================================================================ #
+            if opt.if_train_IIW:
+                # ======= Load data from cpu to gpu
+
+                labels_dict_iiw = get_labels_dict_joint_iiw(data_batch_iiw, opt)
+
+                time_meters_iiw['data_to_gpu'].update(time.time() - ts_iter_start)
+                time_meters_iiw['ts'] = time.time()
+
+                # ======= Forward
+                # if 'dpt_hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
+                #     optimizer_backbone.zero_grad()
+                #     optimizer_others.zero_grad()
+                # else:
+                model.module.freeze_BRDF_except_albedo(if_print=False)
+                optimizer.zero_grad()
+
+                output_dict_iiw, loss_dict = forward_joint_iiw(True, labels_dict_iiw, model, opt, time_meters_iiw, tid=tid)
+                
+                # print('=======loss_dict', loss_dict)
+                loss_dict_reduced = reduce_loss_dict(loss_dict, mark=tid, logger=logger) # **average** over multi GPUs
+                time_meters_iiw['ts'] = time.time()
+
+                # ======= Backward
+                loss = 0.
+                loss_keys_backward = []
+                loss_keys_print = []
+
+                loss_keys_backward.append('loss_iiw-ALL')
+                loss_keys_print.append('loss_iiw-ALL')
+                loss_keys_print.append('loss_iiw-eq')
+                loss_keys_print.append('loss_iiw-darker')
+
+                loss = sum([loss_dict[loss_key] for loss_key in loss_keys_backward])
+
+                if opt.is_master and tid % 20 == 0:
+                    print('----loss_dict', loss_dict.keys())
+                    print('----loss_keys_backward', loss_keys_backward)
+
+                loss.backward()
+
+                if opt.is_master and tid % 5 == 0:
+                    params_train_total = 0
+                    params_not_train_total = 0
+                    for name, param in model.named_parameters():
+                        if param.grad is None:
+                            if param.requires_grad==True:
+                                print('[IIW]', name, '------!!!!!!!!!!!!')
+                                params_not_train_total += 1
+                        else:
+                            print('[IIW]', name, '☑')
+                            params_train_total += 1
+                    logger.info('%d params received grad; %d params require grads but not received'%(params_train_total, params_not_train_total))
+
+                # if 'dpt_hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
+                #     optimizer_backbone.step()
+                #     optimizer_others.step()
+                # else:
+                optimizer.step()
+                time_meters_iiw['backward'].update(time.time() - time_meters_iiw['ts'])
+                time_meters_iiw['ts'] = time.time()
+
+                if opt.is_master:
+                    loss_keys_print = [x for x in loss_keys_print if 'ALL' in x] + [x for x in loss_keys_print if 'ALL' not in x]
+                    logger_str = '[IIW] Epoch %d - Tid %d -'%(epoch, tid) + ', '.join(['%s %.3f'%(loss_key, loss_dict_reduced[loss_key]) for loss_key in loss_keys_print])
+                    logger.info(white_magenta(logger_str))
+
+                    for loss_key in loss_dict_reduced:
+                        writer.add_scalar('loss_train/%s'%loss_key, loss_dict_reduced[loss_key].item(), tid)
+                    writer.add_scalar('training/epoch', epoch, tid)
+
+            # =================================================================================================================================================== #
 
             # End of iteration logging
             ts_iter_end = time.time()
@@ -920,9 +853,6 @@ else:
                 if (tid - tid_start) % 10 == 0:
                     logger.info(green('Rolling end-to-start %.2f, Rolling start-to-end %.2f'%(sum(ts_iter_end_start_list)/len(ts_iter_end_start_list), sum(ts_iter_start_end_list)/len(ts_iter_start_end_list))))
                     logger.info(green('Training timings: ' + time_meters_to_string(time_meters)))
-                # if len(ts_iter_end_start_list) > 100:
-                #     ts_iter_end_start_list = []
-                #     ts_iter_start_end_list = []
                 if opt.is_master and tid % 100 == 0:
                     usage_ratio = print_gpu_usage(handle, logger)
                     writer.add_scalar('training/GPU_usage_ratio', usage_ratio, tid)
@@ -935,57 +865,7 @@ else:
                         else:
                             current_lr = scheduler._get_lr(epoch)[0]
                     writer.add_scalar('training/lr', current_lr, tid)
-            # if opt.is_master:
 
-            # if tid % opt.debug_every_iter == 0:       
-            #     if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool or opt.cfg.MODEL_MATSEG.if_albedo_safenet) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
-            #         if opt.is_master and output_dict['im_trainval_SDR_mask_pooled_mean'] is not None:
-            #             for sample_idx, im_trainval_SDR_mask_pooled_mean in enumerate(output_dict['im_trainval_SDR_mask_pooled_mean']):
-            #                 im_trainval_SDR_mask_pooled_mean = im_trainval_SDR_mask_pooled_mean.detach().cpu().numpy().squeeze().transpose(1, 2, 0)
-            #                 writer.add_image('TRAIN_im_trainval_SDR_debug/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), data_batch['im_trainval_SDR'][sample_idx].numpy().squeeze().transpose(1, 2, 0), tid, dataformats='HWC')
-            #                 writer.add_image('TRAIN_im_trainval_SDR_mask_pooled_mean/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), im_trainval_SDR_mask_pooled_mean, tid, dataformats='HWC')
-            #                 logger.info('Added debug pooling sample')
-            
-            # ===== Logging summaries of training samples
-            # if tid % 2000 == 0:
-            #     for sample_idx, (im_single, im_trainval_SDR, im_path) in enumerate(zip(data_batch['im_trainval'], data_batch['im_trainval_SDR'], data_batch['image_path'])):
-            #         # im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
-            #         im_trainval_SDR = im_trainval_SDR.numpy().squeeze().transpose(1, 2, 0)
-            #         if opt.is_master:
-            #             # writer.add_image('TRAIN_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
-            #             writer.add_image('TRAIN_im_trainval_SDR/%d'%sample_idx, im_trainval_SDR, tid, dataformats='HWC')
-            #             writer.add_text('TRAIN_image_name/%d'%sample_idx, im_path, tid)
-            #     if opt.cfg.DATA.load_matseg_gt:
-            #         for sample_idx, (im_single, mat_aggre_map) in enumerate(zip(data_batch['im_matseg_transformed_trainval'], labels_dict['mat_aggre_map_cpu'])):
-            #             im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
-            #             mat_aggre_map = mat_aggre_map.numpy().squeeze()
-            #             if opt.is_master:
-            #                 writer.add_image('TRAIN_matseg_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
-            #                 writer.add_image('TRAIN_matseg_mat_aggre_map_trainval/%d'%sample_idx, vis_index_map(mat_aggre_map), tid, dataformats='HWC')
-            #             logger.info('Logged training mat seg')
-            #     if opt.cfg.DATA.load_semseg_gt and opt.cfg.MODEL_SEMSEG.enable:
-            #         for sample_idx, (im_single, semseg_label, semseg_pred) in enumerate(zip(data_batch['im_semseg_transformed_trainval'], data_batch['semseg_label'], output_dict['semseg_pred'].detach().cpu())):
-            #             im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
-            #             semseg_colors = np.loadtxt(os.path.join(opt.pwdpath, opt.cfg.PATH.semseg_colors_path)).astype('uint8')
-            #             if opt.cfg.MODEL_SEMSEG.wallseg_only:
-            #                 semseg_colors = np.array([[0, 0, 0], [0, 80, 100]], dtype=np.uint8)
-
-            #             semseg_label = np.uint8(semseg_label.numpy().squeeze())
-            #             from utils.utils_vis import colorize
-            #             semseg_label_color = np.array(colorize(semseg_label, semseg_colors).convert('RGB'))
-            #             if opt.is_master:
-            #                 writer.add_image('TRAIN_semseg_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
-            #                 writer.add_image('TRAIN_semseg_label_trainval/%d'%sample_idx, semseg_label_color, tid, dataformats='HWC')
-
-            #             prediction = np.argmax(semseg_pred.numpy().squeeze(), 0)
-            #             gray_pred = np.uint8(prediction)
-            #             color_pred = np.array(colorize(gray_pred, semseg_colors).convert('RGB'))
-            #             if opt.is_master:
-            #                 writer.add_image('TRAIN_semseg_PRED/%d'%sample_idx, color_pred, tid, dataformats='HWC')
-
-            #             logger.info('Logged training sem seg')
-
-            # synchronize()
             if tid % opt.debug_every_iter == 0:
                 opt.if_vis_debug_pac = False
 
@@ -999,9 +879,3 @@ else:
                 scheduler_others.step(epoch)
             else:
                 scheduler.step(epoch)
-
-
-if opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs:
-    with open(obj_nums_dict_file, 'wb') as f:
-        pickle.dump(train_obj_dict, f)
-    print(white_blue('train_obj_dict dumped to %s'%obj_nums_dict_file))

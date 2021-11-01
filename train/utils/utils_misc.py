@@ -27,6 +27,10 @@ def white_blue(text):
     coloredd = colored(text, 'white', 'on_blue')
     return coloredd
 
+def white_magenta(text):
+    coloredd = colored(text, 'white', 'on_magenta')
+    return coloredd
+
 def blue_text(text):
     coloredd = colored(text, 'blue')
     return coloredd

@@ -222,13 +222,14 @@ def check_save(opt, tid, epoch_save, epoch_total, checkpointer, epochs_saved, ch
         saved_filename = checkpointer.save(ckpt_filepath, **arguments)
         logger.info(green('Saved BEST checkpoint to '+saved_filename))
 
-def freeze_bn_in_module(module):
+def freeze_bn_in_module(module, if_print=True):
     mod = module
     if isinstance(module, torch.nn.modules.instancenorm._InstanceNorm):
         return module
     if isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
         #  or isinstance(module, apex.parallel.optimized_sync_batchnorm.SyncBatchNorm):
-        print(red('-- turning off BN in '), module)
+        if if_print:
+            print(red('-- turning off BN in '), module)
         mod.eval()
 
     # if isinstance(module, torch.nn.modules.groupnorm._GroupNorm):
@@ -244,7 +245,36 @@ def freeze_bn_in_module(module):
         #     mod.weight.data = module.weight.data.clone().detach()
         #     mod.bias.data = module.bias.data.clone().detach()
     for name, child in module.named_children():
-        freeze_bn_in_module(child)
+        freeze_bn_in_module(child, if_print=if_print)
+        # mod.add_module(name, convert_syncbn_model_hvd(child))
+    # # TODO(jie) should I delete model explicitly?
+    # del module
+    # return mod
+
+def unfreeze_bn_in_module(module, if_print=True):
+    mod = module
+    if isinstance(module, torch.nn.modules.instancenorm._InstanceNorm):
+        return module
+    if isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
+        #  or isinstance(module, apex.parallel.optimized_sync_batchnorm.SyncBatchNorm):
+        if if_print:
+            print(red('-- turning off BN in '), module)
+        mod.train()
+
+    # if isinstance(module, torch.nn.modules.groupnorm._GroupNorm):
+    #     # print('--convert_syncbn_model_hvd converting...', module)
+    #     mod.eval()
+        # print(mod)
+        # mod.weight.requires_grad = False
+        # mod.bias.requires_grad = False
+        # mod = SyncBatchNorm(module.num_features, module.eps, module.momentum, module.affine, module.track_running_stats)
+        # mod.running_mean = module.running_mean
+        # mod.running_var = module.running_var
+        # if module.affine:
+        #     mod.weight.data = module.weight.data.clone().detach()
+        #     mod.bias.data = module.bias.data.clone().detach()
+    for name, child in module.named_children():
+        unfreeze_bn_in_module(child, if_print=if_print)
         # mod.add_module(name, convert_syncbn_model_hvd(child))
     # # TODO(jie) should I delete model explicitly?
     # del module

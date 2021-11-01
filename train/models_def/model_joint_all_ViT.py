@@ -5,7 +5,7 @@ import torch.nn as nn
 from models_def.model_matseg import Baseline
 from utils.utils_misc import *
 # import pac
-from utils.utils_training import freeze_bn_in_module
+from utils.utils_training import freeze_bn_in_module, unfreeze_bn_in_module
 import torch.nn.functional as F
 from torchvision.models import resnet
 
@@ -100,7 +100,7 @@ class Model_Joint_ViT(nn.Module):
             if self.cfg.MODEL_LIGHT.freeze_BRDF_Net and self.if_BRDF:
                 self.freeze_BRDF()
 
-    def forward(self, input_dict):
+    def forward(self, input_dict, if_has_gt_BRDF=True):
         # module_hooks_dict = {}
         # input_dict_extra = {}
         output_dict = {}
@@ -112,7 +112,7 @@ class Model_Joint_ViT(nn.Module):
         if self.if_BRDF:
             # assert self.opt.cfg.MODEL_ALL.ViT_baseline.if_share_encoder_over_modalities_stage0
             x_stage0 = input_dict['input_batch_brdf']
-            return_dict_brdf = self.forward_brdf(x_stage0, input_dict)
+            return_dict_brdf = self.forward_brdf(x_stage0, input_dict, if_has_gt_BRDF=if_has_gt_BRDF)
             output_dict.update(return_dict_brdf)
         else:
             return_dict_brdf = {}
@@ -127,8 +127,10 @@ class Model_Joint_ViT(nn.Module):
         return output_dict
 
 
-    def forward_brdf(self, x_stage0, input_dict):
+    def forward_brdf(self, x_stage0, input_dict, if_has_gt_BRDF=True):
         output_dict_model_all = self.MODEL_ALL.forward_brdf(x_stage0)
+
+        if_has_gt_BRDF = if_has_gt_BRDF and (not self.opt.cfg.DATASET.if_no_gt_BRDF) and self.load_brdf_gt
 
         return_dict = {}
 
@@ -140,7 +142,7 @@ class Model_Joint_ViT(nn.Module):
                 albedoPred = 0.5 * (vit_out + 1)
                 albedoPred = torch.clamp(albedoPred, 0, 1)
                 return_dict.update({'albedoPred': albedoPred})
-                if (not self.opt.cfg.DATASET.if_no_gt_BRDF) and self.load_brdf_gt:
+                if if_has_gt_BRDF:
                     input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
                     albedoPred_aligned = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
                             input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
@@ -153,7 +155,7 @@ class Model_Joint_ViT(nn.Module):
                     return_dict.update({'depthInvPred': vit_out})
                     depthPred = 1. / (vit_out + 1e-8)
                 return_dict.update({'depthPred': depthPred})
-                if (not self.opt.cfg.DATASET.if_no_gt_BRDF) and self.load_brdf_gt:
+                if if_has_gt_BRDF:
                     depthPred_aligned = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
                             input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
                     return_dict.update({'depthPred_aligned': depthPred_aligned})
@@ -432,7 +434,22 @@ class Model_Joint_ViT(nn.Module):
         if 'ro' in self.modalities_stage0:
             self.turn_off_names(['_.ro'])
             freeze_bn_in_module(self.MODEL_ALL._['ro'])
+    
+    def freeze_BRDF_except_albedo(self, if_print=True):
+        self.turn_off_names(['_.no'], if_print=if_print)
+        freeze_bn_in_module(self.MODEL_ALL._['no'], if_print=if_print)
+        self.turn_off_names(['_.de'], if_print=if_print)
+        freeze_bn_in_module(self.MODEL_ALL._['de'], if_print=if_print)
+        self.turn_off_names(['_.ro'], if_print=if_print)
+        freeze_bn_in_module(self.MODEL_ALL._['ro'], if_print=if_print)
 
+    def unfreeze_BRDF_except_albedo(self, if_print=True):
+        self.turn_on_names(['_.no'], if_print=if_print)
+        unfreeze_bn_in_module(self.MODEL_ALL._['no'], if_print=if_print)
+        self.turn_on_names(['_.de'], if_print=if_print)
+        unfreeze_bn_in_module(self.MODEL_ALL._['de'], if_print=if_print)
+        self.turn_on_names(['_.ro'], if_print=if_print)
+        unfreeze_bn_in_module(self.MODEL_ALL._['ro'], if_print=if_print)
 
     def print_net(self):
         count_grads = 0
@@ -454,22 +471,24 @@ class Model_Joint_ViT(nn.Module):
             param.requires_grad = True
         self.logger.info(colored('turned on all params', 'white', 'on_red'))
 
-    def turn_on_names(self, in_names):
+    def turn_on_names(self, in_names, if_print=True):
         for name, param in self.named_parameters():
             for in_name in in_names:
             # if 'roi_heads.box.predictor' in name or 'classifier_c' in name:
                 if in_name in name:
                     param.requires_grad = True
-                    self.logger.info(colored('turn_ON_names: ' + in_name, 'white', 'on_red'))
+                    if if_print:
+                        self.logger.info(colored('turn_ON_names: ' + in_name, 'white', 'on_red'))
 
-    def turn_off_names(self, in_names, exclude_names=[]):
+    def turn_off_names(self, in_names, exclude_names=[], if_print=True):
         for name, param in self.named_parameters():
             for in_name in in_names:
             # if 'roi_heads.box.predictor' in name or 'classifier_c' in name:
                 if_not_in_exclude = all([exclude_name not in name for exclude_name in exclude_names]) # any item in exclude_names must not be in the paramater name
                 if in_name in name and if_not_in_exclude:
                     param.requires_grad = False
-                    self.logger.info(colored('turn_OFF_names: ' + in_name, 'white', 'on_red'))
+                    if if_print:
+                        self.logger.info(colored('turn_OFF_names: ' + in_name, 'white', 'on_red'))
 
     def freeze_bn_semantics(self):
         freeze_bn_in_module(self.SEMSEG_Net)

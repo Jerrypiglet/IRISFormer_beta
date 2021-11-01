@@ -1334,26 +1334,25 @@ class Model_Joint(nn.Module):
         im_h, im_w = self.cfg.DATA.im_height, self.cfg.DATA.im_width
 
         # Normalize Albedo and depth
-        if self.cfg.MODEL_LIGHT.use_GT_brdf:
-            if 'al' in self.cfg.MODEL_BRDF.enable_list:
-                albedoInput = return_dict_brdf['albedoPred'].detach().clone()
-            else:
-                albedoInput = input_dict['albedoBatch'].detach().clone()
+        if 'al' in self.cfg.MODEL_BRDF.enable_list and not self.cfg.MODEL_LIGHT.use_GT_brdf:
+            albedoInput = return_dict_brdf['albedoPred'].detach().clone()
+        else:
+            albedoInput = input_dict['albedoBatch'].detach().clone()
 
-            if 'de' in self.cfg.MODEL_BRDF.enable_list:
-                depthInput = return_dict_brdf['depthPred'].detach().clone()
-            else:
-                depthInput = input_dict['depthBatch'].detach().clone()
+        if 'de' in self.cfg.MODEL_BRDF.enable_list and not self.cfg.MODEL_LIGHT.use_GT_brdf:
+            depthInput = return_dict_brdf['depthPred'].detach().clone()
+        else:
+            depthInput = input_dict['depthBatch'].detach().clone()
 
-            if 'no' in self.cfg.MODEL_BRDF.enable_list:
-                normalInput = return_dict_brdf['normalPred'].detach().clone()
-            else:
-                normalInput = input_dict['normalBatch'].detach().clone()
+        if 'no' in self.cfg.MODEL_BRDF.enable_list and not self.cfg.MODEL_LIGHT.use_GT_brdf:
+            normalInput = return_dict_brdf['normalPred'].detach().clone()
+        else:
+            normalInput = input_dict['normalBatch'].detach().clone()
 
-            if 'ro' in self.cfg.MODEL_BRDF.enable_list:
-                roughInput = return_dict_brdf['roughPred'].detach().clone()
-            else:
-                roughInput = input_dict['roughBatch'].detach().clone()
+        if 'ro' in self.cfg.MODEL_BRDF.enable_list and not self.cfg.MODEL_LIGHT.use_GT_brdf:
+            roughInput = return_dict_brdf['roughPred'].detach().clone()
+        else:
+            roughInput = input_dict['roughBatch'].detach().clone()
 
         imBatch = input_dict['imBatch']
         segBRDFBatch = input_dict['segBRDFBatch']

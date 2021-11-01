@@ -55,6 +55,7 @@ _C.PATH.pretrained_cluster = ['/ruidata/semanticInverse/pretrained', '/home/ruzh
 # ===== debug
 
 _C.DEBUG = CN()
+_C.DEBUG.if_fast_BRDF_labels = False
 _C.DEBUG.if_dump_anything = False
 _C.DEBUG.if_test_real = False
 _C.DEBUG.if_iiw = False
@@ -72,6 +73,7 @@ _C.DATASET.dataset_path_local = '/home/ruizhu/Documents/Projects/semanticInverse
 _C.DATASET.dataset_path_local_quarter = '/ruidata/openrooms_raw_quarter'
 _C.DATASET.dataset_path_cluster = ['/siggraphasia20dataset/code/Routine/DatasetCreation/', '', '/datasets_mount/']
 _C.DATASET.dataset_path_binary = ''
+_C.DATASET.dataset_path_local_fast_BRDF = '/ruidata/openrooms_raw_BRDF'
 
 _C.DATASET.real_images_root_path = '/home/ruizhu/Documents/Projects/semanticInverse'
 _C.DATASET.real_images_list_path = 'data/list_real_20.txt'
@@ -267,6 +269,7 @@ _C.MODEL_BRDF.use_scale_aware_depth = True
 _C.MODEL_BRDF.depth_activation = 'relu'
 _C.MODEL_BRDF.loss.depth = CN() # ONLY works for MODEL_ALL (DPT) for now
 _C.MODEL_BRDF.loss.depth.if_use_midas_loss = False # DPT: scale-invariant loss on inv depth; relu
+_C.MODEL_BRDF.loss.depth.if_use_paper_loss = False # log(depth+0.001) instead of log(depth+1)
 _C.MODEL_BRDF.loss.depth.if_use_Zhengqin_loss = True # tanh + loss on depth
 
 _C.MODEL_BRDF.DPT_baseline = CN()
