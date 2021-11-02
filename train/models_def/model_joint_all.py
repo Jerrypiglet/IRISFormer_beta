@@ -4,7 +4,7 @@ import torch.nn as nn
 from models_def.model_matseg import Baseline
 from utils.utils_misc import *
 # import pac
-from utils.utils_training import freeze_bn_in_module
+from utils.utils_training import freeze_bn_in_module, unfreeze_bn_in_module
 import torch.nn.functional as F
 from torchvision.models import resnet
 
@@ -1624,22 +1624,47 @@ class Model_Joint(nn.Module):
             param.requires_grad = True
         self.logger.info(colored('turned on all params', 'white', 'on_red'))
 
-    def turn_on_names(self, in_names):
+    def turn_on_names(self, in_names, if_print=True):
         for name, param in self.named_parameters():
             for in_name in in_names:
             # if 'roi_heads.box.predictor' in name or 'classifier_c' in name:
                 if in_name in name:
                     param.requires_grad = True
-                    self.logger.info(colored('turn_ON_names: ' + in_name, 'white', 'on_red'))
+                    if if_print:
+                        self.logger.info(colored('turn_ON_names: ' + in_name, 'white', 'on_red'))
 
-    def turn_off_names(self, in_names, exclude_names=[]):
+    def turn_off_names(self, in_names, exclude_names=[], if_print=True):
         for name, param in self.named_parameters():
             for in_name in in_names:
             # if 'roi_heads.box.predictor' in name or 'classifier_c' in name:
                 if_not_in_exclude = all([exclude_name not in name for exclude_name in exclude_names]) # any item in exclude_names must not be in the paramater name
                 if in_name in name and if_not_in_exclude:
                     param.requires_grad = False
-                    self.logger.info(colored('turn_OFF_names: ' + in_name, 'white', 'on_red'))
+                    if if_print:
+                        self.logger.info(colored('turn_OFF_names: ' + in_name, 'white', 'on_red'))
+
+    def freeze_BRDF_except_albedo(self, if_print=True):
+        if 'no' in self.opt.cfg.MODEL_BRDF.enable_list:
+            self.turn_off_names(['BRDF_Net.normalDecoder'], if_print=if_print)
+            freeze_bn_in_module(self.BRDF_Net.normalDecoder, if_print=if_print)
+        if 'de' in self.opt.cfg.MODEL_BRDF.enable_list:
+            self.turn_off_names(['BRDF_Net.depthDecoder'], if_print=if_print)
+            freeze_bn_in_module(self.BRDF_Net.depthDecoder, if_print=if_print)
+        if 'ro' in self.opt.cfg.MODEL_BRDF.enable_list:
+            self.turn_off_names(['BRDF_Net.roughDecoder'], if_print=if_print)
+            freeze_bn_in_module(self.BRDF_Net.roughDecoder, if_print=if_print)
+
+    def unfreeze_BRDF_except_albedo(self, if_print=True):
+        if 'no' in self.opt.cfg.MODEL_BRDF.enable_list:
+            self.turn_on_names(['BRDF_Net.normalDecoder'], if_print=if_print)
+            unfreeze_bn_in_module(self.BRDF_Net.normalDecoder, if_print=if_print)
+        if 'de' in self.opt.cfg.MODEL_BRDF.enable_list:
+            self.turn_on_names(['BRDF_Net.depthDecoder'], if_print=if_print)
+            unfreeze_bn_in_module(self.BRDF_Net.depthDecoder, if_print=if_print)
+        if 'ro' in self.opt.cfg.MODEL_BRDF.enable_list:
+            self.turn_on_names(['BRDF_Net.roughDecoder'], if_print=if_print)
+            unfreeze_bn_in_module(self.BRDF_Net.roughDecoder, if_print=if_print)
+
 
     def freeze_bn_semantics(self):
         freeze_bn_in_module(self.SEMSEG_Net)

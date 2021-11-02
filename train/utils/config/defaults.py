@@ -173,6 +173,7 @@ _C.DATASET.if_no_gt_semantics = False
 _C.DATASET.if_quarter = False
 
 _C.DATASET.if_no_gt_BRDF = False
+_C.DATASET.if_no_gt_light = False
 
 
 # ===== data loading configs

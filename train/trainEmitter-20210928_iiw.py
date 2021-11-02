@@ -573,18 +573,18 @@ if not opt.if_train:
     val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift, 'if_register_detectron_only': False}
     if opt.if_vis:
         val_params.update({'batch_size_val_vis': batch_size_val_vis, 'detectron_dataset_name': 'vis'})
-        # with torch.no_grad():
-        #     vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
-        # synchronize()
+        with torch.no_grad():
+            vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
+        synchronize()
 
         with torch.no_grad():
             vis_val_epoch_joint_iiw(iiw_loader_val_vis, model, val_params)
         synchronize()
 
     if opt.if_val:
-        # val_params.update({'brdf_dataset_val': brdf_dataset_val, 'detectron_dataset_name': 'val'})
-        # with torch.no_grad():
-        #     val_epoch_joint(brdf_loader_val, model, val_params)
+        val_params.update({'brdf_dataset_val': brdf_dataset_val, 'detectron_dataset_name': 'val'})
+        with torch.no_grad():
+            val_epoch_joint(brdf_loader_val, model, val_params)
 
         val_params.update({'iiw_dataset_val': iiw_dataset_val})
         with torch.no_grad():
@@ -698,7 +698,11 @@ else:
                 #     optimizer_others.zero_grad()
                 # else:
                 if opt.if_train_IIW:
-                    model.module.unfreeze_BRDF_except_albedo(if_print=False)
+                    if opt.distributed:
+                        model.module.unfreeze_BRDF_except_albedo(if_print=False)
+                    else:
+                        model.unfreeze_BRDF_except_albedo(if_print=False)
+
 
                 optimizer.zero_grad()
 
@@ -787,7 +791,11 @@ else:
                 #     optimizer_backbone.zero_grad()
                 #     optimizer_others.zero_grad()
                 # else:
-                model.module.freeze_BRDF_except_albedo(if_print=False)
+                if opt.distributed:
+                    model.module.freeze_BRDF_except_albedo(if_print=False)
+                else:
+                    model.freeze_BRDF_except_albedo(if_print=False)
+
                 optimizer.zero_grad()
 
                 output_dict_iiw, loss_dict = forward_joint_iiw(True, labels_dict_iiw, model, opt, time_meters_iiw, tid=tid)

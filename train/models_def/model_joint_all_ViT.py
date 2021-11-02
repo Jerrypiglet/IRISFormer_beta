@@ -297,13 +297,16 @@ class Model_Joint_ViT(nn.Module):
         imBatch = input_dict['imBatch']
         assert imBatch.shape[0]==1
 
-        # im_h, im_w = input_dict['im_h_resized_to'], input_dict['im_w_resized_to']
-        im_h, im_w = self.cfg.DATA.im_height_padded, self.cfg.DATA.im_width_padded
+        im_h, im_w = input_dict['im_h_resized_to'], input_dict['im_w_resized_to']
+        # im_h, im_w = self.cfg.DATA.im_height_padded, self.cfg.DATA.im_width_padded
+        im_h = im_h//2*2
+        im_w = im_w//2*2
+
         renderLayer = models_light.renderingLayer(isCuda = self.opt.if_cuda, 
-            imWidth=self.opt.cfg.MODEL_LIGHT.envCol, imHeight=self.opt.cfg.MODEL_LIGHT.envRow, 
-            envWidth = self.cfg.DATA.im_width_padded//2, envHeight = self.cfg.DATA.im_height_padded//2)
+            imWidth=im_w//2, imHeight=im_h//2,  
+            envWidth = self.opt.cfg.MODEL_LIGHT.envWidth, envHeight = self.opt.cfg.MODEL_LIGHT.envHeight)
         output2env = models_light.output2env(isCuda = self.opt.if_cuda, 
-            envWidth = self.cfg.DATA.im_width_padded//2, envHeight = self.cfg.DATA.im_height_padded//2, SGNum = self.opt.cfg.MODEL_LIGHT.SGNum )
+            envWidth = self.opt.cfg.MODEL_LIGHT.envWidth, envHeight = self.opt.cfg.MODEL_LIGHT.envHeight, SGNum = self.opt.cfg.MODEL_LIGHT.SGNum )
 
         # Normalize Albedo and depth
         albedoInput = return_dict_brdf['albedoPred'].detach().clone()
@@ -401,7 +404,7 @@ class Model_Joint_ViT(nn.Module):
 
         envmapsImage_input = envmapsPredImage
 
-        print(normal_input.shape, envmapsImage_input.shape, albedoInput.shape, rough_input.shape, )
+        # print(im_h, im_w, normal_input.shape, envmapsImage_input.shape, albedoInput.shape, rough_input.shape, )
         diffusePred, specularPred = renderLayer.forwardEnv(normalPred=normal_input.detach(), envmap=envmapsImage_input, diffusePred=albedoInput.detach(), roughPred=rough_input.detach())
 
         if self.cfg.MODEL_LIGHT.use_scale_aware_loss:
@@ -417,7 +420,7 @@ class Model_Joint_ViT(nn.Module):
         renderedImPred = renderedImPred_hdr
         renderedImPred_sdr = torch.clamp(renderedImPred_hdr ** (1.0/2.2), 0, 1)
 
-        return_dict.update({'renderedImPred': renderedImPred, 'renderedImPred_sdr': renderedImPred_sdr}) 
+        return_dict.update({'imBatchSmall': imBatchSmall, 'envmapsPredImage': envmapsPredImage, 'renderedImPred': renderedImPred, 'renderedImPred_sdr': renderedImPred_sdr}) 
         return_dict.update({'LightNet_preds': {'axisPred': axisPred_ori, 'lambPred': lambPred_ori, 'weightPred': weightPred_ori}})
 
         return return_dict
@@ -445,20 +448,26 @@ class Model_Joint_ViT(nn.Module):
             freeze_bn_in_module(self.MODEL_ALL._['ro'])
     
     def freeze_BRDF_except_albedo(self, if_print=True):
-        self.turn_off_names(['_.no'], if_print=if_print)
-        freeze_bn_in_module(self.MODEL_ALL._['no'], if_print=if_print)
-        self.turn_off_names(['_.de'], if_print=if_print)
-        freeze_bn_in_module(self.MODEL_ALL._['de'], if_print=if_print)
-        self.turn_off_names(['_.ro'], if_print=if_print)
-        freeze_bn_in_module(self.MODEL_ALL._['ro'], if_print=if_print)
+        if 'no' in self.modalities_stage0:
+            self.turn_off_names(['_.no'], if_print=if_print)
+            freeze_bn_in_module(self.MODEL_ALL._['no'], if_print=if_print)
+        if 'de' in self.modalities_stage0:
+            self.turn_off_names(['_.de'], if_print=if_print)
+            freeze_bn_in_module(self.MODEL_ALL._['de'], if_print=if_print)
+        if 'ro' in self.modalities_stage0:
+            self.turn_off_names(['_.ro'], if_print=if_print)
+            freeze_bn_in_module(self.MODEL_ALL._['ro'], if_print=if_print)
 
     def unfreeze_BRDF_except_albedo(self, if_print=True):
-        self.turn_on_names(['_.no'], if_print=if_print)
-        unfreeze_bn_in_module(self.MODEL_ALL._['no'], if_print=if_print)
-        self.turn_on_names(['_.de'], if_print=if_print)
-        unfreeze_bn_in_module(self.MODEL_ALL._['de'], if_print=if_print)
-        self.turn_on_names(['_.ro'], if_print=if_print)
-        unfreeze_bn_in_module(self.MODEL_ALL._['ro'], if_print=if_print)
+        if 'no' in self.modalities_stage0:
+            self.turn_on_names(['_.no'], if_print=if_print)
+            unfreeze_bn_in_module(self.MODEL_ALL._['no'], if_print=if_print)
+        if 'de' in self.modalities_stage0:
+            self.turn_on_names(['_.de'], if_print=if_print)
+            unfreeze_bn_in_module(self.MODEL_ALL._['de'], if_print=if_print)
+        if 'ro' in self.modalities_stage0:
+            self.turn_on_names(['_.ro'], if_print=if_print)
+            unfreeze_bn_in_module(self.MODEL_ALL._['ro'], if_print=if_print)
 
     def print_net(self):
         count_grads = 0

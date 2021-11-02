@@ -152,6 +152,7 @@ def set_up_envs(opt):
         opt.cfg.DATA.load_light_gt = False
         opt.cfg.DATA.data_read_list = ''
         opt.cfg.DATASET.if_no_gt_BRDF = True
+        opt.cfg.DATASET.if_no_gt_light = True
 
     # if opt.cfg.DEBUG.if_iiw:
     #     opt.cfg.DATASET.if_no_gt_BRDF = True
@@ -171,10 +172,12 @@ def set_up_envs(opt):
         if any(x in opt.cfg.MODEL_ALL.enable_list for x in ['al', 'ro', 'de', 'no'] if x != ''):
             opt.cfg.MODEL_BRDF.enable = True
             opt.cfg.MODEL_BRDF.enable_list = list(set(opt.cfg.MODEL_BRDF.enable_list_allowed) & set(opt.cfg.MODEL_ALL.enable_list))
-        if 'li' in opt.cfg.DATA.data_read_list:
+        if 'li' in opt.cfg.DATA.data_read_list or ('axis' in opt.cfg.DATA.data_read_list and 'lamb' in opt.cfg.DATA.data_read_list and 'weight' in opt.cfg.DATA.data_read_list):
             if not opt.cfg.DEBUG.if_test_real:
                 opt.cfg.DATA.load_light_gt = True
                 # opt.cfg.MODEL_LIGHT.use_GT_brdf = True
+            opt.cfg.MODEL_LIGHT.enable = True
+        if 'li' in opt.cfg.MODEL_ALL.enable_list:
             opt.cfg.MODEL_LIGHT.enable = True
         
 
