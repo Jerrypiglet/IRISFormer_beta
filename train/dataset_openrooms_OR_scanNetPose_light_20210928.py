@@ -439,6 +439,14 @@ class openrooms(data.Dataset):
                 diffusePre_path = hdr_image_path.replace('im_', 'imdiffuse_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
                 specularPre_path = hdr_image_path.replace('im_', 'imspecular_').replace('.hdr', '_%d.h5' % (self.cascadeLevel - 1) )
 
+            if self.opt.cfg.DEBUG.if_fast_light_labels:
+                if frame_info['meta_split']=='main_xml1':
+                    root_path_scene = '/ruidata/openrooms_raw_light_main_xml1'
+                else:
+                    root_path_scene = '/newdata/ruizhu/openrooms_raw_light'
+                env_path = env_path.replace(self.opt.cfg.DATASET.dataset_path_local, root_path_scene)
+                print(env_path)
+
             envmaps, envmapsInd = self.loadEnvmap(env_path )
             envmaps = envmaps * hdr_scale 
             # print(frame_info, self.split, hdr_scale, np.amax(envmaps),np.amin(envmaps), np.median(envmaps))

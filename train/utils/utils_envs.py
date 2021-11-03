@@ -32,6 +32,8 @@ def set_up_envs(opt):
 
     if opt.cfg.DEBUG.if_fast_BRDF_labels:
         opt.cfg.DATASET.dataset_path_local = opt.cfg.DATASET.dataset_path_local_fast_BRDF
+    if opt.cfg.DEBUG.if_fast_light_labels:
+        assert opt.if_cluster == False
 
     if opt.cfg.DATASET.if_quarter and not opt.if_cluster:
         opt.cfg.DATASET.dataset_path_local = opt.cfg.DATASET.dataset_path_local_quarter

@@ -38,6 +38,7 @@ def LSregress(pred, gt, origin, if_clamp_coeff=True):
 
     # coef = (torch.sum(pred * gt, dim = 1) / torch.clamp(torch.sum(pred * pred, dim=1), min=1e-5)).detach()
     coef = (torch.sum(pred * gt, dim = 1) / (torch.sum(pred * pred, dim=1) + 1e-6)).detach()
+    print(coef)
     if if_clamp_coeff:
         coef = torch.clamp(coef, 0.001, 1000)
     # print(coef, pred.shape)

@@ -1451,34 +1451,38 @@ class Model_Joint(nn.Module):
         pixelNum_recon = max( (torch.sum(segEnvBatch ).cpu().data).item(), 1e-5)
         if self.cfg.MODEL_LIGHT.use_GT_light_sg:
             envmapsPredScaledImage = envmapsPredImage * (input_dict['hdr_scaleBatch'].flatten().view(-1, 1, 1, 1, 1, 1))
-            envmapsPredScaledImage_log = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
+            envmapsPredScaledImage_offset_log_ = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
         elif self.cfg.MODEL_LIGHT.use_GT_light_envmap:
             envmapsPredScaledImage = envmapsPredImage # gt envmap already scaled in dataloader
-            envmapsPredScaledImage_log = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
+            envmapsPredScaledImage_offset_log_ = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
         elif self.cfg.MODEL_LIGHT.use_scale_aware_loss:
             envmapsPredScaledImage = envmapsPredImage # not aligning envmap
-            envmapsPredScaledImage_log = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
+            envmapsPredScaledImage_offset_log_ = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
         else: # scale-invariant
             if self.cfg.MODEL_LIGHT.if_align_log_envmap:
-                envmapsPredScaledImage = models_brdf.LSregress(torch.log(envmapsPredImage + self.cfg.MODEL_LIGHT.offset).detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
-                    torch.log(input_dict['envmapsBatch'] + self.cfg.MODEL_LIGHT.offset) * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage, 
-                    if_clamp_coeff=False)
-                envmapsPredScaledImage_log = models_brdf.LSregress(torch.log(envmapsPredImage + self.cfg.MODEL_LIGHT.offset).detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
+                # assert False, 'disabled'
+                # envmapsPredScaledImage = models_brdf.LSregress(torch.log(envmapsPredImage + self.cfg.MODEL_LIGHT.offset).detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
+                #     torch.log(input_dict['envmapsBatch'] + self.cfg.MODEL_LIGHT.offset) * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage, 
+                #     if_clamp_coeff=False)
+                envmapsPredScaledImage_offset_log_ = models_brdf.LSregress(torch.log(envmapsPredImage + self.cfg.MODEL_LIGHT.offset).detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
                     torch.log(input_dict['envmapsBatch'] + self.cfg.MODEL_LIGHT.offset) * segEnvBatch.expand_as(input_dict['envmapsBatch']), torch.log(envmapsPredImage + self.cfg.MODEL_LIGHT.offset), 
-                    if_clamp_coeff=False)
+                    if_clamp_coeff=self.cfg.MODEL_LIGHT.if_clamp_coeff)
+                envmapsPredScaledImage = torch.exp(envmapsPredScaledImage_offset_log_) - self.cfg.MODEL_LIGHT.offset
             else:
                 envmapsPredScaledImage = models_brdf.LSregress(envmapsPredImage.detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
                     input_dict['envmapsBatch'] * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage, 
-                    if_clamp_coeff=False)
-                envmapsPredScaledImage_log = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
+                    if_clamp_coeff=self.cfg.MODEL_LIGHT.if_clamp_coeff)
+                print('-envmapsPredScaledImage-', torch.max(envmapsPredScaledImage), torch.min(envmapsPredScaledImage), torch.mean(envmapsPredScaledImage), torch.median(envmapsPredScaledImage))
+                # envmapsPredScaledImage_offset_log_ = torch.log(torch.clamp(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset, min=self.cfg.MODEL_LIGHT.offset))
+                envmapsPredScaledImage_offset_log_ = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
 
         if self.opt.is_master and if_print:
             ic(torch.max(input_dict['envmapsBatch']), torch.min(input_dict['envmapsBatch']),torch.median(input_dict['envmapsBatch']))
             ic(torch.max(envmapsPredImage), torch.min(envmapsPredImage),torch.median(envmapsPredImage))
             ic(torch.max(envmapsPredScaledImage), torch.min(envmapsPredScaledImage),torch.median(envmapsPredScaledImage))
-            ic(torch.max(envmapsPredScaledImage_log), torch.min(envmapsPredScaledImage_log),torch.median(envmapsPredScaledImage_log))
+            ic(torch.max(envmapsPredScaledImage_offset_log_), torch.min(envmapsPredScaledImage_offset_log_),torch.median(envmapsPredScaledImage_offset_log_))
 
-        return_dict.update({'envmapsPredImage': envmapsPredImage, 'envmapsPredScaledImage': envmapsPredScaledImage, 'envmapsPredScaledImage_log': envmapsPredScaledImage_log, \
+        return_dict.update({'envmapsPredImage': envmapsPredImage, 'envmapsPredScaledImage': envmapsPredScaledImage, 'envmapsPredScaledImage_offset_log_': envmapsPredScaledImage_offset_log_, \
             'segEnvBatch': segEnvBatch, \
             'imBatchSmall': imBatchSmall, 'segBRDFBatchSmall': segBRDFBatchSmall, 'pixelNum_recon': pixelNum_recon}) 
 
@@ -1603,28 +1607,28 @@ class Model_Joint(nn.Module):
         # pixelNum_recon = max( (torch.sum(segEnvBatch ).cpu().data).item(), 1e-5)
         # if self.cfg.MODEL_LIGHT.use_GT_light_sg:
         #     envmapsPredScaledImage = envmapsPredImage * (input_dict['hdr_scaleBatch'].flatten().view(-1, 1, 1, 1, 1, 1))
-        #     envmapsPredScaledImage_log = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
+        #     envmapsPredScaledImage_offset_log_ = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
         # elif self.cfg.MODEL_LIGHT.use_GT_light_envmap:
         #     envmapsPredScaledImage = envmapsPredImage # gt envmap already scaled in dataloader
-        #     envmapsPredScaledImage_log = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
+        #     envmapsPredScaledImage_offset_log_ = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
         # elif self.cfg.MODEL_LIGHT.use_scale_aware_loss:
         #     envmapsPredScaledImage = envmapsPredImage # not aligning envmap
-        #     envmapsPredScaledImage_log = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
+        #     envmapsPredScaledImage_offset_log_ = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
         # else: # scale-invariant
         #     if self.cfg.MODEL_LIGHT.if_align_log_envmap:
         #         envmapsPredScaledImage = models_brdf.LSregress(torch.log(envmapsPredImage + self.cfg.MODEL_LIGHT.offset).detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
         #             torch.log(input_dict['envmapsBatch'] + self.cfg.MODEL_LIGHT.offset) * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage, 
         #             if_clamp_coeff=False)
-        #         envmapsPredScaledImage_log = models_brdf.LSregress(torch.log(envmapsPredImage + self.cfg.MODEL_LIGHT.offset).detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
+        #         envmapsPredScaledImage_offset_log_ = models_brdf.LSregress(torch.log(envmapsPredImage + self.cfg.MODEL_LIGHT.offset).detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
         #             torch.log(input_dict['envmapsBatch'] + self.cfg.MODEL_LIGHT.offset) * segEnvBatch.expand_as(input_dict['envmapsBatch']), torch.log(envmapsPredImage + self.cfg.MODEL_LIGHT.offset), 
         #             if_clamp_coeff=False)
         #     else:
         #         envmapsPredScaledImage = models_brdf.LSregress(envmapsPredImage.detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
         #             input_dict['envmapsBatch'] * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage, 
         #             if_clamp_coeff=False)
-        #         envmapsPredScaledImage_log = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
+        #         envmapsPredScaledImage_offset_log_ = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
 
-        # return_dict.update({'envmapsPredImage': envmapsPredImage, 'envmapsPredScaledImage': envmapsPredScaledImage, 'envmapsPredScaledImage_log': envmapsPredScaledImage_log, \
+        # return_dict.update({'envmapsPredImage': envmapsPredImage, 'envmapsPredScaledImage': envmapsPredScaledImage, 'envmapsPredScaledImage_offset_log_': envmapsPredScaledImage_offset_log_, \
         #     'segEnvBatch': segEnvBatch, \
         #     'imBatchSmall': imBatchSmall, 'segBRDFBatchSmall': segBRDFBatchSmall, 'pixelNum_recon': pixelNum_recon}) 
 

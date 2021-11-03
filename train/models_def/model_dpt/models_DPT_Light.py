@@ -40,6 +40,8 @@ class DPTLightModel(Transformer_Hybrid_Encoder_Decoder):
 
         self.if_batch_norm = opt.cfg.MODEL_LIGHT.DPT_baseline.if_batch_norm
         # self.if_group_norm = opt.cfg.MODEL_LIGHT.DPT_baseline.if_group_norm
+        if modality == 'weight':
+            self.if_batch_norm = opt.cfg.MODEL_LIGHT.DPT_baseline.if_batch_norm_weight_override
 
         super().__init__(opt, cfg_ViT=cfg_DPT, head_names=[modality], N_layers_encoder=N_layers_encoder, N_layers_decoder=N_layers_decoder, **kwargs)
 
@@ -57,7 +59,8 @@ class DPTLightModel(Transformer_Hybrid_Encoder_Decoder):
                 nn.ReLU(True),
                 Interpolate(scale_factor=2, mode="bilinear", align_corners=True),
                 nn.Conv2d(features//2, 64, kernel_size=3, stride=1, padding=1),
-                nn.BatchNorm2d(64) if self.if_batch_norm else nn.Identity(),
+                # nn.BatchNorm2d(64) if self.if_batch_norm else nn.Identity(),
+                nn.Identity(), 
                 nn.ReLU(True),
                 nn.Conv2d(64, self.out_channels, kernel_size=1, stride=1, padding=0),
                 # nn.BatchNorm2d(self.out_channels) if self.if_batch_norm else nn.Identity(),

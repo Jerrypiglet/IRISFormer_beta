@@ -16,7 +16,8 @@ if_cluster = False
 
 # DEST_PATH = Path('/ruidata/openrooms_raw_quarter')
 # DEST_PATH = Path('/ruidata/openrooms_raw_BRDF')
-DEST_PATH = Path('/newdata/ruizhu/openrooms_raw_light')
+# DEST_PATH = Path('/newdata/ruizhu/openrooms_raw_light')
+DEST_PATH = Path('/ruidata/openrooms_raw_light_main_xml1')
 LIST_path = Path('/home/ruizhu/Documents/Projects/semanticInverse/train/data/openrooms/list_OR_V4full/list')
 # PERCENT = 0.25
 PERCENT = 1
@@ -39,7 +40,8 @@ for split in ['train', 'val']:
         scene_name = _.strip().split(' ')[0]
         meta_split = _.strip().split(' ')[2].split('/')[0]
         # if 'xml1' in meta_split:
-        if 'mainDiff' not in meta_split or 'xml1' not in meta_split:
+        # if 'mainDiff' not in meta_split or 'xml1' not in meta_split:
+        if meta_split!='main_xml1':
             continue
         frame_id = int(_.strip().split(' ')[1])
         if 'scene' in scene_name:

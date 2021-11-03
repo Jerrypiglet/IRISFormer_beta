@@ -56,6 +56,7 @@ _C.PATH.pretrained_cluster = ['/ruidata/semanticInverse/pretrained', '/home/ruzh
 
 _C.DEBUG = CN()
 _C.DEBUG.if_fast_BRDF_labels = False
+_C.DEBUG.if_fast_light_labels = False
 _C.DEBUG.if_dump_anything = False
 _C.DEBUG.if_test_real = False
 _C.DEBUG.if_iiw = False
@@ -419,6 +420,7 @@ _C.MODEL_LIGHT.use_scale_aware_loss = False
 _C.MODEL_LIGHT.if_transform_to_LightNet_coords = False # if transform pred lighting to global LightNet coords
 _C.MODEL_LIGHT.enable_list = 'axis_lamb_weight'
 _C.MODEL_LIGHT.if_align_log_envmap = True # instead of align raw envmap_pred and envmap_gt
+_C.MODEL_LIGHT.if_clamp_coeff = True
 
 _C.MODEL_LIGHT.DPT_baseline = CN()
 _C.MODEL_LIGHT.DPT_baseline.enable = False
@@ -427,7 +429,8 @@ _C.MODEL_LIGHT.DPT_baseline.model = 'dpt_hybrid'
 _C.MODEL_LIGHT.DPT_baseline.if_share_patchembed = False
 _C.MODEL_LIGHT.DPT_baseline.if_share_pretrained = False
 _C.MODEL_LIGHT.DPT_baseline.if_batch_norm = False # in DPT output head
-_C.MODEL_LIGHT.DPT_baseline.if_group_norm = False # in DPT output head
+_C.MODEL_LIGHT.DPT_baseline.if_batch_norm_weight_override = False # in DPT output head
+# _C.MODEL_LIGHT.DPT_baseline.if_group_norm = False # in DPT output head
 _C.MODEL_LIGHT.DPT_baseline.if_imagenet_backbone = True
 _C.MODEL_LIGHT.DPT_baseline.readout = 'ignore'
 _C.MODEL_LIGHT.DPT_baseline.if_pos_embed = False
@@ -667,8 +670,8 @@ _C.MODEL_ALL.ViT_baseline.if_indept_MLP_heads_if_layer_norm = False
 _C.MODEL_ALL.ViT_baseline.ViT_pool = 'mean'
 _C.MODEL_ALL.ViT_baseline.N_layers_encoder_stage0 = 4
 _C.MODEL_ALL.ViT_baseline.N_layers_decoder_stage0 = 4
-_C.MODEL_ALL.ViT_baseline.N_layers_encoder_stage1 = 6
-_C.MODEL_ALL.ViT_baseline.N_layers_decoder_stage1 = 6
+_C.MODEL_ALL.ViT_baseline.N_layers_encoder_stage1 = 4
+_C.MODEL_ALL.ViT_baseline.N_layers_decoder_stage1 = 4
 
 _C.MODEL_ALL.ViT_baseline.if_UNet_lighting = False
 

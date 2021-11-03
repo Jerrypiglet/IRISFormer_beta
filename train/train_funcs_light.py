@@ -93,9 +93,9 @@ def postprocess_light(input_dict, output_dict, loss_dict, opt, time_meters):
             #     * \
             #         output_dict['segEnvBatch'].expand_as(output_dict['envmapsPredImage'] ) 
 
-            reconstErr_loss_map = (output_dict['envmapsPredScaledImage_log'] - torch.log(input_dict['envmapsBatch'] + opt.cfg.MODEL_LIGHT.offset ) ) \
+            reconstErr_loss_map = (output_dict['envmapsPredScaledImage_offset_log_'] - torch.log(input_dict['envmapsBatch']+opt.cfg.MODEL_LIGHT.offset) ) \
                 * \
-                    ( output_dict['envmapsPredScaledImage_log'] - torch.log(input_dict['envmapsBatch'] + opt.cfg.MODEL_LIGHT.offset ) ) \
+                    ( output_dict['envmapsPredScaledImage_offset_log_'] - torch.log(input_dict['envmapsBatch']+opt.cfg.MODEL_LIGHT.offset) ) \
                 * \
                     output_dict['segEnvBatch'].expand_as(output_dict['envmapsPredImage'] ) 
 
