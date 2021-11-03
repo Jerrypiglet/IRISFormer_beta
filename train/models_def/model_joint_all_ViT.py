@@ -87,6 +87,7 @@ class Model_Joint_ViT(nn.Module):
             N_layers_encoder_stage1 = self.cfg.MODEL_ALL.ViT_baseline.N_layers_encoder_stage1, 
             N_layers_decoder_stage1 = self.cfg.MODEL_ALL.ViT_baseline.N_layers_decoder_stage1
         )
+        self.forward_LightNet_func = self.MODEL_ALL.forward_light
 
         if self.if_Light:
             self.non_learnable_layers = {}
@@ -96,9 +97,23 @@ class Model_Joint_ViT(nn.Module):
             self.non_learnable_layers['output2env'] = models_light.output2env(isCuda = opt.if_cuda, 
                 envWidth = opt.cfg.MODEL_LIGHT.envWidth, envHeight = opt.cfg.MODEL_LIGHT.envHeight, SGNum = opt.cfg.MODEL_LIGHT.SGNum )
 
-
             if self.cfg.MODEL_LIGHT.freeze_BRDF_Net and self.if_BRDF:
                 self.freeze_BRDF()
+
+            if self.cfg.MODEL_ALL.ViT_baseline.if_UNet_lighting:
+                self.MODEL_ALL._.shared_encoder_stage1 = nn.Identity()
+                self.MODEL_ALL._.axis = nn.Identity()
+                self.MODEL_ALL._.lamb = nn.Identity()
+                self.MODEL_ALL._.weight = nn.Identity()
+
+                self.LIGHT_Net = nn.ModuleDict({})
+                self.LIGHT_Net.update({'lightEncoder':  models_light.encoderLight(cascadeLevel = opt.cascadeLevel, SGNum = opt.cfg.MODEL_LIGHT.SGNum )})
+                self.LIGHT_Net.update({'axisDecoder':  models_light.decoderLight(mode=0, SGNum = opt.cfg.MODEL_LIGHT.SGNum )})
+                self.LIGHT_Net.update({'lambDecoder':  models_light.decoderLight(mode = 1, SGNum = opt.cfg.MODEL_LIGHT.SGNum )})
+                self.LIGHT_Net.update({'weightDecoder':  models_light.decoderLight(mode = 2, SGNum = opt.cfg.MODEL_LIGHT.SGNum )})
+
+                self.forward_LightNet_func = self.forward_LightNet_UNet_func
+
 
     def forward(self, input_dict, if_has_gt_BRDF=True):
         # module_hooks_dict = {}
@@ -215,7 +230,8 @@ class Model_Joint_ViT(nn.Module):
         
         x_stage1 = torch.cat([imBatch, albedoInput, normalInput, roughInput, depthInput ], dim=1 ).detach()
 
-        output_dict_model_all = self.MODEL_ALL.forward_light(x_stage1)
+        # output_dict_model_all = self.MODEL_ALL.forward_light(x_stage1)
+        output_dict_model_all = self.forward_LightNet_func(x_stage1)
 
         axisPred_ori, lambPred_ori, weightPred_ori = output_dict_model_all['axis'], output_dict_model_all['lamb'], output_dict_model_all['weight']
 
@@ -278,7 +294,7 @@ class Model_Joint_ViT(nn.Module):
         if self.cfg.MODEL_LIGHT.use_scale_aware_loss:
             diffusePredScaled, specularPredScaled = diffusePred, specularPred
         else:
-            diffusePredScaled, specularPredScaled = models_brdf.LSregressDiffSpec(
+            diffusePredScaled, specularPredScaled, _ = models_brdf.LSregressDiffSpec(
                 diffusePred.detach(),
                 specularPred.detach(),
                 imBatchSmall,
@@ -345,7 +361,8 @@ class Model_Joint_ViT(nn.Module):
         
         x_stage1 = torch.cat([imBatch, albedoInput, normalInput, roughInput, depthInput ], dim=1 ).detach()
 
-        output_dict_model_all = self.MODEL_ALL.forward_light(x_stage1)
+        # output_dict_model_all = self.MODEL_ALL.forward_light(x_stage1)
+        output_dict_model_all = self.forward_LightNet_func(x_stage1)
 
         axisPred_ori, lambPred_ori, weightPred_ori = output_dict_model_all['axis'], output_dict_model_all['lamb'], output_dict_model_all['weight']
 
@@ -410,7 +427,7 @@ class Model_Joint_ViT(nn.Module):
         if self.cfg.MODEL_LIGHT.use_scale_aware_loss:
             diffusePredScaled, specularPredScaled = diffusePred, specularPred
         else:
-            diffusePredScaled, specularPredScaled = models_brdf.LSregressDiffSpec(
+            diffusePredScaled, specularPredScaled, coefIm = models_brdf.LSregressDiffSpec(
                 diffusePred.detach(),
                 specularPred.detach(),
                 imBatchSmall,
@@ -422,8 +439,31 @@ class Model_Joint_ViT(nn.Module):
 
         return_dict.update({'imBatchSmall': imBatchSmall, 'envmapsPredImage': envmapsPredImage, 'renderedImPred': renderedImPred, 'renderedImPred_sdr': renderedImPred_sdr}) 
         return_dict.update({'LightNet_preds': {'axisPred': axisPred_ori, 'lambPred': lambPred_ori, 'weightPred': weightPred_ori}})
+        return_dict.update({'coefIm': coefIm})
 
         return return_dict
+
+    
+    def forward_LightNet_UNet_func(self, x_stage1):
+        x_stage1Large = F.interpolate(x_stage1, scale_factor=2, mode='bilinear')
+
+        if self.opt.cascadeLevel == 0:
+            # print(input_batch.shape)
+            x1, x2, x3, x4, x5, x6 = self.LIGHT_Net['lightEncoder'](x_stage1Large)
+        else:
+            assert False
+            # assert self.opt.cascadeLevel > 0
+            # x1, x2, x3, x4, x5, x6 = self.LIGHT_Net['lightEncoder'](x_stage1, input_dict['envmapsPreBatch'].detach() )
+
+        # print(input_batch.shape, x1.shape, x2.shape, x3.shape, x4.shape, x5.shape, x6.shape) # torch.Size([4, 11, 480, 640]) torch.Size([4, 128, 60, 80]) torch.Size([4, 256, 30, 40]) torch.Size([4, 256, 15, 20]) torch.Size([4, 512, 7, 10]) torch.Size([4, 512, 3, 5]) torch.Size([4, 1024, 3, 5])
+
+        # Prediction
+        # if 'axis' in self.cfg.MODEL_LIGHT.enable_list and not self.cfg.MODEL_LIGHT.use_GT_light_sg:
+        axisPred_ori = self.LIGHT_Net['axisDecoder'](x1, x2, x3, x4, x5, x6) # torch.Size([4, 12, 3, 120, 160])
+        lambPred_ori = self.LIGHT_Net['lambDecoder'](x1, x2, x3, x4, x5, x6) # torch.Size([4, 12, 120, 160])
+        weightPred_ori = self.LIGHT_Net['weightDecoder'](x1, x2, x3, x4, x5, x6) # torch.Size([4, 36, 120, 160])
+        return {'axis': axisPred_ori, 'lamb': lambPred_ori, 'weight': weightPred_ori}
+
 
     def freeze_BRDF(self):
         self.turn_off_names(['shared_encoder_stage0'])

@@ -670,6 +670,8 @@ _C.MODEL_ALL.ViT_baseline.N_layers_decoder_stage0 = 4
 _C.MODEL_ALL.ViT_baseline.N_layers_encoder_stage1 = 6
 _C.MODEL_ALL.ViT_baseline.N_layers_decoder_stage1 = 6
 
+_C.MODEL_ALL.ViT_baseline.if_UNet_lighting = False
+
 # _C.MODEL_ALL.ViT_baseline.depth = CN()
 # _C.MODEL_ALL.ViT_baseline.depth.activation = 'tanh'
 

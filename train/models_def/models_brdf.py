@@ -110,7 +110,7 @@ def LSregressDiffSpec(diff, spec, imOrig, diffOrig, specOrig):
     diffScaled = coefIm * diffScaled 
     specScaled = coefIm * specScaled
 
-    return diffScaled, specScaled
+    return diffScaled, specScaled, coefIm
 
 
 class encoder0(nn.Module):

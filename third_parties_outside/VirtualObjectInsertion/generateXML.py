@@ -312,6 +312,7 @@ if __name__ == "__main__":
     parser.add_argument('--meshRotateAxis', nargs=3, default=[0.0, 1.0, 0.0], type=float )
     parser.add_argument('--meshRotateAngle', default=0.0, type=float )
     parser.add_argument('--meshScale', default=1.0, type=float )
+    parser.add_argument('--envScale', default=1., type=float )
     opt = parser.parse_args()
     print(opt)
 
@@ -323,7 +324,7 @@ if __name__ == "__main__":
     vn = vn / np.sqrt(np.sum(vn * vn) )
 
     # Load environmental map
-    env = np.load(opt.envName )['env']
+    env = np.load(opt.envName )['env'] * opt.envScale
     envRow, envCol = env.shape[0], env.shape[1]
     cId, rId = (envCol -1) * vimg[0], (envRow-1) * vimg[1]
     rId = np.clip(np.round(rId ), 0, envRow - 1)

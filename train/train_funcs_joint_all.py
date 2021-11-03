@@ -1397,9 +1397,11 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                         real_sample_env_path = real_sample_dump_path / 'env.npz'
                         env_save = envmapsPredImage[sample_idx_batch].transpose(1, 2, 3, 4, 0) # -> (120, 160, 8, 16, 3)
                         # Image.fromarray(env_pred_batch_vis_sdr[:real_sample_im_h, :real_sample_im_w]).save(str(real_sample_env_path))
+                        coefIm = output_dict['coefIm'].detach().cpu().numpy().flatten()[sample_idx_batch]
+                        # print(coefIm)
                         if opt.is_master:
                             np.savez(real_sample_env_path, env=env_save)
-                        I_hdr =envmapsPredImage[sample_idx_batch]
+                        I_hdr =envmapsPredImage[sample_idx_batch] * 1000.
                         H_grid, W_grid, h, w = I_hdr.shape[1:]
                         downsize_ratio = 4
                         H_grid_after = H_grid // 4 * 4

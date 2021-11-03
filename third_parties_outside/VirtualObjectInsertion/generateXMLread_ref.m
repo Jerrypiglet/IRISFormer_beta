@@ -4,7 +4,7 @@ renderer = 'optixRenderer';
 pythonProgram = '/home/ruizhu/anaconda3/envs/py38/bin/python';
 for n = 1 : 20
 n
-root = ['data/Example', num2str(n)] ;
+root = ['data_unet/Example', num2str(n)] ;
 
 
 normalName = fullfile(root, 'normal.png');
