@@ -445,7 +445,7 @@ class openrooms(data.Dataset):
                 else:
                     root_path_scene = '/newdata/ruizhu/openrooms_raw_light'
                 env_path = env_path.replace(self.opt.cfg.DATASET.dataset_path_local, root_path_scene)
-                print(env_path)
+                # print(env_path)
 
             envmaps, envmapsInd = self.loadEnvmap(env_path )
             envmaps = envmaps * hdr_scale 
