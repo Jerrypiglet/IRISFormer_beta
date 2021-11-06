@@ -263,6 +263,16 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
                 loss_keys += ['loss_brdf-albedo-reg']
             if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_depth:
                 loss_keys += ['loss_brdf-depth-reg']
+            if opt.cfg.MODEL_BRDF.if_bilateral:
+                loss_keys += [
+                    'loss_brdf-albedo-bs', ]
+                if not opt.cfg.MODEL_BRDF.if_bilateral_albedo_only:
+                    loss_keys += [
+                        'loss_brdf-normal-bs', 
+                        'loss_brdf-rough-bs', 
+                        'loss_brdf-depth-bs', 
+                    ]
+
 
         if opt.cfg.MODEL_BRDF.enable_semseg_decoder:
             loss_keys += ['loss_semseg-ALL']
@@ -648,6 +658,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
         roughPreds_list = []
         depthPreds_list = []
 
+        albedoBsPreds_list = []
+
     if opt.cfg.MODEL_GMM.enable:
         output_GMM_Q_list = []
     
@@ -728,8 +740,10 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     # print(sample_idx, im_path)
 
                     if opt.cfg.DEBUG.if_test_real:
-                        real_sample_im_path = real_sample_dump_path / 'im.png'
-                        Image.fromarray((im_single*255.).astype(np.uint8)[:real_sample_im_h, :real_sample_im_w]).save(str(real_sample_im_path))
+                        real_sample_im_path = real_sample_dump_path / 'im_.png'
+                        im_ = Image.fromarray((im_single*255.).astype(np.uint8)[:real_sample_im_h, :real_sample_im_w])
+                        im_ = im_.resize((real_sample_im_w*2, real_sample_im_h*2), Image.ANTIALIAS)
+                        im_.save(str(real_sample_im_path))
 
                             
                 if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool or opt.cfg.MODEL_MATSEG.if_albedo_safenet) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
@@ -1358,6 +1372,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                 if 'al' in opt.cfg.MODEL_BRDF.enable_list:
                     # if (not opt.cfg.DATASET.if_no_gt_semantics):
                     albedoPreds_list.append(output_dict['albedoPreds'][n])
+                    if opt.cfg.MODEL_BRDF.if_bilateral:
+                        albedoBsPreds_list.append(output_dict['albedoBsPred'])
                     if (not opt.cfg.DATASET.if_no_gt_BRDF) and opt.cfg.DATA.load_brdf_gt:
                         albedoPreds_aligned_list.append(output_dict['albedoPreds_aligned'][n])
                 if 'no' in opt.cfg.MODEL_BRDF.enable_list:
@@ -1395,9 +1411,14 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     if opt.cfg.DEBUG.if_test_real:
                         real_sample_dump_path, (real_sample_im_h, real_sample_im_w) = real_sample_dump_path_list[sample_idx]
                         real_sample_env_path = real_sample_dump_path / 'env.npz'
-                        env_save = envmapsPredImage[sample_idx_batch].transpose(1, 2, 3, 4, 0) # -> (120, 160, 8, 16, 3)
+                        env_save_ = envmapsPredImage[sample_idx_batch].transpose(1, 2, 3, 4, 0) # -> (120, 160, 8, 16, 3)
+                        env_save = np.zeros((env_save_.shape[0]*2, env_save_.shape[1]*2, env_save_.shape[2], env_save_.shape[3], env_save_.shape[4]), dtype=env_save_.dtype)
+                        env_save[::2, ::2] = env_save_
+                        env_save[::2, 1::2] = env_save_
+                        env_save[1::2, 1::2] = env_save_
+                        env_save[1::2, ::2] = env_save_
                         # Image.fromarray(env_pred_batch_vis_sdr[:real_sample_im_h, :real_sample_im_w]).save(str(real_sample_env_path))
-                        coefIm = output_dict['coefIm'].detach().cpu().numpy().flatten()[sample_idx_batch]
+                        # coefIm = output_dict['coefIm'].detach().cpu().numpy().flatten()[sample_idx_batch]
                         # print(coefIm)
                         if opt.is_master:
                             np.savez(real_sample_env_path, env=env_save)
@@ -1428,7 +1449,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
 
 
 
-                    for I_png, name_tag in zip([renderedImPred[sample_idx_batch], renderedImPred_sdr[sample_idx_batch], imBatchSmall[sample_idx_batch]], ['renderedImPred', 'renderedImPred_sdr', 'imBatchSmall_GT']):
+                    for I_png, name_tag in zip([renderedImPred[sample_idx_batch], renderedImPred_sdr[sample_idx_batch], imBatchSmall[sample_idx_batch], imBatchSmall[sample_idx_batch]**(1./2.2)], ['renderedImPred', 'renderedImPred_sdr', 'imBatchSmall_GT', 'imBatchSmall_GT_sdr']):
                         I_png = np.clip(I_png, 0., 1.)
                         I_png = (I_png.transpose(1, 2, 0) * 255.).astype(np.uint8)
                         if opt.is_master:
@@ -1559,6 +1580,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
             albedoPreds_vis = torch.cat(albedoPreds_list)
             if (not opt.cfg.DATASET.if_no_gt_BRDF) and opt.cfg.DATA.load_brdf_gt:
                 albedoPreds_aligned_vis = torch.cat(albedoPreds_aligned_list)
+            if opt.cfg.MODEL_BRDF.if_bilateral:
+                albedoBsPreds_vis = torch.cat(albedoBsPreds_list)
 
         if 'no' in opt.cfg.MODEL_BRDF.enable_list:
             normalPreds_vis = torch.cat(normalPreds_list)
@@ -1601,6 +1624,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
         # print(opt.cfg.MODEL_BRDF.enable_list, '>>>>>>>>', n, albedoPreds_vis.shape)
         if 'al' in opt.cfg.MODEL_BRDF.enable_list:
             albedo_pred_batch_vis_sdr = ( (albedoPreds_vis ) ** (1.0/2.2) ).data
+            if opt.cfg.MODEL_BRDF.if_bilateral:
+                albedo_bs_pred_batch_vis_sdr = ( (albedoBsPreds_vis ) ** (1.0/2.2) ).data
+
             if (not opt.cfg.DATASET.if_no_gt_BRDF) and opt.cfg.DATA.load_brdf_gt:
                 albedo_pred_aligned_batch_vis_sdr = ( (albedoPreds_aligned_vis ) ** (1.0/2.2) ).data
             if opt.is_master:
@@ -1645,6 +1671,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
             albedo_pred_batch_vis_sdr_numpy = albedo_pred_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
             if (not opt.cfg.DATASET.if_no_gt_BRDF) and opt.cfg.DATA.load_brdf_gt:
                 albedo_pred_aligned_batch_vis_sdr_numpy = albedo_pred_aligned_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
+            if opt.cfg.MODEL_BRDF.if_bilateral:
+                albedo_bs_pred_batch_vis_sdr_numpy = albedo_bs_pred_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
+
         if 'no' in opt.cfg.MODEL_BRDF.enable_list:
             normal_pred_batch_vis_sdr_numpy = normal_pred_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
         if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
@@ -1657,6 +1686,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
 
                 if 'al' in opt.cfg.MODEL_BRDF.enable_list:
                     writer.add_image('VAL_brdf-albedo_PRED/%d'%sample_idx, albedo_pred_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
+                    if opt.cfg.MODEL_BRDF.if_bilateral:
+                        writer.add_image('VAL_brdf-albedo_PRED-BS/%d'%sample_idx, albedo_bs_pred_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                     if (not opt.cfg.DATASET.if_no_gt_BRDF) and opt.cfg.DATA.load_brdf_gt:
                         writer.add_image('VAL_brdf-albedo_scaleAligned_PRED/%d'%sample_idx, albedo_pred_aligned_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                     if opt.cfg.DEBUG.if_dump_perframe_BRDF:
@@ -1666,7 +1697,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     if opt.cfg.DEBUG.if_test_real:
                         real_sample_dump_path, (real_sample_im_h, real_sample_im_w) = real_sample_dump_path_list[sample_idx]
                         real_sample_albedo_path = real_sample_dump_path / 'albedo.png'
-                        Image.fromarray((albedo_pred_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8)[:real_sample_im_h, :real_sample_im_w]).save(str(real_sample_albedo_path))
+                        al = Image.fromarray((albedo_pred_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8)[:real_sample_im_h, :real_sample_im_w])
+                        al = al.resize((real_sample_im_w*2, real_sample_im_h*2), Image.ANTIALIAS)
+                        al.save(str(real_sample_albedo_path))
 
                 if 'no' in opt.cfg.MODEL_BRDF.enable_list:
                     writer.add_image('VAL_brdf-normal_PRED/%d'%sample_idx, normal_pred_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
@@ -1677,7 +1710,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     if opt.cfg.DEBUG.if_test_real:
                         real_sample_dump_path, (real_sample_im_h, real_sample_im_w) = real_sample_dump_path_list[sample_idx]
                         real_sample_normal_path = real_sample_dump_path / 'normal.png'
-                        Image.fromarray((normal_pred_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8)[:real_sample_im_h, :real_sample_im_w]).save(str(real_sample_normal_path))
+                        no = Image.fromarray((normal_pred_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8)[:real_sample_im_h, :real_sample_im_w])
+                        no = no.resize((real_sample_im_w*2, real_sample_im_h*2), Image.ANTIALIAS)
+                        no.save(str(real_sample_normal_path))
 
                 if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
                     writer.add_image('VAL_brdf-rough_PRED/%d'%sample_idx, rough_pred_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
@@ -1688,7 +1723,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     if opt.cfg.DEBUG.if_test_real:
                         real_sample_dump_path, (real_sample_im_h, real_sample_im_w) = real_sample_dump_path_list[sample_idx]
                         real_sample_rough_path = real_sample_dump_path / 'rough.png'
-                        Image.fromarray((rough_pred_batch_vis_sdr_numpy[sample_idx].squeeze()*255.).astype(np.uint8)[:real_sample_im_h, :real_sample_im_w]).save(str(real_sample_rough_path))
+                        ro = Image.fromarray((rough_pred_batch_vis_sdr_numpy[sample_idx].squeeze()*255.).astype(np.uint8)[:real_sample_im_h, :real_sample_im_w])
+                        ro = ro.resize((real_sample_im_w*2, real_sample_im_h*2), Image.ANTIALIAS)
+                        ro.save(str(real_sample_rough_path))
 
                 if 'de' in opt.cfg.MODEL_BRDF.enable_list:
                     if (not opt.cfg.DATASET.if_no_gt_BRDF) and opt.cfg.DATA.load_brdf_gt:

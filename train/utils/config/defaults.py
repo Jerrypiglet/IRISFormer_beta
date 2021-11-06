@@ -241,6 +241,8 @@ _C.MODEL_GMM.RAFT.OF_model_path = '/home/ruizhu/Documents/Projects/nvidia/vidapp
 # ===== BRDF
 _C.MODEL_BRDF = CN()
 _C.MODEL_BRDF.enable = False
+_C.MODEL_BRDF.if_bilateral = False
+_C.MODEL_BRDF.if_bilateral_albedo_only = False
 _C.MODEL_BRDF.if_freeze = False
 # _C.MODEL_BRDF.enable_list = ['al', 'no', 'de', 'ro', 'li']
 _C.MODEL_BRDF.enable_list = '' # `al_no_de_ro`
@@ -257,8 +259,13 @@ _C.MODEL_BRDF.enable_BRDF_decoders = False
 # _C.MODEL_BRDF.is_all_light = True
 _C.MODEL_BRDF.enable_semseg_decoder = False
 _C.MODEL_BRDF.semseg_PPM = True
-_C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240/%s0_13.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
-# _C.MODEL_BRDF.pretrained_pth_name = ''
+
+# _C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240/%s0_13.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
+_C.MODEL_BRDF.pretrained_pth_name = 'checkBs_cascade0_w320_h240/%s0_14_1000.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
+_C.MODEL_BRDF.pretrained_if_load_encoder = True
+_C.MODEL_BRDF.pretrained_if_load_decoder = True
+_C.MODEL_BRDF.pretrained_if_load_Bs = True
+
 _C.MODEL_BRDF.encoder_exclude = '' # e.g. 'x4_x5
 _C.MODEL_BRDF.use_scale_aware_albedo = True # [default: False] set to False to use **scale-invariant** loss for albedo
 _C.MODEL_BRDF.loss = CN()

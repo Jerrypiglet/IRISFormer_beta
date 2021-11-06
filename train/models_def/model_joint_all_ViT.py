@@ -56,6 +56,8 @@ import torch.utils.checkpoint as cp
 
 from models_def.model_dpt.models_ALL_ViT_DPT import ModelAll_ViT
 
+import models_def.BilateralLayer as bs
+
 class Model_Joint_ViT(nn.Module):
     def __init__(self, opt, logger):
         super(Model_Joint_ViT, self).__init__()
@@ -114,6 +116,12 @@ class Model_Joint_ViT(nn.Module):
 
                 self.forward_LightNet_func = self.forward_LightNet_UNet_func
 
+        if self.cfg.MODEL_BRDF.if_bilateral:
+            self.BRDF_Net = nn.ModuleDict({})
+            self.BRDF_Net.update({'albedoBs': bs.BilateralLayer(mode = 0)})
+
+        if self.cfg.MODEL_LIGHT.load_pretrained_MODEL_BRDF:
+            self.load_pretrained_MODEL_BRDF(self.cfg.MODEL_BRDF.pretrained_pth_name, if_load_encoder=self.cfg.MODEL_BRDF.pretrained_if_load_encoder, if_load_decoder=self.cfg.MODEL_BRDF.pretrained_if_load_decoder, if_load_Bs=self.cfg.MODEL_BRDF.pretrained_if_load_Bs)
 
     def forward(self, input_dict, if_has_gt_BRDF=True):
         # module_hooks_dict = {}
@@ -163,6 +171,17 @@ class Model_Joint_ViT(nn.Module):
                             input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
                     albedoPred_aligned = torch.clamp(albedoPred_aligned, 0, 1)
                     return_dict.update({'albedoPred_aligned': albedoPred_aligned})
+
+                if self.cfg.MODEL_BRDF.if_bilateral:
+                    albedoBsPred, albedoConf = self.BRDF_Net['albedoBs'](input_dict['imBatch'], albedoPred.detach(), albedoPred )
+                    if if_has_gt_BRDF:
+                        albedoBsPred = models_brdf.LSregress(albedoBsPred * input_dict['segBRDFBatch'].expand_as(albedoBsPred ),
+                            input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoBsPred )
+                    albedoBsPred = torch.clamp(albedoBsPred, 0, 1 )
+                    if if_has_gt_BRDF:
+                        albedoBsPred = input_dict['segBRDFBatch'] * albedoBsPred
+                    return_dict.update({'albedoBsPred': albedoBsPred, 'albedoConf': albedoConf})
+
             elif modality == 'de':
                 if self.opt.cfg.MODEL_BRDF.loss.depth.if_use_Zhengqin_loss:
                     depthPred = vit_out
@@ -441,6 +460,19 @@ class Model_Joint_ViT(nn.Module):
         renderedImPred = renderedImPred_hdr
         renderedImPred_sdr = torch.clamp(renderedImPred_hdr ** (1.0/2.2), 0, 1)
 
+        cDiff, cSpec = (torch.sum(diffusePredScaled) / torch.sum(diffusePred)).data.item(), ((torch.sum(specularPredScaled) ) / (torch.sum(specularPred) ) ).data.item()
+        if cSpec == 0:
+            cAlbedo = 1/ axisPred_ori.max().data.item()
+            cLight = cDiff / cAlbedo
+        else:
+            cLight = cSpec
+            cAlbedo = cDiff / cLight
+            cAlbedo = np.clip(cAlbedo, 1e-3, 1 / axisPred_ori.max().data.item() )
+            cLight = cDiff / cAlbedo
+        envmapsPredImage = envmapsPredImage * cLight
+        ic(cLight)
+
+
         return_dict.update({'imBatchSmall': imBatchSmall, 'envmapsPredImage': envmapsPredImage, 'renderedImPred': renderedImPred, 'renderedImPred_sdr': renderedImPred_sdr}) 
         return_dict.update({'LightNet_preds': {'axisPred': axisPred_ori, 'lambPred': lambPred_ori, 'weightPred': weightPred_ori}})
         return_dict.update({'coefIm': coefIm})
@@ -557,3 +589,40 @@ class Model_Joint_ViT(nn.Module):
 
     def freeze_bn_matseg(self):
         freeze_bn_in_module(self.MATSEG_Net)
+
+    def load_pretrained_MODEL_BRDF(self, pretrained_pth_name='check_cascade0_w320_h240', if_load_encoder=True, if_load_decoder=True, if_load_Bs=True):
+        if self.opt.if_cluster:
+            pretrained_path = '/viscompfs/users/ruizhu/models_ckpt/' + pretrained_pth_name
+        else:
+            pretrained_path = '/home/ruizhu/Documents/Projects/semanticInverse/models_ckpt/' + pretrained_pth_name
+        loaded_strings = []
+        module_names = []
+        if if_load_encoder:
+            module_names.append('encoder')    
+        if if_load_decoder:
+            module_names += ['albedoDecoder', 'normalDecoder', 'roughDecoder', 'depthDecoder']
+        if if_load_Bs:
+            # module_names += ['albedoBs', 'normalBs', 'roughBs', 'depthBs']
+            module_names += ['albedoBs']
+            assert self.cfg.MODEL_BRDF.if_bilateral_albedo_only
+
+        saved_names_dict = {
+            'encoder': 'encoder', 
+            'albedoDecoder': 'albedo', 
+            'normalDecoder': 'normal', 
+            'roughDecoder': 'rough', 
+            'depthDecoder': 'depth', 
+            'albedoBs': 'albedoBs', 
+            'normalBs': 'normalBs', 
+            'roughBs': 'roughBs', 
+            'depthBs': 'depBsth'
+        }
+        for module_name in module_names:
+            saved_name = saved_names_dict[module_name]
+            pickle_path = pretrained_path % saved_name
+            print('Loading ' + pickle_path)
+            self.BRDF_Net[module_name].load_state_dict(
+                torch.load(pickle_path).state_dict())
+            loaded_strings.append(saved_name)
+
+        self.logger.info(magenta('Loaded pretrained BRDF from %s: %s'%(pretrained_pth_name, '+'.join(loaded_strings))))

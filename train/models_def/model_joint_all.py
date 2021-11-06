@@ -49,9 +49,11 @@ import cv2
 import time
 
 from icecream import ic
+import torch.utils.checkpoint as cp
 
 from models_def.model_dpt.blocks import forward_vit
-import torch.utils.checkpoint as cp
+import models_def.BilateralLayer as bs
+
 class Model_Joint(nn.Module):
     def __init__(self, opt, logger):
         super(Model_Joint, self).__init__()
@@ -325,22 +327,34 @@ class Model_Joint(nn.Module):
                 self.BRDF_Net = nn.ModuleDict({
                         'encoder': self.encoder_to_use(opt, cascadeLevel = self.opt.cascadeLevel, in_channels = in_channels)
                         })
+
                 if self.cfg.MODEL_BRDF.enable_BRDF_decoders:
                     if 'al' in self.cfg.MODEL_BRDF.enable_list:
                         self.BRDF_Net.update({'albedoDecoder': self.decoder_to_use(opt, mode=0, modality='al')})
+                        if self.cfg.MODEL_BRDF.if_bilateral:
+                            self.BRDF_Net.update({'albedoBs': bs.BilateralLayer(mode = 0)})
+
                     if 'no' in self.cfg.MODEL_BRDF.enable_list:
                         self.BRDF_Net.update({'normalDecoder': self.decoder_to_use(opt, mode=1, modality='no')})
+                        if self.cfg.MODEL_BRDF.if_bilateral and not self.cfg.MODEL_BRDF.if_bilateral_albedo_only:
+                            self.BRDF_Net.update({'normalBs': bs.BilateralLayer(mode = 1)})
+
                     if 'ro' in self.cfg.MODEL_BRDF.enable_list:
                         self.BRDF_Net.update({'roughDecoder': self.decoder_to_use(opt, mode=2, modality='ro')})
+                        if self.cfg.MODEL_BRDF.if_bilateral and not self.cfg.MODEL_BRDF.if_bilateral_albedo_only:
+                            self.BRDF_Net.update({'roughBs': bs.BilateralLayer(mode = 2)})
+
                     if 'de' in self.cfg.MODEL_BRDF.enable_list:
-                        if self.cfg.MODEL_BRDF.use_scale_aware_depth:
-                            assert self.cfg.MODEL_BRDF.depth_activation in ['relu', 'sigmoid']
-                            if self.cfg.MODEL_BRDF.depth_activation == 'relu':
-                                self.BRDF_Net.update({'depthDecoder': self.decoder_to_use(opt, mode=5, modality='de')})
-                            elif self.cfg.MODEL_BRDF.depth_activation == 'sigmoid':
-                                self.BRDF_Net.update({'depthDecoder': self.decoder_to_use(opt, mode=6, modality='de')})
-                        else:
-                            self.BRDF_Net.update({'depthDecoder': self.decoder_to_use(opt, mode=4, modality='de')})
+                        # if self.cfg.MODEL_BRDF.use_scale_aware_depth:
+                        assert self.cfg.MODEL_BRDF.depth_activation in ['relu', 'sigmoid', 'tanh']
+                        if self.cfg.MODEL_BRDF.depth_activation == 'relu':
+                            self.BRDF_Net.update({'depthDecoder': self.decoder_to_use(opt, mode=5, modality='de')}) # default # -> [0, inf]
+                        elif self.cfg.MODEL_BRDF.depth_activation == 'sigmoid':
+                            self.BRDF_Net.update({'depthDecoder': self.decoder_to_use(opt, mode=6, modality='de')}) # -> [0, inf]
+                        elif self.cfg.MODEL_BRDF.depth_activation == 'tanh':
+                            self.BRDF_Net.update({'depthDecoder': self.decoder_to_use(opt, mode=4, modality='de')}) # -> [-1, 1]
+                        if self.cfg.MODEL_BRDF.if_bilateral and not self.cfg.MODEL_BRDF.if_bilateral_albedo_only:
+                            self.BRDF_Net.update({'depthBs': bs.BilateralLayer(mode = 4)})
                         
                 if self.cfg.MODEL_BRDF.enable_semseg_decoder:
                     self.BRDF_Net.update({'semsegDecoder': self.decoder_to_use(opt, mode=-1, out_channel=self.cfg.MODEL_SEMSEG.semseg_classes, if_PPM=self.cfg.MODEL_BRDF.semseg_PPM)})
@@ -352,7 +366,7 @@ class Model_Joint(nn.Module):
 
 
         if self.cfg.MODEL_LIGHT.load_pretrained_MODEL_BRDF:
-            self.load_pretrained_MODEL_BRDF(self.cfg.MODEL_BRDF.pretrained_pth_name)
+            self.load_pretrained_MODEL_BRDF(self.cfg.MODEL_BRDF.pretrained_pth_name, if_load_encoder=self.cfg.MODEL_BRDF.pretrained_if_load_encoder, if_load_decoder=self.cfg.MODEL_BRDF.pretrained_if_load_decoder, if_load_Bs=self.cfg.MODEL_BRDF.pretrained_if_load_Bs)
 
         if self.cfg.MODEL_LIGHT.enable:
             if self.cfg.MODEL_LIGHT.DPT_baseline.enable:
@@ -902,9 +916,20 @@ class Model_Joint(nn.Module):
             if 'al' in self.cfg.MODEL_BRDF.enable_list:
                 albedo_output = self.BRDF_Net['albedoDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_extra=input_dict_extra)
                 albedoPred = 0.5 * (albedo_output['x_out'] + 1)
-                # if (not self.opt.cfg.DATASET.if_no_gt_semantics):
+
+                if self.cfg.MODEL_BRDF.if_bilateral:
+                    albedoBsPred, albedoConf = self.BRDF_Net['albedoBs'](input_dict['imBatch'], albedoPred.detach(), albedoPred )
+                    if if_has_gt_BRDF:
+                        albedoBsPred = models_brdf.LSregress(albedoBsPred * input_dict['segBRDFBatch'].expand_as(albedoBsPred ),
+                            input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoBsPred )
+                    albedoBsPred = torch.clamp(albedoBsPred, 0, 1 )
+                    if if_has_gt_BRDF:
+                        albedoBsPred = input_dict['segBRDFBatch'] * albedoBsPred
+                    return_dict.update({'albedoBsPred': albedoBsPred, 'albedoConf': albedoConf})
+                
                 if if_has_gt_BRDF:
                     input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
+                
                 albedoPred = torch.clamp(albedoPred, 0, 1)
                 return_dict.update({'albedoPred': albedoPred})
                 # if not self.cfg.MODEL_BRDF.use_scale_aware_albedo:
@@ -913,21 +938,44 @@ class Model_Joint(nn.Module):
                             input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
                     albedoPred_aligned = torch.clamp(albedoPred_aligned, 0, 1)
                     return_dict.update({'albedoPred_aligned': albedoPred_aligned, 'albedo_extra_output_dict': albedo_output['extra_output_dict']})
+
             if 'no' in self.cfg.MODEL_BRDF.enable_list:
                 normal_output = self.BRDF_Net['normalDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_extra=input_dict_extra)
                 normalPred = normal_output['x_out']
                 return_dict.update({'normalPred': normalPred, 'normal_extra_output_dict': normal_output['extra_output_dict']})
+                if if_has_gt_BRDF:
+                    if self.cfg.MODEL_BRDF.if_bilateral and not self.cfg.MODEL_BRDF.if_bilateral_albedo_only:
+                        normalBsPred = normalPred.clone().detach()
+                        normalConf = albedoConf.clone().detach()
+                        return_dict.update({'normalBsPred': normalBsPred, 'normalConf': normalConf})
+
             if 'ro' in self.cfg.MODEL_BRDF.enable_list:
                 rough_output = self.BRDF_Net['roughDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_extra=input_dict_extra)
                 roughPred = rough_output['x_out']
                 return_dict.update({'roughPred': roughPred, 'rough_extra_output_dict': rough_output['extra_output_dict']})
+                if if_has_gt_BRDF:
+                    if self.cfg.MODEL_BRDF.if_bilateral and not self.cfg.MODEL_BRDF.if_bilateral_albedo_only:
+                        roughBsPred, roughConf = self.BRDF_Net['roughBs'](input_dict['imBatch'], albedoPred.detach(), 0.5*(roughPred+1.) )
+                        roughBsPred = torch.clamp(2 * roughBsPred - 1, -1, 1)
+                        return_dict.update({'roughBsPred': roughBsPred, 'roughConf': roughConf})
+
             if 'de' in self.cfg.MODEL_BRDF.enable_list:
                 depth_output = self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_extra=input_dict_extra)
                 depthPred = depth_output['x_out']
                 # if not self.cfg.MODEL_BRDF.use_scale_aware_depth:
                 return_dict.update({'depthPred': depthPred})
+
                 if if_has_gt_BRDF:
-                    depthPred_aligned = 0.5 * (depth_output['x_out'] + 1) # [-1, 1] -> [0, 1]
+                    if self.cfg.MODEL_BRDF.if_bilateral and not self.cfg.MODEL_BRDF.if_bilateral_albedo_only:
+                        depthBsPred, depthConf = self.BRDF_Net['depthBs'](input_dict['imBatch'], albedoPred.detach(), 0.5*(depthPred+1.) if self.cfg.MODEL_BRDF.depth_activation=='tanh' else depthPred )
+                        depthBsPred = models_brdf.LSregress(depthBsPred *  input_dict['segAllBatch'].expand_as(depthBsPred),
+                                input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthBsPred)
+                        return_dict.update({'depthBsPred': depthBsPred, 'depthConf': depthConf})
+                    
+                    if self.cfg.MODEL_BRDF.depth_activation == 'tanh':
+                        depthPred_aligned = 0.5 * (depthPred + 1) # [-1, 1] -> [0, 1]
+                    else:
+                        depthPred_aligned = depthPred # [0, inf]
                     depthPred_aligned = models_brdf.LSregress(depthPred_aligned *  input_dict['segAllBatch'].expand_as(depthPred_aligned),
                             input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred_aligned)
                     return_dict.update({'depthPred_aligned': depthPred_aligned, 'depth_extra_output_dict': depth_output['extra_output_dict']})
@@ -1659,6 +1707,19 @@ class Model_Joint(nn.Module):
         renderedImPred = renderedImPred_hdr
         renderedImPred_sdr = torch.clamp(renderedImPred_hdr ** (1.0/2.2), 0, 1)
 
+        cDiff, cSpec = (torch.sum(diffusePredScaled) / torch.sum(diffusePred)).data.item(), ((torch.sum(specularPredScaled) ) / (torch.sum(specularPred) ) ).data.item()
+        if cSpec == 0:
+            cAlbedo = 1/ axisPred_ori.max().data.item()
+            cLight = cDiff / cAlbedo
+        else:
+            cLight = cSpec
+            cAlbedo = cDiff / cLight
+            cAlbedo = np.clip(cAlbedo, 1e-3, 1 / axisPred_ori.max().data.item() )
+            cLight = cDiff / cAlbedo
+        envmapsPredImage = envmapsPredImage * cLight
+        ic(cLight)
+
+
         return_dict.update({'imBatchSmall': imBatchSmall, 'envmapsPredImage': envmapsPredImage, 'renderedImPred': renderedImPred, 'renderedImPred_sdr': renderedImPred_sdr}) 
         return_dict.update({'LightNet_preds': {'axisPred': axisPred_ori, 'lambPred': lambPred_ori, 'weightPred': weightPred_ori}})
 
@@ -1684,22 +1745,37 @@ class Model_Joint(nn.Module):
         self.logger.info(magenta('---> ALL %d params; %d trainable'%(len(list(self.named_parameters())), count_grads)))
         return count_grads
 
-    def load_pretrained_MODEL_BRDF(self, pretrained_pth_name='check_cascade0_w320_h240'):
+    def load_pretrained_MODEL_BRDF(self, pretrained_pth_name='check_cascade0_w320_h240', if_load_encoder=True, if_load_decoder=True, if_load_Bs=True):
         if self.opt.if_cluster:
             pretrained_path = '/viscompfs/users/ruizhu/models_ckpt/' + pretrained_pth_name
         else:
             pretrained_path = '/home/ruizhu/Documents/Projects/semanticInverse/models_ckpt/' + pretrained_pth_name
         loaded_strings = []
-        for saved_name in ['encoder', 'albedo', 'normal', 'rough', 'depth']:
-            if saved_name == 'encoder':
-                module_name = saved_name
-            else:
-                module_name = saved_name+'Decoder'
-            # pickle_path = '{0}/{1}{2}_{3}.pth'.format(pretrained_path, saved_name, cascadeLevel, epochIdFineTune) 
+        module_names = []
+        if if_load_encoder:
+            module_names.append('encoder')    
+        if if_load_decoder:
+            module_names += ['albedoDecoder', 'normalDecoder', 'roughDecoder', 'depthDecoder']
+        if if_load_Bs:
+            # module_names += ['albedoBs', 'normalBs', 'roughBs', 'depthBs']
+            module_names += ['albedoBs']
+            assert self.cfg.MODEL_BRDF.if_bilateral_albedo_only
+
+        saved_names_dict = {
+            'encoder': 'encoder', 
+            'albedoDecoder': 'albedo', 
+            'normalDecoder': 'normal', 
+            'roughDecoder': 'rough', 
+            'depthDecoder': 'depth', 
+            'albedoBs': 'albedoBs', 
+            'normalBs': 'normalBs', 
+            'roughBs': 'roughBs', 
+            'depthBs': 'depBsth'
+        }
+        for module_name in module_names:
+            saved_name = saved_names_dict[module_name]
             pickle_path = pretrained_path % saved_name
-            # print('----- Loading %s  for module %s'%(pickle_path, module_name))
-            # print(self.opt.cfg.MODEL_BRDF.enable_list, self.cfg.MODEL_BRDF.enable_BRDF_decoders)
-            # self.print_net()
+            print('Loading ' + pickle_path)
             self.BRDF_Net[module_name].load_state_dict(
                 torch.load(pickle_path).state_dict())
             loaded_strings.append(saved_name)

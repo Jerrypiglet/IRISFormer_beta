@@ -140,7 +140,11 @@ def get_transform_matseg(split, opt, pad_op_override=None):
             transform.ToTensor(),
             transform.Normalize(mean=mean, std=std)
         ]
-        pad_op = opt.pad_op if pad_op_override is None else pad_op_override
+        if opt.if_pad:
+            pad_op = opt.pad_op if pad_op_override is None else pad_op_override
+        else:
+            pad_op = None
+            
         if opt.if_pad and pad_op is not None:
             transform_semseg_list_train.insert(1, opt.pad_op if pad_op_override is None else pad_op_override)
         if opt.if_resize and opt.resize_op is not None:

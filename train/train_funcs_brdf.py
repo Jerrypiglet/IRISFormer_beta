@@ -188,6 +188,12 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
                 # output_dict.update({'mat_seg-albedoPreds': albedoPreds})
                 loss_dict['loss_brdf-albedo'] = loss_dict['loss_brdf-albedo'][-1]
 
+                if opt.cfg.MODEL_BRDF.if_bilateral:
+                    loss_bs = torch.sum( (output_dict['albedoBsPred'] - input_dict['albedoBatch'])
+                        * (output_dict['albedoBsPred'] - input_dict['albedoBatch']) * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch'] ) ) / pixelObjNum / 3.0
+                    loss_dict['loss_brdf-ALL'] += 4 * opt.albeW * loss_bs
+                    loss_dict['loss_brdf-albedo-bs'] = loss_bs
+
         if 'no' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
             normalPreds = []
             normalPred = output_dict['normalPred']
@@ -203,6 +209,9 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
                 loss_dict['loss_brdf-ALL'] += opt.normW * loss_dict['loss_brdf-normal'][-1]
                 # output_dict.update({'mat_seg-normalPreds': normalPreds})
                 loss_dict['loss_brdf-normal'] = loss_dict['loss_brdf-normal'][-1]
+
+                if opt.cfg.MODEL_BRDF.if_bilateral:
+                    assert opt.cfg.MODEL_BRDF.if_bilateral_albedo_only, 'loss and vis for normal-BS not implemented yet'
 
         if 'ro' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
             roughPreds = []

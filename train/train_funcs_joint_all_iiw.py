@@ -122,7 +122,7 @@ def val_epoch_joint_iiw(iiw_loader_val, model, params_mis):
         iiw_dataset_val = params_mis['iiw_dataset_val']
         count_samples_this_rank = 0
 
-        for batch_id, data_batch in enumerate(iiw_loader_val):
+        for batch_id, data_batch in tqdm(enumerate(iiw_loader_val)):
 
             ts_iter_start = time.time()
 
@@ -144,7 +144,10 @@ def val_epoch_joint_iiw(iiw_loader_val, model, params_mis):
                     loss_meters[loss_key].update(loss_dict_reduced[loss_key].item())
 
             # ======= Metering
-            albedoPred_numpy = output_dict['albedoPred'].detach().cpu().numpy()
+            if opt.cfg.MODEL_BRDF.if_bilateral:
+                albedoPred_numpy = output_dict['albedoBsPred'].detach().cpu().numpy()
+            else:
+                albedoPred_numpy = output_dict['albedoPred'].detach().cpu().numpy()
             # print(np.amax(albedoPred_numpy), np.amin(albedoPred_numpy), np.median(albedoPred_numpy), np.mean(albedoPred_numpy))
             judgements_list = input_dict['judgements']
             im_h, im_w = input_dict['im_h_resized_to'].detach().cpu().numpy().flatten(), input_dict['im_w_resized_to'].detach().cpu().numpy().flatten()
@@ -207,6 +210,8 @@ def vis_val_epoch_joint_iiw(iiw_loader_val, model, params_mis):
     roughPreds_list = []
     depthPreds_list = []
 
+    albedoBsPreds_list = []
+
     # ===== Gather vis of N batches
     with torch.no_grad():
         im_single_list = []
@@ -253,6 +258,8 @@ def vis_val_epoch_joint_iiw(iiw_loader_val, model, params_mis):
 
                 if 'al' in opt.cfg.MODEL_BRDF.enable_list:
                     albedoPreds_list.append(output_dict['albedoPreds'][n])
+                    if opt.cfg.MODEL_BRDF.if_bilateral:
+                        albedoBsPreds_list.append(output_dict['albedoBsPred'])
 
                 if 'no' in opt.cfg.MODEL_BRDF.enable_list:
                     normalPreds_list.append(output_dict['normalPreds'][n])
@@ -271,7 +278,9 @@ def vis_val_epoch_joint_iiw(iiw_loader_val, model, params_mis):
 
         if 'al' in opt.cfg.MODEL_BRDF.enable_list:
             albedoPreds_vis = torch.cat(albedoPreds_list)
-            
+            if opt.cfg.MODEL_BRDF.if_bilateral:
+                albedoBsPreds_vis = torch.cat(albedoBsPreds_list)
+
         if 'no' in opt.cfg.MODEL_BRDF.enable_list:
             normalPreds_vis = torch.cat(normalPreds_list)
 
@@ -294,6 +303,9 @@ def vis_val_epoch_joint_iiw(iiw_loader_val, model, params_mis):
         # ==== Preds
         if 'al' in opt.cfg.MODEL_BRDF.enable_list:
             albedo_pred_batch_vis_sdr = ( (albedoPreds_vis ) ** (1.0/2.2) ).data
+            if opt.cfg.MODEL_BRDF.if_bilateral:
+                albedo_bs_pred_batch_vis_sdr = ( (albedoBsPreds_vis ) ** (1.0/2.2) ).data
+
             if opt.is_master:
                 vutils.save_image(albedo_pred_batch_vis_sdr,
                         '{0}/IIW_{1}_albedoPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
@@ -319,6 +331,8 @@ def vis_val_epoch_joint_iiw(iiw_loader_val, model, params_mis):
 
         if 'al' in opt.cfg.MODEL_BRDF.enable_list:
             albedo_pred_batch_vis_sdr_numpy = albedo_pred_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
+            if opt.cfg.MODEL_BRDF.if_bilateral:
+                albedo_bs_pred_batch_vis_sdr_numpy = albedo_bs_pred_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
         if 'no' in opt.cfg.MODEL_BRDF.enable_list:
             normal_pred_batch_vis_sdr_numpy = normal_pred_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
         if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
@@ -330,16 +344,21 @@ def vis_val_epoch_joint_iiw(iiw_loader_val, model, params_mis):
             for sample_idx in tqdm(range(im_batch_vis_sdr.shape[0])):
                 if 'al' in opt.cfg.MODEL_BRDF.enable_list:
                     writer.add_image('IIW_VAL_brdf-albedo_PRED/%d'%sample_idx, albedo_pred_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
+                    if opt.cfg.MODEL_BRDF.if_bilateral:
+                        writer.add_image('IIW_VAL_brdf-albedo_PRED-BS/%d'%sample_idx, albedo_bs_pred_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                     if opt.cfg.DEBUG.if_dump_perframe_BRDF:
                         Image.fromarray((albedo_pred_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8)).save('{0}/IIW_{1}_albedoPred_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
+
                 if 'no' in opt.cfg.MODEL_BRDF.enable_list:
                     writer.add_image('IIW_VAL_brdf-normal_PRED/%d'%sample_idx, normal_pred_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                     if opt.cfg.DEBUG.if_dump_perframe_BRDF:
                         Image.fromarray((normal_pred_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8)).save('{0}/IIW_{1}_normalPred_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
+
                 if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
                     writer.add_image('IIW_VAL_brdf-rough_PRED/%d'%sample_idx, rough_pred_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
                     if opt.cfg.DEBUG.if_dump_perframe_BRDF:
                         Image.fromarray((rough_pred_batch_vis_sdr_numpy[sample_idx]*255.).astype(np.uint8).squeeze()).save('{0}/IIW_{1}_roughPred_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
+
                 if 'de' in opt.cfg.MODEL_BRDF.enable_list:
                     depth_not_normalized_pred = vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True)[0]
                     writer.add_image('IIW_VAL_brdf-depth_PRED/%d'%sample_idx, depth_not_normalized_pred, tid, dataformats='HWC')

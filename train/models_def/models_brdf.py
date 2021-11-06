@@ -38,7 +38,7 @@ def LSregress(pred, gt, origin, if_clamp_coeff=True):
 
     # coef = (torch.sum(pred * gt, dim = 1) / torch.clamp(torch.sum(pred * pred, dim=1), min=1e-5)).detach()
     coef = (torch.sum(pred * gt, dim = 1) / (torch.sum(pred * pred, dim=1) + 1e-6)).detach()
-    print(coef)
+    # print(coef)
     if if_clamp_coeff:
         coef = torch.clamp(coef, 0.001, 1000)
     # print(coef, pred.shape)
@@ -615,13 +615,13 @@ class decoder0(nn.Module):
             x_out = F.softmax(x_orig, dim=1)
         elif self.mode == 4:
             x_orig = torch.mean(x_orig, dim=1).unsqueeze(1)
-            x_out = torch.clamp(1.01 * torch.tanh(x_orig ), -1, 1)
+            x_out = torch.clamp(1.01 * torch.tanh(x_orig ), -1, 1) # -> [-1, 1]
         elif self.mode == 5: # clip to 0., inf
-            x_out = self.relu(torch.mean(x_orig, dim=1).unsqueeze(1))
+            x_out = self.relu(torch.mean(x_orig, dim=1).unsqueeze(1)) # -> [0, inf]
             # x_out[x_out < 1e-8] = 1e-8
         elif self.mode == 6: # sigmoid to 0., 1. -> inverse to 0., inf
             x_out = torch.sigmoid(torch.mean(x_orig, dim=1).unsqueeze(1))
-            x_out = 1. / (x_out + 1e-6)
+            x_out = 1. / (x_out + 1e-6) # -> [0, inf]
         else:
             x_out = x_orig
 

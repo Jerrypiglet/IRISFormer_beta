@@ -10,8 +10,8 @@ spec:
   ttlSecondsAfterFinished: 86400  # Wait one day to delete completed jobs
   template:
     spec:
-      nodeSelector:
-        kubernetes.io/hostname: k8s-haosu-20.sdsc.optiputer.net
+      # nodeSelector:
+      #   kubernetes.io/hostname: k8s-haosu-20.sdsc.optiputer.net
       containers:
       - name: gpu-container-rui3
         # image: pytorch/pytorch:1.2-cuda10.0-cudnn7-runtime  # docker image

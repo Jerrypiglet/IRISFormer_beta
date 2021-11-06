@@ -27,7 +27,7 @@ from dataset_openrooms_OR_scanNetPose_light_20210928 import openrooms, collate_f
 from dataset_openrooms_OR_scanNetPose_light_20210928_iiw import iiw, collate_fn_iiw
 # from dataset_openrooms_OR_scanNetPose_binary_tables_ import openrooms_binary
 # from dataset_openrooms_OR_scanNetPose_pickle import openrooms_pickle
-from utils.utils_dataloader_binary import make_data_loader_binary
+# from utils.utils_dataloader_binary import make_data_loader_binary
 import torch.distributed as dist
 from train_funcs_detectron import gather_lists
 
@@ -583,12 +583,13 @@ if not opt.if_train:
 
     if opt.if_val:
         val_params.update({'brdf_dataset_val': brdf_dataset_val, 'detectron_dataset_name': 'val'})
-        with torch.no_grad():
-            val_epoch_joint(brdf_loader_val, model, val_params)
-
         val_params.update({'iiw_dataset_val': iiw_dataset_val})
+
         with torch.no_grad():
             val_epoch_joint_iiw(iiw_loader_val, model, val_params)
+
+        with torch.no_grad():
+            val_epoch_joint(brdf_loader_val, model, val_params)
 else:
     for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         epoch = epoch_0 + epoch_start
@@ -653,15 +654,16 @@ else:
 
                 if opt.if_val:
                     val_params.update({'brdf_dataset_val': brdf_dataset_val, 'detectron_dataset_name': 'val'})
+                    val_params.update({'iiw_dataset_val': iiw_dataset_val})
+
+                    with torch.no_grad():
+                        val_epoch_joint_iiw(iiw_loader_val, model, val_params)
+                    synchronize()
 
                     with torch.no_grad():
                         val_epoch_joint(brdf_loader_val, model, val_params)
                     synchronize()
 
-                    val_params.update({'iiw_dataset_val': iiw_dataset_val})
-                    with torch.no_grad():
-                        val_epoch_joint_iiw(iiw_loader_val, model, val_params)
-                    synchronize()
 
                 model.train(not cfg.MODEL_SEMSEG.fix_bn)
                 reset_tictoc = True
@@ -725,14 +727,22 @@ else:
                         loss_keys_print.append('loss_brdf-albedo') 
                         if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_albedo:
                             loss_keys_print.append('loss_brdf-albedo-reg') 
+                        if opt.cfg.MODEL_BRDF.if_bilateral:
+                            loss_keys_print.append('loss_brdf-albedo-bs') 
                     if 'no' in opt.cfg.MODEL_BRDF.enable_list and 'no' in opt.cfg.MODEL_BRDF.loss_list:
                         loss_keys_print.append('loss_brdf-normal') 
+                        if opt.cfg.MODEL_BRDF.if_bilateral and not opt.cfg.MODEL_BRDF.if_bilateral_albedo_only:
+                            loss_keys_print.append('loss_brdf-normal-bs') 
                     if 'ro' in opt.cfg.MODEL_BRDF.enable_list and 'ro' in opt.cfg.MODEL_BRDF.loss_list:
                         loss_keys_print.append('loss_brdf-rough') 
+                        if opt.cfg.MODEL_BRDF.if_bilateral and not opt.cfg.MODEL_BRDF.if_bilateral_albedo_only:
+                            loss_keys_print.append('loss_brdf-rough-bs') 
                     if 'de' in opt.cfg.MODEL_BRDF.enable_list and 'de' in opt.cfg.MODEL_BRDF.loss_list:
                         loss_keys_print.append('loss_brdf-depth') 
                         if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_depth:
                             loss_keys_print.append('loss_brdf-depth-reg') 
+                        if opt.cfg.MODEL_BRDF.if_bilateral and not opt.cfg.MODEL_BRDF.if_bilateral_albedo_only:
+                            loss_keys_print.append('loss_brdf-depth-bs') 
 
                 for loss_key in loss_keys_backward:
                     if loss_key in opt.loss_weight_dict:
