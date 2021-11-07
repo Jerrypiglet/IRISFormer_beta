@@ -1,3 +1,4 @@
+from random import sample
 import numpy as np
 import torch
 from torch.autograd import Variable
@@ -417,6 +418,60 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
                 pass
 
             if ENABLE_BRDF:
+                frame_info_list = input_dict['frame_info']
+                if opt.cfg.DEBUG.dump_BRDF_offline.enable:
+                    if 'al' in opt.cfg.MODEL_BRDF.enable_list:
+                        albedo_output = output_dict['albedoPreds'][0].detach().cpu().numpy()
+                    if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
+                        rough_output = output_dict['roughPreds'][0].detach().cpu().numpy()
+                    if 'no' in opt.cfg.MODEL_BRDF.enable_list:
+                        normal_output = output_dict['normalPreds'][0].detach().cpu().numpy()
+                    if 'de' in opt.cfg.MODEL_BRDF.enable_list:
+                        depth_output = output_dict['depthPreds'][0].detach().cpu().numpy()
+
+                    for sample_idx_batch in range(len(frame_info_list)):
+                        frame_info = frame_info_list[sample_idx_batch]
+                        # print(frame_info)
+                        meta_split, scene_name, frame_id = frame_info['meta_split'], frame_info['scene_name'], frame_info['frame_id']
+                        scene_path_dump = Path(opt.cfg.DEBUG.dump_BRDF_offline.path_task) / meta_split / scene_name
+                        scene_path_dump.mkdir(exist_ok=True)
+                        Path(str(scene_path_dump).replace('DiffLight', '')).mkdir(exist_ok=True)
+                        Path(str(scene_path_dump).replace('DiffLight', '').replace('DiffMat', '')).mkdir(exist_ok=True)
+
+                        if 'al' in opt.cfg.MODEL_BRDF.enable_list:
+                            # /data/ruizhu/openrooms_mini/mainDiffMat_xml1/scene0593_01/imbaseColor_12.png/
+                            albedo_dump_path = scene_path_dump / ('imbaseColor_%d_dump.png'%frame_id)
+                            albedo_dump_path = Path(str(albedo_dump_path).replace('DiffLight', ''))
+                            albedo_sdr = np.clip(albedo_output[sample_idx_batch].transpose(1, 2, 0) ** (1.0/2.2), 0., 1.)
+                            Image.fromarray((albedo_sdr*255.).astype(np.uint8)).save(str(albedo_dump_path))
+                            print(albedo_dump_path)
+                            # print(frame_info['albedo_path'])
+                        if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
+                            # /data/ruizhu/openrooms_mini/mainDiffMat_xml1/scene0593_01/imroughness_12.png/
+                            rough_dump_path = scene_path_dump / ('imroughness_%d_dump.png'%frame_id)
+                            rough_dump_path = Path(str(rough_dump_path).replace('DiffLight', ''))
+                            rough_save = np.clip(0.5*(rough_output[sample_idx_batch].squeeze()+1), 0., 1.)
+                            Image.fromarray((rough_save*255.).astype(np.uint8)).save(str(rough_dump_path))
+                            print(rough_dump_path)
+                            print(frame_info['rough_path'])
+                        if 'no' in opt.cfg.MODEL_BRDF.enable_list:
+                            # /data/ruizhu/openrooms_mini/mainDiffMat_xml1/scene0593_01/imnormal_12.png/
+                            normal_dump_path = scene_path_dump / ('imnormal_%d_dump.png'%frame_id)
+                            normal_dump_path = Path(str(normal_dump_path).replace('DiffLight', '').replace('DiffMat', ''))
+                            normal_save = np.clip(0.5*(normal_output[sample_idx_batch].transpose(1, 2, 0)+1), 0., 1.)
+                            Image.fromarray((normal_save*255.).astype(np.uint8)).save(str(normal_dump_path))
+                            print(normal_dump_path)
+                            print(frame_info['normal_path'])
+                        if 'de' in opt.cfg.MODEL_BRDF.enable_list:
+                            # /data/ruizhu/openrooms_mini/mainDiffMat_xml1/scene0593_01/imbaseColor_12.png/
+                            depth_dump_path = scene_path_dump / ('imdepth_%d_dump.pickle'%frame_id)
+                            depth_dump_path = Path(str(depth_dump_path).replace('DiffLight', '').replace('DiffMat', ''))
+                            depth_save = depth_output[sample_idx_batch].squeeze().astype(np.float32)
+                            with open(str(depth_dump_path),"wb") as f:
+                                pickle.dump({'depth_pred': depth_save}, f)
+                            print(depth_dump_path)
+                            print(frame_info['depth_path'])
+
                 if 'de' in opt.cfg.MODEL_BRDF.enable_list:
                     depth_input = input_dict['depthBatch'].detach().cpu().numpy()
                     depth_output = output_dict['depthPreds'][0].detach().cpu().numpy()
@@ -727,6 +782,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                 # semseg_color.save(color_path)
                 if opt.is_master:
                     writer.add_image('VAL_im/%d'%(sample_idx), im_single, tid, dataformats='HWC')
+                    writer.add_image('VAL_pad_mask/%d'%(sample_idx), data_batch['pad_mask'][sample_idx_batch]*255, tid, dataformats='HW')
                     if opt.cfg.DEBUG.if_dump_perframe_BRDF:
                         Image.fromarray((im_single*255.).astype(np.uint8)).save('{0}/{1}_im_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx) )
 
@@ -1447,8 +1503,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                             if opt.is_master:
                                 cv2.imwrite('{0}/{1}-{2}_{3}.hdr'.format(opt.summary_vis_path_task, tid, sample_idx, name_tag) , I_hdr_downsampled[:, :, [2, 1, 0]])
 
-
-
                     for I_png, name_tag in zip([renderedImPred[sample_idx_batch], renderedImPred_sdr[sample_idx_batch], imBatchSmall[sample_idx_batch], imBatchSmall[sample_idx_batch]**(1./2.2)], ['renderedImPred', 'renderedImPred_sdr', 'imBatchSmall_GT', 'imBatchSmall_GT_sdr']):
                         I_png = np.clip(I_png, 0., 1.)
                         I_png = (I_png.transpose(1, 2, 0) * 255.).astype(np.uint8)
@@ -1682,6 +1736,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
             depth_pred_batch_vis_sdr_numpy = depth_pred_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
 
         if opt.is_master:
+            if 'de' in opt.cfg.MODEL_BRDF.enable_list:
+                writer.add_histogram('VAL_brdf-depth_PRED', np.clip(depthPreds_vis.cpu().numpy().flatten(), 0., 200.), tid)
+
             for sample_idx in tqdm(range(im_batch_vis_sdr.shape[0])):
 
                 if 'al' in opt.cfg.MODEL_BRDF.enable_list:
@@ -1733,6 +1790,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                         writer.add_image('VAL_brdf-depth_syncScale_PRED/%d'%sample_idx, depth_normalized_pred, tid, dataformats='HWC')
                     depth_not_normalized_pred = vis_disp_colormap(depth_pred_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True)[0]
                     writer.add_image('VAL_brdf-depth_PRED/%d'%sample_idx, depth_not_normalized_pred, tid, dataformats='HWC')
+                    writer.add_image('VAL_brdf-depth_PRED_thres%.2f/%d'%(opt.cfg.MODEL_LIGHT.depth_thres, sample_idx), depthPreds_vis[sample_idx].cpu().numpy().squeeze()>opt.cfg.MODEL_LIGHT.depth_thres, tid, dataformats='HW')
                     if opt.cfg.DEBUG.if_dump_perframe_BRDF:
                         Image.fromarray((depth_not_normalized_pred).astype(np.uint8)).save('{0}/{1}_depthPred_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))
                         if (not opt.cfg.DATASET.if_no_gt_BRDF) and opt.cfg.DATA.load_brdf_gt:

@@ -147,6 +147,8 @@ class openrooms(data.Dataset):
         # if_load_immask = False
         self.opt.if_load_immask = if_load_immask
 
+
+
         if self.if_extra_op:
             assert if_load_immask
 
@@ -164,13 +166,15 @@ class openrooms(data.Dataset):
 
         seg_ori = np.copy(seg)
         brdf_loss_mask = np.ones((self.im_height, self.im_width), dtype=np.uint8)
+        pad_mask = np.ones((self.im_height, self.im_width), dtype=np.uint8)
         if self.if_extra_op:
             if mask.dtype not in [np.int32, np.float32]:
                 mask = self.extra_op(mask, name='mask') # if resize, willl not work because mask is of dtype int32
             seg = self.extra_op(seg, if_channel_first=True, name='seg')
             brdf_loss_mask = self.extra_op(brdf_loss_mask, if_channel_2_input=True, name='brdf_loss_mask', if_padding_constant=True)
+            pad_mask = self.extra_op(pad_mask, if_channel_2_input=True, name='pad_mask', if_padding_constant=True)
 
-        batch_dict.update({'brdf_loss_mask': torch.from_numpy(brdf_loss_mask)})
+        batch_dict.update({'brdf_loss_mask': torch.from_numpy(brdf_loss_mask), 'pad_mask': torch.from_numpy(pad_mask)})
 
 
         # assert self.opt.cfg.DATA.if_load_png_not_hdr
@@ -256,7 +260,7 @@ class openrooms(data.Dataset):
         # ====== BRDF =====
         # image_path = batch_dict['image_path']
         # if self.opt.cfg.DATA.load_brdf_gt and (not self.opt.cfg.DATASET.if_no_gt_semantics):
-        batch_dict_brdf = self.load_brdf_lighting(hdr_image_path, if_load_immask, mask_path, mask, seg, seg_ori, hdr_scale, frame_info)
+        batch_dict_brdf, frame_info = self.load_brdf_lighting(hdr_image_path, if_load_immask, mask_path, mask, seg, seg_ori, hdr_scale, frame_info)
         batch_dict.update(batch_dict_brdf)
 
         if self.opt.cfg.MODEL_GMM.enable:
@@ -359,11 +363,11 @@ class openrooms(data.Dataset):
                 if self.opt.cfg.DATASET.dataset_if_save_space:
                     albedo_path = albedo_path.replace('DiffLight', '')
                 # Read albedo
+                frame_info['albedo_path'] = albedo_path
                 albedo = self.loadImage(albedo_path, isGama = False)
                 albedo = (0.5 * (albedo + 1) ) ** 2.2
                 if self.if_extra_op:
                     albedo = self.extra_op(albedo, if_channel_first=True, name='albedo')
-
                 batch_dict_brdf.update({'albedo': torch.from_numpy(albedo)})
 
             if 'no' in self.cfg.DATA.data_read_list:
@@ -371,6 +375,7 @@ class openrooms(data.Dataset):
                 if self.opt.cfg.DATASET.dataset_if_save_space:
                     normal_path = normal_path.replace('DiffLight', '').replace('DiffMat', '')
                 # normalize the normal vector so that it will be unit length
+                frame_info['normal_path'] = normal_path
                 normal = self.loadImage(normal_path )
                 normal = normal / np.sqrt(np.maximum(np.sum(normal * normal, axis=0), 1e-5) )[np.newaxis, :]
                 if self.if_extra_op:
@@ -382,6 +387,7 @@ class openrooms(data.Dataset):
                 rough_path = hdr_image_path.replace('im_', 'imroughness_').replace('rgbe', 'png').replace('hdr', 'png')
                 if self.opt.cfg.DATASET.dataset_if_save_space:
                     rough_path = rough_path.replace('DiffLight', '')
+                frame_info['rough_path'] = rough_path
                 # Read roughness
                 rough = self.loadImage(rough_path )[0:1, :, :]
                 if self.if_extra_op:
@@ -393,13 +399,76 @@ class openrooms(data.Dataset):
                 depth_path = hdr_image_path.replace('im_', 'imdepth_').replace('rgbe', 'dat').replace('hdr', 'dat')
                 if self.opt.cfg.DATASET.dataset_if_save_space:
                     depth_path = depth_path.replace('DiffLight', '').replace('DiffMat', '')
+                frame_info['depth_path'] = depth_path
                 # Read depth
                 depth = self.loadBinary(depth_path)
                 if self.if_extra_op:
                     depth = self.extra_op(depth, if_channel_first=True, name='depth')
-
                 batch_dict_brdf.update({'depth': torch.from_numpy(depth),})
 
+            # print('al', albedo.shape, np.amax(albedo), np.amin(albedo), np.median(albedo), np.mean(albedo))
+            # print('no', normal.shape, np.amax(normal), np.amin(normal), np.median(normal), np.mean(normal))
+            # print('ro', rough.shape, np.amax(rough), np.amin(rough), np.median(rough), np.mean(rough))
+            # print('de', depth.shape, np.amax(depth), np.amin(depth), np.median(depth), np.mean(depth))
+            # al (3, 256, 320) 1.0 0.0 0.42050794 0.38241568
+            # no (3, 256, 320) 0.99998415 -0.99431545 0.2006149 0.2737651
+            # ro (1, 256, 320) 1.0 -1.0 0.2 0.067728244
+            # de (1, 256, 320) 4.679752 0.0 2.4866104 2.4604745
+
+        elif self.cfg.DEBUG.if_load_dump_BRDF_offline:
+            if 'al' in self.cfg.DATA.data_read_list:
+                albedo_path = hdr_image_path.replace('im_', 'imbaseColor_').replace('rgbe', 'png').replace('hdr', 'png')
+                if self.opt.cfg.DATASET.dataset_if_save_space:
+                    albedo_path = albedo_path.replace('DiffLight', '')
+                albedo_path = str(Path(self.cfg.DEBUG.dump_BRDF_offline.path_task) / ('/'.join(albedo_path.split('/')[-3::]))).replace('.png', '_dump.png')
+                frame_info['albedo_path'] = albedo_path
+                albedo = np.asarray(Image.open(albedo_path), dtype=np.float32) / 255.
+                albedo = np.transpose(albedo, [2, 0, 1] )
+                albedo = albedo ** 2.2
+                batch_dict_brdf.update({'albedo': torch.from_numpy(albedo)})
+
+            if 'no' in self.cfg.DATA.data_read_list:
+                normal_path = hdr_image_path.replace('im_', 'imnormal_').replace('rgbe', 'png').replace('hdr', 'png')
+                if self.opt.cfg.DATASET.dataset_if_save_space:
+                    normal_path = normal_path.replace('DiffLight', '').replace('DiffMat', '')
+                normal_path = str(Path(self.cfg.DEBUG.dump_BRDF_offline.path_task) / ('/'.join(normal_path.split('/')[-3::]))).replace('.png', '_dump.png')
+                # normalize the normal vector so that it will be unit length
+                frame_info['normal_path'] = normal_path
+                normal = np.asarray(Image.open(normal_path), dtype=np.float32) / 255.
+                normal = np.transpose(normal, [2, 0, 1] )
+                normal = normal * 2. - 1.
+                batch_dict_brdf.update({'normal': torch.from_numpy(normal),})
+
+            if 'ro' in self.cfg.DATA.data_read_list:
+                rough_path = hdr_image_path.replace('im_', 'imroughness_').replace('rgbe', 'png').replace('hdr', 'png')
+                if self.opt.cfg.DATASET.dataset_if_save_space:
+                    rough_path = rough_path.replace('DiffLight', '')
+                rough_path = str(Path(self.cfg.DEBUG.dump_BRDF_offline.path_task) / ('/'.join(rough_path.split('/')[-3::]))).replace('.png', '_dump.png')
+                frame_info['rough_path'] = rough_path
+                # Read roughness
+                rough = np.asarray(Image.open(rough_path), dtype=np.float32) / 255.
+                # assert False
+                rough = rough * 2. - 1.
+                rough = np.expand_dims(rough, 0)
+                batch_dict_brdf.update({'rough': torch.from_numpy(rough),})
+
+            if 'de' in self.cfg.DATA.data_read_list or 'de' in self.cfg.DATA.data_read_list:
+                depth_path = hdr_image_path.replace('im_', 'imdepth_').replace('rgbe', 'dat').replace('hdr', 'dat')
+                if self.opt.cfg.DATASET.dataset_if_save_space:
+                    depth_path = depth_path.replace('DiffLight', '').replace('DiffMat', '')
+                depth_path = str(Path(self.cfg.DEBUG.dump_BRDF_offline.path_task) / ('/'.join(depth_path.split('/')[-3:-1])) / ('imdepth_%d_dump.pickle'%frame_info['frame_id']))
+                frame_info['depth_path'] = depth_path
+                # Read depth
+                with open(depth_path, 'rb') as f:
+                    depth_dict = pickle.load(f)
+                depth = depth_dict['depth_pred']
+                depth = np.expand_dims(depth, 0)
+                batch_dict_brdf.update({'depth': torch.from_numpy(depth),})
+
+            # print('al', albedo.shape, np.amax(albedo), np.amin(albedo), np.median(albedo), np.mean(albedo))
+            # print('no', normal.shape, np.amax(normal), np.amin(normal), np.median(normal), np.mean(normal))
+            # print('ro', rough.shape, np.amax(rough), np.amin(rough), np.median(rough), np.mean(rough))
+            # print('de', depth.shape, np.amax(depth), np.amin(depth), np.median(depth), np.mean(depth))
 
         if if_load_immask:
             segArea = np.logical_and(seg_ori > 0.49, seg_ori < 0.51 ).astype(np.float32 )
@@ -527,7 +596,7 @@ class openrooms(data.Dataset):
             batch_dict_brdf['diffusePre'] = diffusePre
             batch_dict_brdf['specularPre'] = specularPre
 
-        return batch_dict_brdf
+        return batch_dict_brdf, frame_info
 
     def read_scene(self, frame_info):
         scene_total3d_path, frame_id = frame_info['scene_total3d_path'], frame_info['frame_id']

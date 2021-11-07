@@ -78,7 +78,7 @@ parser.add_argument("--local_rank", type=int, default=0)
 
 # DEBUG
 parser.add_argument('--debug', action='store_true', help='Debug eval')
-
+parser.add_argument('--batch_size_override_vis', type=int, default=-1, help='')
 parser.add_argument('--ifMatMapInput', action='store_true', help='using mask as additional input')
 # parser.add_argument('--ifDataloaderOnly', action='store_true', help='benchmark dataloading overhead')
 parser.add_argument('--if_cluster', action='store_true', help='if using cluster')
@@ -311,7 +311,7 @@ if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.yogo_lr:
 
 ENABLE_MATSEG = opt.cfg.MODEL_MATSEG.enable
 opt.bin_mean_shift_device = opt.device if opt.cfg.MODEL_MATSEG.embed_dims <= 4 else 'cpu'
-opt.batch_size_override_vis = -1
+# opt.batch_size_override_vis = -1
 if ENABLE_MATSEG:
     if opt.cfg.MODEL_MATSEG.embed_dims > 2:
         opt.batch_size_override_vis = 1      
@@ -372,6 +372,9 @@ if opt.cfg.MODEL_SEMSEG.enable:
 #     brdf_dataset_val = brdf_dataset_train
 #     brdf_dataset_val_vis = brdf_dataset_train
 # else:
+
+# if opt.cfg.DEBUG.dump_BRDF_offline.enable:
+#     opt.if_overfit_train = True
 
 if opt.if_val:
     brdf_dataset_val = openrooms_to_use(opt, 

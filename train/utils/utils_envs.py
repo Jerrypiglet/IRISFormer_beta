@@ -30,10 +30,22 @@ def set_up_envs(opt):
         opt.cfg.DEBUG.if_dump_perframe_BRDF = True
         opt.cfg.TEST.vis_max_samples = 20000
 
+    if opt.if_cluster:
+        opt.cfg.DEBUG.if_fast_BRDF_labels = False
+        opt.cfg.DEBUG.if_fast_light_labels = False
+
     if opt.cfg.DEBUG.if_fast_BRDF_labels:
         opt.cfg.DATASET.dataset_path_local = opt.cfg.DATASET.dataset_path_local_fast_BRDF
-    if opt.cfg.DEBUG.if_fast_light_labels:
-        assert opt.if_cluster == False
+        
+    # if opt.cfg.DEBUG.if_fast_light_labels:
+    opt.cfg.DEBUG.dump_BRDF_offline.path_root = opt.cfg.DEBUG.dump_BRDF_offline.path_root_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DEBUG.dump_BRDF_offline.path_root_local
+    opt.cfg.DEBUG.dump_BRDF_offline.path_task = str(Path(opt.cfg.DEBUG.dump_BRDF_offline.path_root) / opt.cfg.DEBUG.dump_BRDF_offline.task_name)
+    if opt.cfg.DEBUG.dump_BRDF_offline.enable:
+        Path(opt.cfg.DEBUG.dump_BRDF_offline.path_root).mkdir(exist_ok=True)
+        Path(opt.cfg.DEBUG.dump_BRDF_offline.path_task).mkdir(exist_ok=True)
+        for meta_split in ['main_xml', 'main_xml1', 'mainDiffMat_xml', 'mainDiffLight_xml1', 'mainDiffMat_xml1', 'mainDiffLight_xml']:
+            (Path(opt.cfg.DEBUG.dump_BRDF_offline.path_task) / meta_split).mkdir(exist_ok=True)
+
 
     if opt.cfg.DATASET.if_quarter and not opt.if_cluster:
         opt.cfg.DATASET.dataset_path_local = opt.cfg.DATASET.dataset_path_local_quarter
@@ -181,6 +193,8 @@ def set_up_envs(opt):
             opt.cfg.MODEL_LIGHT.enable = True
         if 'li' in opt.cfg.MODEL_ALL.enable_list:
             opt.cfg.MODEL_LIGHT.enable = True
+
+        assert not (opt.cfg.MODEL_LIGHT.if_align_rerendering_envmap and opt.cfg.MODEL_LIGHT.if_align_log_envmap) # cannot be true at the same time
         
 
     # ====== GMM =====

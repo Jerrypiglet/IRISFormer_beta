@@ -77,7 +77,7 @@ class Model_Joint_ViT(nn.Module):
         self.if_BRDF = self.modalities_stage0 != []
         self.if_Light = self.modalities_stage1 != []
         self.load_brdf_gt = self.opt.cfg.DATA.load_brdf_gt
-        self.use_GT_brdf = self.opt.cfg.MODEL_LIGHT.use_GT_brdf
+        self.use_GT_brdf = self.opt.cfg.MODEL_LIGHT.use_GT_brdf or self.opt.cfg.MODEL_LIGHT.use_offline_brdf
 
         print('====self.modalities', self.modalities)
         self.MODEL_ALL = ModelAll_ViT(
@@ -188,6 +188,8 @@ class Model_Joint_ViT(nn.Module):
                 elif self.opt.cfg.MODEL_BRDF.loss.depth.if_use_midas_loss:
                     return_dict.update({'depthInvPred': vit_out})
                     depthPred = 1. / (vit_out + 1e-8)
+                else:
+                    assert False
                 return_dict.update({'depthPred': depthPred})
                 if if_has_gt_BRDF:
                     depthPred_aligned = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
@@ -235,24 +237,49 @@ class Model_Joint_ViT(nn.Module):
 
         imBatch = input_dict['imBatch']
         segBRDFBatch = input_dict['segBRDFBatch']
-
+        pad_mask = input_dict['pad_mask'].float().unsqueeze(1)
 
         albedoInput[:, :, :im_h, :im_w] = albedoInput[:, :, :im_h, :im_w] / torch.clamp(
                 torch.mean(albedoInput[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
             , min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0
+        albedoInput = albedoInput * pad_mask
+        # print(albedoInput.shape, pad_mask.shape)
+        # albedoInput[:, :, im_h:, :] = 0.
+        # albedoInput[:, :, :, im_w:] = 0.
+        # albedoInput[:, :, im_h:, im_w:] = 0.
 
+        # if self.opt.is_master:
+        #     print('--depth before', torch.max(depthInput), torch.min(depthInput), torch.mean(depthInput), torch.median(depthInput))
+
+        depthInput = torch.clamp(depthInput, 0., self.cfg.MODEL_LIGHT.depth_thres)
         depthInput[:, :, :im_h, :im_w] = depthInput[:, :, :im_h, :im_w] / torch.clamp(
                 torch.mean(depthInput[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
             , min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0
+        depthInput = depthInput * pad_mask
+
         normalInput[:, :, :im_h, :im_w] =  0.5 * (normalInput[:, :, :im_h, :im_w] + 1)
+        normalInput = normalInput * pad_mask
+
         roughInput[:, :, :im_h, :im_w] =  0.5 * (roughInput[:, :, :im_h, :im_w] + 1)
+        roughInput = roughInput * pad_mask
+        
+
+        if self.opt.is_master:
+            print(torch.max(albedoInput), torch.min(albedoInput), torch.mean(albedoInput), torch.median(albedoInput))
+            print(torch.max(depthInput), torch.min(depthInput), torch.mean(depthInput), torch.median(depthInput))
+            print(torch.max(normalInput), torch.min(normalInput), torch.mean(normalInput), torch.median(normalInput))
+            print(torch.max(roughInput), torch.min(roughInput), torch.mean(roughInput), torch.median(roughInput))
         
         x_stage1 = torch.cat([imBatch, albedoInput, normalInput, roughInput, depthInput ], dim=1 ).detach()
 
         # output_dict_model_all = self.MODEL_ALL.forward_light(x_stage1)
+        # print(x_stage1.shape)
+        # print(imBatch.shape, albedoInput.shape, normalInput.shape, roughInput.shape, depthInput.shape)
         output_dict_model_all = self.forward_LightNet_func(x_stage1)
 
         axisPred_ori, lambPred_ori, weightPred_ori = output_dict_model_all['axis'], output_dict_model_all['lamb'], output_dict_model_all['weight']
+        if self.opt.is_master:
+            print('weightPred_ori', torch.max(weightPred_ori), torch.min(weightPred_ori), torch.mean(weightPred_ori), torch.median(weightPred_ori))
 
         if self.cfg.DATA.if_pad_to_32x:
             axisPred_ori, lambPred_ori, weightPred_ori = axisPred_ori[:, :, :, :im_h//2, :im_w//2], lambPred_ori[:, :, :im_h//2, :im_w//2], weightPred_ori[:, :, :im_h//2, :im_w//2]
@@ -291,13 +318,17 @@ class Model_Joint_ViT(nn.Module):
                 envmapsPredScaledImage = models_brdf.LSregress(envmapsPredImage.detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
                     input_dict['envmapsBatch'] * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage, 
                     if_clamp_coeff=self.cfg.MODEL_LIGHT.if_clamp_coeff)
+                return_dict.update({'envmapsPredScaledImage': envmapsPredScaledImage, 'envmapsPredScaledImage_offset_log_': envmapsPredScaledImage_offset_log_})
+            elif self.cfg.MODEL_LIGHT.if_align_rerendering_envmap:
+                pass
             else:
                 envmapsPredScaledImage = models_brdf.LSregress(envmapsPredImage.detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
                     input_dict['envmapsBatch'] * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage, 
                     if_clamp_coeff=self.cfg.MODEL_LIGHT.if_clamp_coeff)
                 envmapsPredScaledImage_offset_log_ = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
+                return_dict.update({'envmapsPredScaledImage': envmapsPredScaledImage, 'envmapsPredScaledImage_offset_log_': envmapsPredScaledImage_offset_log_})
 
-        return_dict.update({'envmapsPredImage': envmapsPredImage, 'envmapsPredScaledImage': envmapsPredScaledImage, 'envmapsPredScaledImage_offset_log_': envmapsPredScaledImage_offset_log_, \
+        return_dict.update({'envmapsPredImage': envmapsPredImage, \
             'segEnvBatch': segEnvBatch, \
             'imBatchSmall': imBatchSmall, 'segBRDFBatchSmall': segBRDFBatchSmall, 'pixelNum_recon': pixelNum_recon}) 
 
@@ -326,6 +357,21 @@ class Model_Joint_ViT(nn.Module):
         renderedImPred_hdr = diffusePredScaled + specularPredScaled
         renderedImPred = renderedImPred_hdr
         renderedImPred_sdr = torch.clamp(renderedImPred_hdr ** (1.0/2.2), 0, 1)
+
+        if self.cfg.MODEL_LIGHT.if_align_rerendering_envmap:
+            cDiff, cSpec = (torch.sum(diffusePredScaled) / torch.sum(diffusePred)).data.item(), ((torch.sum(specularPredScaled) ) / (torch.sum(specularPred) ) ).data.item()
+            # if cSpec == 0:
+            cAlbedo = 1/ axisPred_ori.max().data.item()
+            cLight = cDiff / cAlbedo
+            # else:
+            #     cLight = cSpec
+            #     cAlbedo = cDiff / cLight
+            #     cAlbedo = np.clip(cAlbedo, 1e-3, 1 / axisPred_ori.max().data.item() )
+            #     cLight = cDiff / cAlbedo
+            envmapsPredScaledImage = envmapsPredImage * cLight
+            ic(cLight)
+            envmapsPredScaledImage_offset_log_ = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
+            return_dict.update({'envmapsPredScaledImage': envmapsPredScaledImage, 'envmapsPredScaledImage_offset_log_': envmapsPredScaledImage_offset_log_})
 
         return_dict.update({'renderedImPred': renderedImPred, 'renderedImPred_sdr': renderedImPred_sdr, 'pixelNum_render': pixelNum_render}) 
         return_dict.update({'LightNet_preds': {'axisPred': axisPred_ori, 'lambPred': lambPred_ori, 'weightPred': weightPred_ori, 'segEnvBatch': segEnvBatch, 'notDarkEnv': notDarkEnv}})
@@ -356,31 +402,30 @@ class Model_Joint_ViT(nn.Module):
         segBRDFBatch = input_dict['segBRDFBatch']
         pad_mask = input_dict['pad_mask'].float()
 
-        # albedoInput_masked = albedoInput * pad_mask.unsqueeze(1)
-        # albedoInput_unmasked = albedoInput * (1. - pad_mask.unsqueeze(1))
-        # albedoInput_masked_mean = torch.sum(albedoInput_masked.flatten(1), dim=1, keepdim=True) / (torch.sum(pad_mask.flatten(1), dim=1, keepdim=True) * 3.)
-        # albedoInput = albedoInput_masked / torch.clamp(albedoInput_masked_mean, min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0 + albedoInput_unmasked
         albedoInput[:, :, :im_h, :im_w] = albedoInput[:, :, :im_h, :im_w] / torch.clamp(
                 torch.mean(albedoInput[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
             , min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0
+        albedoInput[:, :, im_h:, :] = 0.
+        albedoInput[:, :, :, im_w:] = 0.
+        albedoInput[:, :, im_h:, im_w:] = 0.
 
-        # depthInput_masked = depthInput * pad_mask.unsqueeze(1)
-        # depthInput_unmasked = depthInput * (1. - pad_mask.unsqueeze(1))
-        # depthInput_masked_mean = torch.sum(depthInput_masked.flatten(1), dim=1, keepdim=True) / (torch.sum(pad_mask.flatten(1), dim=1, keepdim=True) * 3.)
-        # depthInput = depthInput_masked / torch.clamp(depthInput_masked_mean, min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0 + depthInput_unmasked
+        depthInput = torch.clamp(depthInput, 0., self.cfg.MODEL_LIGHT.depth_thres)
         depthInput[:, :, :im_h, :im_w] = depthInput[:, :, :im_h, :im_w] / torch.clamp(
                 torch.mean(depthInput[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
             , min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0
+        depthInput[:, :, im_h:, :] = 0.
+        depthInput[:, :, :, im_w:] = 0.
+        depthInput[:, :, im_h:, im_w:] = 0.
 
         normalInput[:, :, :im_h, :im_w] =  0.5 * (normalInput[:, :, :im_h, :im_w] + 1)
-        # normalInput_masked = normalInput * pad_mask.unsqueeze(1)
-        # normalInput_unmasked = normalInput * (1. - pad_mask.unsqueeze(1))
-        # normalInput = 0.5 * (normalInput_masked + 1.) + normalInput_unmasked
+        normalInput[:, :, im_h:, :] = 0.
+        normalInput[:, :, :, im_w:] = 0.
+        normalInput[:, :, im_h:, im_w:] = 0.
 
         roughInput[:, :, :im_h, :im_w] =  0.5 * (roughInput[:, :, :im_h, :im_w] + 1)
-        # roughInput_masked = roughInput * pad_mask.unsqueeze(1)
-        # roughInput_unmasked = roughInput * (1. - pad_mask.unsqueeze(1))
-        # roughInput = 0.5 * (roughInput_masked + 1.) + roughInput_unmasked
+        roughInput[:, :, im_h:, :] = 0.
+        roughInput[:, :, :, im_w:] = 0.
+        roughInput[:, :, im_h:, im_w:] = 0.
         
         x_stage1 = torch.cat([imBatch, albedoInput, normalInput, roughInput, depthInput ], dim=1 ).detach()
 
@@ -471,7 +516,6 @@ class Model_Joint_ViT(nn.Module):
             cLight = cDiff / cAlbedo
         envmapsPredImage = envmapsPredImage * cLight
         ic(cLight)
-
 
         return_dict.update({'imBatchSmall': imBatchSmall, 'envmapsPredImage': envmapsPredImage, 'renderedImPred': renderedImPred, 'renderedImPred_sdr': renderedImPred_sdr}) 
         return_dict.update({'LightNet_preds': {'axisPred': axisPred_ori, 'lambPred': lambPred_ori, 'weightPred': weightPred_ori}})

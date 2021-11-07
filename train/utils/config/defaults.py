@@ -55,13 +55,23 @@ _C.PATH.pretrained_cluster = ['/ruidata/semanticInverse/pretrained', '/home/ruzh
 # ===== debug
 
 _C.DEBUG = CN()
-_C.DEBUG.if_fast_BRDF_labels = False
-_C.DEBUG.if_fast_light_labels = False
+_C.DEBUG.if_fast_BRDF_labels = True
+_C.DEBUG.if_fast_light_labels = True
 _C.DEBUG.if_dump_anything = False
 _C.DEBUG.if_test_real = False
 _C.DEBUG.if_iiw = False
 _C.DEBUG.if_dump_shadow_renderer = False
 _C.DEBUG.if_dump_perframe_BRDF = False
+
+_C.DEBUG.dump_BRDF_offline = CN()
+_C.DEBUG.dump_BRDF_offline.enable = False
+_C.DEBUG.dump_BRDF_offline.path_root = ''
+_C.DEBUG.dump_BRDF_offline.path_root_local = '/home/ruizhu/Documents/Projects/semanticInverse/dataset/openrooms_dump'
+_C.DEBUG.dump_BRDF_offline.path_root_cluster = ['/ruidata/openrooms_dump', '', '']
+_C.DEBUG.dump_BRDF_offline.path_task = ''
+_C.DEBUG.dump_BRDF_offline.task_name = 'BRDFmodel'
+_C.DEBUG.if_load_dump_BRDF_offline = False
+
 # ===== dataset
 
 _C.DATASET = CN()
@@ -413,6 +423,7 @@ _C.MODEL_LIGHT.envmapWidth = 1024
 _C.MODEL_LIGHT.envmapHeight = 512
 _C.MODEL_LIGHT.offset = 1. # 'the offset for log error'
 _C.MODEL_LIGHT.use_GT_brdf = False
+_C.MODEL_LIGHT.use_offline_brdf = False
 _C.MODEL_LIGHT.use_GT_light_envmap = False
 # _C.MODEL_LIGHT.use_GT_light_axis = False
 # _C.MODEL_LIGHT.use_GT_light_lamb = False
@@ -427,7 +438,10 @@ _C.MODEL_LIGHT.use_scale_aware_loss = False
 _C.MODEL_LIGHT.if_transform_to_LightNet_coords = False # if transform pred lighting to global LightNet coords
 _C.MODEL_LIGHT.enable_list = 'axis_lamb_weight'
 _C.MODEL_LIGHT.if_align_log_envmap = True # instead of align raw envmap_pred and envmap_gt
+_C.MODEL_LIGHT.if_align_rerendering_envmap = False
 _C.MODEL_LIGHT.if_clamp_coeff = True
+
+_C.MODEL_LIGHT.depth_thres = 50.
 
 _C.MODEL_LIGHT.DPT_baseline = CN()
 _C.MODEL_LIGHT.DPT_baseline.enable = False

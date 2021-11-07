@@ -175,10 +175,11 @@ class ModelAll_ViT(torch.nn.Module):
             self.opt, self.opt.cfg.MODEL_LIGHT.DPT_baseline, self._.shared_encoder_stage1, 
             x_stage1)
 
-        if self.opt.cfg.MODEL_ALL.ViT_baseline.if_share_decoder_over_BRDF_modalities:
-            input_dict_extra['shared_BRDF_decoder_outputs'] = forward_vit_ViT_decoder(
-                self.opt, self.opt.cfg.MODEL_LIGHT.DPT_baseline, self._.shared_BRDF_decoder, 
-                input_dict_extra['shared_encoder_outputs'][0])
+        if any(x in self.modalities_stage0 for x in ['al', 'ro', 'de', 'no']):
+            if self.opt.cfg.MODEL_ALL.ViT_baseline.if_share_decoder_over_BRDF_modalities:
+                input_dict_extra['shared_BRDF_decoder_outputs'] = forward_vit_ViT_decoder(
+                    self.opt, self.opt.cfg.MODEL_LIGHT.DPT_baseline, self._.shared_BRDF_decoder, 
+                    input_dict_extra['shared_encoder_outputs'][0])
 
         output_dict = {}
         for modality in self.modalities_stage1:

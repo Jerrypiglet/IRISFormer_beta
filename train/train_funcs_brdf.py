@@ -22,16 +22,17 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
     input_dict['imBatch'] = im_cpu.cuda(non_blocking=True).contiguous()
     # print(torch.max(input_dict['imBatch']), torch.min(input_dict['imBatch']), '+++')
 
-    input_dict['brdf_loss_mask'] = data_batch['brdf_loss_mask'].cuda(non_blocking=True).contiguous()
+    input_dict['brdf_loss_mask'] = data_batch['brdf_loss_mask'].cuda(non_blocking=True)
+    input_dict['pad_mask'] = data_batch['pad_mask'].cuda(non_blocking=True)
+    input_dict['frame_info'] = data_batch['frame_info']
     if opt.cfg.DEBUG.if_test_real:
-        input_dict['pad_mask'] = data_batch['pad_mask'].cuda(non_blocking=True).contiguous()
         input_dict['im_h_resized_to'] = data_batch['im_h_resized_to']
         input_dict['im_w_resized_to'] = data_batch['im_w_resized_to']
 
-    if_load_mask = opt.cfg.DATA.load_brdf_gt and (not opt.cfg.DATASET.if_no_gt_BRDF)
+    if_load_mask = (opt.cfg.DATA.load_brdf_gt or opt.cfg.DEBUG.if_load_dump_BRDF_offline) and (not opt.cfg.DATASET.if_no_gt_BRDF)
     # if_load_mask = opt.cfg.DATASET.if_no_gt_BRDF
 
-    if opt.cfg.DATA.load_brdf_gt:
+    if opt.cfg.DATA.load_brdf_gt or opt.cfg.DEBUG.if_load_dump_BRDF_offline:
         # Load data from cpu to gpu
         if 'al' in opt.cfg.DATA.data_read_list:
             albedo_cpu = data_batch['albedo']
