@@ -264,6 +264,9 @@ model.print_net()
 optimizer = optim.Adam(model.parameters(), lr=cfg.SOLVER.lr)
 if opt.cfg.SOLVER.method == 'adamw':
     optimizer = optim.AdamW(model.parameters(), lr=cfg.SOLVER.lr, weight_decay=0.01)
+if opt.cfg.SOLVER.method == 'zhengqin-lightnet':
+    lr_scale = 1.
+    optimizer = optim.Adam(model.parameters(), lr=1e-4 * lr_scale, betas=(0.5, 0.999) )
 
 # optimizer = optim.Adam(model.parameters(), lr=cfg.SOLVER.lr, betas=(0.5, 0.999) )
 if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:

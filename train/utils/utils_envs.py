@@ -20,6 +20,8 @@ def set_up_envs(opt):
     CLUSTER_ID = opt.cfg.PATH.cluster_names.index(opt.cluster)
     opt.if_pad = False
 
+    assert opt.cfg.SOLVER.method in ['adam', 'adamw', 'zhengqin-lightnet']
+
 
     opt.cfg.PATH.root = opt.cfg.PATH.root_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.PATH.root_local
     if opt.if_cluster:
@@ -36,7 +38,7 @@ def set_up_envs(opt):
 
     if opt.cfg.DEBUG.if_fast_BRDF_labels:
         opt.cfg.DATASET.dataset_path_local = opt.cfg.DATASET.dataset_path_local_fast_BRDF
-        
+
     # if opt.cfg.DEBUG.if_fast_light_labels:
     opt.cfg.DEBUG.dump_BRDF_offline.path_root = opt.cfg.DEBUG.dump_BRDF_offline.path_root_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DEBUG.dump_BRDF_offline.path_root_local
     opt.cfg.DEBUG.dump_BRDF_offline.path_task = str(Path(opt.cfg.DEBUG.dump_BRDF_offline.path_root) / opt.cfg.DEBUG.dump_BRDF_offline.task_name)
@@ -217,7 +219,7 @@ def set_up_envs(opt):
         opt.cfg.MODEL_BRDF.enable_list = [x for x in opt.cfg.MODEL_BRDF.enable_list.split('_') if x != '']
     opt.cfg.MODEL_BRDF.loss_list = [x for x in opt.cfg.MODEL_BRDF.loss_list.split('_') if x != '']
 
-    assert opt.cfg.MODEL_BRDF.depth_activation in ['sigmoid', 'relu', 'midas']
+    assert opt.cfg.MODEL_BRDF.depth_activation in ['sigmoid', 'relu', 'tanh', 'midas']
     assert opt.cfg.MODEL_BRDF.loss.depth.if_use_midas_loss or opt.cfg.MODEL_BRDF.loss.depth.if_use_Zhengqin_loss
     assert not(opt.cfg.MODEL_BRDF.loss.depth.if_use_midas_loss and opt.cfg.MODEL_BRDF.loss.depth.if_use_Zhengqin_loss)
     
@@ -498,6 +500,7 @@ def set_up_envs(opt):
     # if opt.cfg.SOLVER.if_test_dataloader:
     #     opt.cfg.SOLVER.max_epoch = 10
     opt.cfg.PATH.pretrained_path = opt.cfg.PATH.pretrained_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.PATH.pretrained_local
+    opt.cfg.PATH.models_ckpt_path = opt.cfg.PATH.models_ckpt_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.PATH.models_ckpt_local
 
     # dump
     if opt.cfg.DEBUG.if_dump_shadow_renderer:

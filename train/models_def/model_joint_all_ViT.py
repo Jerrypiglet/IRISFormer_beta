@@ -210,7 +210,6 @@ class Model_Joint_ViT(nn.Module):
         return return_dict
 
 
-
     def forward_light(self, input_dict, return_dict_brdf={}):
         im_h, im_w = self.cfg.DATA.im_height, self.cfg.DATA.im_width
 
@@ -264,11 +263,11 @@ class Model_Joint_ViT(nn.Module):
         roughInput = roughInput * pad_mask
         
 
-        if self.opt.is_master:
-            print(torch.max(albedoInput), torch.min(albedoInput), torch.mean(albedoInput), torch.median(albedoInput))
-            print(torch.max(depthInput), torch.min(depthInput), torch.mean(depthInput), torch.median(depthInput))
-            print(torch.max(normalInput), torch.min(normalInput), torch.mean(normalInput), torch.median(normalInput))
-            print(torch.max(roughInput), torch.min(roughInput), torch.mean(roughInput), torch.median(roughInput))
+        # if self.opt.is_master:
+        #     print(torch.max(albedoInput), torch.min(albedoInput), torch.mean(albedoInput), torch.median(albedoInput))
+        #     print(torch.max(depthInput), torch.min(depthInput), torch.mean(depthInput), torch.median(depthInput))
+        #     print(torch.max(normalInput), torch.min(normalInput), torch.mean(normalInput), torch.median(normalInput))
+        #     print(torch.max(roughInput), torch.min(roughInput), torch.mean(roughInput), torch.median(roughInput))
         
         x_stage1 = torch.cat([imBatch, albedoInput, normalInput, roughInput, depthInput ], dim=1 ).detach()
 

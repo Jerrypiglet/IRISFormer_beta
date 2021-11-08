@@ -51,6 +51,9 @@ _C.PATH.OR4X_mapping_catStr_to_RGB = ['data/openrooms/total3D_colors/OR4X_mappin
 _C.PATH.pretrained_path = ''
 _C.PATH.pretrained_local = '/home/ruizhu/Documents/Projects/semanticInverse/pretrained'
 _C.PATH.pretrained_cluster = ['/ruidata/semanticInverse/pretrained', '/home/ruzhu/Documents/Projects/semanticInverse/pretrained', '/newfoundland/semanticInverse/pretrained/']
+_C.PATH.models_ckpt_path = ''
+_C.PATH.models_ckpt_local = '/home/ruizhu/Documents/Projects/semanticInverse/models_ckpt'
+_C.PATH.models_ckpt_cluster = ['/ruidata/semanticInverse/models_ckpt', '', '']
 
 # ===== debug
 
@@ -270,11 +273,13 @@ _C.MODEL_BRDF.enable_BRDF_decoders = False
 _C.MODEL_BRDF.enable_semseg_decoder = False
 _C.MODEL_BRDF.semseg_PPM = True
 
-# _C.MODEL_BRDF.pretrained_pth_name = 'check_cascade0_w320_h240/%s0_13.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
-_C.MODEL_BRDF.pretrained_pth_name = 'checkBs_cascade0_w320_h240/%s0_14_1000.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
+_C.MODEL_BRDF.pretrained_pth_name_BRDF_cascade0 = 'check_cascade0_w320_h240/%s0_13.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
+_C.MODEL_BRDF.pretrained_pth_name_Bs_cascade0 = 'checkBs_cascade0_w320_h240/%s0_14_1000.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
+# _C.MODEL_BRDF.pretrained_pth_name = 'checkBs_cascade0_w320_h240/%s0_14_1000.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
+# _C.MODEL_BRDF.pretrained_pth_name = 'checkBs_cascade0_w320_h240/%s0_14_1000.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
 _C.MODEL_BRDF.pretrained_if_load_encoder = True
 _C.MODEL_BRDF.pretrained_if_load_decoder = True
-_C.MODEL_BRDF.pretrained_if_load_Bs = True
+_C.MODEL_BRDF.pretrained_if_load_Bs = False
 
 _C.MODEL_BRDF.encoder_exclude = '' # e.g. 'x4_x5
 _C.MODEL_BRDF.use_scale_aware_albedo = True # [default: False] set to False to use **scale-invariant** loss for albedo
@@ -433,7 +438,7 @@ _C.MODEL_LIGHT.use_GT_light_sg = False
 _C.MODEL_LIGHT.load_pretrained_MODEL_BRDF = False
 _C.MODEL_LIGHT.load_pretrained_MODEL_LIGHT = False
 _C.MODEL_LIGHT.freeze_BRDF_Net = False
-_C.MODEL_LIGHT.pretrained_pth_name = 'check_cascadeLight0_sg12_offset1.0/%s0_9.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
+_C.MODEL_LIGHT.pretrained_pth_name_cascade0 = 'check_cascadeLight0_sg12_offset1.0/%s0_9.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
 _C.MODEL_LIGHT.use_scale_aware_loss = False
 _C.MODEL_LIGHT.if_transform_to_LightNet_coords = False # if transform pred lighting to global LightNet coords
 _C.MODEL_LIGHT.enable_list = 'axis_lamb_weight'

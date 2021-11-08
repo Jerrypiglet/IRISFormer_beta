@@ -366,7 +366,7 @@ class Model_Joint(nn.Module):
 
 
         if self.cfg.MODEL_LIGHT.load_pretrained_MODEL_BRDF:
-            self.load_pretrained_MODEL_BRDF(self.cfg.MODEL_BRDF.pretrained_pth_name, if_load_encoder=self.cfg.MODEL_BRDF.pretrained_if_load_encoder, if_load_decoder=self.cfg.MODEL_BRDF.pretrained_if_load_decoder, if_load_Bs=self.cfg.MODEL_BRDF.pretrained_if_load_Bs)
+            self.load_pretrained_MODEL_BRDF(if_load_encoder=self.cfg.MODEL_BRDF.pretrained_if_load_encoder, if_load_decoder=self.cfg.MODEL_BRDF.pretrained_if_load_decoder, if_load_Bs=self.cfg.MODEL_BRDF.pretrained_if_load_Bs)
 
         if self.cfg.MODEL_LIGHT.enable:
             if self.cfg.MODEL_LIGHT.DPT_baseline.enable:
@@ -436,7 +436,7 @@ class Model_Joint(nn.Module):
 
 
             if self.cfg.MODEL_LIGHT.load_pretrained_MODEL_LIGHT:
-                self.load_pretrained_MODEL_LIGHT(self.cfg.MODEL_LIGHT.pretrained_pth_name)
+                self.load_pretrained_MODEL_LIGHT()
         
         if self.cfg.MODEL_LAYOUT_EMITTER.enable:
 
@@ -1222,6 +1222,11 @@ class Model_Joint(nn.Module):
         # depthInput = depthInput.view(bn, -1)
         # depthInput = depthInput / torch.clamp(torch.mean(depthInput, dim=1), min=1e-10).unsqueeze(1) / 3.0
         # depthInput = depthInput.view(bn, ch, nrow, ncol)
+        
+        print(albedoInput.shape, torch.max(albedoInput), torch.min(albedoInput), torch.median(albedoInput))
+        print(depthInput.shape, torch.max(depthInput), torch.min(depthInput), torch.median(depthInput))
+        print(normalInput.shape, torch.max(normalInput), torch.min(normalInput), torch.median(normalInput))
+        print(roughInput.shape, torch.max(roughInput), torch.min(roughInput), torch.median(roughInput))
 
         im_h, im_w = self.cfg.DATA.im_height, self.cfg.DATA.im_width
         assert self.cfg.DATA.pad_option == 'const'
@@ -1400,6 +1405,10 @@ class Model_Joint(nn.Module):
 
         if 'de' in self.cfg.MODEL_BRDF.enable_list and not self.cfg.MODEL_LIGHT.use_GT_brdf:
             depthInput = return_dict_brdf['depthPred'].detach().clone()
+            # print('-', depthInput.shape, torch.max(depthInput), torch.min(depthInput), torch.median(depthInput))
+            if self.cfg.MODEL_BRDF.depth_activation == 'tanh':
+                depthInput = 0.5 * (depthInput + 1) # [-1, 1] -> [0, 1]
+            # print('->', depthInput.shape, torch.max(depthInput), torch.min(depthInput), torch.median(depthInput))
         else:
             depthInput = input_dict['depthBatch'].detach().clone()
 
@@ -1418,6 +1427,8 @@ class Model_Joint(nn.Module):
 
         if self.cfg.MODEL_LIGHT.freeze_BRDF_Net and not self.cfg.MODEL_LIGHT.use_GT_brdf:
             assert self.BRDF_Net.training == False
+
+
 
         if self.cfg.MODEL_LIGHT.DPT_baseline.enable:
             axisPred_ori, lambPred_ori, weightPred_ori = self.forward_LIGHT_Net_DPT_baseline(input_dict, imBatch, albedoInput, depthInput, normalInput, roughInput)
@@ -1745,12 +1756,13 @@ class Model_Joint(nn.Module):
         self.logger.info(magenta('---> ALL %d params; %d trainable'%(len(list(self.named_parameters())), count_grads)))
         return count_grads
 
-    def load_pretrained_MODEL_BRDF(self, pretrained_pth_name='check_cascade0_w320_h240', if_load_encoder=True, if_load_decoder=True, if_load_Bs=True):
-        if self.opt.if_cluster:
-            pretrained_path = '/viscompfs/users/ruizhu/models_ckpt/' + pretrained_pth_name
-        else:
-            pretrained_path = '/home/ruizhu/Documents/Projects/semanticInverse/models_ckpt/' + pretrained_pth_name
-        loaded_strings = []
+    def load_pretrained_MODEL_BRDF(self, if_load_encoder=True, if_load_decoder=True, if_load_Bs=True):
+        # if self.opt.if_cluster:
+        #     pretrained_path_root = Path('/viscompfs/users/ruizhu/models_ckpt/')
+        # else:
+        #     pretrained_path_root = Path('/home/ruizhu/Documents/Projects/semanticInverse/models_ckpt/')
+        pretrained_path_root = Path(self.opt.cfg.PATH.models_ckpt_path)
+        # loaded_strings = []
         module_names = []
         if if_load_encoder:
             module_names.append('encoder')    
@@ -1772,31 +1784,39 @@ class Model_Joint(nn.Module):
             'roughBs': 'roughBs', 
             'depthBs': 'depBsth'
         }
+        pretrained_pth_name_dict = {
+            'encoder': self.opt.cfg.MODEL_BRDF.pretrained_pth_name_BRDF_cascade0, 
+            'albedoDecoder': self.opt.cfg.MODEL_BRDF.pretrained_pth_name_BRDF_cascade0, 
+            'normalDecoder': self.opt.cfg.MODEL_BRDF.pretrained_pth_name_BRDF_cascade0, 
+            'roughDecoder': self.opt.cfg.MODEL_BRDF.pretrained_pth_name_BRDF_cascade0, 
+            'depthDecoder': self.opt.cfg.MODEL_BRDF.pretrained_pth_name_BRDF_cascade0, 
+            'albedoBs': self.opt.cfg.MODEL_BRDF.pretrained_pth_name_Bs_cascade0, 
+            'normalBs': self.opt.cfg.MODEL_BRDF.pretrained_pth_name_Bs_cascade0, 
+            'roughBs': self.opt.cfg.MODEL_BRDF.pretrained_pth_name_Bs_cascade0, 
+            'depthBs':self.opt.cfg.MODEL_BRDF.pretrained_pth_name_Bs_cascade0
+        }
         for module_name in module_names:
             saved_name = saved_names_dict[module_name]
-            pickle_path = pretrained_path % saved_name
+            pickle_path = str(pretrained_path_root / pretrained_pth_name_dict[module_name]) % saved_name
             print('Loading ' + pickle_path)
             self.BRDF_Net[module_name].load_state_dict(
                 torch.load(pickle_path).state_dict())
-            loaded_strings.append(saved_name)
+            # loaded_strings.append(saved_name)
 
-        self.logger.info(magenta('Loaded pretrained BRDF from %s: %s'%(pretrained_pth_name, '+'.join(loaded_strings))))
+            self.logger.info(magenta('Loaded pretrained BRDFNet-%s from %s'%(module_name, pickle_path)))
     
-    def load_pretrained_MODEL_LIGHT(self, pretrained_pth_name='check_cascadeLight0_sg12_offset1.0'):
-        if self.opt.if_cluster:
-            pretrained_path = '/viscompfs/users/ruizhu/models_ckpt/' + pretrained_pth_name
-        else:
-            pretrained_path = '/home/ruizhu/Documents/Projects/semanticInverse/models_ckpt/' + pretrained_pth_name
+    def load_pretrained_MODEL_LIGHT(self):
+        pretrained_path_root = Path(self.opt.cfg.PATH.models_ckpt_path)
         loaded_strings = []
         for saved_name in ['lightEncoder', 'axisDecoder', 'lambDecoder', 'weightDecoder', ]:
             # pickle_path = '{0}/{1}{2}_{3}.pth'.format(pretrained_path, saved_name, cascadeLevel, epochIdFineTune) 
-            pickle_path = pretrained_path % saved_name
+            pickle_path = str(pretrained_path_root / self.opt.cfg.MODEL_LIGHT.pretrained_pth_name_cascade0) % saved_name
             print('Loading ' + pickle_path)
             self.LIGHT_Net[saved_name].load_state_dict(
                 torch.load(pickle_path).state_dict())
             loaded_strings.append(saved_name)
 
-        self.logger.info(magenta('Loaded pretrained LIGHT from %s: %s'%(pretrained_pth_name, '+'.join(loaded_strings))))
+            self.logger.info(magenta('Loaded pretrained LightNet-%s from %s'%(saved_name, pickle_path)))
 
     def load_pretrained_semseg(self):
         # self.print_net()
