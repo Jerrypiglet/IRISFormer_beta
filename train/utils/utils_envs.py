@@ -69,6 +69,7 @@ def set_up_envs(opt):
 
     opt.cfg.DATASET.swin_path = opt.cfg.DATASET.swin_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.swin_path_local
     opt.cfg.DATASET.iiw_path = opt.cfg.DATASET.iiw_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.iiw_path_local
+    opt.cfg.DATASET.nyud_path = opt.cfg.DATASET.nyud_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.nyud_path_local
 
     if opt.data_root is not None:
         opt.cfg.DATASET.dataset_path = opt.data_root
@@ -145,15 +146,23 @@ def set_up_envs(opt):
             opt.pad_op = transform.Pad([im_height_pad_to, im_width_pad_to], padding_with=im_pad_with, pad_option=pad_option)
         else:
             opt.pad_op = None
-        opt.cfg.DATA.im_width_padded = im_width_pad_to
-        opt.cfg.DATA.im_height_padded = im_height_pad_to
+        opt.cfg.DATA.im_width_padded_to = im_width_pad_to
+        opt.cfg.DATA.im_height_padded_to = im_height_pad_to
 
-        if not opt.cfg.DEBUG.if_iiw: # if True, should pad indeptly for each sample
-            im_width_pad_to = int(np.ceil(opt.cfg.DATA.iiw.im_width/32.)*32) # 512
-            im_height_pad_to = int(np.ceil(opt.cfg.DATA.iiw.im_height/32.)*32) # 342 -> 352
-            opt.pad_op_iiw = transform.Pad([im_height_pad_to, im_width_pad_to], padding_with=im_pad_with, pad_option=pad_option)
+        # if not opt.cfg.DEBUG.if_iiw: # if True, should pad indeptly for each sample
+        #     im_width_pad_to = int(np.ceil(opt.cfg.DATA.iiw.im_width/32.)*32) # 512
+        #     im_height_pad_to = int(np.ceil(opt.cfg.DATA.iiw.im_height/32.)*32) # 342 -> 352
+        #     opt.pad_op_iiw = transform.Pad([im_height_pad_to, im_width_pad_to], padding_with=im_pad_with, pad_option=pad_option)
+        # else:
+        #     opt.pad_op_iiw = None
+
+        if opt.cfg.DEBUG.if_nyud: # if True, should pad indeptly for each sample
+            im_width_pad_to = int(np.ceil(opt.cfg.DATA.im_width/32.)*32) # 320
+            im_height_pad_to = int(np.ceil(opt.cfg.DATA.im_height/32.)*32) # 256
+            opt.pad_op_nyud = transform.Pad([im_height_pad_to, im_width_pad_to], padding_with=im_pad_with, pad_option=pad_option)
         else:
-            opt.pad_op_iiw = None
+            opt.pad_op_nyud = None
+
     if opt.cfg.DATA.if_resize_to_32x:
         im_width_resize_to = int(np.ceil(opt.cfg.DATA.im_width/32.)*32)
         im_height_resize_to = int(np.ceil(opt.cfg.DATA.im_height/32.)*32)

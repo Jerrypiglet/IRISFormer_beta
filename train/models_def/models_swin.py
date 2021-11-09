@@ -22,7 +22,7 @@ class Swin(torch.nn.Module):
 
         self.cfg_DPT = cfg_DPT
 
-        self.backbone = SwinTransformer(in_chans=in_channels, pretrain_img_size=(opt.cfg.DATA.im_height_padded, opt.cfg.DATA.im_width_padded), patch_size=patch_size)
+        self.backbone = SwinTransformer(in_chans=in_channels, pretrain_img_size=(opt.cfg.DATA.im_height_padded_to, opt.cfg.DATA.im_width_padded_to), patch_size=patch_size)
         if if_batch_norm:
             norm_cfg = dict(type='SyncBN' if opt.distributed else 'BN', requires_grad=True)
         else:

@@ -97,12 +97,13 @@ class iiw(data.Dataset):
         self.logger = logger
         # self.target_hw = (cfg.DATA.im_height, cfg.DATA.im_width) # if split in ['train', 'val', 'test'] else (args.test_h, args.test_w)
         self.im_width, self.im_height = self.cfg.DATA.iiw.im_width, self.cfg.DATA.iiw.im_height
-        self.im_height_padded, self.im_width_padded = self.cfg.DATA.iiw.im_height_padded, self.cfg.DATA.iiw.im_width_padded
+        self.im_height_padded, self.im_width_padded = self.cfg.DATA.iiw.im_height_padded_to, self.cfg.DATA.iiw.im_width_padded_to
 
         self.if_extra_op = False
         if opt.cfg.DATA.if_pad_to_32x:
-            self.extra_op = opt.pad_op_iiw
-            self.if_extra_op = True
+            assert Falsae
+            # self.extra_op = opt.pad_op_iiw
+            # self.if_extra_op = True
         elif opt.cfg.DATA.if_resize_to_32x:
             # self.extra_op = opt.resize_op
             # self.if_extra_op = True
@@ -145,7 +146,7 @@ class iiw(data.Dataset):
             im_w_resized_to = self.im_width_padded
             im_h_resized_to = int(float(im_h) / float(im_w) * im_w_resized_to)
             assert im_h_resized_to <= self.im_height_padded
-            pad_mask[:im_w_resized_to, :] = 1
+            pad_mask[:im_h_resized_to, :] = 1
 
             # rs, re = 0, im_h_resized_to
             # cs, ce = 0, im_w_resized_to
@@ -157,7 +158,7 @@ class iiw(data.Dataset):
             im_h_resized_to = self.im_height_padded
             im_w_resized_to = int(float(im_w) / float(im_h) * im_h_resized_to)
             assert im_w_resized_to <= self.im_width_padded
-            pad_mask[:im_w_resized_to, :] = 1
+            pad_mask[:, :im_w_resized_to] = 1
 
             # rs, re = 0, self.im_height_padded
             # gap = im_w_resized_to - self.im_width_padded
@@ -185,7 +186,6 @@ class iiw(data.Dataset):
         im_trainval = torch.from_numpy(im_fixedscale_HDR) # channel first for training
         im_trainval_SDR = torch.from_numpy(im_fixedscale_SDR)
         im_fixedscale_SDR = torch.from_numpy(im_fixedscale_SDR)
-
 
         batch_dict.update({'image_path': str(png_image_path), 'pad_mask': pad_mask, 'brdf_loss_mask': pad_mask})
         batch_dict.update({'im_w_resized_to': im_w_resized_to, 'im_h_resized_to': im_h_resized_to})

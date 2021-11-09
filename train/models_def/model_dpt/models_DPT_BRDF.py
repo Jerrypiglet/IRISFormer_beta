@@ -68,7 +68,7 @@ class DPTBRDFModel(Transformer_Hybrid_Encoder_Decoder):
 
         self.pretrained = _make_pretrained(
             cfg_DPT=cfg_DPT, 
-            size=[opt.cfg.DATA.im_height_padded, opt.cfg.DATA.im_width_padded],
+            size=[opt.cfg.DATA.im_height_padded_to, opt.cfg.DATA.im_width_padded_to],
             features=[256, 512, 768, 768],
             use_readout=DPT_readout,
         )
@@ -77,8 +77,8 @@ class DPTBRDFModel(Transformer_Hybrid_Encoder_Decoder):
                 2,
                 torch.Size(
                     [
-                        opt.cfg.DATA.im_height_padded // cfg_DPT.patch_size,
-                        opt.cfg.DATA.im_width_padded // cfg_DPT.patch_size,
+                        opt.cfg.DATA.im_height_padded_to // cfg_DPT.patch_size,
+                        opt.cfg.DATA.im_width_padded_to // cfg_DPT.patch_size,
                     ]
                 ),
             )

@@ -63,6 +63,7 @@ _C.DEBUG.if_fast_light_labels = True
 _C.DEBUG.if_dump_anything = False
 _C.DEBUG.if_test_real = False
 _C.DEBUG.if_iiw = False
+_C.DEBUG.if_nyud = False
 _C.DEBUG.if_dump_shadow_renderer = False
 _C.DEBUG.if_dump_perframe_BRDF = False
 
@@ -96,6 +97,11 @@ _C.DATASET.iiw_path = ''
 _C.DATASET.iiw_path_local = '/ruidata/iiw-dataset/data'
 _C.DATASET.iiw_path_cluster = ['', '', '']
 _C.DATASET.iiw_list_path = 'data/iiw/list'
+
+_C.DATASET.nyud_path = ''
+_C.DATASET.nyud_path_local = '/data/ruizhu/NYU'
+_C.DATASET.nyud_path_cluster = ['', '', '']
+_C.DATASET.nyud_list_path = 'data/nyud/list'
 
 _C.DATASET.dataset_path_binary_local = '/newfoundland2/ruizhu/ORfull-seq-240x320'
 # _C.DATASET.dataset_path_binary_local = '/newfoundland2/ruizhu/ORfull-seq-240x320-albedoInOneFile'
@@ -199,8 +205,8 @@ _C.DATA.if_also_load_next_frame = False # load next frame (only png supported) i
 _C.DATA.if_augment_train = False
 _C.DATA.im_height = 240
 _C.DATA.im_width = 320
-_C.DATA.im_height_padded = 256
-_C.DATA.im_width_padded = 320
+_C.DATA.im_height_padded_to = 256
+_C.DATA.im_width_padded_to = 320
 _C.DATA.im_height_ori = 480
 _C.DATA.im_width_ori = 640
 _C.DATA.if_pad_to_32x = False # if pad both height and width to multplicative of 32 (for DPT)
@@ -222,11 +228,16 @@ _C.DATA.load_cam_pose = False
 _C.DATA.iiw = CN()
 _C.DATA.iiw.im_height = 341
 _C.DATA.iiw.im_width = 512
-# _C.DATA.iiw.im_height_padded = 352
-# _C.DATA.iiw.im_width_padded = 512
-_C.DATA.iiw.im_height_padded = 256
-_C.DATA.iiw.im_width_padded = 320
+# _C.DATA.iiw.im_height_padded_to = 352
+# _C.DATA.iiw.im_width_padded_to = 512
+_C.DATA.iiw.im_height_padded_to = 256
+_C.DATA.iiw.im_width_padded_to = 320
 
+_C.DATA.nyud = CN()
+_C.DATA.nyud.im_height = 480
+_C.DATA.nyud.im_width = 640
+_C.DATA.nyud.im_height_padded_to = 256
+_C.DATA.nyud.im_width_padded_to = 320
 
 # ===== GMM
 _C.MODEL_GMM = CN()
@@ -290,7 +301,7 @@ _C.MODEL_BRDF.loss.if_use_reg_loss_albedo = False
 _C.MODEL_BRDF.loss.reg_loss_albedo_weight = 0.5
 
 _C.MODEL_BRDF.use_scale_aware_depth = True
-_C.MODEL_BRDF.depth_activation = 'relu'
+_C.MODEL_BRDF.depth_activation = 'tanh'
 _C.MODEL_BRDF.loss.depth = CN() # ONLY works for MODEL_ALL (DPT) for now
 _C.MODEL_BRDF.loss.depth.if_use_midas_loss = False # DPT: scale-invariant loss on inv depth; relu
 _C.MODEL_BRDF.loss.depth.if_use_paper_loss = False # log(depth+0.001) instead of log(depth+1)
@@ -341,7 +352,6 @@ _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels = 768
 
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.depth = CN()
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.depth.activation = 'tanh'
-
 
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA = CN()
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA = False # use Cross Attention instead of assembling

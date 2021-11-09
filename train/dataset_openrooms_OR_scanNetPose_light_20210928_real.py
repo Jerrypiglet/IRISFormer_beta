@@ -84,7 +84,7 @@ class openrooms(data.Dataset):
         self.logger = logger
         # self.target_hw = (cfg.DATA.im_height, cfg.DATA.im_width) # if split in ['train', 'val', 'test'] else (args.test_h, args.test_w)
         self.im_width, self.im_height = self.cfg.DATA.im_width, self.cfg.DATA.im_height
-        self.im_height_padded, self.im_width_padded = self.cfg.DATA.im_height_padded, self.cfg.DATA.im_width_padded
+        self.im_height_padded, self.im_width_padded = self.cfg.DATA.im_height_padded_to, self.cfg.DATA.im_width_padded_to
 
         self.OR = self.cfg.MODEL_LAYOUT_EMITTER.data.OR
         self.OR_classes = OR4XCLASSES_dict[self.OR]

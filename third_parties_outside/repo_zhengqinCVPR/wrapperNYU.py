@@ -111,11 +111,11 @@ def wrapperNYU(dataBatch, opt,
     angleMean = torch.sum(torch.acos( torch.clamp(torch.sum(normalPred * normalBatch, dim=1).unsqueeze(1), -1, 1) ) / np.pi * 180 * segNormalBatch) / pixelAllNumNormal
 
 
-    normalPred_np = normalPred.data.cpu().numpy()
-    normalBatch_np = normalBatch.data.cpu().numpy()
-    segNormalBatch_np = segNormalBatch.cpu().numpy()
-    theta = np.arccos( np.clip(np.sum(normalPred_np * normalBatch_np, axis=1)[:, np.newaxis, :, :], -1, 1) ) / np.pi * 180
-    angleMean_np = (theta * segNormalBatch_np ) / pixelAllNumNormal
+    # normalPred_np = normalPred.data.cpu().numpy()
+    # normalBatch_np = normalBatch.data.cpu().numpy()
+    # segNormalBatch_np = segNormalBatch.cpu().numpy()
+    # theta = np.arccos( np.clip(np.sum(normalPred_np * normalBatch_np, axis=1)[:, np.newaxis, :, :], -1, 1) ) / np.pi * 180
+    # angleMean_np = (theta * segNormalBatch_np ) / pixelAllNumNormal
 
     return [albedoPred, None], [normalPred, normalErr, angleMean], \
             [roughPred, None ], [depthPred, depthErr], \

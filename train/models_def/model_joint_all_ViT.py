@@ -135,6 +135,7 @@ class Model_Joint_ViT(nn.Module):
         if self.if_BRDF:
             # assert self.opt.cfg.MODEL_ALL.ViT_baseline.if_share_encoder_over_modalities_stage0
             x_stage0 = input_dict['input_batch_brdf']
+            # ic(x_stage0.shape)
             return_dict_brdf = self.forward_brdf(x_stage0, input_dict, if_has_gt_BRDF=if_has_gt_BRDF)
             output_dict.update(return_dict_brdf)
         else:
@@ -382,7 +383,7 @@ class Model_Joint_ViT(nn.Module):
         assert imBatch.shape[0]==1
 
         im_h, im_w = input_dict['im_h_resized_to'], input_dict['im_w_resized_to']
-        # im_h, im_w = self.cfg.DATA.im_height_padded, self.cfg.DATA.im_width_padded
+        # im_h, im_w = self.cfg.DATA.im_height_padded_to, self.cfg.DATA.im_width_padded_to
         im_h = im_h//2*2
         im_w = im_w//2*2
 
@@ -584,6 +585,22 @@ class Model_Joint_ViT(nn.Module):
         if 'de' in self.modalities_stage0:
             self.turn_on_names(['_.de'], if_print=if_print)
             unfreeze_bn_in_module(self.MODEL_ALL._['de'], if_print=if_print)
+        if 'ro' in self.modalities_stage0:
+            self.turn_on_names(['_.ro'], if_print=if_print)
+            unfreeze_bn_in_module(self.MODEL_ALL._['ro'], if_print=if_print)
+
+    def freeze_BRDF_except_depth_normal(self, if_print=True):
+        if 'al' in self.modalities_stage0:
+            self.turn_off_names(['_.al'], if_print=if_print)
+            freeze_bn_in_module(self.MODEL_ALL._['al'], if_print=if_print)
+        if 'ro' in self.modalities_stage0:
+            self.turn_off_names(['_.ro'], if_print=if_print)
+            freeze_bn_in_module(self.MODEL_ALL._['ro'], if_print=if_print)
+
+    def unfreeze_BRDF_except_depth_normal(self, if_print=True):
+        if 'al' in self.modalities_stage0:
+            self.turn_on_names(['_.al'], if_print=if_print)
+            unfreeze_bn_in_module(self.MODEL_ALL._['al'], if_print=if_print)
         if 'ro' in self.modalities_stage0:
             self.turn_on_names(['_.ro'], if_print=if_print)
             unfreeze_bn_in_module(self.MODEL_ALL._['ro'], if_print=if_print)

@@ -141,7 +141,7 @@ class Model_Joint(nn.Module):
                     # from decode_heads_import import UPerHead
                     # from models_def.model_dpt.blocks import Interpolate
                     # swin_dict = {}
-                    # swin_dict['backbone'] = SwinTransformer(pretrain_img_size=(opt.cfg.DATA.im_height_padded, opt.cfg.DATA.im_width_padded))
+                    # swin_dict['backbone'] = SwinTransformer(pretrain_img_size=(opt.cfg.DATA.im_height_padded_to, opt.cfg.DATA.im_width_padded_to))
                     # swin_dict['decoder'] = UPerHead(
                     #     in_channels=[96, 192, 384, 768],
                     #     in_index=[0, 1, 2, 3],
@@ -1596,7 +1596,7 @@ class Model_Joint(nn.Module):
         assert imBatch.shape[0]==1
 
         im_h, im_w = input_dict['im_h_resized_to'], input_dict['im_w_resized_to']
-        # im_h, im_w = self.cfg.DATA.im_height_padded, self.cfg.DATA.im_width_padded
+        # im_h, im_w = self.cfg.DATA.im_height_padded_to, self.cfg.DATA.im_width_padded_to
         im_h = im_h//2*2
         im_w = im_w//2*2
 
@@ -1901,6 +1901,22 @@ class Model_Joint(nn.Module):
         if 'de' in self.opt.cfg.MODEL_BRDF.enable_list:
             self.turn_on_names(['BRDF_Net.depthDecoder'], if_print=if_print)
             unfreeze_bn_in_module(self.BRDF_Net.depthDecoder, if_print=if_print)
+        if 'ro' in self.opt.cfg.MODEL_BRDF.enable_list:
+            self.turn_on_names(['BRDF_Net.roughDecoder'], if_print=if_print)
+            unfreeze_bn_in_module(self.BRDF_Net.roughDecoder, if_print=if_print)
+
+    def freeze_BRDF_except_depth_normal(self, if_print=True):
+        if 'al' in self.opt.cfg.MODEL_BRDF.enable_list:
+            self.turn_off_names(['BRDF_Net.albedoDecoder'], if_print=if_print)
+            freeze_bn_in_module(self.BRDF_Net.albedoDecoder, if_print=if_print)
+        if 'ro' in self.opt.cfg.MODEL_BRDF.enable_list:
+            self.turn_off_names(['BRDF_Net.roughDecoder'], if_print=if_print)
+            freeze_bn_in_module(self.BRDF_Net.roughDecoder, if_print=if_print)
+
+    def unfreeze_BRDF_except_depth_normal(self, if_print=True):
+        if 'al' in self.opt.cfg.MODEL_BRDF.enable_list:
+            self.turn_on_names(['BRDF_Net.albedoDecoder'], if_print=if_print)
+            unfreeze_bn_in_module(self.BRDF_Net.albedoDecoder, if_print=if_print)
         if 'ro' in self.opt.cfg.MODEL_BRDF.enable_list:
             self.turn_on_names(['BRDF_Net.roughDecoder'], if_print=if_print)
             unfreeze_bn_in_module(self.BRDF_Net.roughDecoder, if_print=if_print)
