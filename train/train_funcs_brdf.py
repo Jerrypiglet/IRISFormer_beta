@@ -24,7 +24,8 @@ def get_labels_dict_brdf(data_batch, opt, return_input_batch_as_list=False):
 
     input_dict['brdf_loss_mask'] = data_batch['brdf_loss_mask'].cuda(non_blocking=True)
     input_dict['pad_mask'] = data_batch['pad_mask'].cuda(non_blocking=True)
-    input_dict['frame_info'] = data_batch['frame_info']
+    if 'frame_info' in input_dict:
+        input_dict['frame_info'] = data_batch['frame_info']
     if opt.cfg.DEBUG.if_test_real:
         input_dict['im_h_resized_to'] = data_batch['im_h_resized_to']
         input_dict['im_w_resized_to'] = data_batch['im_w_resized_to']

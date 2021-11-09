@@ -651,14 +651,16 @@ else:
                     val_params.update({'batch_size_val_vis': batch_size_val_vis, 'detectron_dataset_name': 'vis'})
 
                     with torch.no_grad():
-                        if opt.cfg.DEBUG.if_dump_anything:
-                            dump_joint(brdf_loader_val_vis, model, val_params)
-                        vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
-                    synchronize()                
-
-                    with torch.no_grad():
                         vis_val_epoch_joint_nyud(nyud_loader_val_vis, model, val_params)
                     synchronize()
+
+                    if opt.if_train_OR:
+                        with torch.no_grad():
+                            if opt.cfg.DEBUG.if_dump_anything:
+                                dump_joint(brdf_loader_val_vis, model, val_params)
+                            vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
+                        synchronize()                
+
 
                 if opt.if_val:
                     val_params.update({'brdf_dataset_val': brdf_dataset_val, 'detectron_dataset_name': 'val'})
@@ -668,9 +670,10 @@ else:
                         val_epoch_joint_nyud(nyud_loader_val, model, val_params)
                     synchronize()
 
-                    with torch.no_grad():
-                        val_epoch_joint(brdf_loader_val, model, val_params)
-                    synchronize()
+                    if opt.if_train_OR:
+                        with torch.no_grad():
+                            val_epoch_joint(brdf_loader_val, model, val_params)
+                        synchronize()
 
 
                 model.train(not cfg.MODEL_SEMSEG.fix_bn)
@@ -816,7 +819,7 @@ else:
 
                 optimizer.zero_grad()
 
-                output_dict_nyud, loss_dict = forward_joint_nyud(True, labels_dict_nyud, model, opt, time_meters_nyud, tid=tid)
+                output_dict_nyud, loss_dict = forward_joint_nyud(_, labels_dict_nyud, model, opt, time_meters_nyud, tid=tid)
                 
                 # print('=======loss_dict', loss_dict)
                 loss_dict_reduced = reduce_loss_dict(loss_dict, mark=tid, logger=logger) # **average** over multi GPUs
@@ -842,7 +845,7 @@ else:
 
                 loss.backward()
 
-                if opt.is_master and tid % 5 == 0:
+                if opt.is_master and tid % 50 == 0:
                     params_train_total = 0
                     params_not_train_total = 0
                     for name, param in model.named_parameters():

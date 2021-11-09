@@ -82,7 +82,7 @@ def forward_joint_nyud(is_train, labels_dict, model, opt, time_meters, if_vis=Fa
     # forward model + compute losses
 
     # Forward model
-    output_dict = model(labels_dict, if_has_gt_BRDF=False)
+    output_dict = model(labels_dict, if_has_gt_BRDF=True)
     time_meters['forward'].update(time.time() - time_meters['ts'])
     time_meters['ts'] = time.time()
 

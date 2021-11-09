@@ -79,9 +79,10 @@ def postprocess_nyud(input_dict, output_dict, loss_dict, opt, time_meters, eval_
 
             normalErr = torch.sum( (normalPred - normalBatch)
                 * (normalPred - normalBatch) * segNormalBatch.expand_as(normalBatch) ) / pixelAllNumNormal / 3.0
-
-            print(normalPred.shape, torch.max(normalPred), torch.min(normalPred), torch.median(normalPred))
-            print(normalBatch.shape, torch.max(normalBatch), torch.min(normalBatch), torch.median(normalBatch))
+            
+            # both in [-1, 1]
+            # print(normalPred.shape, torch.max(normalPred), torch.min(normalPred), torch.median(normalPred))
+            # print(normalBatch.shape, torch.max(normalBatch), torch.min(normalBatch), torch.median(normalBatch))
 
             angleMean = torch.sum(torch.acos( torch.clamp(torch.sum(normalPred * normalBatch, dim=1).unsqueeze(1), -1, 1) ) / np.pi * 180 * segNormalBatch) / pixelAllNumNormal
 

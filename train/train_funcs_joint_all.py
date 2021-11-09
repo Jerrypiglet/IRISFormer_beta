@@ -1467,17 +1467,22 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     if opt.cfg.DEBUG.if_test_real:
                         real_sample_dump_path, (real_sample_im_h, real_sample_im_w) = real_sample_dump_path_list[sample_idx]
                         real_sample_env_path = real_sample_dump_path / 'env.npz'
-                        env_save_ = envmapsPredImage[sample_idx_batch].transpose(1, 2, 3, 4, 0) # -> (120, 160, 8, 16, 3)
-                        env_save = np.zeros((env_save_.shape[0]*2, env_save_.shape[1]*2, env_save_.shape[2], env_save_.shape[3], env_save_.shape[4]), dtype=env_save_.dtype)
-                        env_save[::2, ::2] = env_save_
-                        env_save[::2, 1::2] = env_save_
-                        env_save[1::2, 1::2] = env_save_
-                        env_save[1::2, ::2] = env_save_
-                        # Image.fromarray(env_pred_batch_vis_sdr[:real_sample_im_h, :real_sample_im_w]).save(str(real_sample_env_path))
-                        # coefIm = output_dict['coefIm'].detach().cpu().numpy().flatten()[sample_idx_batch]
-                        # print(coefIm)
-                        if opt.is_master:
-                            np.savez(real_sample_env_path, env=env_save)
+                        real_sample_env_path_hdr = real_sample_dump_path / 'env.hdr'
+                        env_save_half = envmapsPredImage[sample_idx_batch].transpose(1, 2, 3, 4, 0) # -> (120, 160, 8, 16, 3); >>> s = 'third_parties_outside/VirtualObjectInsertion/data_/Example1/env.npz' ['env']: (106, 160, 8, 16, 3)
+                        env_save_full = np.zeros((env_save_half.shape[0]*2, env_save_half.shape[1]*2, env_save_half.shape[2], env_save_half.shape[3], env_save_half.shape[4]), dtype=env_save_half.dtype) # (106x2, 160x2, 8, 16, 3) 
+                        # env_save_full[::2, ::2] = env_save_half
+                        # env_save_full[::2, 1::2] = env_save_half
+                        # env_save_full[1::2, 1::2] = env_save_half
+                        # env_save_full[1::2, ::2] = env_save_half
+                        # # if opt.is_master:
+                        # #     np.savez(real_sample_env_path, env=env_save)
+                        # print(env_save_half.shape, env_save_full.shape)
+
+                        # Flip to be conincide with our dataset [ Rui: important...... to fix the blue-ish hue of inserted objects]
+                        np.savez_compressed(real_sample_env_path,
+                            env = np.ascontiguousarray(env_save_half[:, :, :, :, ::-1] ) )
+                        # writeEnvToFile(output_dict['envmapsPredImage'][sample_idx_batch], 0, real_sample_env_path_hdr, nrows=24, ncols=16 )
+
                         I_hdr =envmapsPredImage[sample_idx_batch] * 1000.
                         H_grid, W_grid, h, w = I_hdr.shape[1:]
                         downsize_ratio = 4
@@ -1832,3 +1837,32 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
 
     # synchronize()
     opt.if_vis_debug_pac = False
+
+
+def writeEnvToFile(envmaps, envId, envName, nrows=12, ncols=8, envHeight=8, envWidth=16, gap=1):
+    envmap = envmaps[envId, :, :, :, :, :].data.cpu().numpy()
+    envmap = np.transpose(envmap, [1, 2, 3, 4, 0] )
+    envRow, envCol = envmap.shape[0], envmap.shape[1]
+
+    interY = int(envRow / nrows )
+    interX = int(envCol / ncols )
+
+    lnrows = len(np.arange(0, envRow, interY) )
+    lncols = len(np.arange(0, envCol, interX) )
+
+    lenvHeight = lnrows * (envHeight + gap) + gap
+    lenvWidth = lncols * (envWidth + gap) + gap
+
+    envmapLarge = np.zeros([lenvHeight, lenvWidth, 3], dtype=np.float32) + 1.0
+    for r in range(0, envRow, interY ):
+        for c in range(0, envCol, interX ):
+            rId = int(r / interY )
+            cId = int(c / interX )
+
+            rs = rId * (envHeight + gap )
+            cs = cId * (envWidth + gap )
+            envmapLarge[rs : rs + envHeight, cs : cs + envWidth, :] = envmap[r, c, :, :, :]
+
+    envmapLarge = np.clip(envmapLarge, 0, 1)
+    envmapLarge = (255 * (envmapLarge ** (1.0/2.2) ) ).astype(np.uint8 )
+    cv2.imwrite(envName, envmapLarge[:, :, ::-1] )

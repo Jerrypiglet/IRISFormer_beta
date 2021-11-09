@@ -192,9 +192,17 @@ class Model_Joint_ViT(nn.Module):
                 else:
                     assert False
                 return_dict.update({'depthPred': depthPred})
+                # print(if_has_gt_BRDF)
+                # print((not self.opt.cfg.DATASET.if_no_gt_BRDF), self.load_brdf_gt)
                 if if_has_gt_BRDF:
-                    depthPred_aligned = models_brdf.LSregress(depthPred *  input_dict['segAllBatch'].expand_as(depthPred),
-                            input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
+                    if 'segAllBatch' in input_dict:
+                        depthPred_aligned = models_brdf.LSregress(depthPred.detach() *  input_dict['segAllBatch'].expand_as(depthPred),
+                                input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
+                    elif 'segDepthBatch' in input_dict:
+                        depthPred_aligned = models_brdf.LSregress(depthPred.detach() *  input_dict['segDepthBatch'].expand_as(depthPred),
+                                input_dict['depthBatch'] * input_dict['segDepthBatch'].expand_as(input_dict['depthBatch']), depthPred)
+                    else:
+                        assert False
                     return_dict.update({'depthPred_aligned': depthPred_aligned})
             elif modality == 'ro':
                 roughPred = vit_out
@@ -405,27 +413,35 @@ class Model_Joint_ViT(nn.Module):
         albedoInput[:, :, :im_h, :im_w] = albedoInput[:, :, :im_h, :im_w] / torch.clamp(
                 torch.mean(albedoInput[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
             , min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0
-        albedoInput[:, :, im_h:, :] = 0.
-        albedoInput[:, :, :, im_w:] = 0.
-        albedoInput[:, :, im_h:, im_w:] = 0.
+        albedoInput = albedoInput * pad_mask
+        # albedoInput[:, :, im_h:, :] = 0.
+        # albedoInput[:, :, :, im_w:] = 0.
+        # albedoInput[:, :, im_h:, im_w:] = 0.
 
-        depthInput = torch.clamp(depthInput, 0., self.cfg.MODEL_LIGHT.depth_thres)
+        # print(torch.max(depthInput), torch.min(depthInput), torch.median(depthInput)) # [1, inf]
+        # depthInput = torch.clamp(depthInput, 0., self.cfg.MODEL_LIGHT.depth_thres)
+        # print(torch.mean(depthInput[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True))
         depthInput[:, :, :im_h, :im_w] = depthInput[:, :, :im_h, :im_w] / torch.clamp(
                 torch.mean(depthInput[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
             , min=1e-10).unsqueeze(-1).unsqueeze(-1) / 3.0
-        depthInput[:, :, im_h:, :] = 0.
-        depthInput[:, :, :, im_w:] = 0.
-        depthInput[:, :, im_h:, im_w:] = 0.
+        depthInput = depthInput * pad_mask
+        # print(depthInput.shape, im_h, im_w)
+        # depthInput[:, :, im_h:, :] = 0.
+        # depthInput[:, :, :, im_w:] = 0.
+        # depthInput[:, :, im_h:, im_w:] = 0.
+        # print(torch.max(depthInput), torch.min(depthInput), torch.median(depthInput)) # [1, inf]
 
         normalInput[:, :, :im_h, :im_w] =  0.5 * (normalInput[:, :, :im_h, :im_w] + 1)
-        normalInput[:, :, im_h:, :] = 0.
-        normalInput[:, :, :, im_w:] = 0.
-        normalInput[:, :, im_h:, im_w:] = 0.
+        normalInput = normalInput * pad_mask
+        # normalInput[:, :, im_h:, :] = 0.
+        # normalInput[:, :, :, im_w:] = 0.
+        # normalInput[:, :, im_h:, im_w:] = 0.
 
         roughInput[:, :, :im_h, :im_w] =  0.5 * (roughInput[:, :, :im_h, :im_w] + 1)
-        roughInput[:, :, im_h:, :] = 0.
-        roughInput[:, :, :, im_w:] = 0.
-        roughInput[:, :, im_h:, im_w:] = 0.
+        roughInput = roughInput * pad_mask
+        # roughInput[:, :, im_h:, :] = 0.
+        # roughInput[:, :, :, im_w:] = 0.
+        # roughInput[:, :, im_h:, im_w:] = 0.
         
         x_stage1 = torch.cat([imBatch, albedoInput, normalInput, roughInput, depthInput ], dim=1 ).detach()
 
@@ -448,39 +464,9 @@ class Model_Joint_ViT(nn.Module):
         
         return_dict = {}
 
-        envmapsPredImage, axisPred, lambPred, weightPred = output2env.output2env(axisPred_ori, lambPred_ori, weightPred_ori, if_postprocessing=not self.cfg.MODEL_LIGHT.use_GT_light_sg)
+        envmapsPredImage, axisPred, lambPred, weightPred = output2env.output2env(axisPred_ori, lambPred_ori, weightPred_ori, if_postprocessing=not self.cfg.MODEL_LIGHT.use_GT_light_sg) # all half red
+        # print(axisPred_ori.shape, envmapsPredImage.shape)
 
-        # pixelNum_recon = max( (torch.sum(segEnvBatch ).cpu().data).item(), 1e-5)
-        # if self.cfg.MODEL_LIGHT.use_GT_light_sg:
-        #     envmapsPredScaledImage = envmapsPredImage * (input_dict['hdr_scaleBatch'].flatten().view(-1, 1, 1, 1, 1, 1))
-        #     envmapsPredScaledImage_offset_log_ = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
-        # elif self.cfg.MODEL_LIGHT.use_GT_light_envmap:
-        #     envmapsPredScaledImage = envmapsPredImage # gt envmap already scaled in dataloader
-        #     envmapsPredScaledImage_offset_log_ = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
-        # elif self.cfg.MODEL_LIGHT.use_scale_aware_loss:
-        #     envmapsPredScaledImage = envmapsPredImage # not aligning envmap
-        #     envmapsPredScaledImage_offset_log_ = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
-        # else: # scale-invariant
-        #     if self.cfg.MODEL_LIGHT.if_align_log_envmap:
-        #         envmapsPredScaledImage = models_brdf.LSregress(torch.log(envmapsPredImage + self.cfg.MODEL_LIGHT.offset).detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
-        #             torch.log(input_dict['envmapsBatch'] + self.cfg.MODEL_LIGHT.offset) * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage, 
-        #             if_clamp_coeff=False)
-        #         envmapsPredScaledImage_offset_log_ = models_brdf.LSregress(torch.log(envmapsPredImage + self.cfg.MODEL_LIGHT.offset).detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
-        #             torch.log(input_dict['envmapsBatch'] + self.cfg.MODEL_LIGHT.offset) * segEnvBatch.expand_as(input_dict['envmapsBatch']), torch.log(envmapsPredImage + self.cfg.MODEL_LIGHT.offset), 
-        #             if_clamp_coeff=False)
-        #     else:
-        #         envmapsPredScaledImage = models_brdf.LSregress(envmapsPredImage.detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
-        #             input_dict['envmapsBatch'] * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage, 
-        #             if_clamp_coeff=False)
-        #         envmapsPredScaledImage_offset_log_ = torch.log(envmapsPredScaledImage + self.cfg.MODEL_LIGHT.offset)
-
-        # return_dict.update({'envmapsPredImage': envmapsPredImage, 'envmapsPredScaledImage': envmapsPredScaledImage, 'envmapsPredScaledImage_offset_log_': envmapsPredScaledImage_offset_log_, \
-        #     'segEnvBatch': segEnvBatch, \
-        #     'imBatchSmall': imBatchSmall, 'segBRDFBatchSmall': segBRDFBatchSmall, 'pixelNum_recon': pixelNum_recon}) 
-
-        # # Compute the rendered error
-        # pixelNum_render = max( (torch.sum(segBRDFBatchSmall ).cpu().data).item(), 1e-5 )
-        
         normal_input, rough_input = normalInput, roughInput
         if self.cfg.DATA.if_pad_to_32x:
             normal_input = normal_input[:, :, :im_h, :im_w]
@@ -515,6 +501,8 @@ class Model_Joint_ViT(nn.Module):
             cAlbedo = np.clip(cAlbedo, 1e-3, 1 / axisPred_ori.max().data.item() )
             cLight = cDiff / cAlbedo
         envmapsPredImage = envmapsPredImage * cLight
+        # envmapsPredImage = envmapsPredImage / 5.
+        ic(torch.max(envmapsPredImage), torch.min(envmapsPredImage), torch.mean(envmapsPredImage), torch.median(envmapsPredImage))
         ic(cLight)
 
         return_dict.update({'imBatchSmall': imBatchSmall, 'envmapsPredImage': envmapsPredImage, 'renderedImPred': renderedImPred, 'renderedImPred_sdr': renderedImPred_sdr}) 

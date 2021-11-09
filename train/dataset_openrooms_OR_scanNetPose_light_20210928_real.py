@@ -117,12 +117,12 @@ class openrooms(data.Dataset):
             im_w_resized_to = self.im_width_padded
             im_h_resized_to = int(float(im_h) / float(im_w) * im_w_resized_to)
             assert im_h_resized_to <= self.im_height_padded
-            pad_mask[:im_w_resized_to, :] = 1
+            pad_mask[:im_h_resized_to, :] = 1
         else: # taller
             im_h_resized_to = self.im_height_padded
             im_w_resized_to = int(float(im_w) / float(im_h) * im_h_resized_to)
             assert im_w_resized_to <= self.im_width_padded
-            pad_mask[:im_w_resized_to, :] = 1
+            pad_mask[:, :im_w_resized_to] = 1
 
         im_fixedscale_SDR_uint8 = cv2.resize(im_fixedscale_SDR_uint8, (im_w_resized_to, im_h_resized_to), interpolation = cv2.INTER_AREA )
         # print(im_w_resized_to, im_h_resized_to, im_w, im_h)
