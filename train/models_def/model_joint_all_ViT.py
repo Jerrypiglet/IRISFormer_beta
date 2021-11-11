@@ -142,7 +142,7 @@ class Model_Joint_ViT(nn.Module):
             return_dict_brdf = {}
 
         if self.if_Light:
-            if self.opt.cfg.DATASET.if_no_gt_BRDF:
+            if self.opt.cfg.DEBUG.if_test_real:
                 return_dict_light = self.forward_light_real(input_dict, return_dict_brdf)
             else:
                 return_dict_light = self.forward_light(input_dict, return_dict_brdf)
@@ -166,20 +166,24 @@ class Model_Joint_ViT(nn.Module):
                 albedoPred = 0.5 * (vit_out + 1)
                 albedoPred = torch.clamp(albedoPred, 0, 1)
                 return_dict.update({'albedoPred': albedoPred})
-                if if_has_gt_BRDF:
+                if if_has_gt_BRDF and 'al' in self.opt.cfg.DATA.data_read_list:
                     input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
-                    albedoPred_aligned = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
-                            input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
+                    albedoPred_aligned = models_brdf.LSregress(
+                        albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
+                        input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), 
+                        albedoPred)
                     albedoPred_aligned = torch.clamp(albedoPred_aligned, 0, 1)
                     return_dict.update({'albedoPred_aligned': albedoPred_aligned})
 
                 if self.cfg.MODEL_BRDF.if_bilateral:
                     albedoBsPred, albedoConf = self.BRDF_Net['albedoBs'](input_dict['imBatch'], albedoPred.detach(), albedoPred )
-                    if if_has_gt_BRDF:
-                        albedoBsPred = models_brdf.LSregress(albedoBsPred * input_dict['segBRDFBatch'].expand_as(albedoBsPred ),
-                            input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoBsPred )
+                    if if_has_gt_BRDF and 'al' in self.opt.cfg.DATA.data_read_list:
+                        albedoBsPred = models_brdf.LSregress(
+                            albedoBsPred * input_dict['segBRDFBatch'].expand_as(albedoBsPred ),
+                            input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), 
+                            albedoBsPred )
                     albedoBsPred = torch.clamp(albedoBsPred, 0, 1 )
-                    if if_has_gt_BRDF:
+                    if if_has_gt_BRDF and 'al' in self.opt.cfg.DATA.data_read_list:
                         albedoBsPred = input_dict['segBRDFBatch'] * albedoBsPred
                     return_dict.update({'albedoBsPred': albedoBsPred, 'albedoConf': albedoConf})
 
@@ -194,13 +198,17 @@ class Model_Joint_ViT(nn.Module):
                 return_dict.update({'depthPred': depthPred})
                 # print(if_has_gt_BRDF)
                 # print((not self.opt.cfg.DATASET.if_no_gt_BRDF), self.load_brdf_gt)
-                if if_has_gt_BRDF:
+                if if_has_gt_BRDF and 'de' in self.opt.cfg.DATA.data_read_list:
                     if 'segAllBatch' in input_dict:
-                        depthPred_aligned = models_brdf.LSregress(depthPred.detach() *  input_dict['segAllBatch'].expand_as(depthPred),
-                                input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred)
+                        depthPred_aligned = models_brdf.LSregress(
+                            depthPred.detach() *  input_dict['segAllBatch'].expand_as(depthPred),
+                            input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), 
+                            depthPred)
                     elif 'segDepthBatch' in input_dict:
-                        depthPred_aligned = models_brdf.LSregress(depthPred.detach() *  input_dict['segDepthBatch'].expand_as(depthPred),
-                                input_dict['depthBatch'] * input_dict['segDepthBatch'].expand_as(input_dict['depthBatch']), depthPred)
+                        depthPred_aligned = models_brdf.LSregress(
+                            depthPred.detach() *  input_dict['segDepthBatch'].expand_as(depthPred),
+                            input_dict['depthBatch'] * input_dict['segDepthBatch'].expand_as(input_dict['depthBatch']), 
+                            depthPred)
                     else:
                         assert False
                     return_dict.update({'depthPred_aligned': depthPred_aligned})
@@ -222,30 +230,36 @@ class Model_Joint_ViT(nn.Module):
     def forward_light(self, input_dict, return_dict_brdf={}):
         im_h, im_w = self.cfg.DATA.im_height, self.cfg.DATA.im_width
 
-        # Normalize Albedo and depth
-        if 'al' in self.modalities_stage0 and not self.use_GT_brdf:
-            albedoInput = return_dict_brdf['albedoPred'].detach().clone()
-        else:
-            albedoInput = input_dict['albedoBatch'].detach().clone()
-
-        if 'de' in self.modalities_stage0 and not self.use_GT_brdf:
-            depthInput = return_dict_brdf['depthPred'].detach().clone()
-        else:
-            depthInput = input_dict['depthBatch'].detach().clone()
-
-        if 'no' in self.modalities_stage0 and not self.use_GT_brdf:
-            normalInput = return_dict_brdf['normalPred'].detach().clone()
-        else:
-            normalInput = input_dict['normalBatch'].detach().clone()
-
-        if 'ro' in self.modalities_stage0 and not self.use_GT_brdf:
-            roughInput = return_dict_brdf['roughPred'].detach().clone()
-        else:
-            roughInput = input_dict['roughBatch'].detach().clone()
-
         imBatch = input_dict['imBatch']
         segBRDFBatch = input_dict['segBRDFBatch']
         pad_mask = input_dict['pad_mask'].float().unsqueeze(1)
+
+        # if not self.opt.cfg.MODEL_LIGHT.if_image_only_input:
+        # Normalize Albedo and depth
+        if 'al' in self.modalities_stage0:
+            albedoInput = return_dict_brdf['albedoPred'].detach().clone()
+        else:
+            assert self.use_GT_brdf or self.opt.cfg.MODEL_LIGHT.if_image_only_input
+            albedoInput = input_dict['albedoBatch'].detach().clone()
+
+        if 'de' in self.modalities_stage0:
+            depthInput = return_dict_brdf['depthPred'].detach().clone()
+        else:
+            assert self.use_GT_brdf or self.opt.cfg.MODEL_LIGHT.if_image_only_input
+            depthInput = input_dict['depthBatch'].detach().clone()
+
+        if 'no' in self.modalities_stage0:
+            normalInput = return_dict_brdf['normalPred'].detach().clone()
+        else:
+            assert self.use_GT_brdf or self.opt.cfg.MODEL_LIGHT.if_image_only_input
+            normalInput = input_dict['normalBatch'].detach().clone()
+
+        if 'ro' in self.modalities_stage0:
+            roughInput = return_dict_brdf['roughPred'].detach().clone()
+        else:
+            assert self.use_GT_brdf or self.opt.cfg.MODEL_LIGHT.if_image_only_input
+            roughInput = input_dict['roughBatch'].detach().clone()
+
 
         albedoInput[:, :, :im_h, :im_w] = albedoInput[:, :, :im_h, :im_w] / torch.clamp(
                 torch.mean(albedoInput[:, :, :im_h, :im_w].flatten(1), dim=1, keepdim=True)
@@ -278,7 +292,10 @@ class Model_Joint_ViT(nn.Module):
         #     print(torch.max(normalInput), torch.min(normalInput), torch.mean(normalInput), torch.median(normalInput))
         #     print(torch.max(roughInput), torch.min(roughInput), torch.mean(roughInput), torch.median(roughInput))
         
-        x_stage1 = torch.cat([imBatch, albedoInput, normalInput, roughInput, depthInput ], dim=1 ).detach()
+        if self.opt.cfg.MODEL_LIGHT.if_image_only_input:
+            x_stage1 = imBatch.detach()
+        else:
+            x_stage1 = torch.cat([imBatch, albedoInput, normalInput, roughInput, depthInput ], dim=1 ).detach()
 
         # output_dict_model_all = self.MODEL_ALL.forward_light(x_stage1)
         # print(x_stage1.shape)
@@ -402,10 +419,16 @@ class Model_Joint_ViT(nn.Module):
             envWidth = self.opt.cfg.MODEL_LIGHT.envWidth, envHeight = self.opt.cfg.MODEL_LIGHT.envHeight, SGNum = self.opt.cfg.MODEL_LIGHT.SGNum )
 
         # Normalize Albedo and depth
-        albedoInput = return_dict_brdf['albedoPred'].detach().clone()
-        depthInput = return_dict_brdf['depthPred'].detach().clone()
-        normalInput = return_dict_brdf['normalPred'].detach().clone()
-        roughInput = return_dict_brdf['roughPred'].detach().clone()
+        if not self.opt.cfg.DEBUG.if_load_dump_BRDF_offline:
+            albedoInput = return_dict_brdf['albedoPred'].detach().clone()
+            depthInput = return_dict_brdf['depthPred'].detach().clone()
+            normalInput = return_dict_brdf['normalPred'].detach().clone()
+            roughInput = return_dict_brdf['roughPred'].detach().clone()
+        else:
+            albedoInput = input_dict['albedoBatch'].detach().clone()
+            depthInput = input_dict['depthBatch'].detach().clone()
+            normalInput = input_dict['normalBatch'].detach().clone()
+            roughInput = input_dict['roughBatch'].detach().clone()
 
         segBRDFBatch = input_dict['segBRDFBatch']
         pad_mask = input_dict['pad_mask'].float()
@@ -479,6 +502,7 @@ class Model_Joint_ViT(nn.Module):
         diffusePred, specularPred = renderLayer.forwardEnv(normalPred=normal_input.detach(), envmap=envmapsImage_input, diffusePred=albedoInput.detach(), roughPred=rough_input.detach())
 
         if self.cfg.MODEL_LIGHT.use_scale_aware_loss:
+            assert False
             diffusePredScaled, specularPredScaled = diffusePred, specularPred
         else:
             diffusePredScaled, specularPredScaled, coefIm = models_brdf.LSregressDiffSpec(
@@ -492,7 +516,7 @@ class Model_Joint_ViT(nn.Module):
         renderedImPred_sdr = torch.clamp(renderedImPred_hdr ** (1.0/2.2), 0, 1)
 
         cDiff, cSpec = (torch.sum(diffusePredScaled) / torch.sum(diffusePred)).data.item(), ((torch.sum(specularPredScaled) ) / (torch.sum(specularPred) ) ).data.item()
-        if cSpec == 0:
+        if cSpec < 1e-3:
             cAlbedo = 1/ axisPred_ori.max().data.item()
             cLight = cDiff / cAlbedo
         else:
@@ -503,7 +527,7 @@ class Model_Joint_ViT(nn.Module):
         envmapsPredImage = envmapsPredImage * cLight
         # envmapsPredImage = envmapsPredImage / 5.
         ic(torch.max(envmapsPredImage), torch.min(envmapsPredImage), torch.mean(envmapsPredImage), torch.median(envmapsPredImage))
-        ic(cLight)
+        ic(cLight, cDiff, cSpec)
 
         return_dict.update({'imBatchSmall': imBatchSmall, 'envmapsPredImage': envmapsPredImage, 'renderedImPred': renderedImPred, 'renderedImPred_sdr': renderedImPred_sdr}) 
         return_dict.update({'LightNet_preds': {'axisPred': axisPred_ori, 'lambPred': lambPred_ori, 'weightPred': weightPred_ori}})

@@ -101,6 +101,8 @@ def reduce_loss_dict(loss_dict, mark='', if_print=False, logger=None):
     if world_size < 2 or len(loss_dict.keys())==0:
         logger.debug('[train_utils] world_size==%d; not reduced!'%world_size)
         return loss_dict
+    
+    # print(loss_dict.keys())
     with torch.no_grad():
         loss_names = []
         all_losses = []

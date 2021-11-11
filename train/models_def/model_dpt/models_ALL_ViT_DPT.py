@@ -108,7 +108,7 @@ class ModelAll_ViT(torch.nn.Module):
                     if_share_encoder_over_modalities=opt.cfg.MODEL_ALL.ViT_baseline.if_share_encoder_over_modalities_stage1, 
                     N_layers_encoder=N_layers_encoder_stage1, 
                     N_layers_decoder=N_layers_decoder_stage1, 
-                    in_chans=opt.cfg.MODEL_LIGHT.DPT_baseline.in_channels, 
+                    in_chans=opt.cfg.MODEL_LIGHT.DPT_baseline.in_channels if not opt.cfg.MODEL_LIGHT.if_image_only_input else 3, 
                     if_upscale_last_layer=False, 
                 )
         

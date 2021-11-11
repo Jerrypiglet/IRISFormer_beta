@@ -135,6 +135,7 @@ class openrooms(data.Dataset):
 
         if self.opt.cfg.DATA.if_load_png_not_hdr:
             # [PNG]
+            assert False, 'all models are trained with HDR input for now; should convert real images to HDR images by ** 2.2'
             im_fixedscale_HDR = (im_fixedscale_SDR - 0.5) / 0.5
             im_trainval = torch.from_numpy(im_fixedscale_HDR) # channel first for training
             im_trainval_SDR = torch.from_numpy(im_fixedscale_SDR)
@@ -152,9 +153,50 @@ class openrooms(data.Dataset):
         # im_trainval = torch.from_numpy(im_fixedscale_HDR) # channel first for training
 
         batch_dict.update({'image_path': str(png_image_path), 'pad_mask': pad_mask, 'brdf_loss_mask': pad_mask})
+        batch_dict['frame_info'] = {'image_path': str(png_image_path)}
         batch_dict.update({'im_w_resized_to': im_w_resized_to, 'im_h_resized_to': im_h_resized_to})
         # batch_dict.update({'hdr_scale': hdr_scale, 'image_transformed_fixed': image_transformed_fixed, 'im_trainval': im_trainval, 'im_trainval_SDR': im_trainval_SDR, 'im_fixedscale_SDR': im_fixedscale_SDR, 'im_fixedscale_SDR_uint8': im_fixedscale_SDR_uint8})
         batch_dict.update({'hdr_scale': hdr_scale, 'im_trainval': im_trainval, 'im_trainval_SDR': im_trainval_SDR, 'im_fixedscale_SDR': im_fixedscale_SDR.permute(1, 2, 0)}) # im_fixedscale_SDR for Tensorboard logging
+
+        if self.cfg.DEBUG.if_load_dump_BRDF_offline:
+            real_sample_name = str(png_image_path).split('/')[-2]
+            scene_path_dump = Path(self.opt.cfg.DEBUG.dump_BRDF_offline.path_task) / real_sample_name
+
+            if 'al' in self.cfg.DATA.data_read_list:
+                albedo_path = scene_path_dump / ('imbaseColor.png')
+                frame_info['albedo_path'] = albedo_path
+                albedo = np.asarray(Image.open(albedo_path), dtype=np.float32) / 255.
+                albedo = np.transpose(albedo, [2, 0, 1] )
+                albedo = albedo ** 2.2
+                batch_dict.update({'albedo': torch.from_numpy(albedo)})
+
+            if 'no' in self.cfg.DATA.data_read_list:
+                normal_path = scene_path_dump / ('imnormal.png')
+                frame_info['normal_path'] = normal_path
+                normal = np.asarray(Image.open(normal_path), dtype=np.float32) / 255.
+                normal = np.transpose(normal, [2, 0, 1] )
+                normal = normal * 2. - 1.
+                batch_dict.update({'normal': torch.from_numpy(normal),})
+
+            if 'ro' in self.cfg.DATA.data_read_list:
+                rough_path = scene_path_dump / ('imroughness.png')
+                frame_info['rough_path'] = rough_path
+                # Read roughness
+                rough = np.asarray(Image.open(rough_path), dtype=np.float32) / 255.
+                # assert False
+                rough = rough * 2. - 1.
+                rough = np.expand_dims(rough, 0)
+                batch_dict.update({'rough': torch.from_numpy(rough),})
+
+            if 'de' in self.cfg.DATA.data_read_list or 'de' in self.cfg.DATA.data_read_list:
+                depth_path = scene_path_dump / ('imdepth.pickle')
+                frame_info['depth_path'] = depth_path
+                # Read depth
+                with open(depth_path, 'rb') as f:
+                    depth_dict = pickle.load(f)
+                depth = depth_dict['depth_pred']
+                depth = np.expand_dims(depth, 0)
+                batch_dict.update({'depth': torch.from_numpy(depth),})
 
         return batch_dict
 

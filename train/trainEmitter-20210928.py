@@ -811,7 +811,8 @@ else:
                 logger.info(white_blue(logger_str))
 
                 for loss_key in loss_dict_reduced:
-                    writer.add_scalar('loss_train/%s'%loss_key, loss_dict_reduced[loss_key].item(), tid)
+                    if loss_dict_reduced[loss_key] != 0.:
+                        writer.add_scalar('loss_train/%s'%loss_key, loss_dict_reduced[loss_key].item(), tid)
                 writer.add_scalar('training/epoch', epoch, tid)
 
             # End of iteration logging

@@ -455,8 +455,9 @@ _C.MODEL_LIGHT.enable_list = 'axis_lamb_weight'
 _C.MODEL_LIGHT.if_align_log_envmap = True # instead of align raw envmap_pred and envmap_gt
 _C.MODEL_LIGHT.if_align_rerendering_envmap = False
 _C.MODEL_LIGHT.if_clamp_coeff = True
-
 _C.MODEL_LIGHT.depth_thres = 50.
+_C.MODEL_LIGHT.if_image_only_input = False
+
 
 _C.MODEL_LIGHT.DPT_baseline = CN()
 _C.MODEL_LIGHT.DPT_baseline.enable = False

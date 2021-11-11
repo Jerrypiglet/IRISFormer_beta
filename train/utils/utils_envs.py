@@ -39,15 +39,22 @@ def set_up_envs(opt):
     if opt.cfg.DEBUG.if_fast_BRDF_labels:
         opt.cfg.DATASET.dataset_path_local = opt.cfg.DATASET.dataset_path_local_fast_BRDF
 
+
+
     # if opt.cfg.DEBUG.if_fast_light_labels:
+    if opt.cfg.DEBUG.if_test_real:
+        opt.cfg.DEBUG.dump_BRDF_offline.path_root_local = '/home/ruizhu/Documents/Projects/semanticInverse/third_parties_outside/VirtualObjectInsertion/BRDF_offline'
     opt.cfg.DEBUG.dump_BRDF_offline.path_root = opt.cfg.DEBUG.dump_BRDF_offline.path_root_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DEBUG.dump_BRDF_offline.path_root_local
-    opt.cfg.DEBUG.dump_BRDF_offline.path_task = str(Path(opt.cfg.DEBUG.dump_BRDF_offline.path_root) / opt.cfg.DEBUG.dump_BRDF_offline.task_name)
+    if not opt.cfg.DEBUG.if_test_real:
+        opt.cfg.DEBUG.dump_BRDF_offline.path_task = str(Path(opt.cfg.DEBUG.dump_BRDF_offline.path_root) / opt.cfg.DEBUG.dump_BRDF_offline.task_name)
+    else:
+        opt.cfg.DEBUG.dump_BRDF_offline.path_task = opt.cfg.DEBUG.dump_BRDF_offline.path_root
     if opt.cfg.DEBUG.dump_BRDF_offline.enable:
         Path(opt.cfg.DEBUG.dump_BRDF_offline.path_root).mkdir(exist_ok=True)
         Path(opt.cfg.DEBUG.dump_BRDF_offline.path_task).mkdir(exist_ok=True)
-        for meta_split in ['main_xml', 'main_xml1', 'mainDiffMat_xml', 'mainDiffLight_xml1', 'mainDiffMat_xml1', 'mainDiffLight_xml']:
-            (Path(opt.cfg.DEBUG.dump_BRDF_offline.path_task) / meta_split).mkdir(exist_ok=True)
-
+        if not opt.cfg.DEBUG.if_test_real:
+            for meta_split in ['main_xml', 'main_xml1', 'mainDiffMat_xml', 'mainDiffLight_xml1', 'mainDiffMat_xml1', 'mainDiffLight_xml']:
+                (Path(opt.cfg.DEBUG.dump_BRDF_offline.path_task) / meta_split).mkdir(exist_ok=True)
 
     if opt.cfg.DATASET.if_quarter and not opt.if_cluster:
         opt.cfg.DATASET.dataset_path_local = opt.cfg.DATASET.dataset_path_local_quarter
@@ -175,8 +182,9 @@ def set_up_envs(opt):
     # opt.cfg.DATA.load_brdf_gt = False
     if opt.cfg.DEBUG.if_test_real:
         opt.cfg.DATA.load_light_gt = False
-        opt.cfg.DATA.data_read_list = ''
-        opt.cfg.DATASET.if_no_gt_BRDF = True
+        if not opt.cfg.DEBUG.if_load_dump_BRDF_offline:
+            opt.cfg.DATA.data_read_list = ''
+            opt.cfg.DATASET.if_no_gt_BRDF = True
         opt.cfg.DATASET.if_no_gt_light = True
 
     # if opt.cfg.DEBUG.if_iiw:

@@ -175,6 +175,7 @@ class openrooms(data.Dataset):
             pad_mask = self.extra_op(pad_mask, if_channel_2_input=True, name='pad_mask', if_padding_constant=True)
 
         batch_dict.update({'brdf_loss_mask': torch.from_numpy(brdf_loss_mask), 'pad_mask': torch.from_numpy(pad_mask)})
+        batch_dict.update({'im_w_resized_to': self.im_width, 'im_h_resized_to': self.im_height})
 
 
         # assert self.opt.cfg.DATA.if_load_png_not_hdr
