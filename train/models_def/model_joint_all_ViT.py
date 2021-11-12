@@ -73,6 +73,7 @@ class Model_Joint_ViT(nn.Module):
             self.modalities += ['axis', 'lamb', 'weight']
 
         self.modalities_stage0 = list(set(self.modalities) & set(['al', 'no', 'de', 'ro', 'lo']))
+        self.modalities_stage0.sort() # make sure albedo comest first for BS purpose
         self.modalities_stage1 = list(set(self.modalities) & set(['axis', 'lamb', 'weight']))
         self.if_BRDF = self.modalities_stage0 != []
         self.if_Light = self.modalities_stage1 != []
@@ -117,11 +118,29 @@ class Model_Joint_ViT(nn.Module):
                 self.forward_LightNet_func = self.forward_LightNet_UNet_func
 
         if self.cfg.MODEL_BRDF.if_bilateral:
+            # assert self.cfg.DEBUG.if_test_real
             self.BRDF_Net = nn.ModuleDict({})
-            self.BRDF_Net.update({'albedoBs': bs.BilateralLayer(mode = 0)})
+            if 'al' in self.modalities_stage0:
+                self.BRDF_Net.update({'albedoBs': bs.BilateralLayer(mode = 0).eval() })
+                for param in self.BRDF_Net['albedoBs'].parameters():
+                    param.requires_grad = False
+            if 'no' in self.modalities_stage0:
+                self.BRDF_Net.update({'normalBs': bs.BilateralLayer(mode = 1).eval() })
+                for param in self.BRDF_Net['normalBs'].parameters():
+                    param.requires_grad = False
+            if 'ro' in self.modalities_stage0:
+                self.BRDF_Net.update({'roughBs': bs.BilateralLayer(mode = 2).eval() })
+                for param in self.BRDF_Net['roughBs'].parameters():
+                    param.requires_grad = False
+            if 'de' in self.modalities_stage0:
+                self.BRDF_Net.update({'depthBs': bs.BilateralLayer(mode = 4).eval() })
+                for param in self.BRDF_Net['depthBs'].parameters():
+                    param.requires_grad = False
+
+
 
         if self.cfg.MODEL_LIGHT.load_pretrained_MODEL_BRDF:
-            self.load_pretrained_MODEL_BRDF(self.cfg.MODEL_BRDF.pretrained_pth_name, if_load_encoder=self.cfg.MODEL_BRDF.pretrained_if_load_encoder, if_load_decoder=self.cfg.MODEL_BRDF.pretrained_if_load_decoder, if_load_Bs=self.cfg.MODEL_BRDF.pretrained_if_load_Bs)
+            self.load_pretrained_MODEL_BRDF(if_load_encoder=self.cfg.MODEL_BRDF.pretrained_if_load_encoder, if_load_decoder=self.cfg.MODEL_BRDF.pretrained_if_load_decoder, if_load_Bs=self.cfg.MODEL_BRDF.pretrained_if_load_Bs)
 
     def forward(self, input_dict, if_has_gt_BRDF=True):
         # module_hooks_dict = {}
@@ -158,6 +177,8 @@ class Model_Joint_ViT(nn.Module):
 
         return_dict = {}
 
+        # im_h_resized_to_batch, im_w_resized_to_batch = input_dict['im_h_resized_to'], input_dict['im_w_resized_to']
+
         for modality in self.modalities_stage0:
             # vit_out = self.MODEL_ALL[modality].forward(None, input_dict_extra=input_dict_extra)
             vit_out = output_dict_model_all[modality]
@@ -176,16 +197,18 @@ class Model_Joint_ViT(nn.Module):
                     return_dict.update({'albedoPred_aligned': albedoPred_aligned})
 
                 if self.cfg.MODEL_BRDF.if_bilateral:
+                    # assert self.cfg.DEBUG.if_test_real
                     albedoBsPred, albedoConf = self.BRDF_Net['albedoBs'](input_dict['imBatch'], albedoPred.detach(), albedoPred )
-                    if if_has_gt_BRDF and 'al' in self.opt.cfg.DATA.data_read_list:
-                        albedoBsPred = models_brdf.LSregress(
-                            albedoBsPred * input_dict['segBRDFBatch'].expand_as(albedoBsPred ),
-                            input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), 
-                            albedoBsPred )
-                    albedoBsPred = torch.clamp(albedoBsPred, 0, 1 )
-                    if if_has_gt_BRDF and 'al' in self.opt.cfg.DATA.data_read_list:
-                        albedoBsPred = input_dict['segBRDFBatch'] * albedoBsPred
-                    return_dict.update({'albedoBsPred': albedoBsPred, 'albedoConf': albedoConf})
+                    return_dict.update({'albedoBsPred': albedoBsPred})
+                    # if if_has_gt_BRDF and 'al' in self.opt.cfg.DATA.data_read_list:
+                    #     albedoBsPred = models_brdf.LSregress(
+                    #         albedoBsPred * input_dict['segBRDFBatch'].expand_as(albedoBsPred ),
+                    #         input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), 
+                    #         albedoBsPred )
+                    # albedoBsPred = torch.clamp(albedoBsPred, 0, 1 )
+                    # if if_has_gt_BRDF and 'al' in self.opt.cfg.DATA.data_read_list:
+                    #     albedoBsPred = input_dict['segBRDFBatch'] * albedoBsPred
+                    # return_dict.update({'albedoBsPred': albedoBsPred, 'albedoConf': albedoConf})
 
             elif modality == 'de':
                 if self.opt.cfg.MODEL_BRDF.loss.depth.if_use_Zhengqin_loss:
@@ -212,12 +235,30 @@ class Model_Joint_ViT(nn.Module):
                     else:
                         assert False
                     return_dict.update({'depthPred_aligned': depthPred_aligned})
+
+                if self.cfg.MODEL_BRDF.if_bilateral:
+                    # assert self.cfg.DEBUG.if_test_real
+                    depthBsPred, depthConf = self.BRDF_Net['depthBs'](input_dict['imBatch'], return_dict['albedoPred'].detach(), depthPred )
+                    return_dict.update({'depthBsPred': depthBsPred})
+
             elif modality == 'ro':
                 roughPred = vit_out
                 return_dict.update({'roughPred': roughPred})
+                if self.cfg.MODEL_BRDF.if_bilateral:
+                    # assert self.cfg.DEBUG.if_test_real
+                    # print(torch.max(roughPred), torch.min(roughPred), torch.median(roughPred), roughPred.shape)
+                    # print(torch.max(roughPred[:, :, :213, :]), torch.min(roughPred[:, :, :213, :]), torch.median(roughPred[:, :, :213, :]), roughPred[:, :, :213, :].shape)
+                    # print(torch.max(return_dict['albedoPred']), torch.min(return_dict['albedoPred']), torch.median(return_dict['albedoPred']), return_dict['albedoPred'].shape)
+                    # roughBsPred, roughConf = self.BRDF_Net['roughBs'](input_dict['imBatch'][:, :, :213, :], return_dict['albedoPred'][:, :, :213, :].detach(), 0.5*(roughPred[:, :, :213, :]+1.) )
+                    roughBsPred, roughConf = self.BRDF_Net['roughBs'](input_dict['imBatch'], return_dict['albedoPred'].detach(), 0.5*(roughPred+1.) )
+                    roughBsPred = torch.clamp(2 * roughBsPred - 1, -1, 1)
+                    # roughBsPred = roughPred[:, :, :213, :]
+                    return_dict.update({'roughBsPred': roughBsPred})
+
             elif modality == 'no':
                 normalPred = vit_out
                 return_dict.update({'normalPred': normalPred})
+
             elif modality == 'lo':
                 # return_dict.update({'layout_est_result': vit_out})
                 return_dict.update(vit_out) # {'layout_est_result':...
@@ -237,13 +278,19 @@ class Model_Joint_ViT(nn.Module):
         # if not self.opt.cfg.MODEL_LIGHT.if_image_only_input:
         # Normalize Albedo and depth
         if 'al' in self.modalities_stage0:
-            albedoInput = return_dict_brdf['albedoPred'].detach().clone()
+            if self.cfg.MODEL_BRDF.if_bilateral:
+                albedoInput = return_dict_brdf['albedoBsPred'].detach().clone()
+            else:
+                albedoInput = return_dict_brdf['albedoPred'].detach().clone()
         else:
             assert self.use_GT_brdf or self.opt.cfg.MODEL_LIGHT.if_image_only_input
             albedoInput = input_dict['albedoBatch'].detach().clone()
 
         if 'de' in self.modalities_stage0:
-            depthInput = return_dict_brdf['depthPred'].detach().clone()
+            if self.cfg.MODEL_BRDF.if_bilateral:
+                depthInput = return_dict_brdf['depthBsPred'].detach().clone()
+            else:
+                depthInput = return_dict_brdf['depthPred'].detach().clone()
         else:
             assert self.use_GT_brdf or self.opt.cfg.MODEL_LIGHT.if_image_only_input
             depthInput = input_dict['depthBatch'].detach().clone()
@@ -255,7 +302,10 @@ class Model_Joint_ViT(nn.Module):
             normalInput = input_dict['normalBatch'].detach().clone()
 
         if 'ro' in self.modalities_stage0:
-            roughInput = return_dict_brdf['roughPred'].detach().clone()
+            if self.cfg.MODEL_BRDF.if_bilateral:
+                roughInput = return_dict_brdf['roughBsPred'].detach().clone()
+            else:
+                roughInput = return_dict_brdf['roughPred'].detach().clone()
         else:
             assert self.use_GT_brdf or self.opt.cfg.MODEL_LIGHT.if_image_only_input
             roughInput = input_dict['roughBatch'].detach().clone()
@@ -662,12 +712,13 @@ class Model_Joint_ViT(nn.Module):
     def freeze_bn_matseg(self):
         freeze_bn_in_module(self.MATSEG_Net)
 
-    def load_pretrained_MODEL_BRDF(self, pretrained_pth_name='check_cascade0_w320_h240', if_load_encoder=True, if_load_decoder=True, if_load_Bs=True):
-        if self.opt.if_cluster:
-            pretrained_path = '/viscompfs/users/ruizhu/models_ckpt/' + pretrained_pth_name
-        else:
-            pretrained_path = '/home/ruizhu/Documents/Projects/semanticInverse/models_ckpt/' + pretrained_pth_name
-        loaded_strings = []
+    def load_pretrained_MODEL_BRDF(self, if_load_encoder=True, if_load_decoder=True, if_load_Bs=True):
+        # if self.opt.if_cluster:
+        #     pretrained_path_root = Path('/viscompfs/users/ruizhu/models_ckpt/')
+        # else:
+        #     pretrained_path_root = Path('/home/ruizhu/Documents/Projects/semanticInverse/models_ckpt/')
+        pretrained_path_root = Path(self.opt.cfg.PATH.models_ckpt_path)
+        # loaded_strings = []
         module_names = []
         if if_load_encoder:
             module_names.append('encoder')    
@@ -675,8 +726,14 @@ class Model_Joint_ViT(nn.Module):
             module_names += ['albedoDecoder', 'normalDecoder', 'roughDecoder', 'depthDecoder']
         if if_load_Bs:
             # module_names += ['albedoBs', 'normalBs', 'roughBs', 'depthBs']
-            module_names += ['albedoBs']
-            assert self.cfg.MODEL_BRDF.if_bilateral_albedo_only
+            if 'al' in self.modalities_stage0:
+                module_names += ['albedoBs']
+            if 'no' in self.modalities_stage0:
+                module_names += ['normalBs']
+            if 'ro' in self.modalities_stage0:
+                module_names += ['roughBs']
+            if 'de' in self.modalities_stage0:
+                module_names += ['depthBs']
 
         saved_names_dict = {
             'encoder': 'encoder', 
@@ -687,14 +744,25 @@ class Model_Joint_ViT(nn.Module):
             'albedoBs': 'albedoBs', 
             'normalBs': 'normalBs', 
             'roughBs': 'roughBs', 
-            'depthBs': 'depBsth'
+            'depthBs': 'depthBs'
+        }
+        pretrained_pth_name_dict = {
+            'encoder': self.opt.cfg.MODEL_BRDF.pretrained_pth_name_BRDF_cascade0, 
+            'albedoDecoder': self.opt.cfg.MODEL_BRDF.pretrained_pth_name_BRDF_cascade0, 
+            'normalDecoder': self.opt.cfg.MODEL_BRDF.pretrained_pth_name_BRDF_cascade0, 
+            'roughDecoder': self.opt.cfg.MODEL_BRDF.pretrained_pth_name_BRDF_cascade0, 
+            'depthDecoder': self.opt.cfg.MODEL_BRDF.pretrained_pth_name_BRDF_cascade0, 
+            'albedoBs': self.opt.cfg.MODEL_BRDF.pretrained_pth_name_Bs_cascade0, 
+            'normalBs': self.opt.cfg.MODEL_BRDF.pretrained_pth_name_Bs_cascade0, 
+            'roughBs': self.opt.cfg.MODEL_BRDF.pretrained_pth_name_Bs_cascade0, 
+            'depthBs':self.opt.cfg.MODEL_BRDF.pretrained_pth_name_Bs_cascade0
         }
         for module_name in module_names:
             saved_name = saved_names_dict[module_name]
-            pickle_path = pretrained_path % saved_name
+            pickle_path = str(pretrained_path_root / pretrained_pth_name_dict[module_name]) % saved_name
             print('Loading ' + pickle_path)
             self.BRDF_Net[module_name].load_state_dict(
                 torch.load(pickle_path).state_dict())
-            loaded_strings.append(saved_name)
+            # loaded_strings.append(saved_name)
 
-        self.logger.info(magenta('Loaded pretrained BRDF from %s: %s'%(pretrained_pth_name, '+'.join(loaded_strings))))
+            self.logger.info(magenta('Loaded pretrained BRDFNet-%s from %s'%(module_name, pickle_path)))

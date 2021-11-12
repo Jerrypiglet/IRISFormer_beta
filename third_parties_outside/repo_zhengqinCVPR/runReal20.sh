@@ -1,5 +1,5 @@
 # TEST
-python3 testReal.py --cuda --dataRoot DATA --imList imList_20.txt \
+python3 testReal.py --cuda --dataRoot /home/ruizhu/Documents/Projects/Total3DUnderstanding/VirtualObjectInsertion/data --imList imList_20.txt \
     --testRoot Real20 --isLight --isBS --level 2 \
     --experiment0 check_cascade0_w320_h240 --nepoch0 14 \
     --experimentLight0 check_cascadeLight0_sg12_offset1 --nepochLight0 10 \

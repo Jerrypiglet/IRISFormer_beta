@@ -164,7 +164,7 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
 
         if 'al' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
             albedoPreds = []
-            if opt.cfg.MODEL_BRDF.use_scale_aware_albedo:
+            if opt.cfg.MODEL_BRDF.use_scale_aware_albedo or opt.cfg.DEBUG.if_test_real:
                 albedoPred = output_dict['albedoPred']
             else:
                 assert 'al' in opt.cfg.DATA.data_read_list
@@ -215,8 +215,8 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
                 # output_dict.update({'mat_seg-normalPreds': normalPreds})
                 loss_dict['loss_brdf-normal'] = loss_dict['loss_brdf-normal'][-1]
 
-                if opt.cfg.MODEL_BRDF.if_bilateral:
-                    assert opt.cfg.MODEL_BRDF.if_bilateral_albedo_only, 'loss and vis for normal-BS not implemented yet'
+                # if opt.cfg.MODEL_BRDF.if_bilateral:
+                #     assert opt.cfg.MODEL_BRDF.if_bilateral_albedo_only, 'loss and vis for normal-BS not implemented yet'
 
         if 'ro' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
             roughPreds = []
@@ -237,7 +237,7 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
         if 'de' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
             depthPreds = []
             depthInvPreds = []
-            if opt.cfg.MODEL_BRDF.use_scale_aware_depth:
+            if opt.cfg.MODEL_BRDF.use_scale_aware_depth or opt.cfg.DEBUG.if_test_real:
                 depthPred = output_dict['depthPred']
             else:
                 if (not opt.cfg.DATASET.if_no_gt_BRDF) and opt.cfg.DATA.load_brdf_gt and 'de' in opt.cfg.DATA.data_read_list:
