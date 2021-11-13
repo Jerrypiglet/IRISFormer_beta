@@ -228,8 +228,7 @@ def freeze_bn_in_module(module, if_print=True):
     mod = module
     if isinstance(module, torch.nn.modules.instancenorm._InstanceNorm):
         return module
-    if isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
-        #  or isinstance(module, apex.parallel.optimized_sync_batchnorm.SyncBatchNorm):
+    if isinstance(module, torch.nn.modules.batchnorm._BatchNorm) or isinstance(module, torch.nn.modules.batchnorm.SyncBatchNorm):
         if if_print:
             print(red('-- turning off BN in '), module)
         mod.eval()
@@ -260,7 +259,7 @@ def unfreeze_bn_in_module(module, if_print=True):
     if isinstance(module, torch.nn.modules.instancenorm._InstanceNorm):
         return module
     if isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
-        #  or isinstance(module, apex.parallel.optimized_sync_batchnorm.SyncBatchNorm):
+        #  or isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
         if if_print:
             print(red('-- turning ON BN in '), module)
         mod.train()

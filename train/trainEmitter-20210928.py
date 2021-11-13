@@ -245,6 +245,9 @@ else:
 if opt.distributed: # https://github.com/dougsouza/pytorch-sync-batchnorm-example # export NCCL_LL_THRESHOLD=0
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 model.to(opt.device)
+
+model.freeze_BN()
+
 if opt.cfg.MODEL_BRDF.load_pretrained_pth:
     model.load_pretrained_MODEL_BRDF(opt.cfg.MODEL_BRDF.weights)
 if opt.cfg.MODEL_SEMSEG.enable and opt.cfg.MODEL_SEMSEG.if_freeze:

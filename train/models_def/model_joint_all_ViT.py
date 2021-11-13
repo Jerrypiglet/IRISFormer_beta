@@ -100,8 +100,8 @@ class Model_Joint_ViT(nn.Module):
             self.non_learnable_layers['output2env'] = models_light.output2env(isCuda = opt.if_cuda, 
                 envWidth = opt.cfg.MODEL_LIGHT.envWidth, envHeight = opt.cfg.MODEL_LIGHT.envHeight, SGNum = opt.cfg.MODEL_LIGHT.SGNum )
 
-            if self.cfg.MODEL_LIGHT.freeze_BRDF_Net and self.if_BRDF:
-                self.freeze_BRDF()
+            # if self.cfg.MODEL_LIGHT.freeze_BRDF_Net and self.if_BRDF:
+            #     self.freeze_BRDF()
 
             if self.cfg.MODEL_ALL.ViT_baseline.if_UNet_lighting:
                 self.MODEL_ALL._.shared_encoder_stage1 = nn.Identity()
@@ -142,7 +142,7 @@ class Model_Joint_ViT(nn.Module):
         if self.cfg.MODEL_LIGHT.load_pretrained_MODEL_BRDF:
             self.load_pretrained_MODEL_BRDF(if_load_encoder=self.cfg.MODEL_BRDF.pretrained_if_load_encoder, if_load_decoder=self.cfg.MODEL_BRDF.pretrained_if_load_decoder, if_load_Bs=self.cfg.MODEL_BRDF.pretrained_if_load_Bs)
 
-    def freeze_partsset_to_val(self):
+    def freeze_BN(self):
         if self.cfg.MODEL_LIGHT.freeze_BRDF_Net and self.if_BRDF:
             self.freeze_BRDF()
 
