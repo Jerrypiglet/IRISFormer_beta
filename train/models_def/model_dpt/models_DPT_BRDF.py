@@ -122,11 +122,21 @@ class DPTBRDFModel(Transformer_Hybrid_Encoder_Decoder):
         layer_4_rn = self.scratch.layer4_rn(layer_4)
 
         path_4 = self.scratch.refinenet4(layer_4_rn)
+        # if self.modality == 'no':
+            # print('--------', path_4[0, 1, :2, :3])
         path_3 = self.scratch.refinenet3(path_4, layer_3_rn)
+        # if self.modality == 'no':
+            # print('-------->', path_3[0, 1, :2, :3])
         path_2 = self.scratch.refinenet2(path_3, layer_2_rn)
+        # if self.modality == 'no':
+            # print('-------->>', path_2[0, 1, :2, :3])
         path_1 = self.scratch.refinenet1(path_2, layer_1_rn)
+        # if self.modality == 'no':
+            # print('-------->>>', path_1[0, 1, :2, :3])
 
         x_out = self.scratch.output_conv(path_1)
+        # if self.modality == 'no':
+            # print('-------->>>>', x_out[0, 1, :2, :3])
 
         if self.modality == 'al':
             x_out = torch.clamp(1.01 * torch.tanh(x_out ), -1, 1)
@@ -134,6 +144,7 @@ class DPTBRDFModel(Transformer_Hybrid_Encoder_Decoder):
             x_out = torch.clamp(1.01 * torch.tanh(x_out ), -1, 1)
             norm = torch.sqrt(torch.sum(x_out * x_out, dim=1).unsqueeze(1) ).expand_as(x_out)
             x_out = x_out / torch.clamp(norm, min=1e-6)
+            # print('-------->>>>>', x_out[0, 1, :2, :3])
         elif self.modality == 'ro':
             x_out = torch.clamp(1.01 * torch.tanh(x_out ), -1, 1)
             x_out = torch.mean(x_out, dim=1, keepdim=True)

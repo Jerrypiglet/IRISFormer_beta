@@ -777,6 +777,8 @@ else:
 
             loss.backward()
 
+            # if opt.is_master and tid % 10 == 0:
+            #     print(model.MODEL_ALL._.no.scratch.refinenet4.resConfUnit2.conv2.bias)
             if opt.is_master and tid % 100 == 0:
                 params_train_total = 0
                 params_not_train_total = 0
@@ -789,12 +791,6 @@ else:
                         print(name, '☑')
                         params_train_total += 1
                 logger.info('%d params received grad; %d params require grads but not received'%(params_train_total, params_not_train_total))
-
-            # clip_to = 1.
-            # torch.nn.utils.clip_grad_norm_(model.LAYOUT_EMITTER_NET_fc.parameters(), clip_to)
-            # torch.nn.utils.clip_grad_norm_(model.LAYOUT_EMITTER_NET_encoder.parameters(), clip_to)
-            # print(model.LAYOUT_EMITTER_NET_fc.fc_layout_5.weight)
-            # print(model.LAYOUT_EMITTER_NET_fc.fc_layout_5.weight.grad)
 
             if 'dpt_hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
                 optimizer_backbone.step()

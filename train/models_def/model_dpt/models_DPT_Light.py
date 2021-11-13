@@ -134,9 +134,12 @@ class DPTLightModel(Transformer_Hybrid_Encoder_Decoder):
             x_out = torch.clamp(x_out, min=0.)
         elif self.modality in ['weight']:
             # x_out = self.relu(x_out )
-            x_out = torch.tanh(x_out )
-            x_out = 0.5 * (x_out + 1)
-            x_out = torch.clamp(x_out, min=0.)
+            if self.opt.cfg.MODEL_LIGHT.if_est_log_weight:
+                pass
+            else:
+                x_out = torch.tanh(x_out )
+                x_out = 0.5 * (x_out + 1)
+                x_out = torch.clamp(x_out, min=0.)
         elif self.modality in ['axis']:
             bn, _, row, col = x_out.size()
             x_out = x_out.view(bn, self.SGNum, 3, row, col)

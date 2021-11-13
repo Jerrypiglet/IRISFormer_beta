@@ -457,6 +457,7 @@ _C.MODEL_LIGHT.if_align_rerendering_envmap = False
 _C.MODEL_LIGHT.if_clamp_coeff = True
 _C.MODEL_LIGHT.depth_thres = 50.
 _C.MODEL_LIGHT.if_image_only_input = False
+_C.MODEL_LIGHT.if_est_log_weight = False
 
 
 _C.MODEL_LIGHT.DPT_baseline = CN()

@@ -45,22 +45,25 @@ def get_labels_dict_nyud(data_batch, opt, return_input_batch_as_list=False):
 
 def postprocess_nyud(input_dict, output_dict, loss_dict, opt, time_meters, eval_module_list=[], tid=-1, if_loss=True):
 
-    if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
-        output_dict['roughPreds'] = [output_dict['roughPred']]
+    # if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
+    #     output_dict['roughPreds'] = [output_dict['roughPred']]
 
-    if 'al' in opt.cfg.MODEL_BRDF.enable_list:
-        output_dict['albedoPreds'] = [output_dict['albedoPred']]
+    # if 'al' in opt.cfg.MODEL_BRDF.enable_list:
+    #     if opt.cfg.MODEL_BRDF.use_scale_aware_albedo:
+    #         output_dict['albedoPreds'] = [output_dict['albedoPred']]
+    #     else:
+    #         output_dict['albedoPreds'] = [output_dict['albedoPred_aligned']]
 
-    if 'de' in opt.cfg.MODEL_BRDF.enable_list:
-        if opt.cfg.MODEL_BRDF.use_scale_aware_depth:
-            depthPred = output_dict['depthPred']
-        else:
-            if (not opt.cfg.DATASET.if_no_gt_BRDF) and opt.cfg.DATA.load_brdf_gt:
-                depthPred = output_dict['depthPred_aligned']
-        output_dict['depthPreds'] = [output_dict['depthPred']]
+    # if 'de' in opt.cfg.MODEL_BRDF.enable_list:
+    #     if opt.cfg.MODEL_BRDF.use_scale_aware_depth:
+    #         depthPred = output_dict['depthPred']
+    #     else:
+    #         if (not opt.cfg.DATASET.if_no_gt_BRDF) and opt.cfg.DATA.load_brdf_gt:
+    #             depthPred = output_dict['depthPred_aligned']
+    #     output_dict['depthPreds'] = [output_dict['depthPred']]
 
-    if 'no' in opt.cfg.MODEL_BRDF.enable_list:
-        output_dict['normalPreds'] = [output_dict['normalPred']]
+    # if 'no' in opt.cfg.MODEL_BRDF.enable_list:
+    #     output_dict['normalPreds'] = [output_dict['normalPred']]
 
     if if_loss:
         loss_dict['loss_nyud-ALL'] = 0.

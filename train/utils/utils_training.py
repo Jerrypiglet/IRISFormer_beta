@@ -233,6 +233,8 @@ def freeze_bn_in_module(module, if_print=True):
         if if_print:
             print(red('-- turning off BN in '), module)
         mod.eval()
+        # mod.param.requires_grad = False
+        mod.track_running_stats = False
 
     # if isinstance(module, torch.nn.modules.groupnorm._GroupNorm):
     #     # print('--convert_syncbn_model_hvd converting...', module)
@@ -260,8 +262,9 @@ def unfreeze_bn_in_module(module, if_print=True):
     if isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
         #  or isinstance(module, apex.parallel.optimized_sync_batchnorm.SyncBatchNorm):
         if if_print:
-            print(red('-- turning off BN in '), module)
+            print(red('-- turning ON BN in '), module)
         mod.train()
+        mod.track_running_stats = True
 
     # if isinstance(module, torch.nn.modules.groupnorm._GroupNorm):
     #     # print('--convert_syncbn_model_hvd converting...', module)

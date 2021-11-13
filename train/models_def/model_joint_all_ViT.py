@@ -142,6 +142,10 @@ class Model_Joint_ViT(nn.Module):
         if self.cfg.MODEL_LIGHT.load_pretrained_MODEL_BRDF:
             self.load_pretrained_MODEL_BRDF(if_load_encoder=self.cfg.MODEL_BRDF.pretrained_if_load_encoder, if_load_decoder=self.cfg.MODEL_BRDF.pretrained_if_load_decoder, if_load_Bs=self.cfg.MODEL_BRDF.pretrained_if_load_Bs)
 
+    def freeze_partsset_to_val(self):
+        if self.cfg.MODEL_LIGHT.freeze_BRDF_Net and self.if_BRDF:
+            self.freeze_BRDF()
+
     def forward(self, input_dict, if_has_gt_BRDF=True):
         # module_hooks_dict = {}
         # input_dict_extra = {}
@@ -281,7 +285,7 @@ class Model_Joint_ViT(nn.Module):
             if self.cfg.MODEL_BRDF.if_bilateral:
                 albedoInput = return_dict_brdf['albedoBsPred'].detach().clone()
             else:
-                albedoInput = return_dict_brdf['albedoPred'].detach().clone()
+                albedoInput = return_dict_brdf['albedoPred'].detach().clone() # always use non-aligned version as input!!!
         else:
             assert self.use_GT_brdf or self.opt.cfg.MODEL_LIGHT.if_image_only_input
             albedoInput = input_dict['albedoBatch'].detach().clone()
@@ -353,6 +357,9 @@ class Model_Joint_ViT(nn.Module):
         output_dict_model_all = self.forward_LightNet_func(x_stage1)
 
         axisPred_ori, lambPred_ori, weightPred_ori = output_dict_model_all['axis'], output_dict_model_all['lamb'], output_dict_model_all['weight']
+        if self.opt.cfg.MODEL_LIGHT.if_est_log_weight:
+            weightPred_ori = torch.exp(weightPred_ori)
+
         if self.opt.is_master:
             print('weightPred_ori', torch.max(weightPred_ori), torch.min(weightPred_ori), torch.mean(weightPred_ori), torch.median(weightPred_ori))
 
@@ -606,6 +613,8 @@ class Model_Joint_ViT(nn.Module):
         weightPred_ori = self.LIGHT_Net['weightDecoder'](x1, x2, x3, x4, x5, x6) # torch.Size([4, 36, 120, 160])
         return {'axis': axisPred_ori, 'lamb': lambPred_ori, 'weight': weightPred_ori}
 
+    # def freeze_BN(self):
+    #     freeze_bn_in_module(self.MODEL_ALL._['ro'])
 
     def freeze_BRDF(self):
         self.turn_off_names(['shared_encoder_stage0'])

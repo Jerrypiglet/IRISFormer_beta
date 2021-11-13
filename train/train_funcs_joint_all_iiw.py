@@ -257,18 +257,22 @@ def vis_val_epoch_joint_iiw(iiw_loader_val, model, params_mis):
                 n = 0
 
                 if 'al' in opt.cfg.MODEL_BRDF.enable_list:
-                    albedoPreds_list.append(output_dict['albedoPreds'][n])
+                    # albedoPreds_list.append(output_dict['albedoPreds'][n])
+                    albedoPreds_list.append(output_dict['albedoPred'])
                     if opt.cfg.MODEL_BRDF.if_bilateral:
                         albedoBsPreds_list.append(output_dict['albedoBsPred'])
 
                 if 'no' in opt.cfg.MODEL_BRDF.enable_list:
-                    normalPreds_list.append(output_dict['normalPreds'][n])
+                    # normalPreds_list.append(output_dict['normalPreds'][n])
+                    normalPreds_list.append(output_dict['normalPred'])
 
                 if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
-                    roughPreds_list.append(output_dict['roughPreds'][n])
+                    # roughPreds_list.append(output_dict['roughPreds'][n])
+                    roughPreds_list.append(output_dict['roughPred'])
 
                 if 'de' in opt.cfg.MODEL_BRDF.enable_list:
-                    depthPreds_list.append(output_dict['depthPreds'][n])
+                    # depthPreds_list.append(output_dict['depthPreds'][n])
+                    depthPreds_list.append(output_dict['depthPred'])
 
 
     # ===== Vis BRDF 2/2

@@ -426,13 +426,23 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
                 frame_info_list = input_dict['frame_info']
                 if opt.cfg.DEBUG.dump_BRDF_offline.enable:
                     if 'al' in opt.cfg.MODEL_BRDF.enable_list:
-                        albedo_output = output_dict['albedoPreds'][0].detach().cpu().numpy()
+                        # albedo_output = output_dict['albedoPreds'][0].detach().cpu().numpy()
+                        if opt.cfg.MODEL_BRDF.use_scale_aware_albedo:
+                            albedo_output = output_dict['albedoPred'].detach().cpu().numpy()
+                        else:
+                            albedo_output = output_dict['albedoPred_aligned'].detach().cpu().numpy()
                     if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
-                        rough_output = output_dict['roughPreds'][0].detach().cpu().numpy()
+                        # rough_output = output_dict['roughPreds'][0].detach().cpu().numpy()
+                        rough_output = output_dict['roughPred'].detach().cpu().numpy()
                     if 'no' in opt.cfg.MODEL_BRDF.enable_list:
-                        normal_output = output_dict['normalPreds'][0].detach().cpu().numpy()
+                        # normal_output = output_dict['normalPreds'][0].detach().cpu().numpy()
+                        normal_output = output_dict['normalPred'].detach().cpu().numpy()
                     if 'de' in opt.cfg.MODEL_BRDF.enable_list:
-                        depth_output = output_dict['depthPreds'][0].detach().cpu().numpy()
+                        # depth_output = output_dict['depthPreds'][0].detach().cpu().numpy()
+                        if opt.cfg.MODEL_BRDF.use_scale_aware_depth:
+                            depth_output = output_dict['depthPred'].detach().cpu().numpy()
+                        else:
+                            depth_output = output_dict['depthPred_aligned'].detach().cpu().numpy()
 
                     for sample_idx_batch in range(len(frame_info_list)):
                         frame_info = frame_info_list[sample_idx_batch]
@@ -1450,14 +1460,17 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
 
                 if 'al' in opt.cfg.MODEL_BRDF.enable_list:
                     # if (not opt.cfg.DATASET.if_no_gt_semantics):
-                    albedoPreds_list.append(output_dict['albedoPreds'][n])
+                    # albedoPreds_list.append(output_dict['albedoPreds'][n])
+                    albedoPreds_list.append(output_dict['albedoPred'])
                     if opt.cfg.MODEL_BRDF.if_bilateral:
                         albedoBsPreds_list.append(output_dict['albedoBsPred'])
                     if (not opt.cfg.DATASET.if_no_gt_BRDF) and opt.cfg.DATA.load_brdf_gt and 'al' in opt.cfg.DATA.data_read_list:
                         albedoPreds_aligned_list.append(output_dict['albedoPreds_aligned'][n])
                     if opt.cfg.DEBUG.if_test_real and opt.cfg.DEBUG.dump_BRDF_offline.enable:
-                        assert output_dict['albedoPreds'][n].shape[0] == 1
-                        albedoPred_np = output_dict['albedoPreds'][n][0].cpu().numpy()
+                        # assert output_dict['albedoPreds'][n].shape[0] == 1
+                        assert output_dict['albedoPred'].shape[0] == 1
+                        # albedoPred_np = output_dict['albedoPreds'][n][0].cpu().numpy()
+                        albedoPred_np = output_dict['albedoPred'][0].cpu().numpy()
                         albedo_dump_path = scene_path_dump / ('imbaseColor.png')
                         albedo_sdr = np.clip(albedoPred_np.transpose(1, 2, 0) ** (1.0/2.2), 0., 1.)
                         Image.fromarray((albedo_sdr*255.).astype(np.uint8)).save(str(albedo_dump_path))
@@ -1471,24 +1484,28 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                             Image.fromarray((albedoBs_sdr*255.).astype(np.uint8)[:im_h_resized_to, :im_w_resized_to, :]).save(str(albedoBs_dump_path).replace('.png','_cropped.png'))
 
                 if 'no' in opt.cfg.MODEL_BRDF.enable_list:
-                    normalPreds_list.append(output_dict['normalPreds'][n])
+                    normalPreds_list.append(output_dict['normalPred'])
+                    # print(input_dict['imBatch'][0, 1, :2, :3])
+                    # print(output_dict['normalPred'][0, 1, :2, :3])
+                    # print(model.MODEL_ALL._.no.scratch.refinenet4.resConfUnit2.conv2.bias)
+                    
                     if opt.cfg.DEBUG.if_test_real and opt.cfg.DEBUG.dump_BRDF_offline.enable:
-                        assert output_dict['normalPreds'][n].shape[0] == 1
+                        assert output_dict['normalPred'].shape[0] == 1
                         normal_dump_path = scene_path_dump / ('imnormal.png')
-                        normalPred_np = output_dict['normalPreds'][n][0].cpu().numpy()
+                        normalPred_np = output_dict['normalPred'][0].cpu().numpy()
                         normal_save = np.clip(0.5*(normalPred_np.transpose(1, 2, 0)+1), 0., 1.)
                         Image.fromarray((normal_save*255.).astype(np.uint8)).save(str(normal_dump_path))
                         Image.fromarray((normal_save*255.).astype(np.uint8)[:im_h_resized_to, :im_w_resized_to]).save(str(normal_dump_path).replace('.png','_cropped.png'))
                         print(normal_dump_path)
 
                 if 'ro' in opt.cfg.MODEL_BRDF.enable_list:
-                    roughPreds_list.append(output_dict['roughPreds'][n])
+                    roughPreds_list.append(output_dict['roughPred'])
                     if opt.cfg.MODEL_BRDF.if_bilateral:
                         roughBsPreds_list.append(output_dict['roughBsPred'])
                     if opt.cfg.DEBUG.if_test_real and opt.cfg.DEBUG.dump_BRDF_offline.enable:
-                        assert output_dict['roughPreds'][n].shape[0] == 1
+                        assert output_dict['roughPred'].shape[0] == 1
                         rough_dump_path = scene_path_dump / ('imroughness.png')
-                        roughPred_np = output_dict['roughPreds'][n][0].cpu().numpy()
+                        roughPred_np = output_dict['roughPred'][0].cpu().numpy()
                         rough_save = np.clip(0.5*(roughPred_np.squeeze()+1), 0., 1.)
                         Image.fromarray((rough_save*255.).astype(np.uint8)).save(str(rough_dump_path))
                         Image.fromarray((rough_save*255.).astype(np.uint8)[:im_h_resized_to, :im_w_resized_to]).save(str(rough_dump_path).replace('.png','_cropped.png'))
@@ -1501,13 +1518,13 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                             Image.fromarray((roughBs_save*255.).astype(np.uint8)[:im_h_resized_to, :im_w_resized_to, :]).save(str(roughBs_dump_path).replace('.png','_cropped.png'))
 
                 if 'de' in opt.cfg.MODEL_BRDF.enable_list:
-                    depthPreds_list.append(output_dict['depthPreds'][n])
+                    depthPreds_list.append(output_dict['depthPred'])
                     if opt.cfg.MODEL_BRDF.if_bilateral:
                         depthBsPreds_list.append(output_dict['depthBsPred'])
                     if opt.cfg.DEBUG.if_test_real and opt.cfg.DEBUG.dump_BRDF_offline.enable:
-                        assert output_dict['depthPreds'][n].shape[0] == 1
+                        assert output_dict['depthPred'].shape[0] == 1
                         depth_dump_path = scene_path_dump / ('imdepth.pickle')
-                        depthPred_np = output_dict['depthPreds'][n][0].cpu().numpy()
+                        depthPred_np = output_dict['depthPred'][0].cpu().numpy()
                         depth_save = depthPred_np.squeeze().astype(np.float32)
                         with open(str(depth_dump_path),"wb") as f:
                             pickle.dump({'depth_pred': depth_save}, f)
@@ -1759,14 +1776,14 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
         #     vutils.save_image( ( (output_dict['albedoPreds'][n] ) ** (1.0/2.2) ).data,
         #             '{0}/{1}_albedoPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
         # for n in range(0, len(output_dict['normalPreds']) ):
-        #     vutils.save_image( ( 0.5*(output_dict['normalPreds'][n] + 1) ).data,
+        #     vutils.save_image( ( 0.5*(output_dict['normalPred'] + 1) ).data,
         #             '{0}/{1}_normalPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
         # for n in range(0, len(output_dict['roughPreds']) ):
-        #     vutils.save_image( ( 0.5*(output_dict['roughPreds'][n] + 1) ).data,
+        #     vutils.save_image( ( 0.5*(output_dict['roughPred'] + 1) ).data,
         #             '{0}/{1}_roughPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
         # for n in range(0, len(output_dict['depthPreds']) ):
-        #     depthOut = 1 / torch.clamp(output_dict['depthPreds'][n] + 1, 1e-6, 10) * segAllBatch_vis.expand_as(output_dict['depthPreds'][n])
-        #     vutils.save_image( ( depthOut * segAllBatch_vis.expand_as(output_dict['depthPreds'][n]) ).data,
+        #     depthOut = 1 / torch.clamp(output_dict['depthPred'] + 1, 1e-6, 10) * segAllBatch_vis.expand_as(output_dict['depthPred'])
+        #     vutils.save_image( ( depthOut * segAllBatch_vis.expand_as(output_dict['depthPred']) ).data,
         #             '{0}/{1}_depthPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
 
         # ==== Preds

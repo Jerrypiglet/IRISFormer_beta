@@ -40,13 +40,13 @@ def postprocess_iiw(input_dict, output_dict, loss_dict, opt, time_meters, eval_m
 
     if if_loss:
         albedoPred = output_dict['albedoPred']
-        output_dict['albedoPreds'] = [output_dict['albedoPred']]
-        if 'normalPred' in output_dict:
-            output_dict['normalPreds'] = [output_dict['normalPred']]
-        if 'depthPred' in output_dict:
-            output_dict['depthPreds'] = [output_dict['depthPred']]
-        if 'roughPred' in output_dict:
-            output_dict['roughPreds'] = [output_dict['roughPred']]
+        # output_dict['albedoPreds'] = [output_dict['albedoPred']]
+        # if 'normalPred' in output_dict:
+        #     output_dict['normalPreds'] = [output_dict['normalPred']]
+        # if 'depthPred' in output_dict:
+        #     output_dict['depthPreds'] = [output_dict['depthPred']]
+        # if 'roughPred' in output_dict:
+        #     output_dict['roughPreds'] = [output_dict['roughPred']]
 
         eq, darker = input_dict['eq'], input_dict['darker']        
 
