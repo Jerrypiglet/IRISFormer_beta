@@ -432,12 +432,12 @@ if opt.if_vis:
 # <<<<<<<<<<<<< DATASET
 
 # >>>>>>>>>>>>> DATASET
-transforms_train_semseg_iiw = get_transform_semseg('train', opt, pad_op_override=opt.pad_op_iiw)
-transforms_val_semseg_iiw = get_transform_semseg('val', opt, pad_op_override=opt.pad_op_iiw)
-transforms_train_matseg_iiw = get_transform_matseg('train', opt, pad_op_override=opt.pad_op_iiw)
-transforms_val_matseg_iiw = get_transform_matseg('val', opt, pad_op_override=opt.pad_op_iiw)
-transforms_train_resize_iiw = get_transform_resize('train', opt, pad_op_override=opt.pad_op_iiw)
-transforms_val_resize_iiw = get_transform_resize('val', opt, pad_op_override=opt.pad_op_iiw)
+transforms_train_semseg_iiw = get_transform_semseg('train', opt)
+transforms_val_semseg_iiw = get_transform_semseg('val', opt)
+transforms_train_matseg_iiw = get_transform_matseg('train', opt)
+transforms_val_matseg_iiw = get_transform_matseg('val', opt)
+transforms_train_resize_iiw = get_transform_resize('train', opt)
+transforms_val_resize_iiw = get_transform_resize('val', opt)
 
 
 if opt.if_train:

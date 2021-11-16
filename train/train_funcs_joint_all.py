@@ -271,9 +271,11 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
                     'loss_brdf-albedo-bs', ]
                 if not opt.cfg.MODEL_BRDF.if_bilateral_albedo_only:
                     loss_keys += [
-                        'loss_brdf-normal-bs', 
+                        # 'loss_brdf-normal-bs', 
                         'loss_brdf-rough-bs', 
                         'loss_brdf-depth-bs', 
+                        'loss_brdf-rough-bs-paper', 
+                        'loss_brdf-depth-bs-paper', 
                     ]
 
 
@@ -409,6 +411,8 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
             # print(loss_dict.keys())
             loss_dict_reduced = reduce_loss_dict(loss_dict, mark=tid, logger=logger) # **average** over multi GPUs
             time_meters['ts'] = time.time()
+            logger.info(green('Training timings: ' + time_meters_to_string(time_meters)))
+
             # loss = loss_dict['loss_all']
             
             # ======= update loss
@@ -456,7 +460,10 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
 
                         if 'al' in opt.cfg.MODEL_BRDF.enable_list:
                             # /data/ruizhu/openrooms_mini/mainDiffMat_xml1/scene0593_01/imbaseColor_12.png/
-                            albedo_dump_path = scene_path_dump / ('imbaseColor_%d_dump.png'%frame_id)
+                            if opt.cfg.MODEL_BRDF.use_scale_aware_albedo:
+                                albedo_dump_path = scene_path_dump / ('imbaseColor_%d_dump.png'%frame_id)
+                            else:
+                                albedo_dump_path = scene_path_dump / ('imbaseColor_scale_invariant_%d_dump.png'%frame_id)
                             albedo_dump_path = Path(str(albedo_dump_path).replace('DiffLight', ''))
                             albedo_sdr = np.clip(albedo_output[sample_idx_batch].transpose(1, 2, 0) ** (1.0/2.2), 0., 1.)
                             Image.fromarray((albedo_sdr*255.).astype(np.uint8)).save(str(albedo_dump_path))
@@ -482,7 +489,10 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
                             print(frame_info['normal_path'])
                         if 'de' in opt.cfg.MODEL_BRDF.enable_list:
                             # /data/ruizhu/openrooms_mini/mainDiffMat_xml1/scene0593_01/imbaseColor_12.png/
-                            depth_dump_path = scene_path_dump / ('imdepth_%d_dump.pickle'%frame_id)
+                            if opt.cfg.MODEL_BRDF.use_scale_aware_depth:
+                                depth_dump_path = scene_path_dump / ('imdepth_%d_dump.pickle'%frame_id)
+                            else:
+                                depth_dump_path = scene_path_dump / ('imdepth_scale_invariant_%d_dump.pickle'%frame_id)
                             depth_dump_path = Path(str(depth_dump_path).replace('DiffLight', '').replace('DiffMat', ''))
                             depth_save = depth_output[sample_idx_batch].squeeze().astype(np.float32)
                             with open(str(depth_dump_path),"wb") as f:
@@ -492,7 +502,7 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
 
                 if 'de' in opt.cfg.MODEL_BRDF.enable_list:
                     depth_input = input_dict['depthBatch'].detach().cpu().numpy()
-                    depth_output = output_dict['depthPreds'][0].detach().cpu().numpy()
+                    depth_output = output_dict['depthPred'].detach().cpu().numpy()
                     seg_obj = data_batch['segObj'].cpu().numpy()
                     min_depth, max_depth = 0.1, 8.
                     # depth_mask = np.logical_and(np.logical_and(seg_obj != 0, depth_input < max_depth), depth_input > min_depth)
@@ -525,7 +535,7 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
 
                 if 'no' in opt.cfg.MODEL_BRDF.enable_list:
                     normal_input = input_dict['normalBatch'].detach().cpu().numpy()
-                    normal_output = output_dict['normalPreds'][0].detach().cpu().numpy()
+                    normal_output = output_dict['normalPred'].detach().cpu().numpy()
                     # np.save('normal_input_%d.npy'%(batch_id), normal_input)
                     # np.save('normal_output_%d.npy'%(batch_id), normal_output)
                     normal_input_Nx3 = np.transpose(normal_input, (0, 2, 3, 1)).reshape(-1, 3)
@@ -621,7 +631,7 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
     if opt.is_master:
         for loss_key in loss_dict_reduced:
             writer.add_scalar('loss_val/%s'%loss_key, loss_meters[loss_key].avg, tid)
-            logger.info('Logged val loss for %s'%loss_key)
+            logger.info('Logged val loss for %s:%.6f'%(loss_key, loss_meters[loss_key].avg))
 
                 
         if ENABLE_SEMSEG:
@@ -733,10 +743,13 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
         normalPreds_list = []
         roughPreds_list = []
         depthPreds_list = []
+        depthPreds_aligned_list = []
 
         albedoBsPreds_list = []
+        albedoBsPreds_aligned_list = []
         roughBsPreds_list = []
         depthBsPreds_list = []
+        depthBsPreds_aligned_list = []
 
 
     if opt.cfg.MODEL_GMM.enable:
@@ -821,6 +834,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
 
                     if opt.cfg.DEBUG.if_test_real:
                         real_sample_im_path = real_sample_results_path / 'im_.png'
+                        print(im_h_resized_to, im_w_resized_to)
+                        assert len(im_h_resized_to) == 1
+                        im_h_resized_to, im_w_resized_to = im_h_resized_to[0], im_w_resized_to[0]
                         im_ = Image.fromarray((im_single*255.).astype(np.uint8)[:im_h_resized_to, :im_w_resized_to])
                         im_ = im_.resize((im_w_resized_to*2, im_h_resized_to*2), Image.ANTIALIAS)
                         im_.save(str(real_sample_im_path))
@@ -1465,13 +1481,16 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     if opt.cfg.MODEL_BRDF.if_bilateral:
                         albedoBsPreds_list.append(output_dict['albedoBsPred'])
                     if (not opt.cfg.DATASET.if_no_gt_BRDF) and opt.cfg.DATA.load_brdf_gt and 'al' in opt.cfg.DATA.data_read_list:
-                        albedoPreds_aligned_list.append(output_dict['albedoPreds_aligned'][n])
+                        albedoPreds_aligned_list.append(output_dict['albedoPred_aligned'])
                     if opt.cfg.DEBUG.if_test_real and opt.cfg.DEBUG.dump_BRDF_offline.enable:
                         # assert output_dict['albedoPreds'][n].shape[0] == 1
                         assert output_dict['albedoPred'].shape[0] == 1
                         # albedoPred_np = output_dict['albedoPreds'][n][0].cpu().numpy()
                         albedoPred_np = output_dict['albedoPred'][0].cpu().numpy()
-                        albedo_dump_path = scene_path_dump / ('imbaseColor.png')
+                        if opt.cfg.MODEL_BRDF.use_scale_aware_albedo:
+                            albedo_dump_path = scene_path_dump / ('imbaseColor.png')
+                        else:
+                            albedo_dump_path = scene_path_dump / ('imbaseColor_scaleInv.png')
                         albedo_sdr = np.clip(albedoPred_np.transpose(1, 2, 0) ** (1.0/2.2), 0., 1.)
                         Image.fromarray((albedo_sdr*255.).astype(np.uint8)).save(str(albedo_dump_path))
                         Image.fromarray((albedo_sdr*255.).astype(np.uint8)[:im_h_resized_to, :im_w_resized_to, :]).save(str(albedo_dump_path).replace('.png','_cropped.png'))
@@ -1521,9 +1540,16 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     depthPreds_list.append(output_dict['depthPred'])
                     if opt.cfg.MODEL_BRDF.if_bilateral:
                         depthBsPreds_list.append(output_dict['depthBsPred'])
+                    if not opt.cfg.MODEL_BRDF.use_scale_aware_depth and 'de' in opt.cfg.DATA.data_read_list:
+                        depthPreds_aligned_list.append(output_dict['depthPred_aligned'])
+                        if opt.cfg.MODEL_BRDF.if_bilateral:
+                            depthBsPreds_aligned_list.append(output_dict['depthBsPred_aligned'])
                     if opt.cfg.DEBUG.if_test_real and opt.cfg.DEBUG.dump_BRDF_offline.enable:
                         assert output_dict['depthPred'].shape[0] == 1
-                        depth_dump_path = scene_path_dump / ('imdepth.pickle')
+                        if opt.cfg.MODEL_BRDF.use_scale_aware_depth:
+                            depth_dump_path = scene_path_dump / ('imdepth.pickle')
+                        else:
+                            depth_dump_path = scene_path_dump / ('imdepth_scale_invariant.pickle')
                         depthPred_np = output_dict['depthPred'][0].cpu().numpy()
                         depth_save = depthPred_np.squeeze().astype(np.float32)
                         with open(str(depth_dump_path),"wb") as f:
@@ -1532,11 +1558,17 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                             pickle.dump({'depth_pred': depth_save[:im_h_resized_to, :im_w_resized_to]}, f)
                         print(depth_dump_path)
                         _ = depth_save[:im_h_resized_to, :im_w_resized_to]
-                        depth_dump_vis_path = scene_path_dump / ('imdepth_cropped.png')
+                        if opt.cfg.MODEL_BRDF.use_scale_aware_depth:
+                            depth_dump_vis_path = scene_path_dump / ('imdepth_cropped.png')
+                        else:
+                            depth_dump_vis_path = scene_path_dump / ('imdepth_scale_invariant_cropped.png')
                         _ = vis_disp_colormap(_, normalize=True)[0]
                         Image.fromarray(_).save(str(depth_dump_vis_path))
                         if opt.cfg.MODEL_BRDF.if_bilateral:
-                            depthBs_dump_path = scene_path_dump / ('imdepthBs.pickle')
+                            if opt.cfg.MODEL_BRDF.use_scale_aware_depth:
+                                depthBs_dump_path = scene_path_dump / ('imdepthBs.pickle')
+                            else:
+                                depthBs_dump_path = scene_path_dump / ('imdepthBs_scale_invariant.pickle')
                             depthBsPred_np = output_dict['depthBsPred'][0].cpu().numpy()
                             depthBs_save = depthBsPred_np.squeeze().astype(np.float32)
                             with open(str(depthBs_dump_path),"wb") as f:
@@ -1544,7 +1576,10 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                             with open(str(depthBs_dump_path).replace('.pickle','_cropped.pickle'),"wb") as f:
                                 pickle.dump({'depth_pred': depthBs_save[:im_h_resized_to, :im_w_resized_to]}, f)
                             _ = depthBs_save[:im_h_resized_to, :im_w_resized_to]
-                            depthBs_dump_vis_path = scene_path_dump / ('imdepthBs_cropped.png')
+                            if opt.cfg.MODEL_BRDF.use_scale_aware_depth:
+                                depthBs_dump_vis_path = scene_path_dump / ('imdepthBs_cropped.png')
+                            else:
+                                depthBs_dump_vis_path = scene_path_dump / ('imdepthBs_scale_invariant_cropped.png')
                             _ = vis_disp_colormap(_, normalize=True)[0]
                             Image.fromarray(_).save(str(depthBs_dump_vis_path))
 
@@ -1601,6 +1636,12 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                         I_hdr_downsampled = I_hdr_downsampled.transpose(1, 3, 2, 4, 0).reshape(H_grid_after*h//downsize_ratio, W_grid_after*w//downsize_ratio, 3)
                         if opt.is_master:
                             cv2.imwrite('{0}/{1}-{2}_{3}.hdr'.format(opt.summary_vis_path_task, tid, sample_idx, 'light_Pred') , I_hdr_downsampled[:, :, [2, 1, 0]])
+                            if opt.cfg.DEBUG.if_dump_full_envmap:
+                                # cv2.imwrite('{0}/{1}-{2}_{3}_ori.hdr'.format(opt.summary_vis_path_task, tid, sample_idx, 'light_Pred') , )
+                                with open('{0}/{1}-{2}_{3}_ori.pickle'.format(opt.summary_vis_path_task, tid, sample_idx, 'light_Pred'),"wb") as f:
+                                    pickle.dump({'env': I_hdr[[2, 1, 0], :, :, :, :]}, f)
+
+
                     else:
                         for I_hdr, name_tag in zip([envmapsPredImage[sample_idx_batch], envmapsPredScaledImage[sample_idx_batch], envmapsBatch[sample_idx_batch]], ['light_Pred', 'light_Pred_Scaled', 'light_GT']):
                             if I_hdr is None:
@@ -1614,6 +1655,8 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                             I_hdr_downsampled = I_hdr_downsampled.transpose(1, 3, 2, 4, 0).reshape(H_grid*h//downsize_ratio, W_grid*w//downsize_ratio, 3)
                             if opt.is_master:
                                 cv2.imwrite('{0}/{1}-{2}_{3}.hdr'.format(opt.summary_vis_path_task, tid, sample_idx, name_tag) , I_hdr_downsampled[:, :, [2, 1, 0]])
+                                with open('{0}/{1}-{2}_{3}_ori.pickle'.format(opt.summary_vis_path_task, tid, sample_idx, name_tag),"wb") as f:
+                                    pickle.dump({'env': I_hdr[[2, 1, 0], :, :, :, :]}, f)
 
                     for I_png, name_tag in zip([renderedImPred[sample_idx_batch], renderedImPred_sdr[sample_idx_batch], imBatchSmall[sample_idx_batch], imBatchSmall[sample_idx_batch]**(1./2.2)], ['renderedImPred', 'renderedImPred_sdr', 'imBatchSmall_GT', 'imBatchSmall_GT_sdr']):
                         I_png = np.clip(I_png, 0., 1.)
@@ -1731,6 +1774,7 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                 writer.add_image('VAL_brdf-rough_GT/%d'%sample_idx, rough_gt_batch_vis_sdr_numpy[sample_idx], tid, dataformats='HWC')
             if 'de' in opt.cfg.DATA.data_read_list:
                 depth_normalized, depth_min_and_scale = vis_disp_colormap(depth_gt_batch_vis_sdr_numpy[sample_idx].squeeze(), normalize=True, valid_mask=segAll==1)
+                # print(np.amax(depth_gt_batch_vis_sdr_numpy[sample_idx].squeeze()), np.amin(depth_gt_batch_vis_sdr_numpy[sample_idx].squeeze()), depth_min_and_scale, '=====')
                 depth_min_and_scale_list.append(depth_min_and_scale)
                 writer.add_image('VAL_brdf-depth_GT/%d'%sample_idx, depth_normalized, tid, dataformats='HWC')
 
@@ -1757,6 +1801,10 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
             depthPreds_vis = torch.cat(depthPreds_list)
             if opt.cfg.MODEL_BRDF.if_bilateral:
                 depthBsPreds_vis = torch.cat(depthBsPreds_list)
+            if not opt.cfg.MODEL_BRDF.use_scale_aware_depth and 'de' in opt.cfg.DATA.data_read_list:
+                depthPreds_aligned_vis = torch.cat(depthPreds_aligned_list)
+                if opt.cfg.MODEL_BRDF.if_bilateral:
+                    depthBsPreds_aligned_vis = torch.cat(depthBsPreds_aligned_list)
 
         if opt.cascadeLevel > 0:
             diffusePreBatch_vis = torch.cat(diffusePreBatch_list)
@@ -1830,7 +1878,14 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
             depthOut_colored_batch = np.stack(depthOut_colored_single_numpy_list).transpose(0, 3, 1, 2).astype(np.float32) / 255.
             # print(depthOut_colored_batch.shape, segAllBatch_vis.cpu().detach().numpy().shape)
             depth_pred_batch_vis_sdr_colored = ( torch.from_numpy(depthOut_colored_batch).cuda() * segAllBatch_vis.expand_as(depthPreds_vis) ).data
-            # depth_pred_batch_vis_sdr_colored = depthOut_colored_batch * segAllBatch_vis.cpu().detach().numpy()
+            # depth_pred_batch_vis_
+            # sdr_colored = depthOut_colored_batch * segAllBatch_vis.cpu().detach().numpy()
+
+            # if opt.cfg.MODEL_BRDF.if_bilateral:
+
+            # if not opt.cfg.MODEL_BRDF.use_scale_aware_depth and 'de' in opt.cfg.DATA.data_read_list:
+
+
             if opt.is_master:
                 vutils.save_image(depth_pred_batch_vis_sdr,
                     '{0}/{1}_depthPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
@@ -1935,6 +1990,9 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                         _ = _[:im_h_resized_to, :im_w_resized_to]
                         depth_bs_not_normalized_pred = vis_disp_colormap(_, normalize=True)[0]
                         writer.add_image('VAL_brdf-depth_PRED-BS/%d'%sample_idx, depth_bs_not_normalized_pred, tid, dataformats='HWC')
+                        if (not opt.cfg.DATASET.if_no_gt_BRDF) and opt.cfg.DATA.load_brdf_gt and 'de' in opt.cfg.DATA.data_read_list:
+                            depth_bs_normalized_pred = vis_disp_colormap(_, normalize=True, min_and_scale=depth_min_and_scale_list[sample_idx])[0]
+                            writer.add_image('VAL_brdf-depth_syncScale_PRED-BS/%d'%sample_idx, depth_bs_normalized_pred, tid, dataformats='HWC')
 
                     if opt.cfg.DEBUG.if_dump_perframe_BRDF:
                         Image.fromarray((depth_not_normalized_pred).astype(np.uint8)).save('{0}/{1}_depthPred_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx ))

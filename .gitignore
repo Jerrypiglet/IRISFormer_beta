@@ -2,6 +2,7 @@ notebooks/*.obj
 notebooks/*.png
 notebooks/*.mtl
 __pycache__/
+tmp_val_OR/
 models
 models_ckpt
 dataset/

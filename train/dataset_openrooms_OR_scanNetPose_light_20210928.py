@@ -64,6 +64,8 @@ class openrooms(data.Dataset):
         self.task = self.split if task is None else task
         self.if_for_training = if_for_training
         self.data_root = self.opt.cfg.DATASET.dataset_path
+        if self.opt.cfg.DEBUG.if_fast_val_labels and self.split=='val':
+            self.data_root = '/home/ruizhu/Documents/Projects/semanticInverse/tmp_val_OR'
         split_to_list = {'train': 'train.txt', 'val': 'val.txt', 'test': 'test.txt'}
         data_list = os.path.join(self.cfg.PATH.root, self.cfg.DATASET.dataset_list)
         data_list = os.path.join(data_list, split_to_list[split])
@@ -422,6 +424,8 @@ class openrooms(data.Dataset):
                 if self.opt.cfg.DATASET.dataset_if_save_space:
                     albedo_path = albedo_path.replace('DiffLight', '')
                 albedo_path = str(Path(self.cfg.DEBUG.dump_BRDF_offline.path_task) / ('/'.join(albedo_path.split('/')[-3::]))).replace('.png', '_dump.png')
+                if not self.opt.cfg.MODEL_BRDF.use_scale_aware_albedo:
+                    albedo_path = albedo_path.replace('imbaseColor_', 'imbaseColor_scale_invariant_')
                 frame_info['albedo_path'] = albedo_path
                 albedo = np.asarray(Image.open(albedo_path), dtype=np.float32) / 255.
                 albedo = np.transpose(albedo, [2, 0, 1] )
@@ -458,6 +462,8 @@ class openrooms(data.Dataset):
                 if self.opt.cfg.DATASET.dataset_if_save_space:
                     depth_path = depth_path.replace('DiffLight', '').replace('DiffMat', '')
                 depth_path = str(Path(self.cfg.DEBUG.dump_BRDF_offline.path_task) / ('/'.join(depth_path.split('/')[-3:-1])) / ('imdepth_%d_dump.pickle'%frame_info['frame_id']))
+                if not self.opt.cfg.MODEL_BRDF.use_scale_aware_depth:
+                    depth_path = depth_path.replace('imdepth_', 'imdepth_scale_invariant_')
                 frame_info['depth_path'] = depth_path
                 # Read depth
                 with open(depth_path, 'rb') as f:
@@ -515,7 +521,7 @@ class openrooms(data.Dataset):
                 else:
                     root_path_scene = '/newdata/ruizhu/openrooms_raw_light'
                 env_path = env_path.replace(self.opt.cfg.DATASET.dataset_path_local, root_path_scene)
-                # print(env_path)
+            print(env_path)
 
             envmaps, envmapsInd = self.loadEnvmap(env_path )
             envmaps = envmaps * hdr_scale 

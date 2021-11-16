@@ -204,6 +204,9 @@ class Model_Joint_ViT(nn.Module):
                     # assert self.cfg.DEBUG.if_test_real
                     albedoBsPred, albedoConf = self.BRDF_Net['albedoBs'](input_dict['imBatch'], albedoPred.detach(), albedoPred )
                     return_dict.update({'albedoBsPred': albedoBsPred})
+                    if if_has_gt_BRDF and 'al' in self.opt.cfg.DATA.data_read_list:
+                        albedoBsPred_aligned, albedoConf_aligned = self.BRDF_Net['albedoBs'](input_dict['imBatch'], albedoPred_aligned.detach(), albedoPred_aligned )
+                        return_dict.update({'albedoBsPred_aligned': albedoBsPred_aligned})
                     # if if_has_gt_BRDF and 'al' in self.opt.cfg.DATA.data_read_list:
                     #     albedoBsPred = models_brdf.LSregress(
                     #         albedoBsPred * input_dict['segBRDFBatch'].expand_as(albedoBsPred ),
@@ -242,8 +245,16 @@ class Model_Joint_ViT(nn.Module):
 
                 if self.cfg.MODEL_BRDF.if_bilateral:
                     # assert self.cfg.DEBUG.if_test_real
-                    depthBsPred, depthConf = self.BRDF_Net['depthBs'](input_dict['imBatch'], return_dict['albedoPred'].detach(), depthPred )
+                    if 'albedoPred' in return_dict:
+                        depthBsPred, depthConf = self.BRDF_Net['depthBs'](input_dict['imBatch'], return_dict['albedoPred'].detach(), depthPred )
+                    else:
+                        assert self.opt.cfg.DEBUG.if_load_dump_BRDF_offline
+                        depthBsPred, depthConf = self.BRDF_Net['depthBs'](input_dict['imBatch'], input_dict['albedoBatch'].detach(), depthPred )
                     return_dict.update({'depthBsPred': depthBsPred})
+                    if if_has_gt_BRDF and 'de' in self.opt.cfg.DATA.data_read_list:
+                        assert 'depthPred_aligned' in return_dict
+                        depthBsPred_aligned, depthConf = self.BRDF_Net['depthBs'](input_dict['imBatch'], return_dict['albedoPred'].detach() if not self.opt.cfg.DEBUG.if_load_dump_BRDF_offline else input_dict['albedoBatch'].detach(), depthPred_aligned )
+                        return_dict.update({'depthBsPred_aligned': depthBsPred_aligned})
 
             elif modality == 'ro':
                 roughPred = vit_out
@@ -254,7 +265,11 @@ class Model_Joint_ViT(nn.Module):
                     # print(torch.max(roughPred[:, :, :213, :]), torch.min(roughPred[:, :, :213, :]), torch.median(roughPred[:, :, :213, :]), roughPred[:, :, :213, :].shape)
                     # print(torch.max(return_dict['albedoPred']), torch.min(return_dict['albedoPred']), torch.median(return_dict['albedoPred']), return_dict['albedoPred'].shape)
                     # roughBsPred, roughConf = self.BRDF_Net['roughBs'](input_dict['imBatch'][:, :, :213, :], return_dict['albedoPred'][:, :, :213, :].detach(), 0.5*(roughPred[:, :, :213, :]+1.) )
-                    roughBsPred, roughConf = self.BRDF_Net['roughBs'](input_dict['imBatch'], return_dict['albedoPred'].detach(), 0.5*(roughPred+1.) )
+                    if 'albedoPred' in return_dict:
+                        roughBsPred, roughConf = self.BRDF_Net['roughBs'](input_dict['imBatch'], return_dict['albedoPred'].detach(), 0.5*(roughPred+1.) )
+                    else:
+                        assert self.opt.cfg.DEBUG.if_load_dump_BRDF_offline
+                        roughBsPred, roughConf = self.BRDF_Net['roughBs'](input_dict['imBatch'], input_dict['albedoBatch'].detach(), 0.5*(roughPred+1.) )
                     roughBsPred = torch.clamp(2 * roughBsPred - 1, -1, 1)
                     # roughBsPred = roughPred[:, :, :213, :]
                     return_dict.update({'roughBsPred': roughBsPred})

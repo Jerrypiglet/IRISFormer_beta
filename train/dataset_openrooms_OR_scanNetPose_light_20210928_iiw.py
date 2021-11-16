@@ -100,14 +100,14 @@ class iiw(data.Dataset):
         self.im_height_padded, self.im_width_padded = self.cfg.DATA.iiw.im_height_padded_to, self.cfg.DATA.iiw.im_width_padded_to
 
         self.if_extra_op = False
-        if opt.cfg.DATA.if_pad_to_32x:
-            assert Falsae
+        # if opt.cfg.DATA.if_pad_to_32x:
+            # assert False
             # self.extra_op = opt.pad_op_iiw
             # self.if_extra_op = True
-        elif opt.cfg.DATA.if_resize_to_32x:
+        # elif opt.cfg.DATA.if_resize_to_32x:
             # self.extra_op = opt.resize_op
             # self.if_extra_op = True
-            assert False
+            # assert False
 
     def __len__(self):
         return len(self.data_list)

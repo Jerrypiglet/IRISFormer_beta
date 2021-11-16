@@ -163,7 +163,7 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
             loss_dict['loss_brdf-ALL'] = 0.
 
         if 'al' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
-            albedoPreds = []
+            # albedoPreds = []
             if opt.cfg.MODEL_BRDF.use_scale_aware_albedo or opt.cfg.DEBUG.if_test_real:
                 albedoPred = output_dict['albedoPred']
 
@@ -176,7 +176,7 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
                 # print('>>>>>>', if_loss, 'al' in opt.cfg.DATA.data_read_list)
                 if if_loss and 'al':
                     loss_dict['loss_brdf-albedo'] = []
-                    assert len(albedoPreds) == 1
+                    # assert len(albedoPreds) == 1
                     # for n in range(0, len(albedoPreds) ):
                     loss = torch.sum( (albedoPred - input_dict['albedoBatch'])
                         * (albedoPred - input_dict['albedoBatch']) * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch'] ) ) / pixelObjNum / 3.0
@@ -192,8 +192,11 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
                     loss_dict['loss_brdf-albedo'] = loss_dict['loss_brdf-albedo'][-1]
 
                     if opt.cfg.MODEL_BRDF.if_bilateral:
-                        loss_bs = torch.sum( (output_dict['albedoBsPred'] - input_dict['albedoBatch'])
-                            * (output_dict['albedoBsPred'] - input_dict['albedoBatch']) * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch'] ) ) / pixelObjNum / 3.0
+                        albedoBsPred = output_dict['albedoBsPred']
+                        if not opt.cfg.MODEL_BRDF.use_scale_aware_albedo:
+                            albedoBsPred = output_dict['albedoBsPred_aligned']
+                        loss_bs = torch.sum( (albedoBsPred - input_dict['albedoBatch'])
+                            * (albedoBsPred - input_dict['albedoBatch']) * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch'] ) ) / pixelObjNum / 3.0
                         loss_dict['loss_brdf-ALL'] += 4 * opt.albeW * loss_bs
                         loss_dict['loss_brdf-albedo-bs'] = loss_bs
 
@@ -235,6 +238,14 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
                 # output_dict.update({'mat_seg-roughPreds': roughPreds}) 
                 loss_dict['loss_brdf-rough'] = loss_dict['loss_brdf-rough'][-1]
                 loss_dict['loss_brdf-rough-paper'] = loss_dict['loss_brdf-rough'] / 4.
+
+                if opt.cfg.MODEL_BRDF.if_bilateral:
+                    loss_bs = torch.sum( (output_dict['roughBsPred'] - input_dict['roughBatch'])
+                        * (output_dict['roughBsPred'] - input_dict['roughBatch']) * input_dict['segBRDFBatch'].expand_as(input_dict['roughBatch'] ) ) / pixelObjNum
+                    loss_dict['loss_brdf-ALL'] += 4 * opt.rougW * loss_bs
+                    loss_dict['loss_brdf-rough-bs'] = loss_bs
+                    loss_dict['loss_brdf-rough-bs-paper'] = loss_bs / 4.
+
 
         if 'de' in opt.cfg.MODEL_BRDF.enable_list + eval_module_list:
             # depthPreds = []
@@ -294,6 +305,18 @@ def postprocess_brdf(input_dict, output_dict, loss_dict, opt, time_meters, eval_
                     loss_dict['loss_brdf-depth-paper'] = torch.sum( (torch.log(depthPred+0.001) - torch.log(input_dict['depthBatch']+0.001) )
                         * ( torch.log(depthPred+0.001) - torch.log(input_dict['depthBatch']+0.001) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum
 
+                    if opt.cfg.MODEL_BRDF.if_bilateral:
+                        depthBsPred = output_dict['depthBsPred']
+                        if not opt.cfg.MODEL_BRDF.use_scale_aware_depth:
+                            depthBsPred = output_dict['depthBsPred_aligned']
+                        loss_bs =  torch.sum(
+                                    (torch.log(depthBsPred+1) - torch.log(input_dict['depthBatch']+1) )
+                                    * ( torch.log(depthBsPred+1) - torch.log(input_dict['depthBatch']+1) )
+                                    * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) 
+                                ) / pixelAllNum 
+                        loss_dict['loss_brdf-ALL'] += 4 * opt.deptW * loss_bs
+                        loss_dict['loss_brdf-depth-bs-paper'] = torch.sum( (torch.log(depthBsPred+0.001) - torch.log(input_dict['depthBatch']+0.001) )
+                        * ( torch.log(depthBsPred+0.001) - torch.log(input_dict['depthBatch']+0.001) ) * input_dict['segAllBatch'].expand_as(input_dict['depthBatch'] ) ) / pixelAllNum
 
 
     if opt.cfg.MODEL_BRDF.enable_semseg_decoder:

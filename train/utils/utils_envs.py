@@ -163,7 +163,8 @@ def set_up_envs(opt):
         # else:
         #     opt.pad_op_iiw = None
 
-        if opt.cfg.DEBUG.if_nyud: # if True, should pad indeptly for each sample
+    if opt.cfg.DEBUG.if_nyud: # if True, should pad indeptly for each sample
+        if opt.cfg.DATA.if_pad_to_32x:
             im_width_pad_to = int(np.ceil(opt.cfg.DATA.im_width/32.)*32) # 320
             im_height_pad_to = int(np.ceil(opt.cfg.DATA.im_height/32.)*32) # 256
             opt.pad_op_nyud = transform.Pad([im_height_pad_to, im_width_pad_to], padding_with=im_pad_with, pad_option=pad_option)
@@ -312,10 +313,11 @@ def set_up_envs(opt):
     if isinstance(opt.cfg.MODEL_LAYOUT_EMITTER.enable_list, str):
         opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.split('_')
 
-    opt.dataset_config = Dataset_Config('OR', OR=opt.cfg.MODEL_LAYOUT_EMITTER.data.OR, version=opt.cfg.MODEL_LAYOUT_EMITTER.data.version, opt=opt)
-    opt.bins_tensor = to_dict_tensor(opt.dataset_config.bins, if_cuda=True)
 
     if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
+        opt.dataset_config = Dataset_Config('OR', OR=opt.cfg.MODEL_LAYOUT_EMITTER.data.OR, version=opt.cfg.MODEL_LAYOUT_EMITTER.data.version, opt=opt)
+        opt.bins_tensor = to_dict_tensor(opt.dataset_config.bins, if_cuda=True)
+
         if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
             if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_use_est_layout:
                 opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.append('lo')

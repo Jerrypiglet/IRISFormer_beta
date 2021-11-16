@@ -60,7 +60,9 @@ _C.PATH.models_ckpt_cluster = ['/ruidata/semanticInverse/models_ckpt', '', '']
 _C.DEBUG = CN()
 _C.DEBUG.if_fast_BRDF_labels = True
 _C.DEBUG.if_fast_light_labels = True
+_C.DEBUG.if_fast_val_labels = False
 _C.DEBUG.if_dump_anything = False
+_C.DEBUG.if_dump_full_envmap = False
 _C.DEBUG.if_test_real = False
 _C.DEBUG.if_iiw = False
 _C.DEBUG.if_nyud = False
@@ -285,6 +287,9 @@ _C.MODEL_BRDF.enable_semseg_decoder = False
 _C.MODEL_BRDF.semseg_PPM = True
 
 _C.MODEL_BRDF.pretrained_pth_name_BRDF_cascade0 = 'check_cascade0_w320_h240/%s0_13.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
+#IIW: check_cascadeIIW0/%s0_1.pth
+# NYU: check_cascadeNYU0/%s0_1.pth
+
 _C.MODEL_BRDF.pretrained_pth_name_Bs_cascade0 = 'checkBs_cascade0_w320_h240/%s0_14_1000.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
 # _C.MODEL_BRDF.pretrained_pth_name = 'checkBs_cascade0_w320_h240/%s0_14_1000.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits
 # _C.MODEL_BRDF.pretrained_pth_name = 'checkBs_cascade0_w320_h240/%s0_14_1000.pth' # should not use for Rui's splits; this ckpt was trained with Zhengqin's CVPR'20 splits

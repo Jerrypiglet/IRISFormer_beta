@@ -519,6 +519,15 @@ class Model_Joint(nn.Module):
             from detectron2.modeling import build_model
             self.DETECTRON = build_model(opt.cfg_detectron)
 
+    def freeze_BN(self):
+        if self.cfg.MODEL_LIGHT.freeze_BRDF_Net:
+            self.turn_off_names(['BRDF_Net'])
+            freeze_bn_in_module(self.BRDF_Net)
+
+        if self.cfg.MODEL_LIGHT.if_freeze or self.cfg.MODEL_LIGHT.DPT_baseline.enable_as_single_est_freeze_LightNet:
+            self.turn_off_names(['LIGHT_Net'])
+            freeze_bn_in_module(self.LIGHT_Net)
+
 
     def forward(self, input_dict, if_has_gt_BRDF=True):
         return_dict = {}
@@ -846,7 +855,8 @@ class Model_Joint(nn.Module):
         return return_dict
 
     def forward_brdf(self, input_dict, input_dict_extra={}, if_has_gt_BRDF=True):
-        if_has_gt_BRDF = if_has_gt_BRDF and (not self.opt.cfg.DATASET.if_no_gt_BRDF) and self.load_brdf_gt
+        if_has_gt_BRDF = if_has_gt_BRDF and (not self.opt.cfg.DATASET.if_no_gt_BRDF) and self.load_brdf_gt and not self.opt.cfg.DEBUG.if_test_real
+        if_has_gt_segBRDF = if_has_gt_BRDF and not self.opt.cfg.DEBUG.if_nyud and not self.opt.cfg.DEBUG.if_iiw and not self.opt.cfg.DEBUG.if_test_real
 
         assert 'input_dict_guide' in input_dict_extra
         if 'input_dict_guide' in input_dict_extra:
@@ -917,27 +927,31 @@ class Model_Joint(nn.Module):
                 albedo_output = self.BRDF_Net['albedoDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_extra=input_dict_extra)
                 albedoPred = 0.5 * (albedo_output['x_out'] + 1)
 
-                if self.cfg.MODEL_BRDF.if_bilateral:
-                    albedoBsPred, albedoConf = self.BRDF_Net['albedoBs'](input_dict['imBatch'], albedoPred.detach(), albedoPred )
-                    if if_has_gt_BRDF:
-                        albedoBsPred = models_brdf.LSregress(albedoBsPred * input_dict['segBRDFBatch'].expand_as(albedoBsPred ),
-                            input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoBsPred )
-                    albedoBsPred = torch.clamp(albedoBsPred, 0, 1 )
-                    if if_has_gt_BRDF:
-                        albedoBsPred = input_dict['segBRDFBatch'] * albedoBsPred
-                    return_dict.update({'albedoBsPred': albedoBsPred, 'albedoConf': albedoConf})
-                
-                if if_has_gt_BRDF:
+                if if_has_gt_segBRDF:
                     input_dict['albedoBatch'] = input_dict['segBRDFBatch'] * input_dict['albedoBatch']
                 
                 albedoPred = torch.clamp(albedoPred, 0, 1)
                 return_dict.update({'albedoPred': albedoPred})
                 # if not self.cfg.MODEL_BRDF.use_scale_aware_albedo:
-                if if_has_gt_BRDF:
+                if if_has_gt_BRDF and if_has_gt_segBRDF:
                     albedoPred_aligned = models_brdf.LSregress(albedoPred * input_dict['segBRDFBatch'].expand_as(albedoPred),
                             input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoPred)
                     albedoPred_aligned = torch.clamp(albedoPred_aligned, 0, 1)
                     return_dict.update({'albedoPred_aligned': albedoPred_aligned, 'albedo_extra_output_dict': albedo_output['extra_output_dict']})
+
+                if self.cfg.MODEL_BRDF.if_bilateral:
+                    albedoBsPred, albedoConf = self.BRDF_Net['albedoBs'](input_dict['imBatch'], albedoPred.detach(), albedoPred )
+                    if if_has_gt_BRDF and 'al' in self.opt.cfg.DATA.data_read_list:
+                        albedoBsPred = models_brdf.LSregress(albedoBsPred * input_dict['segBRDFBatch'].expand_as(albedoBsPred ),
+                            input_dict['albedoBatch'] * input_dict['segBRDFBatch'].expand_as(input_dict['albedoBatch']), albedoBsPred )
+                    albedoBsPred = torch.clamp(albedoBsPred, 0, 1 )
+                    if if_has_gt_segBRDF:
+                        albedoBsPred = input_dict['segBRDFBatch'] * albedoBsPred
+                    return_dict.update({'albedoBsPred': albedoBsPred, 'albedoConf': albedoConf})
+
+                    if if_has_gt_BRDF and 'al' in self.opt.cfg.DATA.data_read_list:
+                        albedoBsPred_aligned, albedoConf_aligned = self.BRDF_Net['albedoBs'](input_dict['imBatch'], albedoPred_aligned.detach(), albedoPred_aligned )
+                        return_dict.update({'albedoBsPred_aligned': albedoBsPred_aligned})
 
             if 'no' in self.cfg.MODEL_BRDF.enable_list:
                 normal_output = self.BRDF_Net['normalDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_extra=input_dict_extra)
@@ -953,11 +967,11 @@ class Model_Joint(nn.Module):
                 rough_output = self.BRDF_Net['roughDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_extra=input_dict_extra)
                 roughPred = rough_output['x_out']
                 return_dict.update({'roughPred': roughPred, 'rough_extra_output_dict': rough_output['extra_output_dict']})
-                if if_has_gt_BRDF:
-                    if self.cfg.MODEL_BRDF.if_bilateral and not self.cfg.MODEL_BRDF.if_bilateral_albedo_only:
-                        roughBsPred, roughConf = self.BRDF_Net['roughBs'](input_dict['imBatch'], albedoPred.detach(), 0.5*(roughPred+1.) )
-                        roughBsPred = torch.clamp(2 * roughBsPred - 1, -1, 1)
-                        return_dict.update({'roughBsPred': roughBsPred, 'roughConf': roughConf})
+                # if if_has_gt_BRDF:
+                if self.cfg.MODEL_BRDF.if_bilateral and not self.cfg.MODEL_BRDF.if_bilateral_albedo_only:
+                    roughBsPred, roughConf = self.BRDF_Net['roughBs'](input_dict['imBatch'], albedoPred.detach(), 0.5*(roughPred+1.) )
+                    roughBsPred = torch.clamp(2 * roughBsPred - 1, -1, 1)
+                    return_dict.update({'roughBsPred': roughBsPred, 'roughConf': roughConf})
 
             if 'de' in self.cfg.MODEL_BRDF.enable_list:
                 depth_output = self.BRDF_Net['depthDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6, input_dict_extra=input_dict_extra)
@@ -968,17 +982,39 @@ class Model_Joint(nn.Module):
                 if if_has_gt_BRDF:
                     if self.cfg.MODEL_BRDF.if_bilateral and not self.cfg.MODEL_BRDF.if_bilateral_albedo_only:
                         depthBsPred, depthConf = self.BRDF_Net['depthBs'](input_dict['imBatch'], albedoPred.detach(), 0.5*(depthPred+1.) if self.cfg.MODEL_BRDF.depth_activation=='tanh' else depthPred )
-                        depthBsPred = models_brdf.LSregress(depthBsPred *  input_dict['segAllBatch'].expand_as(depthBsPred),
-                                input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthBsPred)
+                        if if_has_gt_segBRDF:
+                            depthBsPred = models_brdf.LSregress(depthBsPred *  input_dict['segAllBatch'].expand_as(depthBsPred),
+                                    input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthBsPred)
+                        else:
+                            depthBsPred = models_brdf.LSregress(depthBsPred, input_dict['depthBatch'], depthBsPred)
                         return_dict.update({'depthBsPred': depthBsPred, 'depthConf': depthConf})
                     
                     if self.cfg.MODEL_BRDF.depth_activation == 'tanh':
                         depthPred_aligned = 0.5 * (depthPred + 1) # [-1, 1] -> [0, 1]
+                        # print(torch.max(depthPred_aligned), torch.min(depthPred_aligned), torch.median(depthPred_aligned))
                     else:
                         depthPred_aligned = depthPred # [0, inf]
-                    depthPred_aligned = models_brdf.LSregress(depthPred_aligned *  input_dict['segAllBatch'].expand_as(depthPred_aligned),
-                            input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred_aligned)
+                    if if_has_gt_segBRDF:
+                        depthPred_aligned = models_brdf.LSregress(depthPred_aligned *  input_dict['segAllBatch'].expand_as(depthPred_aligned),
+                                input_dict['depthBatch'] * input_dict['segAllBatch'].expand_as(input_dict['depthBatch']), depthPred_aligned)
+                    else:
+                        depthPred_aligned = models_brdf.LSregress(depthPred_aligned, input_dict['depthBatch'], depthPred_aligned)
+                    # print('-->', torch.max(depthPred_aligned), torch.min(depthPred_aligned), torch.median(depthPred_aligned))
                     return_dict.update({'depthPred_aligned': depthPred_aligned, 'depth_extra_output_dict': depth_output['extra_output_dict']})
+
+                if self.cfg.MODEL_BRDF.if_bilateral and not self.cfg.MODEL_BRDF.if_bilateral_albedo_only:
+                    # assert self.cfg.DEBUG.if_test_real
+                    if 'albedoPred' in return_dict:
+                        depthBsPred, depthConf = self.BRDF_Net['depthBs'](input_dict['imBatch'], return_dict['albedoPred'].detach(), depthPred )
+                    else:
+                        assert self.opt.cfg.DEBUG.if_load_dump_BRDF_offline
+                        depthBsPred, depthConf = self.BRDF_Net['depthBs'](input_dict['imBatch'], input_dict['albedoBatch'].detach(), depthPred )
+                    return_dict.update({'depthBsPred': depthBsPred})
+                    if if_has_gt_BRDF and 'de' in self.opt.cfg.DATA.data_read_list:
+                        assert 'depthPred_aligned' in return_dict
+                        depthBsPred_aligned, depthConf = self.BRDF_Net['depthBs'](input_dict['imBatch'], return_dict['albedoPred'].detach(), depthPred_aligned )
+                        return_dict.update({'depthBsPred_aligned': depthBsPred_aligned})
+
 
 
             # print(x1.shape, x2.shape, x3.shape, x4.shape, x5.shape, x6.shape)
@@ -1711,11 +1747,25 @@ class Model_Joint(nn.Module):
         if if_load_encoder:
             module_names.append('encoder')    
         if if_load_decoder:
-            module_names += ['albedoDecoder', 'normalDecoder', 'roughDecoder', 'depthDecoder']
+            if 'al' in self.opt.cfg.MODEL_BRDF.enable_list:
+                module_names += ['albedoDecoder']
+            if 'no' in self.opt.cfg.MODEL_BRDF.enable_list:
+                module_names += ['normalDecoder']
+            if 'ro' in self.opt.cfg.MODEL_BRDF.enable_list:
+                module_names += ['roughDecoder']
+            if 'de' in self.opt.cfg.MODEL_BRDF.enable_list:
+                module_names += ['depthDecoder']
         if if_load_Bs:
-            # module_names += ['albedoBs', 'normalBs', 'roughBs', 'depthBs']
-            module_names += ['albedoBs']
-            assert self.cfg.MODEL_BRDF.if_bilateral_albedo_only
+            if 'al' in self.opt.cfg.MODEL_BRDF.enable_list:
+                module_names += ['albedoBs']
+            if 'no' in self.opt.cfg.MODEL_BRDF.enable_list:
+                module_names += ['normalBs']
+            if 'ro' in self.opt.cfg.MODEL_BRDF.enable_list:
+                module_names += ['roughBs']
+            if 'de' in self.opt.cfg.MODEL_BRDF.enable_list:
+                module_names += ['depthBs']
+            # module_names += ['albedoBs']
+            # assert self.cfg.MODEL_BRDF.if_bilateral_albedo_only
 
         saved_names_dict = {
             'encoder': 'encoder', 
@@ -1726,7 +1776,7 @@ class Model_Joint(nn.Module):
             'albedoBs': 'albedoBs', 
             'normalBs': 'normalBs', 
             'roughBs': 'roughBs', 
-            'depthBs': 'depBsth'
+            'depthBs': 'depthBs'
         }
         pretrained_pth_name_dict = {
             'encoder': self.opt.cfg.MODEL_BRDF.pretrained_pth_name_BRDF_cascade0, 

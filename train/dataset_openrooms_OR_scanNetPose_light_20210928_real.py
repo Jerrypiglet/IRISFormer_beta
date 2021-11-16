@@ -106,28 +106,34 @@ class openrooms(data.Dataset):
         frame_info = {'index': index, 'png_image_path': png_image_path}
         batch_dict = {'image_index': index}
 
-        pad_mask = np.zeros((self.im_height_padded, self.im_width_padded), dtype=np.uint8)
+        im_height_padded, im_width_padded = self.im_height_padded, self.im_width_padded
 
         hdr_scale = 1.
         # Read PNG image
         image = Image.open(str(png_image_path))
         im_fixedscale_SDR_uint8 = np.array(image)
         im_h, im_w = im_fixedscale_SDR_uint8.shape[0], im_fixedscale_SDR_uint8.shape[1]
-        if float(im_h) / float(im_w) < float(self.im_height_padded) / float(self.im_width_padded): # flatter
-            im_w_resized_to = self.im_width_padded
+        if not self.opt.cfg.DATA.if_pad_to_32x:
+            im_height_padded, im_width_padded = int(np.ceil(float(im_h)/4.)*4), int(np.ceil(float(im_w)/4.)*4)
+            print('>>>>', im_height_padded, im_width_padded)
+            assert self.opt.cfg.TEST.ims_per_batch == 1
+
+        pad_mask = np.zeros((im_height_padded, im_width_padded), dtype=np.uint8)
+        if float(im_h) / float(im_w) < float(im_height_padded) / float(im_width_padded): # flatter
+            im_w_resized_to = im_width_padded
             im_h_resized_to = int(float(im_h) / float(im_w) * im_w_resized_to)
-            assert im_h_resized_to <= self.im_height_padded
+            assert im_h_resized_to <= im_height_padded
             pad_mask[:im_h_resized_to, :] = 1
         else: # taller
-            im_h_resized_to = self.im_height_padded
+            im_h_resized_to = im_height_padded
             im_w_resized_to = int(float(im_w) / float(im_h) * im_h_resized_to)
-            assert im_w_resized_to <= self.im_width_padded
+            assert im_w_resized_to <= im_width_padded
             pad_mask[:, :im_w_resized_to] = 1
 
         im_fixedscale_SDR_uint8 = cv2.resize(im_fixedscale_SDR_uint8, (im_w_resized_to, im_h_resized_to), interpolation = cv2.INTER_AREA )
         # print(im_w_resized_to, im_h_resized_to, im_w, im_h)
         assert self.opt.cfg.DATA.pad_option == 'const'
-        im_fixedscale_SDR_uint8 = cv2.copyMakeBorder(im_fixedscale_SDR_uint8, 0, self.im_height_padded-im_h_resized_to, 0, self.im_width_padded-im_w_resized_to, cv2.BORDER_CONSTANT, value=0)
+        im_fixedscale_SDR_uint8 = cv2.copyMakeBorder(im_fixedscale_SDR_uint8, 0, im_height_padded-im_h_resized_to, 0, im_width_padded-im_w_resized_to, cv2.BORDER_CONSTANT, value=0)
         # print(im_fixedscale_SDR_uint8.shape, pad_mask.shape)
         im_fixedscale_SDR = im_fixedscale_SDR_uint8.astype(np.float32) / 255.
         im_fixedscale_SDR = im_fixedscale_SDR.transpose(2, 0, 1)
@@ -163,7 +169,10 @@ class openrooms(data.Dataset):
             scene_path_dump = Path(self.opt.cfg.DEBUG.dump_BRDF_offline.path_task) / real_sample_name
 
             if 'al' in self.cfg.DATA.data_read_list:
-                albedo_path = scene_path_dump / ('imbaseColor.png')
+                if self.opt.cfg.MODEL_BRDF.use_scale_aware_albedo:
+                    albedo_path = scene_path_dump / ('imbaseColor.png')
+                else:
+                    albedo_path = scene_path_dump / ('imbaseColor_scaleInv.png')
                 frame_info['albedo_path'] = albedo_path
                 albedo = np.asarray(Image.open(albedo_path), dtype=np.float32) / 255.
                 albedo = np.transpose(albedo, [2, 0, 1] )
@@ -189,7 +198,10 @@ class openrooms(data.Dataset):
                 batch_dict.update({'rough': torch.from_numpy(rough),})
 
             if 'de' in self.cfg.DATA.data_read_list or 'de' in self.cfg.DATA.data_read_list:
-                depth_path = scene_path_dump / ('imdepth.pickle')
+                if self.cfg.MODEL_BRDF.use_scale_aware_depth:
+                    depth_path = scene_path_dump / ('imdepth.pickle')
+                else:
+                    depth_path = scene_path_dump / ('imdepth_scale_invariant.pickle')
                 frame_info['depth_path'] = depth_path
                 # Read depth
                 with open(depth_path, 'rb') as f:
