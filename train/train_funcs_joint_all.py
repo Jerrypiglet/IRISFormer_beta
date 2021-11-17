@@ -162,7 +162,9 @@ def forward_joint(is_train, labels_dict, model, opt, time_meters, if_vis=False, 
     # forward model + compute losses
 
     # Forward model
+    a = time.time()
     output_dict = model(labels_dict)
+    print(time.time()-a)
     time_meters['forward'].update(time.time() - time_meters['ts'])
     time_meters['ts'] = time.time()
 

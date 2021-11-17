@@ -27,6 +27,9 @@ cluster_control/yamls/
 *.npy
 a.pkl
 tmp
+third_parties_outside/iiw-decompositions
+third_parties_outside/CGIntrinsics
+third_parties_outside/Neural-Inverse-Rendering
 third-parties_outside/adobe_svbrdf-master/train_list_cs.txt
 third_parties_outside/apex
 third_parties_outside/YOGO
