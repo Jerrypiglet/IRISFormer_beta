@@ -26,8 +26,6 @@ import models_def.model_matcls as model_matcls
 # import models_def.model_nvidia.AppGMM as AppGMM
 import models_def.model_nvidia.AppGMM_singleFrame as AppGMM
 import models_def.model_nvidia.ssn.ssn as ssn
-import models_def.models_swin as models_swin
-from models_def.models_swin import get_LightNet_Swin
 
 from utils.utils_scannet import convert_IntM_from_OR, CamIntrinsic_to_cuda
 

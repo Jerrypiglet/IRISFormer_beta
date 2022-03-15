@@ -25,8 +25,6 @@ import models_def.model_matcls as model_matcls
 # import models_def.model_nvidia.AppGMM as AppGMM
 import models_def.model_nvidia.AppGMM_singleFrame as AppGMM
 import models_def.model_nvidia.ssn.ssn as ssn
-import models_def.models_swin as models_swin
-from models_def.models_swin import get_LightNet_Swin
 
 from utils.utils_scannet import convert_IntM_from_OR, CamIntrinsic_to_cuda
 
@@ -154,6 +152,8 @@ class Model_Joint(nn.Module):
                     #     if_upsample=True
                     # )
                     # self.BRDF_Net = nn.ModuleDict(swin_dict)
+                    import models_def.models_swin as models_swin
+                    from models_def.models_swin import get_LightNet_Swin
                     self.BRDF_Net = models_swin.SwinBRDFModel(
                         opt, 
                         modality = 'al', 
@@ -1736,7 +1736,7 @@ class Model_Joint(nn.Module):
         self.logger.info(magenta('---> ALL %d params; %d trainable'%(len(list(self.named_parameters())), count_grads)))
         return count_grads
 
-    def load_pretrained_MODEL_BRDF(self, if_load_encoder=True, if_load_decoder=True, if_load_Bs=True):
+    def load_pretrained_MODEL_BRDF(self, if_load_encoder=True, if_load_decoder=True, if_load_Bs=False):
         # if self.opt.if_cluster:
         #     pretrained_path_root = Path('/viscompfs/users/ruizhu/models_ckpt/')
         # else:

@@ -169,7 +169,7 @@ opt.pwdpath = pwdpath
 # >>>>>>>>>>>>> A bunch of modularised set-ups
 # opt.gpuId = opt.deviceIds[0]
 semseg_configs = utils_config.load_cfg_from_cfg_file(os.path.join(pwdpath, opt.cfg.MODEL_SEMSEG.config_file))
-semseg_configs = utils_config.merge_cfg_from_list(semseg_configs, opt.params)
+semseg_configs = utils_config.merge_cfg_from_list(semseg_configs, opt.params, ignore_non_exist=True)
 opt.semseg_configs = semseg_configs
 
 from utils.utils_envs import set_up_dist
@@ -249,7 +249,11 @@ model.to(opt.device)
 model.freeze_BN()
 
 if opt.cfg.MODEL_BRDF.load_pretrained_pth:
-    model.load_pretrained_MODEL_BRDF(opt.cfg.MODEL_BRDF.weights)
+    model.load_pretrained_MODEL_BRDF(
+        if_load_encoder=opt.cfg.MODEL_BRDF.pretrained_if_load_encoder, 
+        if_load_decoder=opt.cfg.MODEL_BRDF.pretrained_if_load_decoder, 
+        if_load_Bs=opt.cfg.MODEL_BRDF.pretrained_if_load_Bs
+    )
 if opt.cfg.MODEL_SEMSEG.enable and opt.cfg.MODEL_SEMSEG.if_freeze:
     # model.turn_off_names(['UNet'])
     model.turn_off_names(['SEMSEG_Net'])

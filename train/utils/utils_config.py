@@ -95,7 +95,7 @@ def merge_cfg_from_list_old(cfg, cfg_list):
     return new_cfg
 
 
-def merge_cfg_from_list(cfg, cfg_list):
+def merge_cfg_from_list(cfg, cfg_list, ignore_non_exist=False):
     new_cfg = copy.deepcopy(cfg)
     _assert_with_logging(
         len(cfg_list) % 2 == 0,
@@ -121,7 +121,10 @@ def merge_cfg_from_list(cfg, cfg_list):
         subkey = key_list[-1]
         # _assert_with_logging(subkey in d, "Non-existent key: {}".format(full_key))
         if subkey not in d:
-            continue
+            if not ignore_non_exist:
+                raise (RuntimeError("Non-existent key: {}".format(full_key)))
+            else:
+                continue
         value = _decode_cfg_value(v)
         value = _check_and_coerce_cfg_value_type(value, d[subkey], subkey, full_key)
         d[subkey] = value

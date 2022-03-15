@@ -33,7 +33,7 @@ from train_funcs_detectron import postprocess_detectron, gather_lists
 from utils.utils_metrics import compute_errors_depth_nyu
 from train_funcs_matcls import getG1IdDict, getRescaledMatFromID
 # from pytorch_lightning.metrics import Precision, Recall, F1, Accuracy
-from pytorch_lightning.metrics import Accuracy
+from torchmetrics import Accuracy
 
 from icecream import ic
 import pickle
@@ -164,7 +164,7 @@ def forward_joint(is_train, labels_dict, model, opt, time_meters, if_vis=False, 
     # Forward model
     a = time.time()
     output_dict = model(labels_dict)
-    print(time.time()-a)
+    # print(time.time()-a)
     time_meters['forward'].update(time.time() - time_meters['ts'])
     time_meters['ts'] = time.time()
 
@@ -413,7 +413,7 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
             # print(loss_dict.keys())
             loss_dict_reduced = reduce_loss_dict(loss_dict, mark=tid, logger=logger) # **average** over multi GPUs
             time_meters['ts'] = time.time()
-            logger.info(green('Training timings: ' + time_meters_to_string(time_meters)))
+            # logger.info(green('Training timings: ' + time_meters_to_string(time_meters)))
 
             # loss = loss_dict['loss_all']
             

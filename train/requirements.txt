@@ -1,4 +1,4 @@
-# conda install pytorch==1.8.0 torchvision==0.9.0 torchaudio==0.8.0 cudatoolkit=10.2 -c pytorch
+# conda install pytorch==1.8.0 torchvision==0.9.0 torchaudio==0.8.0 cudatoolkit=11.3 -c pytorch
 
 opencv-python==4.2.0.34
 psutil
@@ -11,7 +11,7 @@ tensorboard
 torchsummary
 statistics
 tables
-pyyaml
+pyyaml==5.4.1
 yacs
 pathlib
 termcolor
@@ -27,6 +27,7 @@ pytorch-lightning
 shapely
 vtk
 tensorboardX
-timm
+timm==0.4.12
 iopath
 ipympl
+pytorch_lightning
