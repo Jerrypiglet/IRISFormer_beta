@@ -23,10 +23,7 @@ from train_funcs_matseg import get_labels_dict_matseg, postprocess_matseg, val_e
 from train_funcs_semseg import get_labels_dict_semseg, postprocess_semseg
 from train_funcs_brdf import get_labels_dict_brdf, postprocess_brdf
 from train_funcs_light import get_labels_dict_light, postprocess_light
-from train_funcs_layout_object_emitter import get_labels_dict_layout_emitter, postprocess_layout_object_emitter
 from train_funcs_matcls import get_labels_dict_matcls, postprocess_matcls
-from train_funcs_detectron import postprocess_detectron, gather_lists
-# from utils.comm import synchronize
 from train_funcs_nyud import get_labels_dict_nyud, postprocess_nyud
 
 from utils.utils_metrics import compute_errors_depth_nyu
@@ -37,13 +34,6 @@ from pytorch_lightning.metrics import Accuracy
 from icecream import ic
 import pickle
 import matplotlib.pyplot as plt
-
-from train_funcs_layout_object_emitter import vis_layout_emitter
-
-# from detectron2.evaluation import COCOEvaluator, inference_on_dataset
-# from detectron2.data import build_detection_test_loader,DatasetCatalog, MetadataCatalog
-from utils.utils_dettectron import py_cpu_nms
-# from detectron2.utils.visualizer import Visualizer, ColorMode
 
 from contextlib import ExitStack, contextmanager
 from skimage.segmentation import mark_boundaries

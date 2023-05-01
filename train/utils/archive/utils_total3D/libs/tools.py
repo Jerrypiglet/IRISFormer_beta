@@ -210,7 +210,7 @@ def proj_pnt_to_img(cam_paras, point, faces, im_size, convex_hull = False):
         for poly in polys:
             cv2.fillConvexPoly(new_image, poly, 255)
 
-    return new_image.astype(np.bool)
+    return new_image.astype(np.bool_)
 
 def cvt2nyuclass_map(class_map, nyuclass_mapping):
     '''

@@ -44,9 +44,9 @@ def vis_disp_colormap(disp_array, file=None, normalize=True, min_and_scale=None,
     # print('-', disp_array.shape)
     if valid_mask is not None:
         assert valid_mask.shape==disp_array.shape
-        assert valid_mask.dtype==np.bool
+        assert valid_mask.dtype==np.bool_
     else:
-        valid_mask = np.ones_like(disp_array).astype(np.bool)
+        valid_mask = np.ones_like(disp_array).astype(np.bool_)
     
     if normalize:
         if min_and_scale is None:

@@ -356,14 +356,6 @@ class decoder0(nn.Module):
         
         self.if_PPM = if_PPM
 
-        self.if_appearance_recon = False
-        if self.opt.cfg.MODEL_GMM.enable and self.opt.cfg.MODEL_GMM.appearance_recon.enable and self.modality in self.opt.cfg.MODEL_GMM.appearance_recon.modalities:
-            self.if_appearance_recon = True
-
-        self.if_albedo_pooling = self.opt.cfg.MODEL_MATSEG.if_albedo_pooling
-        self.if_albedo_asso_pool_conv = self.opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv
-        self.if_albedo_pac_pool = self.opt.cfg.MODEL_MATSEG.if_albedo_pac_pool
-        
         self.dconv1 = nn.Conv2d(in_channels=1024*self.channel_multi, out_channels=512*self.channel_multi, kernel_size=3, stride=1, padding = 1, bias=True)
         self.dgn1 = nn.GroupNorm(num_groups=32*self.channel_multi, num_channels=512*self.channel_multi )
 
@@ -438,16 +430,6 @@ class decoder0(nn.Module):
         dconv_final_in_channels = 64
         if self.if_PPM:
             dconv_final_in_channels = 128
-        if self.if_albedo_pooling:
-            dconv_final_in_channels = 128
-        if self.if_albedo_asso_pool_conv:
-            dconv_final_in_channels = 64 * 4
-        if self.if_albedo_pac_pool:
-            if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_pool_mean:
-                dconv_final_in_channels = 64 * 2 if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_pool_keep_input else 64
-            else:
-                dconv_final_in_channels = 64 * (1 + len(self.acco_pool_mean_list)) if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_pool_keep_input else 64 * len(self.acco_pool_mean_list)
-        assert not(self.if_albedo_pooling and self.if_albedo_asso_pool_conv), 'self.if_albedo_pooling and self.if_albedo_asso_pool_conv cannot be True at the same time!'
 
         self.dconvFinal = nn.Conv2d(in_channels=dconv_final_in_channels*self.channel_multi, out_channels=out_channel, kernel_size = 3, stride=1, bias=True)
 
@@ -473,107 +455,31 @@ class decoder0(nn.Module):
 
         extra_output_dict = {}
 
-        if self.if_albedo_pooling:
-            if self.opt.cfg.MODEL_MATSEG.albedo_pooling_from == 'gt':
-                instance = input_dict_extra['matseg-instance']
-                num_mat_masks_batch = input_dict_extra['semseg-num_mat_masks_batch']
-            else:
-                matseg_logits = input_dict_extra['matseg-logits']
-                matseg_embeddings = input_dict_extra['matseg-embeddings']
-                mat_notlight_mask_cpu = input_dict_extra['mat_notlight_mask_cpu']
-                instance, num_mat_masks_batch, predict_segmentation = logit_embedding_to_instance(mat_notlight_mask_cpu, matseg_logits, matseg_embeddings, self.opt)
-            # print(instance.shape, num_mat_masks_batch.shape) # torch.Size([16, 50, 240, 320]) torch.Size([16])
-            # if self.flag:
-            #     np.save('instance.npy', instance.cpu().numpy())
-            #     np.save('num_mat_masks_batch.npy', num_mat_masks_batch.cpu().numpy())
-            #     self.flag = False
-
-        if self.if_albedo_asso_pool_conv or self.if_albedo_pac_pool:
-            matseg_embeddings = input_dict_extra['matseg-embeddings']
-            
         dx1 = F.relu(self.dgn1(self.dconv1(x6 ) ) )
-        if self.if_appearance_recon:
-            dx1 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], dx1, scale_feat_map=32)
         xin1 = torch.cat([dx1, x5], dim = 1)
-        # if self.if_appearance_recon:
-        #     xin1 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], xin1, scale_feat_map=32)
         dx2 = F.relu(self.dgn2(self.dconv2(F.interpolate(xin1, scale_factor=2, mode='bilinear') ) ), True)
 
         if dx2.size(3) != x4.size(3) or dx2.size(2) != x4.size(2):
             dx2 = F.interpolate(dx2, [x4.size(2), x4.size(3)], mode='bilinear')
-        if self.if_appearance_recon:
-            dx2 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], dx2, scale_feat_map=16)
         xin2 = torch.cat([dx2, x4], dim=1 )
-        # if self.if_appearance_recon:
-        #     xin2 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], xin2, scale_feat_map=16)
         dx3 = F.relu(self.dgn3(self.dconv3(F.interpolate(xin2, scale_factor=2, mode='bilinear') ) ), True)
 
         if dx3.size(3) != x3.size(3) or dx3.size(2) != x3.size(2):
             dx3 = F.interpolate(dx3, [x3.size(2), x3.size(3)], mode='bilinear')
-        if self.if_appearance_recon:
-            dx3 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], dx3, scale_feat_map=8)
         xin3 = torch.cat([dx3, x3], dim=1)
-        # if self.if_appearance_recon:
-        #     xin3 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], xin3, scale_feat_map=8)
         dx4 = F.relu(self.dgn4(self.dconv4(F.interpolate(xin3, scale_factor=2, mode='bilinear') ) ), True)
 
         if dx4.size(3) != x2.size(3) or dx4.size(2) != x2.size(2):
             dx4 = F.interpolate(dx4, [x2.size(2), x2.size(3)], mode='bilinear')
-        if self.if_appearance_recon:
-            dx4 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], dx4, scale_feat_map=4)
         xin4 = torch.cat([dx4, x2], dim=1 )
-        # if self.if_appearance_recon:
-        #     xin4 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], xin4, scale_feat_map=4)
         dx5 = F.relu(self.dgn5(self.dconv5(F.interpolate(xin4, scale_factor=2, mode='bilinear') ) ), True)
 
         if dx5.size(3) != x1.size(3) or dx5.size(2) != x1.size(2):
             dx5 = F.interpolate(dx5, [x1.size(2), x1.size(3)], mode='bilinear')
-        if self.if_appearance_recon:
-            dx5 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], dx5, scale_feat_map=2)
         xin5 = torch.cat([dx5, x1], dim=1 )
         # if  :
         #     xin5 = input_dict_extra['MODEL_GMM'].appearance_recon(input_dict_extra['gamma_GMM'], xin5, scale_feat_map=2)
         dx6 = F.relu(self.dgn6(self.dconv6(F.interpolate(xin5, scale_factor=2, mode='bilinear') ) ), True)
-
-        im_trainval_SDR_mask_pooled_mean = None
-        if self.if_albedo_pooling:
-            dx6_pooled_mean = self.mask_pooled_mean(dx6, instance, num_mat_masks_batch)
-            dx6 = torch.cat([dx6, dx6 - dx6_pooled_mean], 1)
-
-            if self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
-                im_trainval_SDR_mask_pooled_mean = self.mask_pooled_mean(input_dict_extra['im_trainval_SDR'], instance, num_mat_masks_batch)
-
-        if self.if_albedo_asso_pool_conv:
-            dx6_pool_1 = self.acco_pool_1(dx6, matseg_embeddings)
-            dx6_pool_2 = self.acco_pool_2(dx6, matseg_embeddings)
-            dx6_pool_4 = self.acco_pool_4(dx6, matseg_embeddings)
-            # print(dx6_pool_1.shape, dx6_pool_2.shape, dx6_pool_4.shape)
-            dx6 = torch.cat([dx6, dx6_pool_1, dx6_pool_2, dx6_pool_4], 1)
-
-        if self.if_albedo_pac_pool:
-            dx6_pool_mean_list = []
-            for acco_pool_mean in self.acco_pool_mean_list:
-                dx6_pool_mean = acco_pool_mean(dx6, matseg_embeddings)
-                dx6_pool_mean_list.append(dx6_pool_mean)
-            if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_pool_mean:
-                dx6_pool_mean = torch.stack(dx6_pool_mean_list, dim=0).mean(dim=0)
-            else:
-                dx6_pool_mean = torch.cat(dx6_pool_mean_list, dim=1)
-
-            # print(dx6_pool_mean.shape)
-            # dx6 = torch.cat([dx6, dx6_pool_1, dx6_pool_2, dx6_pool_4], 1)
-            if self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
-                im_trainval_SDR_mask_pooled_mean_list = []
-                for acco_pool_mean in self.acco_pool_mean_list:
-                    im_trainval_SDR_mask_pooled_mean = acco_pool_mean(input_dict_extra['im_trainval_SDR'], matseg_embeddings * (2. * input_dict_extra['mat_notlight_mask_gpu_float'] - 1))
-                    im_trainval_SDR_mask_pooled_mean_list.append(im_trainval_SDR_mask_pooled_mean)
-                im_trainval_SDR_mask_pooled_mean = torch.stack(im_trainval_SDR_mask_pooled_mean_list, dim=0).mean(dim=0)
-
-
-            if self.opt.cfg.MODEL_MATSEG.if_albedo_pac_pool_keep_input            :
-                dx6 = torch.cat([dx6, dx6_pool_mean], 1)
-            else:
-                dx6 = dx6_pool_mean
 
         if dx6.size(3) != im.size(3) or dx6.size(2) != im.size(2):
             dx6 = F.interpolate(dx6, [im.size(2), im.size(3)], mode='bilinear')
@@ -583,7 +489,6 @@ class decoder0(nn.Module):
             dx6 = self.ppm(dx6)
 
         return_dict = {'extra_output_dict': extra_output_dict, 'dx1': dx1, 'dx2': dx2, 'dx3': dx3, 'dx4': dx4, 'dx5': dx5, 'dx6': dx6}
-        # if self.if_albedo_pooling:
         return_dict.update({'im_trainval_SDR_mask_pooled_mean': im_trainval_SDR_mask_pooled_mean})
 
         if self.if_not_final_fc:

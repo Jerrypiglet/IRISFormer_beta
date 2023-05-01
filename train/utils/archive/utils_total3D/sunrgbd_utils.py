@@ -867,7 +867,7 @@ def read_seg2d_data(seg2d_path):
 #             target_inst_masks.append(None)
 #             continue
 
-#         target_inst_mask = candidate_inst_masks[in_box_ratio >= 0.8].sum(0).astype(np.bool)
+#         target_inst_mask = candidate_inst_masks[in_box_ratio >= 0.8].sum(0).astype(np.bool_)
 #         locs = np.argwhere(target_inst_mask)
 #         y1, x1 = locs.min(0)
 #         y2, x2 = locs.max(0)

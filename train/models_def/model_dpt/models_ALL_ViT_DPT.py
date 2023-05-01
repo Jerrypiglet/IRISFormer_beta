@@ -32,7 +32,6 @@ from .blocks_ViT import (
 
 from .models_DPT_BRDF import DPTBRDFModel
 from .models_DPT_Light import DPTLightModel
-from .models_ViT_layout import ViTLayoutObjModel
 
 class ModelAll_ViT(torch.nn.Module):
     '''
@@ -57,26 +56,13 @@ class ModelAll_ViT(torch.nn.Module):
             # 'no': ['normal'], 
             # 'de': ['depth'], 
             # 'ro': ['rough'], 
-            'lo': ['camera', 'layout'], 
+            # 'lo': ['camera', 'layout'], 
             # 'li': ['lighting']
             }
         # assert all([x in list(head_names_dict.keys()) for x in modalities])
 
         module_dict = {}
         for modality in modalities:
-            if modality in ['lo']:
-                module_dict[modality] = ViTLayoutObjModel(
-                    opt=opt, 
-                    cfg_ViT=opt.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline, 
-                    modality=modality, 
-                    backbone=backbone, 
-                    if_imagenet_backbone=opt.cfg.MODEL_ALL.ViT_baseline.if_imagenet_backbone, 
-                    if_share_encoder_over_modalities=opt.cfg.MODEL_ALL.ViT_baseline.if_share_encoder_over_modalities_stage0, 
-                    N_layers_encoder=N_layers_encoder_stage0, 
-                    N_layers_decoder=N_layers_decoder_stage0, 
-                    head_names=head_names_dict[modality], 
-                    ViT_pool=opt.cfg.MODEL_ALL.ViT_baseline.ViT_pool
-                )
             if modality in ['al', 'no', 'de', 'ro']:
                 module_dict[modality] = DPTBRDFModel(
                     opt=opt, 

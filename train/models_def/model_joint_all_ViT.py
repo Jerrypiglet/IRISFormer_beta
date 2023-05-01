@@ -12,31 +12,10 @@ from torchvision.models import resnet
 from models_def.model_matseg import logit_embedding_to_instance
 
 import models_def.models_brdf as models_brdf # basic model
-import models_def.models_brdf_GMM_feat_transform as models_brdf_GMM_feat_transform
-# import models_def.models_brdf_pac_pool as models_brdf_pac_pool
-# import models_def.models_brdf_pac_conv as models_brdf_pac_conv
-# import models_def.models_brdf_safenet as models_brdf_safenet
 import models_def.models_light as models_light 
-import models_def.models_layout_emitter as models_layout_emitter
-import models_def.models_object_detection as models_object_detection
-import models_def.models_mesh_reconstruction as models_mesh_reconstruction
-import models_def.models_layout_emitter_lightAccu as models_layout_emitter_lightAccu
-import models_def.models_layout_emitter_lightAccuScatter as models_layout_emitter_lightAccuScatter
 import models_def.model_matcls as model_matcls
-# import models_def.model_nvidia.AppGMM as AppGMM
-import models_def.model_nvidia.AppGMM_singleFrame as AppGMM
-import models_def.model_nvidia.ssn.ssn as ssn
-
-from utils.utils_scannet import convert_IntM_from_OR, CamIntrinsic_to_cuda
-
-from SimpleLayout.SimpleSceneTorchBatch import SimpleSceneTorchBatch
-from utils.utils_total3D.utils_OR_layout import get_layout_bdb_sunrgbd
-from utils.utils_total3D.utils_OR_cam import get_rotation_matix_result
 
 from models_def.model_dpt.models import DPTBRDFModel, get_BRDFNet_DPT, get_LightNet_DPT
-from models_def.model_dpt.models_CAv2 import DPTBRDFModel_CAv2, get_BRDFNet_DPT_CAv2
-from models_def.model_dpt.models_SSN import DPTBRDFModel_SSN
-from models_def.model_dpt.models_SSN_yogoUnet_N_layers import DPTBRDFModel_SSN_yogoUnet_N_layers
 from models_def.model_dpt.transforms import Resize as dpt_Resize
 from models_def.model_dpt.transforms import NormalizeImage as dpt_NormalizeImage
 from models_def.model_dpt.transforms import PrepareForNet as dpt_PrepareForNet

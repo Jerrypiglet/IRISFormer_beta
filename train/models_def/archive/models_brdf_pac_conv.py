@@ -135,35 +135,7 @@ class decoder0_pacconv(nn.Module):
 
         im_trainval_SDR_mask_pooled_mean, kernel_list = None, None
         
-        # assert self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug == False
-        if self.opt.cfg.MODEL_MATSEG.albedo_pooling_debug and self.opt.if_vis_debug_pac:
-            # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[3, 3, 3], paddings=[30, 20, 10], dilations=[30, 20, 10])
-            # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[3, 3, 3], paddings=[20, 10, 5], dilations=[20, 10, 5])
-            # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[3, 3, 3], paddings=[10, 5, 2], dilations=[10, 5, 2])
-            # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[3], paddings=[20], dilations=[20])
-            # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[3], paddings=[10], dilations=[10])
-            # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[3], paddings=[5], dilations=[5])
-            x_pac_conv, _ = self.build_pac_conv_list(None, kernel_sizes=[7], paddings=[30], dilations=[10])
-            # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[7], paddings=[15], dilations=[5])
-            # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[7], paddings=[9], dilations=[3])
-            # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[7], paddings=[3], dilations=[1])
-            # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[9], paddings=[8], dilatsions=[2])
-
-            # x_pac_conv, _ = self.build_pac_conv_list(kernel_sizes=[15], strides=[15], paddings=[7], dilations=[1])
-
-
-            im_in = input_dict_extra['im_trainval_SDR']
-            # im_in = F.interpolate(im_in, [120, 160], mode='bilinear')
-            # im_in = F.interpolate(im_in, [60, 80], mode='bilinear')
-            # im_in = F.interpolate(im_in, [30, 40], mode='bilinear')
-            
-            # print(matseg_embeddings.shape, matseg_embeddings[0, :5, :2, 0])
-            # matseg_embeddings = torch.ones_like(matseg_embeddings, device=matseg_embeddings.device)
-            # im_trainval_SDR_mask_pooled_mean = im_in
-            im_trainval_SDR_mask_pooled_mean, kernel_list = self.pac_conv_transform(im_in, (matseg_embeddings, mat_notlight_mask_gpu_float), x_pac_conv, force_mean=True, return_kernel_list=True)
-            print(im_trainval_SDR_mask_pooled_mean.shape, '======')
         return_dict.update({'im_trainval_SDR_mask_pooled_mean': im_trainval_SDR_mask_pooled_mean, 'kernel_list': kernel_list})
-
         
         if 'x6' in self.albedo_pac_conv_mean_layers:
             x6 = self.pac_conv_transform(x6, (matseg_embeddings, mat_notlight_mask_gpu_float), self.x6_pac_conv)
@@ -232,7 +204,6 @@ class decoder0_pacconv(nn.Module):
             x_out = torch.clamp(1.01 * torch.tanh(x_orig ), -1, 1)
 
         return_dict.update({'x_out': x_out})
-        # if self.if_albedo_pooling:
 
         return return_dict
 

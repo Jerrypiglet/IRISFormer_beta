@@ -19,23 +19,6 @@ from pathlib import Path
 # import pickle
 import pickle5 as pickle
 from icecream import ic
-from utils.utils_total3D.utils_OR_imageops import loadHdr_simple, to_nonhdr
-import math
-from utils.utils_total3D.data_config import RECON_3D_CLS_OR_dict
-from scipy.spatial import cKDTree
-import copy
-# import math
-# from detectron2.structures import BoxMode
-# from detectron2.data.dataset_mapper import DatasetMapper
-
-from utils.utils_total3D.utils_OR_vis_labels import RGB_to_01
-from utils.utils_total3D.utils_others import Relation_Config, OR4XCLASSES_dict, OR4XCLASSES_not_detect_mapping_ids_dict, OR4X_mapping_catInt_to_RGB
-# from detectron2.data import build_detection_test_loader,DatasetCatalog, MetadataCatalog
-
-from utils.utils_scannet import read_ExtM_from_txt, read_img
-import utils.utils_nvidia.mdataloader.m_preprocess as m_preprocess
-import PIL
-import torchvision.transforms as tfv_transform
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -71,8 +54,6 @@ class openrooms(data.Dataset):
 
         logger.info(white_blue('%s: total frames: %d'%(self.dataset_name, len(self.data_list))))
 
-        self.OR = opt.cfg.MODEL_LAYOUT_EMITTER.data.OR
-
         self.cascadeLevel = cascadeLevel
 
         assert transforms_fixed is not None, 'OpenRooms: Need a transforms_fixed!'
@@ -85,17 +66,6 @@ class openrooms(data.Dataset):
         # self.target_hw = (cfg.DATA.im_height, cfg.DATA.im_width) # if split in ['train', 'val', 'test'] else (args.test_h, args.test_w)
         self.im_width, self.im_height = self.cfg.DATA.im_width, self.cfg.DATA.im_height
         self.im_height_padded, self.im_width_padded = self.cfg.DATA.im_height_padded_to, self.cfg.DATA.im_width_padded_to
-
-        self.OR = self.cfg.MODEL_LAYOUT_EMITTER.data.OR
-        self.OR_classes = OR4XCLASSES_dict[self.OR]
-
-        # self.if_extra_op = False
-        # if opt.cfg.DATA.if_pad_to_32x:
-        #     self.extra_op = opt.pad_op
-        #     self.if_extra_op = True
-        # elif opt.cfg.DATA.if_resize_to_32x:
-        #     self.extra_op = opt.resize_op
-        #     self.if_extra_op = True
 
     def __len__(self):
         return len(self.data_list)
@@ -286,8 +256,6 @@ def collate_fn_OR(batch):
         if key == 'boxes_batch':
             collated_batch[key] = dict()
             for subkey in batch[0][key]:
-                if subkey in ['bdb2D_full', 'bdb3D_full']: # lists of original & more information (e.g. color)
-                    continue
                 if subkey in ['mask', 'random_id', 'cat_name']: # list of lists
                     tensor_batch = [elem[key][subkey] for elem in batch]
                 else:
@@ -298,9 +266,7 @@ def collate_fn_OR(batch):
                     except RuntimeError:
                         print(subkey, [x.shape for x in list_of_tensor])
                 collated_batch[key][subkey] = tensor_batch
-        elif key in ['frame_info', 'boxes_valid_list', 'emitter2wall_assign_info_list', 'emitters_obj_list', 'gt_layout_RAW', 'cell_info_grid', 'image_index', \
-                'gt_obj_path_alignedNew_normalized_list', 'gt_obj_path_alignedNew_original_list', \
-                'detectron_sample_dict', 'detectron_sample_dict']:
+        elif key in ['frame_info', 'image_index']:
             collated_batch[key] = [elem[key] for elem in batch]
         else:
             try:
@@ -309,18 +275,6 @@ def collate_fn_OR(batch):
                 print('[!!!!] Type error in collate_fn_OR: ', key, e)
                 # print(type(batch[0][key]))
                 # print(batch[0][key].dtype)
-
-    if 'boxes_batch' in batch[0]:
-        interval_list = [elem['boxes_batch']['patch'].shape[0] for elem in batch]
-        collated_batch['obj_split'] = torch.tensor([[sum(interval_list[:i]), sum(interval_list[:i+1])] for i in range(len(interval_list))])
-
-    # boxes_valid_list = [item for sublist in collated_batch['boxes_valid_list'] for item in sublist]
-    # boxes_valid_nums = [sum(x) for x in collated_batch['boxes_valid_list']]
-    # boxes_total_nums = [len(x) for x in collated_batch['boxes_valid_list']]
-    # if sum(boxes_valid_list)==0:
-    #     print(boxes_valid_nums, '/', boxes_total_nums, red(sum(boxes_valid_list)), '/', len(boxes_valid_list), boxes_valid_list)
-    # else:
-    #     print(boxes_valid_nums, '/', boxes_total_nums, sum(boxes_valid_list), '/', len(boxes_valid_list), boxes_valid_list)
 
     return collated_batch
 

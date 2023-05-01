@@ -5,7 +5,7 @@
 	path = third_parties_outside/photoshape
 	url = https://github.com/Jerrypiglet/photoshape.git
 [submodule "train/SimpleLayout"]
-	path = train/SimpleLayout
+	path = train/archive/SimpleLayout
 	url = https://github.com/Jerrypiglet/SimpleLayout.git
 [submodule "third_parties_outside/VirtualObjectInsertion"]
 	path = third_parties_outside/VirtualObjectInsertion

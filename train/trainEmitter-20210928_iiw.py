@@ -28,8 +28,6 @@ from dataset_openrooms_OR_scanNetPose_light_20210928_iiw import iiw, collate_fn_
 # from dataset_openrooms_OR_scanNetPose_binary_tables_ import openrooms_binary
 # from dataset_openrooms_OR_scanNetPose_pickle import openrooms_pickle
 # from utils.utils_dataloader_binary import make_data_loader_binary
-import torch.distributed as dist
-from train_funcs_detectron import gather_lists
 
 
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -77,7 +75,7 @@ parser.add_argument('--cascadeLevel', type=int, default=0, help='the casacade le
 
 # Rui
 # Device
-parser.add_argument("--local_rank", type=int, default=0)
+# parser.add_argument("--local_rank", type=int, default=0)
 # parser.add_argument("--master_port", type=str, default='8914')
 
 # DEBUG
@@ -289,9 +287,6 @@ else:
     bin_mean_shift = Bin_Mean_Shift_N(embedding_dims=opt.cfg.MODEL_MATSEG.embed_dims, \
         device=opt.bin_mean_shift_device, invalid_index=opt.invalid_index, if_freeze=opt.cfg.MODEL_MATSEG.if_freeze)
 opt.bin_mean_shift = bin_mean_shift
-
-opt.OR_classes = OR4XCLASSES_dict[opt.cfg.MODEL_LAYOUT_EMITTER.data.OR][1:] # list of OR class names exclusing unlabelled(0)
-
 
 # >>>>>>>>>>>>> DATASET
 from utils.utils_semseg import get_transform_semseg, get_transform_matseg, get_transform_resize
@@ -570,9 +565,9 @@ optimizer.zero_grad()
 # for epoch_0 in list(range(1, 2) ):
 
 if not opt.if_train:
-    val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift, 'if_register_detectron_only': False}
+    val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift}
     if opt.if_vis:
-        val_params.update({'batch_size_val_vis': batch_size_val_vis, 'detectron_dataset_name': 'vis'})
+        val_params.update({'batch_size_val_vis': batch_size_val_vis})
         with torch.no_grad():
             vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
         synchronize()
@@ -582,7 +577,7 @@ if not opt.if_train:
         synchronize()
 
     if opt.if_val:
-        val_params.update({'brdf_dataset_val': brdf_dataset_val, 'detectron_dataset_name': 'val'})
+        val_params.update({'brdf_dataset_val': brdf_dataset_val})
         val_params.update({'iiw_dataset_val': iiw_dataset_val})
 
         with torch.no_grad():
@@ -637,10 +632,10 @@ else:
             # synchronize()
             print((tid - tid_start) % opt.eval_every_iter, opt.eval_every_iter)
             if opt.eval_every_iter != -1 and (tid - tid_start) % opt.eval_every_iter == 0:
-                val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift, 'if_register_detectron_only': False}
+                val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift}
 
                 if opt.if_vis:
-                    val_params.update({'batch_size_val_vis': batch_size_val_vis, 'detectron_dataset_name': 'vis'})
+                    val_params.update({'batch_size_val_vis': batch_size_val_vis})
 
                     with torch.no_grad():
                         if opt.cfg.DEBUG.if_dump_anything:
@@ -653,7 +648,7 @@ else:
                     synchronize()
 
                 if opt.if_val:
-                    val_params.update({'brdf_dataset_val': brdf_dataset_val, 'detectron_dataset_name': 'val'})
+                    val_params.update({'brdf_dataset_val': brdf_dataset_val})
                     val_params.update({'iiw_dataset_val': iiw_dataset_val})
 
                     with torch.no_grad():

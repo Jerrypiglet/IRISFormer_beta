@@ -16,17 +16,10 @@ import torchvision.transforms as T
 # import PIL
 from utils.utils_misc import *
 from pathlib import Path
-# import pickle
 import pickle5 as pickle
 from icecream import ic
-from utils.utils_total3D.utils_OR_imageops import loadHdr_simple, to_nonhdr
 import math
-from utils.utils_total3D.data_config import RECON_3D_CLS_OR_dict
-from scipy.spatial import cKDTree
 import copy
-
-from utils.utils_total3D.utils_OR_vis_labels import RGB_to_01
-from utils.utils_total3D.utils_others import Relation_Config, OR4XCLASSES_dict, OR4XCLASSES_not_detect_mapping_ids_dict, OR4X_mapping_catInt_to_RGB
 
 from utils.utils_scannet import read_ExtM_from_txt, read_img
 import utils.utils_nvidia.mdataloader.m_preprocess as m_preprocess
@@ -36,33 +29,7 @@ import torchvision.transforms as tfv_transform
 import warnings
 warnings.filterwarnings("ignore")
 
-rel_cfg = Relation_Config()
-d_model = int(rel_cfg.d_g/4)
-
-
-HEIGHT_PATCH = 256
-WIDTH_PATCH = 256
-
 from utils import transform
-def get_bdb2d_transform(split, crop_bdb): # crop_bdb: [x1, x2, y1, y2] in float
-    assert split in ['train', 'val']
-    if split == 'train':
-        data_transforms_crop_nonormalize = [
-            transform.CropBdb(crop_bdb), 
-            transform.Resize((280, 280)),
-            transform.Crop((HEIGHT_PATCH, WIDTH_PATCH), crop_type='rand'),
-            transform.ToTensor()
-        ]
-        data_transforms_crop_nonormalize = transform.Compose(data_transforms_crop_nonormalize)
-        return data_transforms_crop_nonormalize
-    else:
-        data_transforms_nocrop_nonormalize = [
-            transform.CropBdb(crop_bdb), 
-            transform.Resize((HEIGHT_PATCH, WIDTH_PATCH)),
-            transform.ToTensor()
-        ]
-        data_transforms_nocrop_nonormalize = transform.Compose(data_transforms_nocrop_nonormalize)
-        return data_transforms_nocrop_nonormalize
 
 def return_percent(list_in, percent=1.):
     len_list = len(list_in)

@@ -523,7 +523,7 @@ class Box(Scene3D):
                 material_dict = self.material_dict[split_type]                
                 albedo, rough = material_dict['albedo'], material_dict['rough']
                 x1, y1, x2, y2 = obj_mask['msk_bdb_half'] # [x1, y1, x2, y2]
-                msk_half_bool = obj_mask['msk_half'].astype(np.bool)
+                msk_half_bool = obj_mask['msk_half'].astype(np.bool_)
                 
                 albedo_masked = albedo[y1:y2+1, x1:x2+1]
                 rough_masked = rough[y1:y2+1, x1:x2+1]

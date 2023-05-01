@@ -247,41 +247,6 @@ _C.MODEL_MATSEG.load_pretrained_pth = False
 _C.MODEL_MATSEG.pretrained_pth = ''
 _C.MODEL_MATSEG.use_pred_as_input = False
 
-_C.MODEL_MATSEG.albedo_pooling_debug = False
-
-_C.MODEL_MATSEG.if_albedo_pooling = False
-_C.MODEL_MATSEG.albedo_pooling_from = 'gt' # ['gt', 'pred']
-
-_C.MODEL_MATSEG.if_albedo_asso_pool_conv = False
-
-_C.MODEL_MATSEG.if_albedo_pac_pool = False
-_C.MODEL_MATSEG.if_albedo_pac_pool_debug_deform = False
-_C.MODEL_MATSEG.if_albedo_pac_pool_keep_input = True
-_C.MODEL_MATSEG.if_albedo_DatasetNew_test_pool_mean = False # True: return mean of pooled tensors; False: return stacked
-_C.MODEL_MATSEG.albedo_pac_pool_mean_layers = 'xin6'
-_C.MODEL_MATSEG.albedo_pac_pool_mean_layers_allowed = 'x6_xin1_xin2_xin3_xin4_xin5_xin6'
-# _C.MODEL_MATSEG.albedo_pac_pool_deform_layers = 'xin6'
-# _C.MODEL_MATSEG.albedo_pac_pool_deform_layers_allowed = 'x6_xin1_xin2_xin3_xin4_xin5_xin6'
-
-_C.MODEL_MATSEG.if_albedo_pac_conv = False
-_C.MODEL_MATSEG.if_albedo_pac_conv_keep_input = True
-_C.MODEL_MATSEG.if_albedo_pac_conv_mean = False # True: return mean of pooled tensors; False: return stacked
-_C.MODEL_MATSEG.if_albedo_pac_conv_normalize_kernel = True
-_C.MODEL_MATSEG.if_albedo_pac_conv_DCN = False
-_C.MODEL_MATSEG.albedo_pac_conv_deform_layers = 'xin6'
-_C.MODEL_MATSEG.albedo_pac_conv_deform_layers_allowed = 'x6_xin1_xin2_xin3_xin4_xin5_xin6'
-
-_C.MODEL_MATSEG.albedo_pac_conv_mean_layers = 'xin6'
-_C.MODEL_MATSEG.albedo_pac_conv_mean_layers_allowed = 'x6_xin1_xin2_xin3_xin4_xin5_xin6'
-
-_C.MODEL_MATSEG.if_albedo_safenet = False
-_C.MODEL_MATSEG.if_albedo_safenet_keep_input = True
-_C.MODEL_MATSEG.if_albedo_safenet_normalize_embedding = False
-_C.MODEL_MATSEG.if_albedo_safenet_use_pacnet_affinity = False
-# _C.MODEL_MATSEG.if_albedo_safenet_mean = False # True: return mean of pooled tensors; False: return stacked
-_C.MODEL_MATSEG.albedo_safenet_affinity_layers = 'xin3'
-_C.MODEL_MATSEG.albedo_safenet_affinity_layers_allowed = 'x6_xin1_xin2_xin3_xin4_xin5_xin6'
-
 # ===== semantic segmentation
 
 _C.MODEL_SEMSEG = CN()

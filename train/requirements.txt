@@ -1,4 +1,5 @@
-# conda install pytorch==1.8.0 torchvision==0.9.0 torchaudio==0.8.0 cudatoolkit=11.3 -c pytorch
+# python 3.10
+# torch==2.0.0
 
 opencv-python==4.2.0.34
 psutil
@@ -17,17 +18,17 @@ pathlib
 termcolor
 nvidia_ml_py3
 pickle5
-trimesh
+# trimesh
 numba
 numpy-quaternion
 seaborn
 sympy
 icecream
 pytorch-lightning
-shapely
-vtk
+# shapely
+# vtk
 tensorboardX
-timm==0.4.12
+timm==0.6.13
 iopath
 ipympl
-pytorch_lightning
+torchmetrics

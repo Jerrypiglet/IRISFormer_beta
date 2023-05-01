@@ -100,36 +100,10 @@ class DPT(BaseModel):
 
         self.module_hooks_dict = {}
 
-        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
-            from models_def.model_dpt.utils_yogo import CrossAttention, LayerNormLastTwo
-
-            module_dict = {}
-            im_c = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels
-            token_c = im_c
-            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer == 'instanceNorm':
-                norm_layer_1d = nn.InstanceNorm1d
-            elif opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer == 'layerNorm':
-                norm_layer_1d = LayerNormLastTwo
-                # assert False
-            elif opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer == 'identity':
-                norm_layer_1d = nn.Identity
-            else:
-                assert False, 'Invalid MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer'
-
-            for layer_idx in range(len(self.pretrained.model.blocks)):
-                module_dict['layer_%d_ca'%layer_idx] = CrossAttention(opt, token_c, im_c, token_c, norm_layer_1d=norm_layer_1d)
-
         if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers != -1:
             for layer_idx in range(len(self.pretrained.model.blocks)):
                 if layer_idx >= self.num_layers:
                     self.pretrained.model.blocks[layer_idx] = nn.Identity()
-                    if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
-                        del module_dict['layer_%d_ca'%layer_idx]
-
-        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA:
-            self.ca_modules = nn.ModuleDict(module_dict)
-            self.module_hooks_dict.update({'ca_modules': self.ca_modules, 'output_hooks': self.output_hooks})
-
 
     def forward(self, x, input_dict_extra={}):
         if self.channels_last:

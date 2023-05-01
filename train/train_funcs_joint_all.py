@@ -25,9 +25,7 @@ from train_funcs_matseg import get_labels_dict_matseg, postprocess_matseg, val_e
 from train_funcs_semseg import get_labels_dict_semseg, postprocess_semseg
 from train_funcs_brdf import get_labels_dict_brdf, postprocess_brdf
 from train_funcs_light import get_labels_dict_light, postprocess_light
-from train_funcs_layout_object_emitter import get_labels_dict_layout_emitter, postprocess_layout_object_emitter
 from train_funcs_matcls import get_labels_dict_matcls, postprocess_matcls
-from train_funcs_detectron import postprocess_detectron, gather_lists
 # from utils.comm import synchronize
 
 from utils.utils_metrics import compute_errors_depth_nyu
@@ -38,13 +36,6 @@ from torchmetrics import Accuracy
 from icecream import ic
 import pickle
 import matplotlib.pyplot as plt
-
-from train_funcs_layout_object_emitter import vis_layout_emitter
-
-# from detectron2.evaluation import COCOEvaluator, inference_on_dataset
-# from detectron2.data import build_detection_test_loader,DatasetCatalog, MetadataCatalog
-from utils.utils_dettectron import py_cpu_nms
-# from detectron2.utils.visualizer import Visualizer, ColorMode
 
 from contextlib import ExitStack, contextmanager
 from skimage.segmentation import mark_boundaries
@@ -57,11 +48,9 @@ def get_time_meters_joint():
     time_meters['forward'] = AverageMeter()
     time_meters['loss_brdf'] = AverageMeter()
     time_meters['loss_light'] = AverageMeter()
-    time_meters['loss_layout_emitter'] = AverageMeter()
     time_meters['loss_matseg'] = AverageMeter()
     time_meters['loss_semseg'] = AverageMeter()
     time_meters['loss_matcls'] = AverageMeter()
-    time_meters['loss_detectron'] = AverageMeter()
     time_meters['backward'] = AverageMeter()    
     return time_meters
 
@@ -149,13 +138,6 @@ def get_labels_dict_joint(data_batch, opt):
         labels_dict_matcls = {}
     labels_dict.update(labels_dict_matcls)
 
-    if opt.cfg.DATA.load_detectron_gt:
-        labels_dict_detectron = {'detectron_dict_list': data_batch['detectron_sample_dict']}
-    else:
-        labels_dict_detectron = {}
-    labels_dict.update(labels_dict_detectron)
-
-    # labels_dict = {**labels_dict_matseg, **labels_dict_brdf}
     return labels_dict
 
 def forward_joint(is_train, labels_dict, model, opt, time_meters, if_vis=False, if_loss=True, tid=-1, loss_dict=None):
@@ -193,43 +175,21 @@ def forward_joint(is_train, labels_dict, model, opt, time_meters, if_vis=False, 
         time_meters['loss_light'].update(time.time() - time_meters['ts'])
         time_meters['ts'] = time.time()
 
-    if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
-        output_dict, loss_dict = postprocess_layout_object_emitter(labels_dict, output_dict, loss_dict, opt, time_meters, is_train=is_train, if_vis=if_vis)
-        time_meters['loss_layout_emitter'].update(time.time() - time_meters['ts'])
-        time_meters['ts'] = time.time()
-
     if opt.cfg.MODEL_MATCLS.enable:
         output_dict, loss_dict = postprocess_matcls(labels_dict, output_dict, loss_dict, opt, time_meters, if_vis=if_vis)
         time_meters['loss_matcls'].update(time.time() - time_meters['ts'])
         time_meters['ts'] = time.time()
         # synchronize()
 
-    if opt.cfg.MODEL_DETECTRON.enable:
-        output_dict, loss_dict = postprocess_detectron(labels_dict, output_dict, loss_dict, opt, time_meters, if_vis=if_vis, is_train=is_train)
-        time_meters['loss_detectron'].update(time.time() - time_meters['ts'])
-        time_meters['ts'] = time.time()
-        # synchronize()
-
-
     return output_dict, loss_dict
 
 def val_epoch_joint(brdf_loader_val, model, params_mis):
     writer, logger, opt, tid, bin_mean_shift = params_mis['writer'], params_mis['logger'], params_mis['opt'], params_mis['tid'], params_mis['bin_mean_shift']
-    if_register_detectron_only = params_mis['if_register_detectron_only']
     ENABLE_SEMSEG = opt.cfg.MODEL_BRDF.enable_semseg_decoder or opt.cfg.MODEL_SEMSEG.enable
     ENABLE_MATSEG = opt.cfg.MODEL_MATSEG.enable
     ENABLE_BRDF = opt.cfg.MODEL_BRDF.enable and opt.cfg.DATA.load_brdf_gt
     ENABLE_LIGHT = opt.cfg.MODEL_LIGHT.enable
     ENABLE_MATCLS = opt.cfg.MODEL_MATCLS.enable
-    if if_register_detectron_only:
-        ENABLE_SEMSEG = False
-        ENABLE_MATSEG = False
-        ENABLE_BRDF = False
-        ENABLE_LIGHT = False
-        ENABLE_MATCLS = False
-
-    ENABLE_DETECTRON = opt.cfg.MODEL_DETECTRON.enable
-
 
     logger.info(red('===Evaluating for %d batches'%len(brdf_loader_val)))
 
@@ -291,64 +251,6 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
             'loss_light-renderErr', 
         ]
 
-    if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
-        if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-            loss_keys += [
-                'loss_layout-pitch_cls', 
-                'loss_layout-pitch_reg', 
-                'loss_layout-roll_cls', 
-                'loss_layout-roll_reg', 
-                'loss_layout-lo_ori_cls', 
-                'loss_layout-lo_ori_reg', 
-                'loss_layout-lo_centroid', 
-                'loss_layout-lo_coeffs', 
-                'loss_layout-lo_corner', 
-                'loss_layout-ALL'
-            ]
-        if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-            loss_keys += [
-                'loss_object-size_reg', 
-                'loss_object-ori_cls', 
-                'loss_object-ori_reg', 
-                'loss_object-centroid_cls', 
-                'loss_object-centroid_reg', 
-                'loss_object-offset_2D', 
-                'loss_object-ALL', 
-            ]
-        if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-            loss_keys += [
-                'loss_joint-phy', 
-                'loss_joint-bdb2D', 
-                'loss_joint-corner', 
-                'loss_joint-ALL', 
-            ]
-
-        if 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-            if opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'SVRLoss':
-                loss_keys += [
-                    'loss_mesh-chamfer', 
-                    'loss_mesh-face', 
-                    'loss_mesh-edge', 
-                    'loss_mesh-boundary', 
-                ]
-            elif opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'ReconLoss':
-                loss_keys += [
-                    'loss_mesh-point', 
-                ]
-            loss_keys += [
-                    'loss_mesh-ALL', 
-                ]
-
-        if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-            loss_keys += [
-                'loss_emitter-light_ratio', 
-                'loss_emitter-cell_cls', 
-                'loss_emitter-cell_axis', 
-                'loss_emitter-cell_intensity', 
-                'loss_emitter-cell_lamb', 
-                'loss_emitter-ALL', 
-        ]
-
     if opt.cfg.MODEL_MATCLS.enable:
         loss_keys += [
             'loss_matcls-ALL',
@@ -357,15 +259,6 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
             loss_keys += [
             'loss_matcls-supcls',]
 
-    if opt.cfg.MODEL_DETECTRON.enable:
-        loss_keys += [
-            'loss_detectron-ALL',
-            'loss_detectron-cls', 
-            'loss_detectron-box_reg', 
-            'loss_detectron-mask', 
-            'loss_detectron-rpn_cls', 
-            'loss_detectron-rpn_loc', ]
-        
     loss_meters = {loss_key: AverageMeter() for loss_key in loss_keys}
     time_meters = get_time_meters_joint()
     if ENABLE_SEMSEG:
@@ -378,10 +271,6 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
         matcls_meters = get_matcls_meters(opt)
 
     with torch.no_grad():
-        if ENABLE_DETECTRON:
-            detectron_evaluator = COCOEvaluator(None, ("bbox", "segm"), opt.distributed, output_dir=str(opt.summary_vis_path_task), logger=logger)
-            detectron_evaluator.reset()
-            coco_dictt_labels = []
 
         brdf_dataset_val = params_mis['brdf_dataset_val']
         count_samples_this_rank = 0
@@ -397,7 +286,6 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
             
                 if max(count_samples_gathered)>=len(brdf_dataset_val.scene_key_frame_id_list_this_rank):
                     break
-
 
             ts_iter_start = time.time()
 
@@ -572,63 +460,8 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
                     matcls_meters['pred_labels_sup_list'].update(output.cpu().flatten())
                     matcls_meters['gt_labels_sup_list'].update(target.cpu().flatten())
 
-            if ENABLE_DETECTRON:
-                detectron_dict_list, output_detectron = input_dict['detectron_dict_list'], output_dict['output_detectron']
-                if opt.distributed:
-                    detectron_dict_list_gathered = gather_lists(detectron_dict_list, opt.num_gpus)
-                #     output_detectron = gather_lists(output_detectron, opt.num_gpus)
-                detectron_evaluator.process(detectron_dict_list, output_detectron)
-                coco_dictt_labels += detectron_dict_list_gathered
-                # print('----', opt.rank, [x['image_id'] for x in input_dict['detectron_dict_list']])
-
-
-            # synchronize()
 
     # ======= Metering
-
-    if ENABLE_DETECTRON:
-        # if opt.distributed:
-        #     coco_dictt_labels = gather_lists(coco_dictt_labels, opt.num_gpus)
-        #     # print(len(coco_dictt_labels), '<<<<<<<<<<', opt.rank)
-        #     coco_dictt_labels_allgather = [None for _ in range(opt.num_gpus)]
-        #     dist.all_gather_object(coco_dictt_labels_allgather, coco_dictt_labels)
-        #     # print(len(coco_dictt_labels_allgather), len(coco_dictt_labels_allgather[0]), '<<<<<<<<<<-------', opt.rank)
-        #     coco_dictt_labels = [item for sublist in coco_dictt_labels_allgather for item in sublist]
-        pickle_path = Path(opt.summary_vis_path_task) / ('OR_detectron_%s.pth'%params_mis['detectron_dataset_name'])
-        if opt.is_master:
-            # --- dump processed labels for the entire val set for use in detectron_evaluator.evaluate()
-            if not pickle_path.exists():
-                torch.save(coco_dictt_labels, str(pickle_path))
-                logger.info(green('[Detectron] Dumped detectron pickle: %s'%str(pickle_path)))
-        # synchronize()
-
-        coco_dictt_labels = torch.load(str(pickle_path))
-        # brdf_dataset_val.run(OR_detectron_path)
-        # val_dict = brdf_dataset_val.dict
-        detectron_dataset_name = "OR_detectron_" + params_mis['detectron_dataset_name']
-        if detectron_dataset_name not in DatasetCatalog.list():
-            DatasetCatalog.register(detectron_dataset_name, lambda d=params_mis['detectron_dataset_name']:coco_dictt_labels)
-            assert len(opt.OR_classes)==opt.cfg_detectron.MODEL.ROI_HEADS.NUM_CLASSES
-            MetadataCatalog.get(detectron_dataset_name).set(thing_classes=opt.OR_classes)
-            logger.info(green('[Detectron] Registered dataCatalog: %s'%detectron_dataset_name))
-
-        # --- eval with the dumped labels
-        # opt.OR_detectron_metadata_val = MetadataCatalog.get("OR_detectron_val")
-        if if_register_detectron_only:
-            return
-        detectron_evaluator.init_dataset(detectron_dataset_name)
-        detectron_results = detectron_evaluator.evaluate()
-        if detectron_results != {}:
-            for task_idx, task_name in enumerate(['bbox', 'segm']):
-                dict_items = list(detectron_results.items())[task_idx]
-                assert dict_items[0]==task_name
-                for metric in ['AP', 'AP50', 'AP75', 'APs', 'APm', 'APl']:
-                    if opt.is_master:
-                        writer.add_scalar('VAL/DETECTRON-%s-%s_val'%(task_name, metric), dict_items[1][metric], tid)
-        # writer.add_scalar('VAL/DETECTRON-mAcc_val', mAcc, tid)
-        # writer.add_scalar('VAL/DETECTRON-allAcc_val', allAcc, tid)
-        # synchronize()
-
         
     if opt.is_master:
         for loss_key in loss_dict_reduced:
@@ -754,17 +587,11 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
         depthBsPreds_aligned_list = []
 
 
-    if opt.cfg.MODEL_GMM.enable:
-        output_GMM_Q_list = []
-    
     if opt.cfg.MODEL_MATCLS.enable:
         matG1IdDict = getG1IdDict(opt.cfg.PATH.matcls_matIdG1_path)
 
 
-    # opt.albedo_pooling_debug = True
-
     # ===== Gather vis of N batches
-
 
     with torch.no_grad():
         im_single_list = []
@@ -825,11 +652,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                     if opt.cfg.DEBUG.if_dump_perframe_BRDF:
                         Image.fromarray((im_single*255.).astype(np.uint8)).save('{0}/{1}_im_{2}.png'.format(opt.summary_vis_path_task, tid, sample_idx) )
 
-                    if opt.cfg.MODEL_MATSEG.albedo_pooling_debug and not opt.if_cluster:
-                        os.makedirs('tmp/demo_%s'%(opt.task_name), exist_ok=True)
-                        np.save('tmp/demo_%s/im_trainval_SDR_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), im_single)
-                        print('Saved to' + 'tmp/demo_%s/im_trainval_SDR_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx))
-
                     writer.add_text('VAL_image_name/%d'%(sample_idx), im_path, tid)
                     assert sample_idx == data_batch['image_index'][sample_idx_batch]
                     # print(sample_idx, im_path)
@@ -850,210 +672,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                             # scene_path_dump_list.append(scene_path_dump)
                             # im_h_resized_to, im_w_resized_to = data_batch['im_h_resized_to'], data_batch['im_w_resized_to']
                             # scene_path_dump_list.append([scene_path_dump, (im_h_resized_to, im_w_resized_to)])
-
-
-                            
-                if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool or opt.cfg.MODEL_MATSEG.if_albedo_safenet) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
-                    if opt.is_master:
-                        if output_dict['im_trainval_SDR_mask_pooled_mean'] is not None:
-                            im_trainval_SDR_mask_pooled_mean = output_dict['im_trainval_SDR_mask_pooled_mean'][sample_idx_batch]
-                            im_trainval_SDR_mask_pooled_mean = im_trainval_SDR_mask_pooled_mean.cpu().numpy().squeeze().transpose(1, 2, 0)
-                            writer.add_image('VAL_im_trainval_SDR_mask_pooled_mean/%d'%(sample_idx), im_trainval_SDR_mask_pooled_mean, tid, dataformats='HWC')
-                        if not opt.if_cluster:
-                            if 'kernel_list' in output_dict and not output_dict['kernel_list'] is None:
-                                kernel_list = output_dict['kernel_list']
-                                # print(len(kernel_list), kernel_list[0].shape)
-                                np.save('tmp/demo_%s/kernel_list_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), kernel_list[0].detach().cpu().numpy())
-                            if output_dict['im_trainval_SDR_mask_pooled_mean'] is not None:
-                                np.save('tmp/demo_%s/im_trainval_SDR_mask_pooled_mean_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), im_trainval_SDR_mask_pooled_mean)
-                            if 'embeddings' in output_dict and output_dict['embeddings'] is not None:
-                                np.save('tmp/demo_%s/embeddings_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), output_dict['embeddings'].detach().cpu().numpy())
-                            if 'affinity' in output_dict:
-                                affinity = output_dict['affinity']
-                                sample_ij = output_dict['sample_ij']
-                                if affinity is not None:
-                                    np.save('tmp/demo_%s/affinity_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), affinity[0].detach().cpu().numpy())
-                                    np.save('tmp/demo_%s/sample_ij_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), sample_ij)
-
-            # === BRDF feat_ssn superpixel segmentation
-            # print(output_dict['encoder_outputs']['brdf_extra_output_dict'].keys(), output_dict['albedo_extra_output_dict'].keys()) # dict_keys(['x1_affinity', 'x2_affinity', 'x3_affinity']) dict_keys(['dx3_affinity', 'dx4_affinity', 'dx5_affinity'])
-            if opt.cfg.MODEL_GMM.enable and opt.cfg.MODEL_GMM.feat_recon.enable:
-                for encoder_key in ['x1', 'x2', 'x3']:
-                    if encoder_key in opt.cfg.MODEL_GMM.feat_recon.layers_list:
-                        affinity_matrix = output_dict['encoder_outputs']['brdf_extra_output_dict']['%s_affinity'%encoder_key]
-                        affinity_matrix_label = torch.argmax(affinity_matrix, 1).detach().cpu().numpy()
-
-                        for sample_idx_batch, affinity_matrix_label_single in enumerate(affinity_matrix_label):
-                            sample_idx = sample_idx_batch+batch_size*batch_id
-                            if sample_idx >= opt.cfg.TEST.vis_max_samples:
-                                break
-                            
-                            im_single_resized = scikit_resize(im_single_list[sample_idx], (affinity_matrix_label_single.shape[0], affinity_matrix_label_single.shape[1]))
-
-                            if opt.is_master:
-                                im_single_ssn_result = mark_boundaries(im_single_resized, affinity_matrix_label_single)
-                                writer.add_image('VAL_GMM_encoder_SSN_%s/%d'%(encoder_key, sample_idx), im_single_ssn_result, tid, dataformats='HWC')
-
-                for mode in opt.cfg.MODEL_GMM.appearance_recon.modalities:
-                    modality = {'al': 'albedo', 'ro': 'rough'}[mode]
-                    if not '%s_extra_output_dict'%modality in output_dict:
-                        continue
-
-                    for decoder_key in ['dx3', 'dx4', 'dx5']:
-                        if decoder_key in opt.cfg.MODEL_GMM.feat_recon.layers_list:
-                            affinity_matrix = output_dict['%s_extra_output_dict'%modality]['%s_affinity'%decoder_key]
-                            affinity_matrix_label = torch.argmax(affinity_matrix, 1).detach().cpu().numpy()
-
-                            for sample_idx_batch, affinity_matrix_label_single in enumerate(affinity_matrix_label):
-                                sample_idx = sample_idx_batch+batch_size*batch_id
-                                if sample_idx >= opt.cfg.TEST.vis_max_samples:
-                                    break
-
-                                im_single_resized = scikit_resize(im_single_list[sample_idx], (affinity_matrix_label_single.shape[0], affinity_matrix_label_single.shape[1]))
-
-                                if opt.is_master:
-                                    im_single_ssn_result = mark_boundaries(im_single_resized, affinity_matrix_label_single)
-                                    writer.add_image('VAL_GMM_decoder-%s_SSN_%s/%d'%(modality, decoder_key, sample_idx), im_single_ssn_result, tid, dataformats='HWC')
-
-            # === BRDF-DPT superpixel segmentation
-            if opt.cfg.MODEL_BRDF.DPT_baseline.enable:
-                mode = opt.cfg.MODEL_BRDF.DPT_baseline.modality
-                assert mode=='enabled'
-                # modality = {'al': 'albedo', 'de': 'depth'}[mode]
-                for modality in opt.cfg.MODEL_BRDF.enable_list:
-                    if not '%s_extra_output_dict'%modality in output_dict:
-                        pass
-                    else:
-                        if opt.cfg.MODEL_BRDF.DPT_baseline.model == 'dpt_hybrid_SSN' or opt.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_affinity:
-                            decoder_key = 'matseg'
-                            affinity_matrix = output_dict['%s_extra_output_dict'%modality]['%s_affinity'%decoder_key]
-                            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_ssn_matseg_on_lower_res:
-                                affinity_matrix = F.interpolate(affinity_matrix, scale_factor=4., mode='bilinear')
-                            # print(affinity_matrix.shape, affinity_matrix[0].sum(-1).sum(-1)) # should be either normalized by J, or RAW dist matrix
-                            affinity_matrix_label = torch.argmax(affinity_matrix, 1).detach().cpu().numpy()
-
-                            for sample_idx_batch, affinity_matrix_label_single in enumerate(affinity_matrix_label):
-                                sample_idx = sample_idx_batch+batch_size*batch_id
-                                if sample_idx >= opt.cfg.TEST.vis_max_samples:
-                                    break
-
-                                im_single_resized = scikit_resize(im_single_list[sample_idx], (affinity_matrix_label_single.shape[0], affinity_matrix_label_single.shape[1]))
-
-                                if opt.is_master:
-                                    im_single_ssn_result = mark_boundaries(im_single_resized, affinity_matrix_label_single)
-                                    writer.add_image('VAL_DPT-SSN_%s_SSN_%s/%d'%(modality, decoder_key, sample_idx), im_single_ssn_result, tid, dataformats='HWC')
-
-
-                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_debug_unet:
-                    assert 'albedo_pred_unet' in output_dict['albedo_extra_output_dict']
-                    albedo_pred_unet = output_dict['albedo_extra_output_dict']['albedo_pred_unet'].cpu().numpy().transpose(0, 2, 3, 1)
-                    for sample_idx_batch, albedo_pred_unet_single in enumerate(albedo_pred_unet):
-                        sample_idx = sample_idx_batch+batch_size*batch_id
-                        if opt.is_master:
-                            writer.add_image('VAL_DPT-SSN_albedo_PRED/%d'%sample_idx, albedo_pred_unet_single, tid, dataformats='HWC')
-
-                if opt.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_proj_coef:
-                    assert 'proj_coef_dict' in output_dict['albedo_extra_output_dict']
-                    assert 'hooks' in output_dict['albedo_extra_output_dict']
-                    proj_coef_dict = output_dict['albedo_extra_output_dict']['proj_coef_dict']
-                    hooks = output_dict['albedo_extra_output_dict']['hooks'] if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers == -1 else range(opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers)
-                    start_im_hw = [256//4, 320//4]
-                    patch_size = opt.cfg.MODEL_BRDF.DPT_baseline.patch_size
-                    spixel_hw = [256//patch_size, 320//patch_size]
-                    # if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_ssn_matseg_on_lower_res:
-                    #     spixel_hw = [spixel_hw[0]//4, spixel_hw[1]//4]
-                    head = 0
-                    for idx, hook in enumerate(hooks):
-                        proj_coef_matrix = proj_coef_dict['proj_coef_%d'%hook].detach() # torch.Size([1, 2, 5120, 320])
-                        # print(idx, proj_coef_matrix[0, 0, :5, 0])
-                        # print(idx, proj_coef_matrix[0, 0, :5, -1])
-                        # print(proj_coef_matrix.shape, np.min(proj_coef_matrix.cpu().numpy()), np.max(proj_coef_matrix.cpu().numpy()), np.median(proj_coef_matrix.cpu().numpy()))
-                        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg_if_inject_proj_coef:
-                            proj_coef_matrix = (proj_coef_matrix / (proj_coef_matrix.sum(2, keepdims=True)+1e-8)).cpu().numpy() # softmax in pixels dim
-                        else:
-                            proj_coef_matrix = F.softmax(proj_coef_matrix, dim=2).cpu().numpy() # softmax in pixels dim
-
-                        # print(proj_coef_matrix.shape, np.min(proj_coef_matrix), np.max(proj_coef_matrix), np.median(proj_coef_matrix))
-                        for sample_idx_batch, proj_coef_matrix_single in enumerate(proj_coef_matrix):
-                            sample_idx = sample_idx_batch+batch_size*batch_id
-                            if opt.is_master:
-                                proj_coef_matrix_single_vis = proj_coef_matrix_single[head].reshape(start_im_hw[0], start_im_hw[1], spixel_hw[0], spixel_hw[1])
-                                # print('>>>>', idx, sample_idx_batch, proj_coef_matrix_single_vis[0, :5, 0, 0])
-                                # print('>>>>', idx, sample_idx_batch, proj_coef_matrix_single_vis[0, :5, -1, -1])
-                                a_list = []
-                                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_SSN and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg:
-                                    for spixel_h in [0, 1]:
-                                        for spixel_w in [0, 1]:
-                                            a_list.append([spixel_h, spixel_w])
-                                else:
-                                    for spixel_h in [spixel_hw[0]//3, spixel_hw[0]//3*2, spixel_hw[0]-1]:
-                                        for spixel_w in [spixel_hw[1]//3, spixel_hw[1]//3*2, spixel_hw[1]-1]:
-                                            a_list.append([spixel_h, spixel_w])
-
-                                for spixel_h, spixel_w in a_list:
-                                    # print(spixel_h, spixel_w, proj_coef_matrix_single_vis.shape)
-                                    proj_coef_matrix_single_token_vis = proj_coef_matrix_single_vis[:, :, spixel_h, spixel_w]
-                                    # print(proj_coef_matrix_single_token_vis.shape, np.sum(proj_coef_matrix_single_token_vis))
-                                    print(spixel_h, spixel_w, hook, np.min(proj_coef_matrix_single_token_vis), np.max(proj_coef_matrix_single_token_vis), np.median(proj_coef_matrix_single_token_vis), np.amax(proj_coef_matrix_single_vis))
-                                    # proj_coef_matrix_single_token_vis = proj_coef_matrix_single_token_vis - np.amin(proj_coef_matrix_single_token_vis)
-                                    # proj_coef_matrix_single_token_vis = proj_coef_matrix_single_token_vis / (np.amax(proj_coef_matrix_single_vis)+1e-6)
-                                    # proj_coef_matrix_single_token_vis = proj_coef_matrix_single_token_vis / (np.sum(proj_coef_matrix_single_token_vis) + 1e-6)
-                                    proj_coef_matrix_single_token_vis = np.clip(proj_coef_matrix_single_token_vis * start_im_hw[0] * start_im_hw[1] / 10., 0., 1.)
-                                    proj_coef_matrix_single_token_vis = cv2.resize(proj_coef_matrix_single_token_vis, dsize=(320, 256), interpolation=cv2.INTER_NEAREST)
-                                    print('->', np.min(proj_coef_matrix_single_token_vis), np.max(proj_coef_matrix_single_token_vis), np.median(proj_coef_matrix_single_token_vis))
-
-                                    writer.add_image('VAL_DPT-CA_proj_coef_sample%d/head%d_spixel(%d)%d-%d_PRED/%d'%(sample_idx, head, spixel_h*spixel_hw[1]+spixel_w, spixel_h*patch_size, spixel_w*patch_size, hook), \
-                                        vis_disp_colormap(proj_coef_matrix_single_token_vis, normalize=False, cmap_name='viridis')[0], tid, dataformats='HWC')
-
-                        if not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_not_reduce_res:
-                            start_im_hw = start_im_hw[0]//2, start_im_hw[1]//2
-
-
-                if opt.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_affinity:
-                    assert 'abs_affinity_normalized_by_pixels' in output_dict['albedo_extra_output_dict']
-                    abs_affinity_normalized_by_pixels_input = output_dict['albedo_extra_output_dict']['abs_affinity_normalized_by_pixels'] # torch.Size([1, 320, 64, 80])
-                    patch_size = opt.cfg.MODEL_BRDF.DPT_baseline.patch_size
-                    spixel_hw = [256//patch_size, 320//patch_size]
-                    # if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_ssn_matseg_on_lower_res:
-                    #     spixel_hw = [spixel_hw[0]//4, spixel_hw[1]//4]
-
-                    abs_affinity_normalized_by_pixels_input = abs_affinity_normalized_by_pixels_input.view(-1, spixel_hw[0], spixel_hw[1], abs_affinity_normalized_by_pixels_input.shape[-2], abs_affinity_normalized_by_pixels_input.shape[-1]).detach().cpu().numpy()
-                    for sample_idx_batch, abs_affinity_normalized_by_pixels_input_single in enumerate(abs_affinity_normalized_by_pixels_input):
-                        sample_idx = sample_idx_batch+batch_size*batch_id
-                        if opt.is_master:
-                            a_list = []
-                            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_SSN and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg:
-                                for spixel_h in [0, 1]:
-                                    for spixel_w in [0, 1]:
-                                        a_list.append([spixel_h, spixel_w])
-                            else:
-                                for spixel_h in [spixel_hw[0]//3, spixel_hw[0]//3*2, spixel_hw[0]-1]:
-                                    for spixel_w in [spixel_hw[1]//3, spixel_hw[1]//3*2, spixel_hw[1]-1]:
-                                        a_list.append([spixel_h, spixel_w])
-
-                            for spixel_h, spixel_w in a_list:
-                                abs_affinity_normalized_by_pixels_input_vis = abs_affinity_normalized_by_pixels_input_single[spixel_h, spixel_w, :, :]
-                                # print(abs_affinity_normalized_by_pixels_input.shape, abs_affinity_normalized_by_pixels_input_vis.shape)
-                                writer.add_histogram('VAL_hist_DPT-SSN_abs_affinity_normalized_by_pixels_sample%d/head%d_spixel(%d)%d-%d_PRED'%(sample_idx, head, spixel_h*spixel_hw[1]+spixel_w, spixel_h*patch_size, spixel_w*patch_size), \
-                                    abs_affinity_normalized_by_pixels_input_vis, tid)
-
-                                # print(np.sum(abs_affinity_normalized_by_pixels_input_vis), '----------')
-                                # abs_affinity_normalized_by_pixels_input_vis = abs_affinity_normalized_by_pixels_input_vis / (np.amax(abs_affinity_normalized_by_pixels_input_vis)+1e-6)
-                                abs_affinity_normalized_by_pixels_input_vis = np.clip(abs_affinity_normalized_by_pixels_input_vis * 256 * 320 / 10., 0., 1.)
-                                writer.add_image('VAL_DPT-SSN_abs_affinity_normalized_by_pixels_sample%d/head%d_spixel(%d)%d-%d_PRED'%(sample_idx, head, spixel_h*spixel_hw[1]+spixel_w, spixel_h*patch_size, spixel_w*patch_size), \
-                                    vis_disp_colormap(abs_affinity_normalized_by_pixels_input_vis, normalize=False, cmap_name='viridis')[0], tid, dataformats='HWC')
-
-                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_SSN and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg:
-                    assert 'num_mat_masks' in output_dict['albedo_extra_output_dict'] and 'instance' in output_dict['albedo_extra_output_dict']
-                    for sample_idx_batch, abs_affinity_normalized_by_pixels_input_single in enumerate(abs_affinity_normalized_by_pixels_input):
-                        sample_idx = sample_idx_batch+batch_size*batch_id
-                        if opt.is_master:
-                            num_mat_masks = output_dict['albedo_extra_output_dict']['num_mat_masks'][sample_idx_batch].item()
-                            instance = output_dict['albedo_extra_output_dict']['instance'][sample_idx_batch].detach().cpu().numpy()
-                            # print(instance.shape, instance.sum(-1).sum(-1), instance.dtype)
-                            for mask_idx in range(num_mat_masks+1):
-                                writer.add_image('VAL_DPT-SSN_gt_matseg_instance_sample%d/%d'%(sample_idx, mask_idx), \
-                                    instance[mask_idx].astype(np.float32), tid, dataformats='HW')
 
             # ======= Vis BRDFsemseg / semseg
             if opt.cfg.DATA.load_semseg_gt:
@@ -1084,251 +702,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                         if opt.if_save_pickles:
                             with open(str(pickle_save_path),"wb") as f:
                                 pickle.dump(save_dict, f)
-
-            # ======= Vis Detectron2
-            if opt.cfg.MODEL_DETECTRON.enable:
-                detectron_dataset_name = "OR_detectron_" + params_mis['detectron_dataset_name']
-                if detectron_dataset_name not in DatasetCatalog.list():
-                    with torch.no_grad():
-                        params_mis['if_register_detectron_only'] = True
-                        val_epoch_joint(brdf_loader_val, model, params_mis)
-                        params_mis['if_register_detectron_only'] = False
-                for sample_idx_batch, detectron_output_dict in enumerate(output_dict['output_detectron']):
-                    sample_idx = sample_idx_batch+batch_size*batch_id
-                    if opt.is_master:
-                        print('[detectron] Visualizing %d sample ...'%sample_idx, batch_id, sample_idx_batch)
-                    output_dict = detectron_output_dict['instances']._fields
-                    # put all the predction of the current image into a list, them apply NMS
-                    scores=output_dict['scores'].cpu().numpy()
-                    mask_pre_list=(output_dict['pred_masks'].cpu().numpy()*255).astype('uint8')[scores > opt.cfg.MODEL_DETECTRON.thresh]
-                    scores=scores[scores > opt.cfg.MODEL_DETECTRON.thresh]
-                    # os.makedirs(osp.join(pred,filesubpath), exist_ok=True)
-                    # os.makedirs(osp.join(viz,filesubpath), exist_ok=True)
-
-                    ## visualize the prediction mask
-                    if(mask_pre_list.shape[0]==0):
-                        mask=np.zeros((opt.cfg.DATA.im_height, opt.cfg.DATA.im_width))
-                    else:
-                        mask_pre_list=mask_pre_list[py_cpu_nms(mask_pre_list, scores, opt.cfg.MODEL_DETECTRON.nms_thresh)]
-                        for mask_idx, mask in enumerate(mask_pre_list):
-                            # cv2.imwrite(osp.join(pred, filesubpath,'mask{}.png'.format(index)), mask)
-                            if opt.is_master:
-                                writer.add_image('VAL_DETECTRON_mask_PRED_%d/%d'%(sample_idx, mask_idx), mask, tid, dataformats='HW')
-                        # mask_list=map1[d["file_name"]]
-
-                    im_single = (data_batch['im_fixedscale_SDR'][sample_idx_batch].detach().cpu().numpy().astype(np.float32) * 255.).astype(np.uint8)
-                    v = Visualizer(im_single, metadata=MetadataCatalog.get("OR_detectron_val"), scale=1)
-                    v_pred = v.draw_instance_predictions(detectron_output_dict["instances"].to("cpu"))
-                    # cv2.imwrite(osp.join(viz, filesubpath,'viz.png'),v.get_image()[:, :, ::-1])
-                    if opt.is_master:
-                        writer.add_image('VAL_DETECTRON_vis_PRED/%d'%(sample_idx), v_pred.get_image(), tid, dataformats='HWC')
-                    
-                    v = Visualizer(im_single, metadata=MetadataCatalog.get("OR_detectron_val"), scale=1)
-                    v_gt = v.draw_dataset_dict(input_dict['detectron_dict_list'][sample_idx_batch])
-                    if opt.is_master:
-                        writer.add_image('VAL_DETECTRON_vis_GT/%d'%(sample_idx), v_gt.get_image(), tid, dataformats='HWC')
-
-
-            # ======= Vis layout-emitter
-            if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
-                output_vis_dict = vis_layout_emitter(input_dict, output_dict, data_batch, opt, time_meters=time_meters, batch_size_id=[batch_size, batch_id])
-                # output_dict['output_layout_emitter_vis_dict'] = output_vis_dict
-                if_real_image = False
-                draw_mode = 'both' if not if_real_image else 'prediction'
-
-                scene_box_list, layout_info_dict_list, emitter_info_dict_list = output_vis_dict['scene_box_list'], output_vis_dict['layout_info_dict_list'], output_vis_dict['emitter_info_dict_list']
-                if opt.is_master:
-                    logger.info('emitter_layout -------> ' + str(Path(opt.summary_vis_path_task)))
-
-                    if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-                        patch_flattened = data_batch['boxes_batch']['patch'] # [B, 3, ?, ?]
-                        patch_batch = [patch_flattened[x[0]:x[1]].numpy() for x in data_batch['obj_split'].cpu().numpy()] # [[?, 3, D, D], [?, 3, D, D], ...]
-                        # [x.shape[0] for x in patch_batch], data_batch['obj_split'].cpu().numpy(), patch_flattened.shape)
-                        # print([[x[0], x[1]] for x in data_batch['obj_split'].cpu().numpy()])
-                        assert sum([x.shape[0] for x in patch_batch])==patch_flattened.shape[0]
-
-
-                    for sample_idx_batch, (scene_box, layout_info_dict, emitter_info_dict) in enumerate(zip(scene_box_list, layout_info_dict_list, emitter_info_dict_list)):
-                        sample_idx = sample_idx_batch+batch_size*batch_id
-                        save_prefix = ('results_LABEL_tid%d-%d'%(tid, sample_idx))
-
-                        if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-                            output_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'layout') + '.png')
-                            fig_2d, ax_2d, _ = scene_box.draw_projected_layout(draw_mode, return_plt=True, if_use_plt=True) # with plt plotting
-                            # fig_2d.savefig(str(output_path))
-                            # plt.close(fig_2d)
-                            fig_2d.tight_layout(pad=0)
-                            ax_2d.margins(0) # To remove the huge white borders
-                            fig_2d.canvas.draw()
-                            image_from_plot = np.frombuffer(fig_2d.canvas.tostring_rgb(), dtype=np.uint8)
-                            image_from_plot = image_from_plot.reshape(fig_2d.canvas.get_width_height()[::-1] + (3,))
-                            writer.add_image('VAL_layout_PRED/%d'%(sample_idx), image_from_plot, tid, dataformats='HWC')
-
-                            
-                        pickle_save_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'layout_info') + '.pickle')
-                        save_dict = {'rgb_img_path': data_batch['image_path'][sample_idx_batch],  'bins_tensor': opt.bins_tensor}
-                        save_dict.update(layout_info_dict)
-                        if opt.if_save_pickles:
-                            with open(str(pickle_save_path),"wb") as f:
-                                pickle.dump(save_dict, f)
-
-                        if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-                            output_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'obj') + '.png')
-                            fig_2d = scene_box.draw_projected_bdb3d(draw_mode, if_vis_2dbbox=False, return_plt=True, if_use_plt=True)
-                            fig_2d.savefig(str(output_path))
-                            plt.close(fig_2d)
-
-                            patch_batch_sample = patch_batch[sample_idx_batch]
-                            for patch_idx, patch_single in enumerate(patch_batch_sample):
-                                writer.add_image('VAL_bdb2d_patch/%d-%d'%(sample_idx, patch_idx), patch_single.transpose(1, 2, 0), tid, dataformats='HWC')
-
-                        if 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-                            mask_all = np.zeros((240, 320))
-                            obj_idx = 1
-                            for x in data_batch['boxes_batch']['mask'][sample_idx_batch]:
-                                if x is None:
-                                    continue
-                                x1, y1, x2, y2 = x['msk_bdb']
-                                dest_mask = mask_all[y1:y2+1, x1:x2+1]==0
-                                ori_mask = x['msk'].astype(np.uint8)
-                                ori_mask[ori_mask==1] += obj_idx
-                                mask_all[y1:y2+1, x1:x2+1][dest_mask] = ori_mask[dest_mask]
-                                obj_idx += 1
-
-                            mask_all = mask_all.astype(np.float32)
-                            mask_all = mask_all / np.amax(mask_all)
-                            writer.add_image('VAL_bdb2d_masks/%d'%(sample_idx), mask_all, tid, dataformats='HW')
-
-                            fig_3d, _, ax_3ds = scene_box.draw_3D_scene_plt(draw_mode, if_show_objs=True, hide_random_id=False, if_debug=False, hide_cells=True, if_dump_to_mesh=True, if_show_emitter=False, pickle_id=sample_idx)
-
-                            if opt.cfg.MODEL_LAYOUT_EMITTER.mesh.if_use_vtk:
-                                im_meshes_GT = scene_box.draw3D('GT', if_return_img=True, if_save_img=False, if_save_obj=False, save_path_without_suffix = 'recon')['im']
-                                im_meshes_pred = scene_box.draw3D('prediction', if_return_img=True, if_save_img=False, if_save_obj=False, save_path_without_suffix = 'recon')['im']
-                                writer.add_image('VAL_mesh_GT/%d'%(sample_idx), im_meshes_GT, tid, dataformats='HWC')
-                                writer.add_image('VAL_mesh_pred/%d'%(sample_idx), im_meshes_pred, tid, dataformats='HWC')
-
-
-
-                        if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-                            output_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'emitter') + '.png')
-                            fig_3d, _, ax_3ds = scene_box.draw_3D_scene_plt(draw_mode, if_return_cells_vis_info=True, if_show_emitter=not(if_real_image), if_show_objs='ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list, \
-                                if_show_cell_normals=False, if_show_cell_meshgrid=False)
-                            # az = 90
-                            # elev = 0
-                            # ax_3ds[1].view_init(elev=elev, azim=az)
-                            # ax_3ds[0].view_init(elev=elev, azim=az)
-
-                            fig_3d.savefig(str(output_path))
-                            plt.close(fig_3d)
-                            cells_vis_info_list = ax_3ds[-1]
-                            save_dict = {'cells_vis_info_list': cells_vis_info_list}
-                            save_dict.update(emitter_info_dict)
-                            pickle_save_path = Path(opt.summary_vis_path_task) / (save_prefix.replace('LABEL', 'cells_vis_info_list') + '.pickle')
-                            if opt.if_save_pickles:
-                                with open(str(pickle_save_path),"wb") as f:
-                                    pickle.dump(save_dict, f)
-
-                            emitter_input_dict = {'hdr_scale': data_batch['hdr_scale'].cpu().numpy()[sample_idx_batch]}
-
-                            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
-                                fig_3d, _, ax_3d = scene_box.draw_3D_scene_plt('GT', )
-                                ax_3d[1] = fig_3d.add_subplot(122, projection='3d')
-                                scene_box.draw_3D_scene_plt('GT', fig_or_ax=[ax_3d[1], ax_3d[0]], hide_cells=True)
-                                
-                                lightAccu_color_array_GT = emitter_info_dict['envmap_lightAccu_mean_vis_GT'].transpose(0, 2, 3, 1) # -> [6, 8, 8, 3]
-                                hdr_scale = data_batch['hdr_scale'][sample_idx_batch].item()
-                                # lightAccu_color_array_GT = np.clip(lightAccu_color_array_GT * hdr_scale, 0., 1.)
-                                lightAccu_color_array_GT = np.clip(lightAccu_color_array_GT, 0., 1.)
-                                scene_box.draw_all_cells(ax_3d[1], scene_box.gt_layout, current_type='GT', lightnet_array_GT=lightAccu_color_array_GT, alpha=1.)
-
-                                output_path = Path(opt.summary_vis_path_task) / (('results_LABEL-%d'%(sample_idx)).replace('LABEL', 'lightAccu_view1') + '.png')
-                                fig_3d.savefig(str(output_path))
-
-                                az = 92
-                                elev = 113
-                                ax_3d[1].view_init(elev=elev, azim=az)
-                                ax_3d[0].view_init(elev=elev, azim=az)
-                                output_path = str(output_path).replace('lightAccu_view1', 'lightAccu_view2')
-                                fig_3d.savefig(str(output_path))
-
-                                plt.close(fig_3d)
-        
-                                if opt.if_save_pickles:
-                                    results_emitter_pickle_save_path = Path(opt.summary_vis_path_task) / ('results_emitter_%d.pickle'%sample_idx)
-                                    results_emitter_save_dict = {}
-                                    if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version in ['V2', 'V3']:
-                                        results_emitter_save_dict.update({
-                                            'envmap_lightAccu_mean': output_dict['emitter_est_result']['envmap_lightAccu_mean'].detach().cpu().numpy()[sample_idx_batch], \
-                                            'points_sampled_mask_expanded': output_dict['emitter_est_result']['points_sampled_mask_expanded'].detach().cpu().numpy()[sample_idx_batch], \
-                                            'cell_normal_outside_label': input_dict['emitter_labels']['cell_normal_outside'].detach().cpu().numpy()[sample_idx_batch], 
-                                            'emitter_cell_axis_abs_est': output_dict['results_emitter']['emitter_cell_axis_abs_est'].detach().cpu().numpy()[sample_idx_batch], \
-                                            'emitter_cell_axis_abs_gt': output_dict['results_emitter']['emitter_cell_axis_abs_gt'].detach().cpu().numpy()[sample_idx_batch], \
-                                            'window_mask': output_dict['results_emitter']['window_mask'].detach().cpu().numpy()[sample_idx_batch], 
-                                        })
-                                        if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
-                                            emitter_input_dict.update({'img_feat_map_sampled': output_dict['emitter_input']['img_feat_map_sampled'].detach().cpu().numpy()[sample_idx_batch], })
-
-                                    if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version in ['V3']:
-                                        results_emitter_save_dict.update({
-                                            'envmap_lightAccu': output_dict['emitter_est_result']['envmap_lightAccu'].detach().cpu().numpy()[sample_idx_batch], \
-                                            'scattered_light': output_dict['emitter_est_result']['scattered_light'].detach().cpu().numpy()[sample_idx_batch], \
-                                            'emitter_outdirs_meshgrid_Total3D_outside': output_dict['emitter_est_result']['emitter_outdirs_meshgrid_Total3D_outside'].detach().cpu().numpy()[sample_idx_batch], \
-                                            'normal_outside_Total3D': output_dict['emitter_est_result']['normal_outside_Total3D'].detach().cpu().numpy()[sample_idx_batch], \
-                                            'depthPred': output_dict['emitter_est_result']['depthPred'].detach().cpu().numpy()[sample_idx_batch], \
-                                            'points_backproj': output_dict['emitter_est_result']['points_backproj'].detach().cpu().numpy()[sample_idx_batch]}) \
-                                            # 'points': output_dict['emitter_est_result']['points'].detach().cpu().numpy()[sample_idx_batch], \
-                                        if opt.cfg.DEBUG.if_dump_anything:
-                                            results_emitter_save_dict.update({
-                                                'depthGT': input_dict['depthBatch'].detach().cpu().numpy()[sample_idx_batch], \
-                                                'normalGT': input_dict['normalBatch'].detach().cpu().numpy()[sample_idx_batch], \
-                                                'normalPred': output_dict['normalPred'].detach().cpu().numpy()[sample_idx_batch], \
-                                                'albedoGT': input_dict['albedoBatch'].detach().cpu().numpy()[sample_idx_batch], \
-                                                'roughGT': input_dict['roughBatch'].detach().cpu().numpy()[sample_idx_batch], \
-                                                'albedoPred': output_dict['albedoPred'].detach().cpu().numpy()[sample_idx_batch], \
-                                                'roughPred': output_dict['roughPred'].detach().cpu().numpy()[sample_idx_batch], \
-                                                'T_LightNet2Total3D_rightmult': output_dict['emitter_est_result']['T_LightNet2Total3D_rightmult'].detach().cpu().numpy()[sample_idx_batch], \
-                                                'semseg_label': input_dict['semseg_label_ori'].detach().cpu().numpy()[sample_idx_batch], \
-                                                'envmapsBatch': input_dict['envmapsBatch'].detach().cpu().numpy()[sample_idx_batch], \
-                                                'envmapsPredScaledImage': output_dict['envmapsPredScaledImage'].detach().cpu().numpy()[sample_idx_batch], \
-                                                'envmapsPredImage': output_dict['envmapsPredImage'].detach().cpu().numpy()[sample_idx_batch], \
-                                                # 'envmapsPredScaledImage_LightNetCoords': output_dict['emitter_input']['envmapsPredScaledImage_LightNetCoords'].detach().cpu().numpy()[sample_idx_batch], \
-                                                # 'envmapsPred_LightNetCoords': output_dict['emitter_input']['envmapsPred_LightNetCoords'].detach().cpu().numpy()[sample_idx_batch], \
-                                            })
-                                            if opt.cfg.MODEL_LIGHT.if_transform_to_LightNet_coords:
-                                                LightNet_misc = {}
-                                                for key in output_dict['emitter_misc']['LightNet_misc']:
-                                                    LightNet_misc[key] = output_dict['emitter_misc']['LightNet_misc'][key].detach().cpu().numpy()[sample_idx_batch]
-                                                results_emitter_save_dict['LightNet_misc'] = LightNet_misc
-                                        if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis:
-                                            results_emitter_save_dict.update({'cell_axis_weights': output_dict['emitter_est_result']['cell_axis_weights'].detach().cpu().numpy()[sample_idx_batch]})
-
-                                    # envmap_lightAccu (3, 384, 120, 160)
-                                    # envmap_lightAccu_mean (6, 3, 8, 8)
-                                    # points_sampled_mask_expanded (1, 1, 120, 160)
-                                    # scattered_light (384, 8, 16, 3)
-                                    # cell_normal_outside_label (6, 8, 8, 3)
-                                    # emitter_outdirs_meshgrid_Total3D_outside (384, 8, 16, 3)
-                                    # normal_outside_Total3D (384, 1, 1, 3)
-                                    # emitter_cell_axis_abs_est (6, 64, 3)
-                                    # emitter_cell_axis_abs_gt (6, 64, 3)
-                                    # window_mask (6, 64)
-                                    # cell_axis_weights (384, 8, 16, 1)
-                                    if opt.if_save_pickles:
-                                        with open(str(results_emitter_pickle_save_path),"wb") as f:
-                                            pickle.dump(results_emitter_save_dict, f)
-
-                                emitter_input_dict.update({x: output_dict['emitter_input'][x].detach().cpu().numpy()[sample_idx_batch] for x in output_dict['emitter_input']})
-                                emitter_input_dict.update({'env_scale': data_batch['env_scale'].cpu().numpy()[sample_idx_batch], 'envmap_path': data_batch['envmap_path'][sample_idx_batch]})
-
-
-                            pickle_save_path = Path(opt.summary_vis_path_task) / ('results_emitter_input_%d.pickle'%sample_idx)
-                            # normalPred_lightAccu (3, 240, 320)
-                            # depthPred_lightAccu (240, 320)
-                            # envmapsPredImage_lightAccu (3, 120, 160, 8, 16)
-                            if opt.if_save_pickles:
-                                with open(str(pickle_save_path),"wb") as f:
-                                    pickle.dump(emitter_input_dict, f)
-
 
             # ======= Vis matcls
             if opt.cfg.MODEL_MATCLS.enable:
@@ -1445,8 +818,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
 
                     if opt.is_master:
                         writer.add_image('VAL_matseg-aggre_map_PRED/%d'%(sample_idx), matAggreMap_pred_single_vis, tid, dataformats='HWC')
-                        if opt.cfg.MODEL_MATSEG.albedo_pooling_debug and not opt.if_cluster:
-                            np.save('tmp/demo_%s/matseg_pred_tid%d_idx%d.npy'%(opt.task_name, tid, sample_idx), matAggreMap_pred_single_vis)
                         if opt.cfg.MODEL_MATSEG.if_save_embedding:
                             npy_path = Path(opt.summary_vis_path_task) / ('matseg_pred_embedding_tid%d_idx%d.npy'%(tid, sample_idx))
                             np.save(str(npy_path), embedding_single.detach().cpu().numpy())
@@ -1677,21 +1048,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                         if opt.is_master:
                             writer.add_image('VAL_light-%s/%d'%('reconstErr_loss_map_2D', sample_idx), reconstErr_loss_map_2D, tid, dataformats='HW')
         
-            # ===== Vis GMM
-            if opt.cfg.MODEL_GMM.enable:
-                if opt.cfg.MODEL_GMM.appearance_recon.enable and opt.cfg.MODEL_GMM.appearance_recon.sanity_check:
-                    Q_M_batch = output_dict['output_GMM']['gamma_update'].detach().cpu().numpy()
-                    im_resampled_GMM_batch = output_dict['output_GMM']['im_resampled_GMM'].detach().cpu().numpy()
-                    # print(Q_M_batch.shape) # [b, 315, 240, 320]
-                    for sample_idx_batch, (im_single, im_path) in enumerate(zip(data_batch['im_fixedscale_SDR'], data_batch['image_path'])):
-                        sample_idx = sample_idx_batch+batch_size*batch_id
-                        # Q_M = Q_M_batch[sample_idx_batch]
-                        # output_GMM_Q_list.append(Q_M)
-
-                        im_resampled_GMM = im_resampled_GMM_batch[sample_idx_batch].transpose(1, 2, 0)
-                        im_resampled_GMM = np.clip(im_resampled_GMM*255., 0., 255.).astype(np.uint8)
-                        writer.add_image('VAL_GMM_im_hat/%d'%(sample_idx), im_resampled_GMM, tid, dataformats='HWC')
-                        # writer.add_image('VAL_GMM_im_gt/%d'%(sample_idx), im_single, tid, dataformats='HWC')
 
     # ===== Vis BRDF 2/2
     # ===== logging top N to TB
@@ -1878,22 +1234,13 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
             for depthPreds_vis_single_numpy in depthOut.cpu().detach().numpy():
                 depthOut_colored_single_numpy_list.append(vis_disp_colormap(depthPreds_vis_single_numpy.squeeze(), normalize=True)[0])
             depthOut_colored_batch = np.stack(depthOut_colored_single_numpy_list).transpose(0, 3, 1, 2).astype(np.float32) / 255.
-            # print(depthOut_colored_batch.shape, segAllBatch_vis.cpu().detach().numpy().shape)
             depth_pred_batch_vis_sdr_colored = ( torch.from_numpy(depthOut_colored_batch).cuda() * segAllBatch_vis.expand_as(depthPreds_vis) ).data
-            # depth_pred_batch_vis_
-            # sdr_colored = depthOut_colored_batch * segAllBatch_vis.cpu().detach().numpy()
-
-            # if opt.cfg.MODEL_BRDF.if_bilateral:
-
-            # if not opt.cfg.MODEL_BRDF.use_scale_aware_depth and 'de' in opt.cfg.DATA.data_read_list:
-
 
             if opt.is_master:
                 vutils.save_image(depth_pred_batch_vis_sdr,
                     '{0}/{1}_depthPred_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
                 vutils.save_image(depth_pred_batch_vis_sdr_colored,
                     '{0}/{1}_depthPred_colored_{2}.png'.format(opt.summary_vis_path_task, tid, n) )
-
 
         if 'al' in opt.cfg.MODEL_BRDF.enable_list:
             albedo_pred_batch_vis_sdr_numpy = albedo_pred_batch_vis_sdr.cpu().numpy().transpose(0, 2, 3, 1)
@@ -2021,26 +1368,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
                             depth_bs = depth_bs.resize((im_w_resized_to*2, im_h_resized_to*2), Image.ANTIALIAS)
                             depth_bs.save(str(real_sample_depth_bs_path))
 
-                # if opt.cfg.MODEL_GMM.enable:
-                #     Q_M = output_GMM_Q_list[sample_idx]
-                #     im_single = im_batch_vis_sdr[sample_idx].cpu().detach().numpy().transpose(1, 2, 0) # [H, W, 3]
-                #     J = Q_M.shape[0]
-
-                #     # V1.0: appearance recon via SSD
-                #     # Q_M_Jnormalized = Q_M / (Q_M.sum(-1, keepdims=True).sum(-2, keepdims=True)+1e-6) # [J, 240, 320]
-                #     # im_single_J = Q_M_Jnormalized.reshape(J, -1) @ im_single.reshape(-1, 3) # [J, 3]
-                #     # # print(Q_M_Jnormalized.shape, Q_M_Jnormalized.sum(-1).sum(-1)) # should be all 1s
-                #     # # print(np.sum(Q_M, 0))
-                #     # # print(im_single.shape)
-                #     # # print(im_single_J.shape, im_single_J) # (315, 3)
-                #     # # print(Q_M.shape, Q_M)
-                #     # im_single_hat = Q_M.transpose(1, 2, 0) @ im_single_J # (240, 320, 3)
-
-                #     # im_single_hat = np.clip(im_single_hat*255., 0., 255.).astype(np.uint8)
-
-                #     writer.add_image('VAL_GMM_im_hat/%d'%(sample_idx), im_single_hat, tid, dataformats='HWC')
-                #     writer.add_image('VAL_GMM_im_gt/%d'%(sample_idx), im_single, tid, dataformats='HWC')
-
     if opt.cfg.DEBUG.if_load_dump_BRDF_offline and opt.cfg.DEBUG.if_test_real:
         if opt.is_master:
             for sample_idx in tqdm(range(im_batch_vis_sdr.shape[0])):
@@ -2063,8 +1390,6 @@ def vis_val_epoch_joint(brdf_loader_val, model, params_mis):
 
 
     logger.info(red('Evaluation VIS timings: ' + time_meters_to_string(time_meters)))
-
-    # opt.albedo_pooling_debug = False
 
     # synchronize()
     opt.if_vis_debug_pac = False

@@ -24,7 +24,7 @@ _C.DTYPE = "float32"
 _C.MM1_DEBUG = False
 
 _C.PATH = CN()
-_C.PATH.cluster_names = ['kubectl', 'nvidia', 'ngc']
+_C.PATH.cluster_names = ['kubectl']
 _C.PATH.root = ''
 _C.PATH.root_local = '/home/ruizhu/Documents/Projects/semanticInverse/train'
 _C.PATH.root_cluster = ['.', '.', '.']
@@ -38,9 +38,6 @@ _C.PATH.total3D_lists_path_zhengqinCVPR = 'data/openrooms/list_OR_V4full_zhengqi
 
 _C.PATH.matcls_matIdG1_path = 'data/openrooms/matIdGlobal1.txt'
 _C.PATH.matcls_matIdG2_path = 'data/openrooms/matIdGlobal2.txt'
-_C.PATH.dcn_path = ''
-_C.PATH.dcn_cluster = ['/viscompfs/users/ruizhu/lib/Deformable-Convolution-V2-PyTorch', '', '']
-_C.PATH.dcn_local = '/home/ruizhu/Documents/Projects/semanticInverse/third-partieresults_outside/Deformable-Convolution-V2-PyTorch'
 _C.PATH.torch_home_path = ''
 _C.PATH.torch_home_local = '/home/ruizhu/Documents/Projects/semanticInverse/'
 _C.PATH.torch_home_cluster = ['/ruidata/dptInverse/', '/home/ruzhu/Documents/torch', '/newfoundland/torch']
@@ -138,23 +135,6 @@ _C.DATASET.binary.if_shuffle = False
 _C.DATASET.if_pickle = False
 _C.DATASET.pickle = CN()
 
-_C.DATASET.layout_emitter_path = ''
-# _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-OR45_total3D_train_test_data'
-# _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitter-OR45_total3D_train_test_data'
-# _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-detachEmitterRERE-OR45_total3D_train_test_data'
-
-# _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-withMesh20210507-val500-OR45_total3D_train_test_data'
-# _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-withMesh20210507-val-OR45_total3D_train_test_data'
-# _C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-withMesh20210507-OR45_total3D_train_test_data'
-_C.DATASET.layout_emitter_path_local = '/data/ruizhu/OR-V4full-withMesh20210510-assign2NotReindex-OR45_total3D_train_test_data'
-
-# _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-OR45_total3D_train_test_data'
-# _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitter-OR45_total3D_train_test_data'
-# _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitterRERE-OR45_total3D_train_test_data'
-# _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-detachEmitterRERERE20210502-OR45_total3D_train_test_data'
-# _C.DATASET.layout_emitter_path_cluster = '/ruidata/OR-V4full-withMesh20210507-OR45_total3D_train_test_data'
-_C.DATASET.layout_emitter_path_cluster = ['/ruidata/OR-V4full-withMesh20210510-assign2NotReindex-OR45_total3D_train_test_data_3', '', '']
-
 _C.DATASET.envmap_path = ''
 _C.DATASET.envmap_path_local = '/home/ruizhu/Documents/data/EnvDataset/'
 _C.DATASET.envmap_path_cluster = ['/siggraphasia20dataset/EnvDataset/', '', '']
@@ -224,7 +204,6 @@ _C.DATA.data_read_list = ''
 _C.DATA.data_read_list_allowed = ['al', 'no', 'de', 'ro', 'li', \
     'lo', 'em', 'ob', 'mesh']
 _C.DATA.load_matcls_gt = False
-_C.DATA.load_detectron_gt = False
 _C.DATA.load_cam_pose = False
 
 _C.DATA.iiw = CN()
@@ -240,29 +219,6 @@ _C.DATA.nyud.im_height = 480
 _C.DATA.nyud.im_width = 640
 _C.DATA.nyud.im_height_padded_to = 256
 _C.DATA.nyud.im_width_padded_to = 320
-
-# ===== GMM
-_C.MODEL_GMM = CN()
-_C.MODEL_GMM.enable = False
-_C.MODEL_GMM.appearance_recon = CN() # single frame only
-_C.MODEL_GMM.appearance_recon.enable = False
-_C.MODEL_GMM.appearance_recon.sanity_check = False
-_C.MODEL_GMM.appearance_recon.modalities = 'al'
-_C.MODEL_GMM.feat_recon = CN() # single frame only
-_C.MODEL_GMM.feat_recon.enable = False
-_C.MODEL_GMM.feat_recon.n_iter = 10
-_C.MODEL_GMM.feat_recon.layers_list = 'dx3_dx4_dx5' # 'dx3_dx4_dx5_x1_x2_x3'
-_C.MODEL_GMM.feat_recon.use_matseg = False
-_C.MODEL_GMM.feat_recon.matseg_H = 6
-_C.MODEL_GMM.feat_recon.matseg_W = 8
-
-_C.MODEL_GMM.learning_rate = 1e-5
-_C.MODEL_GMM.ssn_grid_spixel = False
-_C.MODEL_GMM.src_idx = 1
-_C.MODEL_GMM.grad_clip = 0.
-_C.MODEL_GMM.RAFT = CN()
-_C.MODEL_GMM.RAFT.small = False
-_C.MODEL_GMM.RAFT.OF_model_path = '/home/ruizhu/Documents/Projects/nvidia/vidapp/third-party/raft/models/raft-things.pth'
 
 # ===== BRDF
 _C.MODEL_BRDF = CN()
@@ -322,17 +278,12 @@ _C.MODEL_BRDF.DPT_baseline.if_SGD = False
 _C.MODEL_BRDF.DPT_baseline.if_pos_embed = False
 _C.MODEL_BRDF.DPT_baseline.if_batch_norm = True # in DPT output head
 _C.MODEL_BRDF.DPT_baseline.if_batch_norm_depth_override = True # in DPT output head
-_C.MODEL_BRDF.DPT_baseline.if_vis_CA_proj_coef = False
-_C.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_affinity = False
-_C.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_gt_matseg = False
-# _C.MODEL_BRDF.DPT_baseline.if_batch_norm_in_proj_extra = False
 _C.MODEL_BRDF.DPT_baseline.modality = 'enabled'
 _C.MODEL_BRDF.DPT_baseline.model = 'dpt_hybrid'
 _C.MODEL_BRDF.DPT_baseline.readout = 'project'
 _C.MODEL_BRDF.DPT_baseline.use_vit_only = False
 # _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_path = 'dpt_weights/dpt_hybrid-midas-501f0c75.pt'
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid_path = 'NA'
-# _C.MODEL_BRDF.DPT_baseline.dpt_SSN_path = 'NA'
 _C.MODEL_BRDF.DPT_baseline.dpt_base_path = 'NA'
 # _C.MODEL_BRDF.DPT_baseline.dpt_large_path = 'dpt_weights/dpt_large-midas-2f21e586.pt'
 _C.MODEL_BRDF.DPT_baseline.dpt_large_path = 'NA'
@@ -358,77 +309,10 @@ _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels = 768
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.depth = CN()
 _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.depth.activation = 'tanh'
 
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA = CN()
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA = False # use Cross Attention instead of assembling
-# _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_recompute_C = False # recompute tokens from im_feat then feed to next transformer; not applicable to CAv2
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_init_img_feat = False
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_grid_assembling = False # reverting back to grid assembling in CA
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.im_feat_init_c = None
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_res_CA_except_first = False
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type = 'full' # [single, double, full] of resnet
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full = CN()
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_shared_stem = False # if shared one resnet; or separate for tokens and im_feats
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full.backbone_dims = 1856 # 64+256+512+1024
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full.proj_extra_dims = 768 # to be consistent with hybrid
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full.proj_extra_if_inst_norm = True
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_full.proj_extra_if_simple = False
-
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CAc = False # use Cross Attention-tokens to update tokens (proj im feat to tokens)
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.CAc = CN()
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.CAc.if_use_previous_feat = False # use previous im_feat instead of current im_feat
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.CAc.if_use_init_feat = False # use previous im_feat instead of current im_feat
-
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_SSN = False # use SSN to generate initial token
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN = CN()
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_freeze_matseg = True
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_hard_affinity_for_c = False
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_dense = False
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg = False # if use GT matseg labels as hard affinity
-# _C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_inject_gt_affinity = False # if inject (multiply) gt affinity (binary) to CA
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg_if_duplicate_tokens = False # if duplicate tokens to avoid empty tokens instead of applying token masks to everywhere
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg_if_inject_token_mask = False # if inject (multiply) gt token masks (binary) to CA for reconstruction
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg_if_inject_proj_coef = False
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg_if_inject_transformer = False
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from = 'matseg' # ['backbone', 'matseg', 'matseg-2']
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.backbone_dims = 1856 # 64+256+512+1024
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.proj_extra_dims = 768 # to be consistent with hybrid
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.proj_extra_if_inst_norm = True
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.proj_extra_if_simple = False
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_ssn_matseg_on_lower_res = False # if SSN on quarter matseg feat instead of on full res and then resize
-
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_not_reduce_res = False # if not reducing resolution in vit_CAv2.py
-_C.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_only_last_transformer_output_used = False # [debug] if only using the last transformer outoput in unet, instead of using 4 intermediate outputs
-
 _C.MODEL_BRDF.DPT_baseline.dpt_large = CN()
 _C.MODEL_BRDF.DPT_baseline.dpt_large.feat_proj_channels = 1024
 
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN = CN() # dpt_hybrid_SSN (V1)
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from = 'matseg' # ['backbone', 'matseg']
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method = 'qkv' # ['qtc', 'qkv']
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers = -1 # set to -1 to disable; otherwise denoting keeping the first N layers
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv = False # if recompute im_feat and codebook bwtween transformer layers  to qkv mode; similar to YOGO
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_slim = False # if recompute im_feat and codebook bwtween transformer layers  to qkv mode; similar to YOGO
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_recompute_C = False # if not recompute C by QI_new
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_reduce_res = False # if not reducing resolution in vit_SSN_unet_qkv.py
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used = False # [debug] if only using the last transformer outoput in unet, instead of using 4 intermediate outputs
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_use_init_img_feat = False
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_use_Q_as_proj_coef = False
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_res_add_after_QI = False # if not reducing resolution in vit_SSN_unet_qkv.py
-# _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_vis_affinity_in_layers = False # if compute affinity between tokens and im
-# _C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_reconQ_from = 'proj_coef' # ['proj_coef', 'affinity']
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_perpixel_abs_pos_embed = False
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method = 'full' # if using residual/concat/none in projector in CrossAttention module
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.feat_fusion_method = 'sum' # fusion method in class FeatureFusionBlock_custom
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer = 'instanceNorm' # [instanceNorm, identity, layerNorm]
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.backbone_dims = 1344 # resnet: stem + stage 0,1,2
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_freeze_matseg = True
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_dense = True
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_freeze_unet = False
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_debug_unet = False
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone = False # use unet instead of resnet as backbone, for DPT-ssn models
-_C.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_feat_in_transformer = False # use unet instead of resnet as backbone, for DPT-ssn models
-# _C.MODEL_BRDF.DPT_baseline.dpt_SSN.spixel_h = 12
-# _C.MODEL_BRDF.DPT_baseline.dpt_SSN.spixel_w = 16
+_C.MODEL_BRDF.DPT_baseline.feat_fusion_method = 'sum' # fusion method in class FeatureFusionBlock_custom\
 
 # ===== per-pixel lighting
 _C.MODEL_LIGHT = CN()
@@ -496,118 +380,6 @@ _C.MODEL_LIGHT.DPT_baseline.swin.patch_size = 4
 
 # _C.MODEL_LIGHT.pretrained_pth_name = ''
 
-# ===== layout, objects, emitter
-_C.MODEL_LAYOUT_EMITTER = CN()
-_C.MODEL_LAYOUT_EMITTER.enable = False # enable model / modules
-_C.MODEL_LAYOUT_EMITTER.enable_list = '' # enable model / modules
-_C.MODEL_LAYOUT_EMITTER.enable_list_allowed = ['lo', 'ob', 'em', 'mesh', 'joint']
-_C.MODEL_LAYOUT_EMITTER.loss_list = ''
-_C.MODEL_LAYOUT_EMITTER.use_depth_as_input = False
-
-_C.MODEL_LAYOUT_EMITTER.data = CN()
-_C.MODEL_LAYOUT_EMITTER.data.OR = 'OR45'
-_C.MODEL_LAYOUT_EMITTER.data.version = 'V4full'
-
-_C.MODEL_LAYOUT_EMITTER.emitter = CN()
-_C.MODEL_LAYOUT_EMITTER.emitter.if_freeze = False
-_C.MODEL_LAYOUT_EMITTER.emitter.if_use_est_layout = False
-_C.MODEL_LAYOUT_EMITTER.emitter.if_differentiable_layout_input = False
-_C.MODEL_LAYOUT_EMITTER.emitter.if_train_with_reindexed_layout = False
-_C.MODEL_LAYOUT_EMITTER.emitter.grid_size = 8
-_C.MODEL_LAYOUT_EMITTER.emitter.est_type = 'cell_info'
-_C.MODEL_LAYOUT_EMITTER.emitter.representation_type = '3SG' # 0ambient, 1ambient, 2ambient
-_C.MODEL_LAYOUT_EMITTER.emitter.loss_type = 'L2' # [L2, KL]
-_C.MODEL_LAYOUT_EMITTER.emitter.sigmoid = False
-_C.MODEL_LAYOUT_EMITTER.emitter.softmax = False
-_C.MODEL_LAYOUT_EMITTER.emitter.relative_dir = True
-_C.MODEL_LAYOUT_EMITTER.emitter.scale_invariant_loss_for_cell_axis = True
-_C.MODEL_LAYOUT_EMITTER.emitter.cls_agnostric = False
-_C.MODEL_LAYOUT_EMITTER.emitter.loss = CN()
-_C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_axis_global = 4.
-_C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_light_ratio = 10.
-_C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_cls = 10.
-_C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_intensity = 0.2
-_C.MODEL_LAYOUT_EMITTER.emitter.loss.weight_cell_lamb = 0.3
-
-_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net = CN() # better model than the vanilla model
-_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable = False # enable spatial-encoding network from per-pixel lighting, instead of image encoder-decoder
-_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version = 'V2'
-_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_light = True # use GT per-pixel lighting instead of predicting using LIGHT_NET
-_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_brdf = True # use GT brdf instead of predicting using BRDF_NET
-_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.freeze_lightnet = True # freeze LIGHT_NET when using predictiion from LIGHT_NET
-_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.freeze_brdfnet = True # freeze LIGHT_NET when using predictiion from LIGHT_NET
-_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_weighted_axis = True
-_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.envHeight = 8
-_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.envWidth = 16
-
-_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_envmap = False
-_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_envmap_as_input = False
-
-_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input = False
-_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_learn_feats = False
-_C.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels = 8 # = 64 + 128 + 256 + 256 if sample_BRDF_feats_instead_of_learn_feats
-
-_C.MODEL_LAYOUT_EMITTER.layout = CN()
-_C.MODEL_LAYOUT_EMITTER.layout.if_freeze = False
-_C.MODEL_LAYOUT_EMITTER.layout.loss = CN()
-_C.MODEL_LAYOUT_EMITTER.layout.loss.cls_reg_ratio = 10
-_C.MODEL_LAYOUT_EMITTER.layout.loss.obj_cam_ratio = 1
-_C.MODEL_LAYOUT_EMITTER.layout.loss.weight_all = 1
-_C.MODEL_LAYOUT_EMITTER.layout.if_train_with_reindexed = False
-_C.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder = True
-# _C.MODEL_LAYOUT_EMITTER.layout.if_fully_differentiable = False # get rid of argmax in layout est -> bbox; not implememted yet
-_C.MODEL_LAYOUT_EMITTER.layout.if_estcls_in_loss = False
-# _C.MODEL_LAYOUT_EMITTER.layout.if_argmax_in_results = True
-
-_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline = CN()
-_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.enable = False
-_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_pos_embed = True
-_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.model = 'dpt_hybrid'
-_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.readout = 'project'
-_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_imagenet_backbone = True
-_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.patch_size = 16
-_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_share_encoder_over_modalities = True
-_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_share_decoder_over_heads = False # e.g. for layout estimation there are two heads: cam, lo. Set to True to use indept encoder for each
-_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_indept_MLP_heads = False
-_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_indept_MLP_heads_if_layer_norm = False
-_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.ViT_pool = 'mean'
-
-_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.dpt_hybrid = CN()
-_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.dpt_hybrid.N_layers_encoder = 6
-_C.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.dpt_hybrid.N_layers_decoder = 6
-
-_C.MODEL_LAYOUT_EMITTER.mesh = CN()
-_C.MODEL_LAYOUT_EMITTER.mesh.tmn_subnetworks = 2
-_C.MODEL_LAYOUT_EMITTER.mesh.face_samples = 1
-_C.MODEL_LAYOUT_EMITTER.mesh.with_edge_classifier = True
-_C.MODEL_LAYOUT_EMITTER.mesh.neighbors = 30
-_C.MODEL_LAYOUT_EMITTER.mesh.loss = 'SVRLoss' # ['SVRLoss', 'ReconLoss']
-_C.MODEL_LAYOUT_EMITTER.mesh.original_path = ''
-_C.MODEL_LAYOUT_EMITTER.mesh.original_path_local = '/newfoundland2/ruizhu/siggraphasia20dataset/uv_mapped'
-_C.MODEL_LAYOUT_EMITTER.mesh.original_path_cluster = ['/siggraphasia20dataset/uv_mapped', '', '']
-_C.MODEL_LAYOUT_EMITTER.mesh.sampled_path = ''
-_C.MODEL_LAYOUT_EMITTER.mesh.sampled_path_local = '/home/ruizhu/Documents/data/OR-sampledMeshes'
-_C.MODEL_LAYOUT_EMITTER.mesh.sampled_path_cluster = ['/ruidata/OR-sampledMeshes', '', '']
-_C.MODEL_LAYOUT_EMITTER.mesh.if_use_vtk = True
-
-_C.MODEL_LAYOUT_EMITTER.mesh_obj = CN()
-_C.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs = False
-# filter invalid frames with 0 valid objects, and filter invalid objects in dataloader
-_C.MODEL_LAYOUT_EMITTER.mesh_obj.if_clip_boxes_train = True # randomly sample N objects if there are too many
-_C.MODEL_LAYOUT_EMITTER.mesh_obj.clip_boxes_train_to = 5
-_C.MODEL_LAYOUT_EMITTER.mesh_obj.if_use_only_valid_objs = True
-_C.MODEL_LAYOUT_EMITTER.mesh_obj.valid_bbox_vis_ratio = 0.1
-
-_C.MODEL_LAYOUT_EMITTER.mesh_obj.if_pre_filter_invalid_frames = False # using e.g./home/ruizhu/Documents/Projects/semanticInverse/train/data/openrooms/list_ORmini-val/list/obj_list.pickle
-_C.MODEL_LAYOUT_EMITTER.mesh_obj.if_skip_invalid_frames = True # skip invalid frames in dataloader.__getitem()__
-
-# ===== detectron
-_C.MODEL_DETECTRON = CN()
-_C.MODEL_DETECTRON.enable = False
-_C.MODEL_DETECTRON.pretrained = True
-_C.MODEL_DETECTRON.thresh = 0.75
-_C.MODEL_DETECTRON.nms_thresh = 0.6
-
 # ===== material cls (Yu-Ying)
 _C.MODEL_MATCLS = CN()
 _C.MODEL_MATCLS.enable = False
@@ -633,41 +405,6 @@ _C.MODEL_MATSEG.load_pretrained_pth = False
 _C.MODEL_MATSEG.pretrained_pth = ''
 _C.MODEL_MATSEG.use_pred_as_input = False
 _C.MODEL_MATSEG.if_save_embedding = False
-
-_C.MODEL_MATSEG.albedo_pooling_debug = False
-
-_C.MODEL_MATSEG.if_albedo_pooling = False
-_C.MODEL_MATSEG.albedo_pooling_from = 'gt' # ['gt', 'pred']
-
-_C.MODEL_MATSEG.if_albedo_asso_pool_conv = False
-
-_C.MODEL_MATSEG.if_albedo_pac_pool = False
-_C.MODEL_MATSEG.if_albedo_pac_pool_debug_deform = False
-_C.MODEL_MATSEG.if_albedo_pac_pool_keep_input = True
-_C.MODEL_MATSEG.if_albedo_DatasetNew_test_pool_mean = False # True: return mean of pooled tensors; False: return stacked
-_C.MODEL_MATSEG.albedo_pac_pool_mean_layers = 'xin6'
-_C.MODEL_MATSEG.albedo_pac_pool_mean_layers_allowed = 'x6_xin1_xin2_xin3_xin4_xin5_xin6'
-# _C.MODEL_MATSEG.albedo_pac_pool_deform_layers = 'xin6'
-# _C.MODEL_MATSEG.albedo_pac_pool_deform_layers_allowed = 'x6_xin1_xin2_xin3_xin4_xin5_xin6'
-
-_C.MODEL_MATSEG.if_albedo_pac_conv = False
-_C.MODEL_MATSEG.if_albedo_pac_conv_keep_input = True
-_C.MODEL_MATSEG.if_albedo_pac_conv_mean = False # True: return mean of pooled tensors; False: return stacked
-_C.MODEL_MATSEG.if_albedo_pac_conv_normalize_kernel = True
-_C.MODEL_MATSEG.if_albedo_pac_conv_DCN = False
-_C.MODEL_MATSEG.albedo_pac_conv_deform_layers = 'xin6'
-_C.MODEL_MATSEG.albedo_pac_conv_deform_layers_allowed = 'x6_xin1_xin2_xin3_xin4_xin5_xin6'
-
-_C.MODEL_MATSEG.albedo_pac_conv_mean_layers = 'xin6'
-_C.MODEL_MATSEG.albedo_pac_conv_mean_layers_allowed = 'x6_xin1_xin2_xin3_xin4_xin5_xin6'
-
-_C.MODEL_MATSEG.if_albedo_safenet = False
-_C.MODEL_MATSEG.if_albedo_safenet_keep_input = True
-_C.MODEL_MATSEG.if_albedo_safenet_normalize_embedding = False
-_C.MODEL_MATSEG.if_albedo_safenet_use_pacnet_affinity = False
-# _C.MODEL_MATSEG.if_albedo_safenet_mean = False # True: return mean of pooled tensors; False: return stacked
-_C.MODEL_MATSEG.albedo_safenet_affinity_layers = 'xin3'
-_C.MODEL_MATSEG.albedo_safenet_affinity_layers_allowed = 'x6_xin1_xin2_xin3_xin4_xin5_xin6'
 
 # ===== semantic segmentation
 

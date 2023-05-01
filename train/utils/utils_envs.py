@@ -7,13 +7,12 @@ from pathlib import Path
 from utils.utils_misc import *
 from utils.comm import synchronize, get_rank
 import os, sys
-from utils.utils_total3D.data_config import Dataset_Config
-from utils.utils_total3D.utils_OR_layout import to_dict_tensor
 from utils.utils_misc import only1true
 from icecream import ic
 import os
 from utils import transform
-
+import nvidia_smi
+import datetime
 
 def set_up_envs(opt):
     assert opt.cluster in opt.cfg.PATH.cluster_names
@@ -64,17 +63,13 @@ def set_up_envs(opt):
     opt.cfg.DATASET.dataset_path_pickle = opt.cfg.DATASET.dataset_path_pickle_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.dataset_path_pickle_local
     opt.cfg.DATASET.dataset_path_mini_pickle = opt.cfg.DATASET.dataset_path_mini_pickle_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.dataset_path_mini_pickle_local
 
-    opt.cfg.DATASET.layout_emitter_path = opt.cfg.DATASET.layout_emitter_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.layout_emitter_path_local
     opt.cfg.DATASET.png_path = opt.cfg.DATASET.png_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.png_path_local
     opt.cfg.DATASET.dataset_path_mini = opt.cfg.DATASET.dataset_path_mini_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.dataset_path_mini_local
     opt.cfg.DATASET.dataset_path_mini_binary = opt.cfg.DATASET.dataset_path_mini_binary_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.dataset_path_mini_binary_local
     opt.cfg.DATASET.matpart_path = opt.cfg.DATASET.matpart_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.matpart_path_local
     opt.cfg.DATASET.matori_path = opt.cfg.DATASET.matori_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.matori_path_local
     opt.cfg.DATASET.envmap_path = opt.cfg.DATASET.envmap_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.envmap_path_local
-    opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path = opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.MODEL_LAYOUT_EMITTER.mesh.sampled_path_local
-    opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path = opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.MODEL_LAYOUT_EMITTER.mesh.original_path_local
 
-    opt.cfg.DATASET.swin_path = opt.cfg.DATASET.swin_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.swin_path_local
     opt.cfg.DATASET.iiw_path = opt.cfg.DATASET.iiw_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.iiw_path_local
     opt.cfg.DATASET.nyud_path = opt.cfg.DATASET.nyud_path_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.DATASET.nyud_path_local
 
@@ -200,9 +195,6 @@ def set_up_envs(opt):
         assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.depth.activation in ['tanh', 'relu']
         # if not opt.cfg.DEBUG.if_test_real:
         #     opt.cfg.DATA.load_brdf_gt = True
-        if 'lo' in opt.cfg.MODEL_ALL.enable_list:
-            opt.cfg.MODEL_LAYOUT_EMITTER.enable = True
-            opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = list(set(opt.cfg.MODEL_LAYOUT_EMITTER.enable_list_allowed) & set(opt.cfg.MODEL_ALL.enable_list))
         if any(x in opt.cfg.MODEL_ALL.enable_list for x in ['al', 'ro', 'de', 'no'] if x != ''):
             opt.cfg.MODEL_BRDF.enable = True
             opt.cfg.MODEL_BRDF.enable_list = list(set(opt.cfg.MODEL_BRDF.enable_list_allowed) & set(opt.cfg.MODEL_ALL.enable_list))
@@ -217,21 +209,6 @@ def set_up_envs(opt):
         assert not (opt.cfg.MODEL_LIGHT.if_align_rerendering_envmap and opt.cfg.MODEL_LIGHT.if_align_log_envmap) # cannot be true at the same time
         
 
-    # ====== GMM =====
-    if opt.cfg.MODEL_GMM.enable:
-        # opt.cfg.DATA.if_load_png_not_hdr = True
-        # opt.cfg.DATA.if_also_load_next_frame = True
-        # opt.cfg.DATA.load_cam_pose = True
-        assert not(opt.cfg.MODEL_GMM.appearance_recon.enable and opt.cfg.MODEL_GMM.feat_recon.enable)
-        assert opt.cfg.MODEL_GMM.appearance_recon.enable or opt.cfg.MODEL_GMM.feat_recon.enable
-
-        opt.cfg.MODEL_GMM.appearance_recon.modalities = opt.cfg.MODEL_GMM.appearance_recon.modalities.split('_')
-        opt.cfg.MODEL_GMM.feat_recon.layers_list = opt.cfg.MODEL_GMM.feat_recon.layers_list.split('_')
-
-        if opt.cfg.MODEL_GMM.feat_recon.enable and opt.cfg.MODEL_GMM.feat_recon.use_matseg:
-            opt.cfg.MODEL_MATSEG.enable = True
-
-
     # ====== BRDF =====
     if isinstance(opt.cfg.MODEL_BRDF.enable_list, str):
         opt.cfg.MODEL_BRDF.enable_list = [x for x in opt.cfg.MODEL_BRDF.enable_list.split('_') if x != '']
@@ -245,34 +222,16 @@ def set_up_envs(opt):
     opt.cfg.MODEL_LIGHT.DPT_baseline.dpt_hybrid = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid
     if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.DPT_baseline.enable:
         # opt.cfg.DATA.if_load_png_not_hdr = True
-        assert opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_large', 'dpt_base', 'dpt_hybrid', 'dpt_hybrid_SSN', 'dpt_base_SSN', 'dpt_large_SSN', 'dpt_hybrid_CAv2', 'swin']
+        assert opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_large', 'dpt_base', 'dpt_hybrid', 'swin']
         
         assert opt.cfg.MODEL_BRDF.DPT_baseline.modality in ['al', 'de', 'enabled']
 
         assert opt.cfg.DATA.if_pad_to_32x or opt.cfg.DATA.if_resize_to_32x
         assert not(opt.cfg.DATA.if_pad_to_32x and opt.cfg.DATA.if_resize_to_32x)
 
-        if opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_hybrid_SSN', 'dpt_base_SSN', 'dpt_large_SSN']:
-            assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from in ['backbone', 'matseg', 'on-the-fly']
-            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_from == 'matseg':
-                opt.cfg.MODEL_MATSEG.enable = True
-                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_freeze_matseg:
-                    opt.cfg.MODEL_MATSEG.if_freeze = True
-
-        if opt.cfg.MODEL_BRDF.DPT_baseline.model in ['dpt_hybrid_CAv2']:
-            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_SSN:
-                assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from in ['backbone', 'matseg', 'matseg-2']
-                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.ssn_from in ['matseg', 'matseg-2']:
-                    opt.cfg.MODEL_MATSEG.enable = True
-                    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_freeze_matseg:
-                        opt.cfg.MODEL_MATSEG.if_freeze = True
-
-        assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method in ['qtc', 'qkv']
-        assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method in ['residual', 'concat', 'none', 'full']
         assert opt.cfg.MODEL_BRDF.DPT_baseline.readout in ['ignore', 'add', 'project']
-        assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_norm_layer in ['instanceNorm', 'layerNorm', 'identity']
 
-        assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.feat_fusion_method in ['sum', 'concat']
+        assert opt.cfg.MODEL_BRDF.DPT_baseline.feat_fusion_method in ['sum', 'concat']
 
         if 'dpt_hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model:
             opt.cfg.MODEL_BRDF.DPT_baseline.feat_proj_channels = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.feat_proj_channels
@@ -280,126 +239,6 @@ def set_up_envs(opt):
             opt.cfg.MODEL_BRDF.DPT_baseline.feat_proj_channels = opt.cfg.MODEL_BRDF.DPT_baseline.dpt_large.feat_proj_channels
         # else:
         #     assert False, 'not supported yet'
-
-        if 'CAv2' in opt.cfg.MODEL_BRDF.DPT_baseline.model:
-            opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA = True
-            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers == -1:
-                opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers = 12
-            
-            assert opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type in ['double', 'single', 'full'] # [single, double, full] of resnet
-            opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.im_feat_init_c = {'double': 256, 'single': 64, 'full': 768}[opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.stem_type]
-
-            assert not (opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.CAc.if_use_previous_feat and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.CAc.if_use_init_feat)
-
-        if 'SSN' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ssn_recon_method == 'qkv' and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv:
-            opt.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_proj_coef = True
-        if opt.cfg.MODEL_BRDF.DPT_baseline.model == 'dpt_hybrid_CAv2' and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA and not opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_CA_if_grid_assembling:
-            opt.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_proj_coef = True
-            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_SSN:
-                opt.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_affinity = True
-                if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg:
-                    opt.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_gt_matseg = True
-
-
-        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_only_last_transformer_output_used:
-            opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_not_reduce_res = True
-
-    # ====== detectron (objects & masks) =====
-    if opt.cfg.MODEL_DETECTRON.enable:
-        opt.cfg.DATA.data_read_list.append('ob')
-        opt.cfg.DATA.load_detectron_gt = True
-
-    # ====== layout, emitters, objs, meshes =====
-    if isinstance(opt.cfg.MODEL_LAYOUT_EMITTER.enable_list, str):
-        opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.split('_')
-
-
-    if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
-        opt.dataset_config = Dataset_Config('OR', OR=opt.cfg.MODEL_LAYOUT_EMITTER.data.OR, version=opt.cfg.MODEL_LAYOUT_EMITTER.data.version, opt=opt)
-        opt.bins_tensor = to_dict_tensor(opt.dataset_config.bins, if_cuda=True)
-
-        if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_use_est_layout:
-                opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.append('lo')
-                # opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.append('ob')
-                opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_differentiable = True
-
-            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
-                opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.append('em')
-
-                if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_light:
-                    opt.cfg.DATA.load_light_gt = True
-                else: # use LIGHT_Net prediction
-                    opt.cfg.MODEL_LIGHT.enable = True
-                    opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_brdf = False
-                    opt.cfg.MODEL_LIGHT.load_pretrained_MODEL_BRDF = True
-                    opt.cfg.MODEL_LIGHT.load_pretrained_MODEL_LIGHT = True
-                    if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.freeze_lightnet:
-                        opt.cfg.MODEL_LIGHT.if_freeze = True
-                
-                if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_brdf:
-                    opt.cfg.DATA.load_brdf_gt = True
-                    opt.cfg.DATA.data_read_list.append('de') # used to get 3d points
-                    opt.cfg.DATA.data_read_list.append('no')
-                else: # use BRDF_Net prediction
-                    opt.cfg.MODEL_BRDF.enable = True
-                    opt.cfg.MODEL_BRDF.enable_list += 'no_de'.split('_')
-            else: # vanilla fc-layout-emitter net using BRDF encoder feats or indept feats
-                if not opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder:
-                    opt.cfg.MODEL_BRDF.enable = True
-                    if opt.cfg.MODEL_BRDF.enable_BRDF_decoders == False and not opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
-                        opt.cfg.MODEL_BRDF.encoder_exclude = 'x5_x6' # if no BRDF decoder, these two layers are not used in layout net
-
-        if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-            if not opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder:
-                opt.cfg.MODEL_BRDF.enable = True
-                if opt.cfg.MODEL_BRDF.enable_BRDF_decoders == False and not opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
-                    opt.cfg.MODEL_BRDF.encoder_exclude = 'x5_x6' # if no BRDF decoder, these two layers are not used in layout net
-
-        opt.cfg.DATA.load_brdf_gt = True
-        opt.cfg.DATA.load_layout_emitter_gt = True
-        opt.cfg.DATA.data_read_list += ['lo']
-        opt.cfg.DATA.data_read_list += opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
-        if opt.cfg.MODEL_LAYOUT_EMITTER.use_depth_as_input:
-            opt.cfg.DATA.data_read_list.append('de')
-        assert opt.cfg.MODEL_LAYOUT_EMITTER.emitter.est_type in ['cell_prob', 'wall_prob', 'cell_info']
-
-
-
-        if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
-            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V3':
-                opt.cfg.MODEL_LAYOUT_EMITTER.emitter.relative_dir = True
-
-            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_envmap_as_input:
-                opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_envmap = True
-
-            if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
-                opt.cfg.MODEL_BRDF.enable = True # enable image encoder
-                if opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_learn_feats:
-                    opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels = 64 + 128 + 256 + 256
-
-        # --- deal with enable/loss lists
-        if opt.cfg.MODEL_LAYOUT_EMITTER.loss_list == '':
-            opt.cfg.MODEL_LAYOUT_EMITTER.loss_list = opt.cfg.MODEL_LAYOUT_EMITTER.enable_list
-        else:
-            opt.cfg.MODEL_LAYOUT_EMITTER.loss_list = opt.cfg.MODEL_LAYOUT_EMITTER.loss_list.split('_')
-        if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-            opt.cfg.MODEL_LAYOUT_EMITTER.enable_list.append('joint')
-        if 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list and 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
-            opt.cfg.MODEL_LAYOUT_EMITTER.loss_list.append('joint')
-        os.environ['IF_MESH'] = 'False'
-        if 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-            # opt.cfg.DATA.data_read_list += ['de', 'lo', 'ob']
-            opt.cfg.DATA.data_read_list += ['lo', 'ob']
-            # opt.cfg.MODEL_LAYOUT_EMITTER.enable_list += ['ob', 'joint']
-            assert opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss in ['SVRLoss', 'ReconLoss']
-            assert opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.if_pre_filter_invalid_frames==False, 'too costy; disabled for now'
-            os.environ['IF_MESH'] = 'True'
-
-        # if opt.if_cluster:
-        #     os.environ['EXTERNAL_PATH'] = '/viscompfs/users/ruizhu/semanticInverse/external'
-        # else:
-        #     os.environ['EXTERNAL_PATH'] = 'local'
 
     # ====== per-pixel lighting =====
     if opt.cfg.MODEL_LIGHT.enable:
@@ -441,14 +280,11 @@ def set_up_envs(opt):
                 opt.semseg_configs.train_w = opt.cfg.DATA.im_width
                 opt.semseg_configs.train_h = opt.cfg.DATA.im_height
 
-    if opt.cfg.MODEL_MATSEG.enable or opt.cfg.MODEL_MATSEG.use_as_input or opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool:
+    if opt.cfg.MODEL_MATSEG.enable or opt.cfg.MODEL_MATSEG.use_as_input:
         opt.cfg.DATA.load_matseg_gt = True
     
     if opt.cfg.MODEL_BRDF.enable_semseg_decoder and opt.cfg.MODEL_SEMSEG.enable:
         raise (RuntimeError("Cannot be True at the same time: opt.cfg.MODEL_BRDF.enable_semseg_decoder, opt.cfg.MODEL_SEMSEG.enable"))
-
-    if not opt.cfg.MODEL_SEMSEG.if_freeze:
-        opt.cfg.MODEL_SEMSEG.fix_bn = False
 
     # ====== matcls =====
     if opt.cfg.MODEL_MATCLS.enable:
@@ -471,45 +307,8 @@ def set_up_envs(opt):
     check_if_in_list(opt.cfg.MODEL_BRDF.loss_list, opt.cfg.MODEL_BRDF.enable_list_allowed)
     check_if_in_list(opt.cfg.MODEL_ALL.enable_list, opt.cfg.MODEL_ALL.enable_list_allowed)
 
-    check_if_in_list(opt.cfg.MODEL_LAYOUT_EMITTER.enable_list, opt.cfg.MODEL_LAYOUT_EMITTER.enable_list_allowed)
-    check_if_in_list(opt.cfg.MODEL_LAYOUT_EMITTER.loss_list, opt.cfg.MODEL_LAYOUT_EMITTER.enable_list_allowed)
-
-    # Guidance in general
-    guidance_options = [opt.cfg.MODEL_MATSEG.if_albedo_pooling,opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv, \
-        opt.cfg.MODEL_MATSEG.if_albedo_pac_pool, opt.cfg.MODEL_MATSEG.if_albedo_pac_conv, \
-        opt.cfg.MODEL_MATSEG.if_albedo_safenet]
-    assert only1true(guidance_options) or nonetrue(guidance_options), 'Only ONE of the guidance methods canbe true at the same time!'
-
-    assert opt.cfg.MODEL_MATSEG.albedo_pooling_from in ['gt', 'pred']
-
     # extra BRDF net params
     opt.cfg.MODEL_BRDF.encoder_exclude = opt.cfg.MODEL_BRDF.encoder_exclude.split('_')
-
-
-    # PAC
-    opt.if_vis_debug_pac = False
-    # Pac pool
-    opt.cfg.MODEL_MATSEG.albedo_pac_pool_mean_layers  = opt.cfg.MODEL_MATSEG.albedo_pac_pool_mean_layers.split('_')
-    opt.cfg.MODEL_MATSEG.albedo_pac_pool_mean_layers_allowed  = opt.cfg.MODEL_MATSEG.albedo_pac_pool_mean_layers_allowed.split('_')
-    assert all(e in opt.cfg.MODEL_MATSEG.albedo_pac_pool_mean_layers_allowed for e in opt.cfg.MODEL_MATSEG.albedo_pac_pool_mean_layers)
-
-    # Pac cov
-    opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers  = opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers.split('_')
-    opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers_allowed  = opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers_allowed.split('_')
-    assert all(e in opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers_allowed for e in opt.cfg.MODEL_MATSEG.albedo_pac_conv_mean_layers)
-
-    opt.cfg.MODEL_MATSEG.albedo_pac_conv_deform_layers  = opt.cfg.MODEL_MATSEG.albedo_pac_conv_deform_layers.split('_')
-    opt.cfg.MODEL_MATSEG.albedo_pac_conv_deform_layers_allowed  = opt.cfg.MODEL_MATSEG.albedo_pac_conv_deform_layers_allowed.split('_')
-    assert all(e in opt.cfg.MODEL_MATSEG.albedo_pac_conv_deform_layers_allowed for e in opt.cfg.MODEL_MATSEG.albedo_pac_conv_deform_layers)
-    
-    # Safenet global affinity
-    opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers  = opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers.split('_')
-    opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers_allowed  = opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers_allowed.split('_')
-    assert all(e in opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers_allowed for e in opt.cfg.MODEL_MATSEG.albedo_safenet_affinity_layers)
-
-    # DCN
-    opt.cfg.PATH.dcn_path = opt.cfg.PATH.dcn_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.PATH.dcn_local
-    sys.path.insert(0, os.path.join(opt.cfg.PATH.dcn_path, 'functions'))
 
     # export
     opt.cfg.PATH.torch_home_path = opt.cfg.PATH.torch_home_cluster[CLUSTER_ID] if opt.if_cluster else opt.cfg.PATH.torch_home_local
@@ -526,23 +325,16 @@ def set_up_envs(opt):
         opt.cfg.DEBUG.if_dump_anything = True
         opt.if_vis = True
 
-        opt.cfg.MODEL_LAYOUT_EMITTER.enable = True
-        # opt.cfg.DATA.if_load_png_not_hdr = False
-        opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable = True
-        opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version = 'V3'
-        opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_light = False
-        opt.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_brdf = False
         opt.cfg.MODEL_LIGHT.load_pretrained_MODEL_BRDF = False
         opt.cfg.MODEL_LIGHT.load_pretrained_MODEL_LIGHT = False
         opt.cfg.MODEL_BRDF.use_scale_aware_depth = True
         opt.cfg.MODEL_BRDF.depth_activation = 'relu'
-        opt.cfg.MODEL_LAYOUT_EMITTER.enable_list = 'em'
         opt.cfg.DATA.data_read_list += ['mesh', 'de']
 
     # extra loss weights
     opt.loss_weight_dict = {
-        'loss_layout-ALL': opt.cfg.MODEL_LAYOUT_EMITTER.layout.loss.weight_all
     }
+    
 def check_if_in_list(list_to_check, list_allowed, module_name='Unknown Module'):
     if len(list_to_check) == 0:
         return
@@ -553,8 +345,6 @@ def check_if_in_list(list_to_check, list_allowed, module_name='Unknown Module'):
         print(list_to_check, list_allowed)
         error_str = red('Illegal %s of length %d: %s'%(module_name, len(list_to_check), '_'.join(list_to_check)))
         raise ValueError(error_str)
-
-
 
 def set_up_logger(opt):
     from utils.logger import setup_logger, Logger, printer
@@ -600,8 +390,6 @@ def set_up_logger(opt):
 
     return logger, writer
 
-
-
 def set_up_folders(opt):
     from utils.global_paths import SUMMARY_PATH, SUMMARY_VIS_PATH, CKPT_PATH
     opt.SUMMARY_PATH, opt.SUMMARY_VIS_PATH, opt.CKPT_PATH = SUMMARY_PATH, SUMMARY_VIS_PATH, CKPT_PATH
@@ -610,12 +398,6 @@ def set_up_folders(opt):
     if opt.if_cluster:
         if opt.cluster == 'kubectl':
             opt.home_path = Path('/ruidata/dptInverse/') 
-        elif opt.cluster == 'nvidia':
-            opt.home_path = Path('/home/ruzhu/Documents/Projects/')
-        elif opt.cluster == 'ngc':
-            opt.home_path = Path('/newfoundland/semanticInverse/')
-            # opt.SUMMARY_PATH_ALL = opt.home_path / SUMMARY_PATH
-            # opt.home_path_tmp = Path('/result/')
 
         opt.CKPT_PATH = opt.home_path / CKPT_PATH
         opt.SUMMARY_PATH = opt.home_path / SUMMARY_PATH
@@ -681,7 +463,10 @@ def set_up_folders(opt):
 
 
 def set_up_dist(opt):
-    import nvidia_smi
+    # os.environ['MASETER_PORT'] = str(find_free_port())
+    os.environ['OMP_NUM_THREADS'] = str(1)
+    local_rank = int(os.environ["LOCAL_RANK"] if "LOCAL_RANK" in os.environ else 0)
+    opt.rank = local_rank
 
     # >>>> DISTRIBUTED TRAINING
     torch.manual_seed(opt.cfg.seed)
@@ -691,16 +476,17 @@ def set_up_dist(opt):
     opt.num_gpus = int(os.environ["WORLD_SIZE"]) if "WORLD_SIZE" in os.environ else 1
     opt.distributed = opt.num_gpus > 1
     if opt.distributed:
-        torch.cuda.set_device(opt.local_rank)
+        torch.cuda.set_device(opt.rank)
         opt.process_group = torch.distributed.init_process_group(
-            backend="nccl", world_size=opt.num_gpus, init_method="env://"
-        )
+            backend="nccl", rank=opt.rank, world_size=opt.num_gpus, init_method="env://", timeout=datetime.timedelta(seconds=5400))
         # synchronize()
     # device = torch.device("cuda" if torch.cuda.is_available() and not opt.cpu else "cpu")
     opt.device = 'cuda'
     opt.if_cuda = opt.device == 'cuda'
-    opt.rank = get_rank()
+    # opt.rank = get_rank()
     opt.is_master = opt.rank == 0
+    print('=++++++ opt.rank:', opt.rank, opt.is_master)
+
     nvidia_smi.nvmlInit()
     handle = nvidia_smi.nvmlDeviceGetHandleByIndex(opt.rank)
     # <<<< DISTRIBUTED TRAINING
@@ -716,10 +502,6 @@ def set_up_checkpointing(opt, model, optimizer, scheduler, logger):
     )
     tid_start = 0
     epoch_start = 0
-
-    if opt.cfg.MODEL_DETECTRON.enable and opt.cfg.MODEL_DETECTRON.pretrained:
-        checkpointer.load(f=opt.cfg_detectron.MODEL.WEIGHTS, replace_kws=[], replace_with_kws=[], \
-            skip_kws=['box_predictor.bbox_pred', 'box_predictor.cls_score', 'mask_head.predictor'])
 
     if opt.resume != 'NoCkpt':
         print('=+++++=opt.resume', opt.resume)

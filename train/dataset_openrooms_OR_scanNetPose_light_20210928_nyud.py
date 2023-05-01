@@ -19,21 +19,6 @@ from pathlib import Path
 # import pickle
 import pickle5 as pickle
 from icecream import ic
-from utils.utils_total3D.utils_OR_imageops import loadHdr_simple, to_nonhdr
-import math
-from utils.utils_total3D.data_config import RECON_3D_CLS_OR_dict
-from scipy.spatial import cKDTree
-import copy
-# import math
-# from detectron2.structures import BoxMode
-# from detectron2.data.dataset_mapper import DatasetMapper
-
-from utils.utils_total3D.utils_OR_vis_labels import RGB_to_01
-from utils.utils_total3D.utils_others import Relation_Config, OR4XCLASSES_dict, OR4XCLASSES_not_detect_mapping_ids_dict, OR4X_mapping_catInt_to_RGB
-# from detectron2.data import build_detection_test_loader,DatasetCatalog, MetadataCatalog
-
-from utils.utils_scannet import read_ExtM_from_txt, read_img
-import utils.utils_nvidia.mdataloader.m_preprocess as m_preprocess
 import PIL
 import torchvision.transforms as tfv_transform
 

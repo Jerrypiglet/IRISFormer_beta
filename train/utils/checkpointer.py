@@ -12,7 +12,6 @@ from utils.maskrcnn_rui.utils.model_zoo import cache_url
 
 from pathlib import Path, PurePath
 from iopath.common.file_io import HTTPURLHandler, PathManager
-# from detectron2.utils.file_io import PathManager
 
 import pickle
 from typing import Any, Dict, Iterable, List, NamedTuple, Optional, Tuple

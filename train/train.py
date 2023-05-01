@@ -1,6 +1,6 @@
 import torch
-# torch.autograd.set_detect_anomaly(True)
-# torch.backends.cudnn.benchmark = True
+torch.autograd.set_detect_anomaly(True)
+torch.backends.cudnn.benchmark = True
 import numpy as np
 from torch.autograd import Variable
 import torch.optim as optim
@@ -19,28 +19,31 @@ PACNET_PATH = Path(pwdpath) / 'third-parties' / 'pacnet'
 sys.path.insert(0, str(PACNET_PATH))
 print(sys.path)
 
+import torch.multiprocessing
+torch.multiprocessing.set_sharing_strategy('file_system')
+
 # from dataset_openroomsV4_total3d_matcls_ import openrooms, collate_fn_OR
-from dataset_openrooms_OR_scanNetPose import openrooms, collate_fn_OR
-# from dataset_openrooms_OR_scanNetPose_binary_ import openrooms_binary
-from dataset_openrooms_OR_scanNetPose_binary_tables_ import openrooms_binary
-import torch.distributed as dist
-from train_funcs_detectron import gather_lists
+from dataset_openrooms_OR_scanNetPose_light_20210928 import openrooms, collate_fn_OR
+# from dataset_openrooms_OR_scanNetPose_binary_tables_ import openrooms_binary
+# from dataset_openrooms_OR_scanNetPose_pickle import openrooms_pickle
+# from utils.utils_dataloader_binary import make_data_loader_binary
+# import torch.distributed as dist
+from utils.utils_training import gather_lists
+
 
 from torch.nn.parallel import DistributedDataParallel as DDP
 from utils.config import cfg
 from utils.bin_mean_shift import Bin_Mean_Shift
 from utils.bin_mean_shift_3 import Bin_Mean_Shift_3
 from utils.bin_mean_shift_N import Bin_Mean_Shift_N
+from utils.comm import synchronize
 from utils.utils_misc import *
 from utils.utils_dataloader import make_data_loader
-from utils.utils_dataloader_binary import make_data_loader_binary
 from utils.utils_training import reduce_loss_dict, check_save, print_gpu_usage, time_meters_to_string, find_free_port
 from torch.optim.lr_scheduler import MultiStepLR, ReduceLROnPlateau, StepLR
 
 import utils.utils_config as utils_config
 from utils.utils_envs import set_up_envs
-from utils.utils_total3D.utils_others import OR4XCLASSES_dict
-from utils.utils_vis import vis_index_map
 from icecream import ic
 
 parser = argparse.ArgumentParser()
@@ -68,12 +71,12 @@ parser.add_argument('--cascadeLevel', type=int, default=0, help='the casacade le
 
 # Rui
 # Device
-parser.add_argument("--local_rank", type=int, default=0)
+# parser.add_argument("--local_rank", type=int, default=0)
 # parser.add_argument("--master_port", type=str, default='8914')
 
 # DEBUG
 parser.add_argument('--debug', action='store_true', help='Debug eval')
-
+parser.add_argument('--batch_size_override_vis', type=int, default=-1, help='')
 parser.add_argument('--ifMatMapInput', action='store_true', help='using mask as additional input')
 # parser.add_argument('--ifDataloaderOnly', action='store_true', help='benchmark dataloading overhead')
 parser.add_argument('--if_cluster', action='store_true', help='if using cluster')
@@ -92,6 +95,8 @@ parser.add_argument('--reset_latest_ckpt', action='store_true', help='remove lat
 parser.add_argument('--reset_scheduler', action='store_true', help='')
 parser.add_argument('--reset_lr', action='store_true', help='')
 parser.add_argument('--reset_tid', action='store_true', help='')
+parser.add_argument('--tid_start', type=int, default=-1)
+parser.add_argument('--epoch_start', type=int, default=-1)
 # debug
 # parser.add_argument("--mini_val", type=str2bool, nargs='?', const=True, default=False)
 # to get rid of
@@ -99,10 +104,40 @@ parser.add_argument('--test_real', action='store_true', help='')
 
 parser.add_argument('--skip_keys', nargs='+', help='Skip those keys in the model', required=False)
 parser.add_argument('--replaced_keys', nargs='+', help='Replace those keys in the model', required=False)
-parser.add_argument('--replacedby', nargs='+', help='... with those keys from ckpt. Must be in the same length as ``replace_leys``', required=False)
+parser.add_argument('--replacedby', nargs='+', help='... to match those keys from ckpt. Must be in the same length as ``replace_leys``', required=False)
 parser.add_argument("--if_save_pickles", type=str2bool, nargs='?', const=True, default=False)
 
 parser.add_argument('--meta_splits_skip', nargs='+', help='Skip those keys in the model', required=False)
+
+# for warm-up lr scheduler
+parser.add_argument('--epochs', default=150, type=int)
+ # Learning rate schedule parameters
+parser.add_argument('--sched', default='cosine', type=str, metavar='SCHEDULER',
+                    help='LR scheduler (default: "cosine"')
+# parser.add_argument('--lr', type=float, default=1e-5, metavar='LR',
+#                     help='learning rate (default: 5e-4)')
+parser.add_argument('--lr-noise', type=float, nargs='+', default=None, metavar='pct, pct',
+                    help='learning rate noise on/off epoch percentages')
+parser.add_argument('--lr-noise-pct', type=float, default=0.67, metavar='PERCENT',
+                    help='learning rate noise limit percent (default: 0.67)')
+parser.add_argument('--lr-noise-std', type=float, default=1.0, metavar='STDDEV',
+                    help='learning rate noise std-dev (default: 1.0)')
+parser.add_argument('--warmup-lr', type=float, default=1e-6, metavar='LR',
+                    help='warmup learning rate (default: 1e-6)')
+parser.add_argument('--min-lr', type=float, default=1e-5, metavar='LR',
+                    help='lower lr bound for cyclic schedulers that hit 0 (1e-5)')
+
+# parser.add_argument('--decay-epochs', type=float, default=30, metavar='N',
+#                     help='epoch interval to decay LR')
+parser.add_argument('--warmup-epochs', type=int, default=5, metavar='N',
+                    help='epochs to warmup LR, if scheduler supports')
+parser.add_argument('--cooldown-epochs', type=int, default=10, metavar='N',
+                    help='epochs to cooldown LR at min_lr, after cyclic schedule ends')
+# parser.add_argument('--patience-epochs', type=int, default=10, metavar='N',
+#                     help='patience epochs for Plateau LR scheduler (default: 10')
+parser.add_argument('--decay-rate', '--dr', type=float, default=0.1, metavar='RATE',
+                    help='LR decay rate (default: 0.1)')
+
 
 parser.add_argument(
     "--config-file",
@@ -124,7 +159,6 @@ opt = parser.parse_args()
 # os.environ['MASETER_PORT'] = str(nextPort(int(opt.master_port)))
 os.environ['MASETER_PORT'] = str(find_free_port())
 cfg.merge_from_file(opt.config_file)
-# cfg.merge_from_list(opt.params)
 cfg = utils_config.merge_cfg_from_list(cfg, opt.params)
 opt.cfg = cfg
 opt.pwdpath = pwdpath
@@ -132,11 +166,12 @@ opt.pwdpath = pwdpath
 # >>>>>>>>>>>>> A bunch of modularised set-ups
 # opt.gpuId = opt.deviceIds[0]
 semseg_configs = utils_config.load_cfg_from_cfg_file(os.path.join(pwdpath, opt.cfg.MODEL_SEMSEG.config_file))
-semseg_configs = utils_config.merge_cfg_from_list(semseg_configs, opt.params)
+semseg_configs = utils_config.merge_cfg_from_list(semseg_configs, opt.params, ignore_non_exist=True)
 opt.semseg_configs = semseg_configs
 
 from utils.utils_envs import set_up_dist
 handle = set_up_dist(opt)
+synchronize()
 
 from utils.utils_envs import set_up_folders
 set_up_folders(opt)
@@ -154,14 +189,26 @@ if opt.is_master:
 
 # >>>>>>>>>>>>> MODEL AND OPTIMIZER
 from models_def.model_joint_all import Model_Joint as the_model
+from models_def.model_joint_all_ViT import Model_Joint_ViT as the_model_ViT
 # build model
 # model = MatSeg_BRDF(opt, logger)
-model = the_model(opt, logger)
+if opt.cfg.MODEL_ALL.enable:
+    model = the_model_ViT(opt, logger)
+else:
+    model = the_model(opt, logger)
+
 if opt.distributed: # https://github.com/dougsouza/pytorch-sync-batchnorm-example # export NCCL_LL_THRESHOLD=0
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 model.to(opt.device)
+
+model.freeze_BN()
+
 if opt.cfg.MODEL_BRDF.load_pretrained_pth:
-    model.load_pretrained_MODEL_BRDF(opt.cfg.MODEL_BRDF.weights)
+    model.load_pretrained_MODEL_BRDF(
+        if_load_encoder=opt.cfg.MODEL_BRDF.pretrained_if_load_encoder, 
+        if_load_decoder=opt.cfg.MODEL_BRDF.pretrained_if_load_decoder, 
+        if_load_Bs=opt.cfg.MODEL_BRDF.pretrained_if_load_Bs
+    )
 if opt.cfg.MODEL_SEMSEG.enable and opt.cfg.MODEL_SEMSEG.if_freeze:
     # model.turn_off_names(['UNet'])
     model.turn_off_names(['SEMSEG_Net'])
@@ -174,9 +221,38 @@ model.print_net()
 
 # set up optimizers
 # optimizer = get_optimizer(model.parameters(), cfg.SOLVER)
-optimizer = optim.Adam(model.parameters(), lr=cfg.SOLVER.lr, betas=(0.5, 0.999) )
+# print(model.BRDF_Net, '===f=asdfas')
+
+optimizer = optim.Adam(model.parameters(), lr=cfg.SOLVER.lr)
+if opt.cfg.SOLVER.method == 'adamw':
+    optimizer = optim.AdamW(model.parameters(), lr=cfg.SOLVER.lr, weight_decay=0.01)
+if opt.cfg.SOLVER.method == 'zhengqin-lightnet':
+    lr_scale = 1.
+    optimizer = optim.Adam(model.parameters(), lr=1e-4 * lr_scale, betas=(0.5, 0.999) )
+
+# optimizer = optim.Adam(model.parameters(), lr=cfg.SOLVER.lr, betas=(0.5, 0.999) )
+if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
+    backbone_params = []
+    other_params = []
+    for k, v in model.named_parameters():
+        if 'backbone' in k:
+            backbone_params.append(v)
+            if opt.is_master:
+                print(k)
+        else:
+            other_params.append(v)
+    # my_list = ['BRDF_Net.pretrained.model.patch_embed.backbone']
+    # backbone_params = list(filter(lambda kv: kv[0] in my_list, model.named_parameters()))
+    # other_params = list(filter(lambda kv: kv[0] not in my_list, model.named_parameters()))
+    optimizer_backbone = optim.Adam(backbone_params, lr=1e-5, betas=(0.5, 0.999) )
+    optimizer_others = optim.Adam(other_params, lr=1e-4, betas=(0.5, 0.999) )
+    if opt.cfg.SOLVER.method == 'adamw':
+        optimizer_backbone = optim.AdamW(backbone_params, lr=1e-5, weight_decay=0.05)
+        optimizer_others = optim.AdamW(other_params, lr=1e-4, weight_decay=0.05)
+
 if opt.cfg.MODEL_BRDF.DPT_baseline.enable and opt.cfg.MODEL_BRDF.DPT_baseline.if_SGD:
-    optimizer = optim.SGD(model.parameters(), lr=cfg.SOLVER.lr, momentum=0.9)
+    assert False, 'SGD disabled.'
+    # optimizer = optim.SGD(model.parameters(), lr=cfg.SOLVER.lr, momentum=0.9)
    
 
 if opt.distributed:
@@ -184,11 +260,23 @@ if opt.distributed:
 
 logger.info(red('Optimizer: '+type(optimizer).__name__))
 scheduler = ReduceLROnPlateau(optimizer, 'min', factor=0.1, patience=50, cooldown=0, verbose=True, threshold_mode='rel', threshold=0.01)
+if opt.cfg.SOLVER.if_warm_up:
+    # https://github.com/microsoft/Cream/blob/2fb020852cb6ea77bb3409da5319891a132ac47f/iRPE/DeiT-with-iRPE/main.py
+    from timm.scheduler import create_scheduler
+    scheduler, _ = create_scheduler(opt, optimizer)
+    if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
+        scheduler_backbone, _ = create_scheduler(opt, optimizer_backbone)
+        scheduler_others, _ = create_scheduler(opt, optimizer_others)
+
+if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.yogo_lr:
+    optimizer = optim.Adam(model.parameters(), lr=cfg.SOLVER.lr)
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=100)
+
 # <<<<<<<<<<<<< MODEL AND OPTIMIZER
 
 ENABLE_MATSEG = opt.cfg.MODEL_MATSEG.enable
 opt.bin_mean_shift_device = opt.device if opt.cfg.MODEL_MATSEG.embed_dims <= 4 else 'cpu'
-opt.batch_size_override_vis = -1
+# opt.batch_size_override_vis = -1
 if ENABLE_MATSEG:
     if opt.cfg.MODEL_MATSEG.embed_dims > 2:
         opt.batch_size_override_vis = 1      
@@ -199,8 +287,6 @@ else:
     bin_mean_shift = Bin_Mean_Shift_N(embedding_dims=opt.cfg.MODEL_MATSEG.embed_dims, \
         device=opt.bin_mean_shift_device, invalid_index=opt.invalid_index, if_freeze=opt.cfg.MODEL_MATSEG.if_freeze)
 opt.bin_mean_shift = bin_mean_shift
-
-opt.OR_classes = OR4XCLASSES_dict[opt.cfg.MODEL_LAYOUT_EMITTER.data.OR][1:] # list of OR class names exclusing unlabelled(0)
 
 
 # >>>>>>>>>>>>> DATASET
@@ -213,9 +299,10 @@ transforms_val_matseg = get_transform_matseg('val', opt)
 transforms_train_resize = get_transform_resize('train', opt)
 transforms_val_resize = get_transform_resize('val', opt)
 
-openrooms_to_use = openrooms_binary if opt.cfg.DATASET.binary else openrooms
+openrooms_to_use = openrooms
+make_data_loader_to_use = make_data_loader
+
 print('+++++++++openrooms_to_use', openrooms_to_use)
-make_data_loader_to_use = make_data_loader_binary if opt.cfg.DATASET.binary else make_data_loader
 
 if opt.if_train:
     brdf_dataset_train = openrooms_to_use(opt, 
@@ -237,7 +324,7 @@ if opt.cfg.MODEL_SEMSEG.enable:
     opt.semseg_colors = brdf_dataset_train.semseg_colors
 
 if opt.if_val:
-    brdf_dataset_val = openrooms(opt, 
+    brdf_dataset_val = openrooms_to_use(opt, 
         transforms_fixed = transforms_val_resize, 
         transforms_semseg = transforms_val_semseg, 
         transforms_matseg = transforms_val_matseg,
@@ -245,7 +332,7 @@ if opt.if_val:
         # cascadeLevel = opt.cascadeLevel, split = 'val', logger=logger)
         # cascadeLevel = opt.cascadeLevel, split = 'val', load_first = 20 if opt.mini_val else -1, logger=logger)
         cascadeLevel = opt.cascadeLevel, split = 'val', if_for_training=False, load_first = -1, logger=logger)
-    brdf_loader_val, _ = make_data_loader(
+    brdf_loader_val, _ = make_data_loader_to_use(
         opt,
         brdf_dataset_val,
         is_train=False,
@@ -358,39 +445,21 @@ ts_iter_end_start_list = []
 ts_iter_start_end_list = []
 num_mat_masks_MAX = 0
 
-model.train(not opt.cfg.MODEL_SEMSEG.fix_bn)
-
-
-# for epoch in list(range(opt.epochIdFineTune+1, opt.cfg.SOLVER.max_epoch)):
-# for epoch_0 in list(range(1, 2) ):
-
-if opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs:
-    assert opt.if_cluster == False
-    obj_nums_dict_file = Path(opt.cfg.DATASET.dataset_list) / 'obj_nums_dict.pickle' # {frame_info: (valid) obj_nums}
-    import pickle
-    if obj_nums_dict_file.exists():
-        with open(obj_nums_dict_file, 'rb') as f:
-            train_obj_dict = pickle.load(f)
-            print(yellow('Existing keys in obj_nums_dict.pickle (%s):'%(str(obj_nums_dict_file))))
-            for key in train_obj_dict:
-                ic(key)
-    else:
-        print(yellow('Empty obj_nums_dict.pickle (%s)'%(str(obj_nums_dict_file))))
-        train_obj_dict = {}
+model.train()
+synchronize()
 
 if not opt.if_train:
-    val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift, 'if_register_detectron_only': False}
+    val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift}
     if opt.if_vis:
-        val_params.update({'batch_size_val_vis': batch_size_val_vis, 'detectron_dataset_name': 'vis'})
+        val_params.update({'batch_size_val_vis': batch_size_val_vis})
         with torch.no_grad():
             vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
+        synchronize()
     if opt.if_val:
-        val_params.update({'detectron_dataset_name': 'val'})
+        val_params.update({'brdf_dataset_val': brdf_dataset_val})
         with torch.no_grad():
             val_epoch_joint(brdf_loader_val, model, val_params)
 else:
-    epoch_length = len(brdf_dataset_train) // opt.num_gpus // opt.cfg.SOLVER.ims_per_batch
-    
     for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         epoch = epoch_0 + epoch_start
 
@@ -403,20 +472,22 @@ else:
         # ts_iter_start = ts
         ts_iter_end = ts_epoch_start
         
-        print('=======NEW EPOCH of length %d'%epoch_length, opt.rank, cfg.MODEL_SEMSEG.fix_bn)
+        print('=======NEW EPOCH', opt.rank, cfg.MODEL_SEMSEG.fix_bn)
+        synchronize()
 
         if tid >= opt.max_iter and opt.max_iter != -1:
             break
         
-        start_iter = tid_start + epoch_length * epoch_0
+        start_iter = tid_start + len(brdf_loader_train) * epoch_0
         logger.info("Starting training from iteration {}".format(start_iter))
         # with EventStorage(start_iter) as storage:
+
         if cfg.SOLVER.if_test_dataloader:
             tic = time.time()
             tic_list = []
 
         count_samples_this_rank = 0
-    
+
         for i, data_batch in tqdm(enumerate(brdf_loader_train)):
 
             if opt.cfg.DATASET.if_binary and opt.distributed:
@@ -429,54 +500,43 @@ else:
                 if max(count_samples_gathered)>=len(brdf_dataset_train.scene_key_frame_id_list_this_rank):
                     break
 
+
             if cfg.SOLVER.if_test_dataloader:
                 if i % 100 == 0:
                     print(data_batch.keys())
                     print(opt.task_name, 'On average: %.4f iter/s'%((len(tic_list)+1e-6)/(sum(tic_list)+1e-6)))
-                if opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs:
-                    # print(data_batch.keys())
-                    # print(data_batch['boxes_valid_list'])
-                    # print(data_batch['frame_info'])
-                    ic(data_batch['num_valid_boxes'])
-                    frame_info_list = data_batch['frame_info']
-                    boxes_valid_list_list = data_batch['boxes_valid_list']
-                    for frame_info, boxes_valid_list in zip(frame_info_list, boxes_valid_list_list):
-                        frame_key = '%s-%s-%d'%(frame_info['meta_split'], frame_info['scene_name'], frame_info['frame_id'])
-                        if frame_key in train_obj_dict:
-                            continue
-                        else:
-                            if sum(boxes_valid_list) == 0:
-                                print(sum(boxes_valid_list), boxes_valid_list)
-                            train_obj_dict[frame_key] = {'valid_obj_num': sum(boxes_valid_list), 'boxes_valid_list': boxes_valid_list}
-
                 tic_list.append(time.time()-tic)
                 tic = time.time()
                 continue
             reset_tictoc = False
             # Evaluation for an epoch```
 
+            # synchronize()
             print((tid - tid_start) % opt.eval_every_iter, opt.eval_every_iter)
             if opt.eval_every_iter != -1 and (tid - tid_start) % opt.eval_every_iter == 0:
-                val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift, 'if_register_detectron_only': False}
+                val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift}
                 if opt.if_vis:
-                    val_params.update({'batch_size_val_vis': batch_size_val_vis, 'detectron_dataset_name': 'vis'})
+                    val_params.update({'batch_size_val_vis': batch_size_val_vis})
                     with torch.no_grad():
                         if opt.cfg.DEBUG.if_dump_anything:
                             dump_joint(brdf_loader_val_vis, model, val_params)
                         vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
+                    synchronize()                
                 if opt.if_val:
-                    val_params.update({'detectron_dataset_name': 'val'})
+                    val_params.update({'brdf_dataset_val': brdf_dataset_val})
                     with torch.no_grad():
                         val_epoch_joint(brdf_loader_val, model, val_params)
                 model.train(not cfg.MODEL_SEMSEG.fix_bn)
                 reset_tictoc = True
                 
+                synchronize()
 
             # Save checkpoint
             if opt.save_every_iter != -1 and (tid - tid_start) % opt.save_every_iter == 0 and 'tmp' not in opt.task_name:
                 check_save(opt, tid, tid, epoch, checkpointer, epochs_saved, opt.checkpoints_path_task, logger)
                 reset_tictoc = True
 
+            # synchronize()
 
             # torch.cuda.empty_cache()
 
@@ -495,16 +555,20 @@ else:
             # ======= Load data from cpu to gpu
 
             labels_dict = get_labels_dict_joint(data_batch, opt)
+            # synchronize()
 
             time_meters['data_to_gpu'].update(time.time() - ts_iter_start)
             time_meters['ts'] = time.time()
 
-            if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list or 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-                print('Valid objs num: ', [sum(x) for x in data_batch['boxes_valid_list']], 'Totasl objs num: ', [len(x) for x in data_batch['boxes_valid_list']])
 
             # ======= Forward
-            optimizer.zero_grad()
+            if 'dpt_hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
+                optimizer_backbone.zero_grad()
+                optimizer_others.zero_grad()
+            else:
+                optimizer.zero_grad()
             output_dict, loss_dict = forward_joint(True, labels_dict, model, opt, time_meters, tid=tid)
+            # synchronize()
             
             # print('=======loss_dict', loss_dict)
             loss_dict_reduced = reduce_loss_dict(loss_dict, mark=tid, logger=logger) # **average** over multi GPUs
@@ -530,17 +594,21 @@ else:
                     loss_keys_print.append('loss_semseg-aux') 
 
             if opt.cfg.MODEL_BRDF.enable and opt.cfg.MODEL_BRDF.enable_BRDF_decoders:
-                if not opt.cfg.MODEL_BRDF.if_freeze:
+                if not (opt.cfg.MODEL_BRDF.if_freeze or opt.cfg.MODEL_LIGHT.freeze_BRDF_Net):
                     loss_keys_backward.append('loss_brdf-ALL')
                     loss_keys_print.append('loss_brdf-ALL')
                 if 'al' in opt.cfg.MODEL_BRDF.enable_list and 'al' in opt.cfg.MODEL_BRDF.loss_list:
                     loss_keys_print.append('loss_brdf-albedo') 
+                    if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_albedo:
+                        loss_keys_print.append('loss_brdf-albedo-reg') 
                 if 'no' in opt.cfg.MODEL_BRDF.enable_list and 'no' in opt.cfg.MODEL_BRDF.loss_list:
                     loss_keys_print.append('loss_brdf-normal') 
                 if 'ro' in opt.cfg.MODEL_BRDF.enable_list and 'ro' in opt.cfg.MODEL_BRDF.loss_list:
                     loss_keys_print.append('loss_brdf-rough') 
                 if 'de' in opt.cfg.MODEL_BRDF.enable_list and 'de' in opt.cfg.MODEL_BRDF.loss_list:
                     loss_keys_print.append('loss_brdf-depth') 
+                    if opt.cfg.MODEL_BRDF.loss.if_use_reg_loss_depth:
+                        loss_keys_print.append('loss_brdf-depth-reg') 
 
             if opt.cfg.MODEL_LIGHT.enable:
                 if not opt.cfg.MODEL_LIGHT.if_freeze:
@@ -554,59 +622,6 @@ else:
                 if opt.cfg.MODEL_MATCLS.if_est_sup:
                     loss_keys_print.append('loss_matcls-supcls')
 
-
-            if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
-                if_use_layout_loss = 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list
-                if_use_object_loss = 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list
-
-                if if_use_layout_loss:
-                    if not opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_freeze:
-                        loss_keys_backward.append('loss_layout-ALL')
-                    loss_keys_print.append('loss_layout-ALL')
-                    loss_keys_print += ['loss_layout-pitch_cls', 
-                        'loss_layout-pitch_reg', 
-                        'loss_layout-roll_cls', 
-                        'loss_layout-roll_reg', 
-                        'loss_layout-lo_ori_cls', 
-                        'loss_layout-lo_ori_reg', 
-                        'loss_layout-lo_centroid', 
-                        'loss_layout-lo_coeffs', 
-                        'loss_layout-lo_corner', ]
-
-                if if_use_object_loss:
-                    loss_keys_backward.append('loss_object-ALL')
-                    loss_keys_print.append('loss_object-ALL')
-                if if_use_layout_loss and if_use_object_loss:
-                    loss_keys_backward.append('loss_joint-ALL')
-                    loss_keys_print.append('loss_joint-ALL')
-
-                if 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
-                    loss_keys_backward.append('loss_mesh-ALL')
-                    loss_keys_print.append('loss_mesh-ALL')
-                    if opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'SVRLoss':
-                        for loss_name in ['loss_mesh-chamfer', 'loss_mesh-face', 'loss_mesh-edge', 'loss_mesh-boundary']:
-                            loss_keys_print.append(loss_name)
-                        
-
-                if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
-                    if not opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_freeze:
-                        loss_keys_backward.append('loss_emitter-ALL')
-                    loss_keys_print.append('loss_emitter-ALL')
-                    loss_keys_print += ['loss_emitter-light_ratio', 
-                        'loss_emitter-cell_cls', 
-                        'loss_emitter-cell_axis', 
-                        'loss_emitter-cell_intensity', 
-                        'loss_emitter-cell_lamb'] 
-
-            if opt.cfg.MODEL_DETECTRON.enable:
-                loss_keys_backward.append('loss_detectron-ALL')
-                loss_keys_print += ['loss_detectron-ALL', 
-                    'loss_detectron-cls', 
-                    'loss_detectron-box_reg', 
-                    'loss_detectron-mask', 
-                    'loss_detectron-rpn_cls', 
-                    'loss_detectron-rpn_loc', ]
-
             for loss_key in loss_keys_backward:
                 if loss_key in opt.loss_weight_dict:
                     loss_dict[loss_key] = loss_dict[loss_key] * opt.loss_weight_dict[loss_key]
@@ -619,16 +634,29 @@ else:
 
             loss.backward()
 
-            # clip_to = 1.
-            # torch.nn.utils.clip_grad_norm_(model.LAYOUT_EMITTER_NET_fc.parameters(), clip_to)
-            # torch.nn.utils.clip_grad_norm_(model.LAYOUT_EMITTER_NET_encoder.parameters(), clip_to)
-            # print(model.LAYOUT_EMITTER_NET_fc.fc_layout_5.weight)
-            # print(model.LAYOUT_EMITTER_NET_fc.fc_layout_5.weight.grad)
+            # if opt.is_master and tid % 10 == 0:
+            #     print(model.MODEL_ALL._.no.scratch.refinenet4.resConfUnit2.conv2.bias)
+            if opt.is_master and tid % 100 == 0:
+                params_train_total = 0
+                params_not_train_total = 0
+                for name, param in model.named_parameters():
+                    if param.grad is None:
+                        if param.requires_grad==True:
+                            print(name, '------!!!!!!!!!!!!')
+                            params_not_train_total += 1
+                    else:
+                        print(name, '☑')
+                        params_train_total += 1
+                logger.info('%d params received grad; %d params require grads but not received'%(params_train_total, params_not_train_total))
 
-            
-            optimizer.step()
+            if 'dpt_hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
+                optimizer_backbone.step()
+                optimizer_others.step()
+            else:
+                optimizer.step()
             time_meters['backward'].update(time.time() - time_meters['ts'])
             time_meters['ts'] = time.time()
+            # synchronize()
 
             if opt.is_master:
                 loss_keys_print = [x for x in loss_keys_print if 'ALL' in x] + [x for x in loss_keys_print if 'ALL' not in x]
@@ -636,7 +664,8 @@ else:
                 logger.info(white_blue(logger_str))
 
                 for loss_key in loss_dict_reduced:
-                    writer.add_scalar('loss_train/%s'%loss_key, loss_dict_reduced[loss_key].item(), tid)
+                    if loss_dict_reduced[loss_key] != 0.:
+                        writer.add_scalar('loss_train/%s'%loss_key, loss_dict_reduced[loss_key].item(), tid)
                 writer.add_scalar('training/epoch', epoch, tid)
 
             # End of iteration logging
@@ -654,13 +683,25 @@ else:
                     writer.add_scalar('training/GPU_usage_ratio', usage_ratio, tid)
                     writer.add_scalar('training/batch_size_per_gpu', len(data_batch['image_path']), tid)
                     writer.add_scalar('training/gpus', opt.num_gpus, tid)
+                    current_lr = optimizer.param_groups[0]['lr']
+                    if opt.cfg.SOLVER.if_warm_up:
+                        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
+                            current_lr = scheduler_backbone._get_lr(epoch)[0]
+                        else:
+                            current_lr = scheduler._get_lr(epoch)[0]
+                    writer.add_scalar('training/lr', current_lr, tid)
+
+            # synchronize()
+            if tid % opt.debug_every_iter == 0:
+                opt.if_vis_debug_pac = False
 
             tid += 1
             if tid >= opt.max_iter and opt.max_iter != -1:
                 break
-
-
-if opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs:
-    with open(obj_nums_dict_file, 'wb') as f:
-        pickle.dump(train_obj_dict, f)
-    print(white_blue('train_obj_dict dumped to %s'%obj_nums_dict_file))
+    
+        if opt.cfg.SOLVER.if_warm_up:
+            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
+                scheduler_backbone.step(epoch)
+                scheduler_others.step(epoch)
+            else:
+                scheduler.step(epoch)

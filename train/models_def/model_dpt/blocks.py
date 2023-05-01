@@ -372,7 +372,7 @@ class FeatureFusionBlock_custom(nn.Module):
         if self.expand == True:
             out_features = features // 2
 
-        feat_fusion_method = self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.feat_fusion_method
+        feat_fusion_method = self.opt.cfg.MODEL_BRDF.DPT_baseline.feat_fusion_method
         
         if not self.if_assert_one_input and feat_fusion_method=='concat':
             self.features_in = features * 2
@@ -407,15 +407,9 @@ class FeatureFusionBlock_custom(nn.Module):
         if len(xs) == 2:
             assert not self.if_assert_one_input
             res = self.resConfUnit1(xs[1])
-            # print(xs[0].shape, xs[1].shape, res.shape)
-            # if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_only_last_transformer_output_used:
-            #     output = self.skip_add.add(output, res*0.)
-            # else:
-            # print(self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.feat_fusion_method, '=a=fadfsd')
-            # print(output.shape, res.shape, self.features_in)
-            if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.feat_fusion_method == 'sum':
+            if self.opt.cfg.MODEL_BRDF.DPT_baseline.feat_fusion_method == 'sum':
                 output = self.skip_add.add(output, res)
-            elif self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.feat_fusion_method == 'concat':
+            elif self.opt.cfg.MODEL_BRDF.DPT_baseline.feat_fusion_method == 'concat':
                 output = torch.cat([output, res], 1)
             else:
                 assert False
@@ -424,7 +418,6 @@ class FeatureFusionBlock_custom(nn.Module):
 
         output = self.resConfUnit2(output)
 
-        # if (not self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_not_reduce_res) or self.if_up_resize_override==True:
         if self.if_upscale:
             output = nn.functional.interpolate(
                 output, scale_factor=2, mode="bilinear", align_corners=self.align_corners

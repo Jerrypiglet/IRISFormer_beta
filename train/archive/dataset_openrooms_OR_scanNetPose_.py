@@ -25,12 +25,9 @@ from utils.utils_total3D.data_config import RECON_3D_CLS_OR_dict
 from scipy.spatial import cKDTree
 import copy
 # import math
-# from detectron2.structures import BoxMode
-# from detectron2.data.dataset_mapper import DatasetMapper
 
 from utils.utils_total3D.utils_OR_vis_labels import RGB_to_01
 from utils.utils_total3D.utils_others import Relation_Config, OR4XCLASSES_dict, OR4XCLASSES_not_detect_mapping_ids_dict, OR4X_mapping_catInt_to_RGB
-# from detectron2.data import build_detection_test_loader,DatasetCatalog, MetadataCatalog
 
 from utils.utils_scannet import read_ExtM_from_txt, read_img
 import utils.utils_nvidia.mdataloader.m_preprocess as m_preprocess
@@ -348,38 +345,6 @@ class openrooms(data.Dataset):
         if self.opt.cfg.DATA.load_matseg_gt:
             mat_seg_dict = self.load_matseg(mask, im_fixedscale_SDR_uint8)
             batch_dict.update(mat_seg_dict)
-
-        # ====== layout, obj (including masks), emitters =====
-        if self.opt.cfg.DATA.load_layout_emitter_gt or 'ob' in self.opt.cfg.DATA.data_read_list and (not self.opt.cfg.DATASET.if_no_gt_semantics):
-            scene_dict = self.read_scene(frame_info=frame_info)
-
-        if self.opt.cfg.DATA.load_layout_emitter_gt and (not self.opt.cfg.DATASET.if_no_gt_semantics):
-            layout_emitter_dict = self.load_layout_emitter_gt_detach_emitter(scene_dict=scene_dict, frame_info=frame_info, hdr_scale=hdr_scale)
-            batch_dict.update(layout_emitter_dict)
-
-        if 'ob' in self.opt.cfg.DATA.data_read_list or 'mesh' in self.opt.cfg.DATA.data_read_list and (not self.opt.cfg.DATASET.if_no_gt_semantics):
-            objs_dict = self.load_objs(im_trainval, scene_dict['sequence']['boxes'], frame_info=frame_info)
-            batch_dict.update({'boxes_batch': objs_dict['boxes'], 'boxes_valid_list': objs_dict['boxes_valid_list'], \
-                'num_valid_boxes': sum(objs_dict['boxes_valid_list'])})
-            if self.opt.cfg.DATA.load_detectron_gt:
-                detectron_sample_dict = objs_dict['detectron_sample_dict']
-                # print('---', detectron_sample_dict.keys()) # dict_keys(['file_name', 'image_id', 'frame_key', 'height', 'width', 'annotations'])
-                if not self.running:
-                    try:
-                        detectron_sample_dict = self.detectron_mapper(detectron_sample_dict)
-                    except SyntaxError:
-                        print('Issue with png file %s'%detectron_sample_dict['file_name'])
-                # print('------', not self.running, detectron_sample_dict.keys()) # dict_keys(['file_name', 'image_id', 'frame_key', 'height', 'width', 'image', 'instances'])
-                batch_dict.update({'detectron_sample_dict': detectron_sample_dict})
-
-            if 'mesh' in self.opt.cfg.DATA.data_read_list:
-                meshes_dict = self.load_meshes(objs_dict, scene_dict)
-                batch_dict.update(meshes_dict)
-
-            post_process_objs_status = self.post_process_objs_meshes(index, batch_dict, frame_info)
-            if not post_process_objs_status:
-                return self.__getitem__((index+1)%len(self.data_list))
-
 
         return batch_dict
 
@@ -769,68 +734,12 @@ class openrooms(data.Dataset):
         assert len(boxes['mask'])==len(boxes_valid_list)==len(boxes['size_cls'])
         mask_list_new = []
 
-        if self.opt.cfg.DATA.load_detectron_gt:
-            detectron_png_path = str(frame_info['png_image_path']).replace('.png', '_240x320.png')
-            if Path(detectron_png_path).exists()==False:
-                im = cv2.imread(str(frame_info['png_image_path']))
-                im = cv2.resize(im, (320, 240), interpolation = cv2.INTER_AREA )
-                cv2.imwrite(detectron_png_path, im)
-                # print(detectron_png_path)
-
-            detectron_sample_dict = {
-                'file_name': detectron_png_path, 
-                'image_id': frame_info['index'], 
-                'frame_key': frame_info['frame_key'], 
-                'height': self.opt.cfg.DATA.im_height, 
-                'width': self.opt.cfg.DATA.im_width, 
-                'annotations': []}
-            assert detectron_sample_dict['height']==240 and detectron_sample_dict['width']==320
-
         for mask_idx, mask in enumerate(boxes['mask']):
             if mask is None:
                 mask_list_new.append(None)
                 boxes_valid_list[mask_idx] = False # [!!!!!] set objs without masks to False
                 continue
             mask_dict = {'msk': mask['msk_half'], 'msk_bdb': mask['msk_bdb_half'], 'class_id': mask['class_id']}
-
-            if self.opt.cfg.DATA.load_detectron_gt:
-                mask_half_fullimage = np.zeros((self.opt.cfg.DATA.im_height, self.opt.cfg.DATA.im_width), dtype=np.uint8)
-                # mask_half_fullimage = np.zeros((480, 640), dtype=np.uint8)
-                x1, y1, x2, y2 = mask['msk_bdb_half']
-                mask_half_fullimage[y1:y2+1, x1:x2+1] = mask['msk_half']
-                mask_dict['mask_half_fullimage'] = mask_half_fullimage
-                
-                # turn binary mask into polygon (RLE format)
-                contours, hierarchy = cv2.findContours((mask_half_fullimage).astype(np.uint8), cv2.RETR_TREE,cv2.CHAIN_APPROX_SIMPLE)
-                segmentation = []
-                # in here, contours is a list of contour of small region, sometime it will have some extra contour of length 1 or 2
-                # thus we only keep those contour of more than 3 dots
-                for contour in contours:
-                    contour = contour.flatten().tolist()
-                    '''
-                    if len(contour)<6:
-                        im=self.process(im) oppo 
-                        cv2.imwrite("{}.png".format(ind),im )
-                        import pdb;pdb.set_trace()
-                    '''
-                    if len(contour) > 6:
-                        segmentation.append(contour)
-                # contour=measure.find_contours(mask, 0.5)
-                if(len(segmentation)==0):
-                    mask_list_new.append(None)
-                    boxes_valid_list[mask_idx] = False # [!!!!!] set objs without masks to False
-                    print(yellow('skipped object because len(segmentation)==0'))
-                    continue
-
-                detectron_obj_dict = {
-                    'bbox': [x1,y1,x2,y2],
-                    'bbox_mode': BoxMode.XYXY_ABS,
-                    'segmentation': segmentation,
-                    'iscrowd':0, 
-                    'category_id': boxes['class_id'][mask_idx]-1 # [-1 for unlabelled]
-                }
-                detectron_sample_dict['annotations'].append(detectron_obj_dict)
-                
 
             # print(mask['msk_half'].shape, mask['msk_half'].dtype, mask['msk_bdb_half'], boxes['bdb2D_full'][mask_idx])
             mask_list_new.append(mask_dict)

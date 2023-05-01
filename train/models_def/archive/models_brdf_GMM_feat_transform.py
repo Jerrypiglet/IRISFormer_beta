@@ -274,7 +274,6 @@ class decoder0(nn.Module):
             x_out = x_orig
 
         return_dict = {'x_out': x_out, 'extra_output_dict': extra_output_dict}
-        # if self.if_albedo_pooling:
         return_dict.update({'im_trainval_SDR_mask_pooled_mean': im_trainval_SDR_mask_pooled_mean})
 
         return return_dict

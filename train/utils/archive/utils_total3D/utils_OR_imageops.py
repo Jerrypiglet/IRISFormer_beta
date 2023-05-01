@@ -2,7 +2,6 @@ from ctypes import resize
 import os.path as osp
 import cv2
 import numpy as np
-import trimesh
 from PIL import Image, ImageDraw, ImageFont
 import os.path as osp
 import struct

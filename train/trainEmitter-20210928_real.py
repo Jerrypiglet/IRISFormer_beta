@@ -24,13 +24,13 @@ torch.multiprocessing.set_sharing_strategy('file_system')
 
 # from dataset_openroomsV4_total3d_matcls_ import openrooms, collate_fn_OR
 from dataset_openrooms_OR_scanNetPose_light_20210928_real import openrooms, collate_fn_OR
-from train_funcs_detectron import gather_lists
+from utils.utils_training import gather_lists
 
 
 from torch.nn.parallel import DistributedDataParallel as DDP
 from utils.config import cfg
 from utils.bin_mean_shift import Bin_Mean_Shift
-from utils.bin_mean_shift_3 import Bin_Mean_Shift_3
+# from utils.bin_mean_shift_3 import Bin_Mean_Shift_3
 from utils.bin_mean_shift_N import Bin_Mean_Shift_N
 from utils.comm import synchronize
 from utils.utils_misc import *
@@ -40,8 +40,8 @@ from torch.optim.lr_scheduler import MultiStepLR, ReduceLROnPlateau, StepLR
 
 import utils.utils_config as utils_config
 from utils.utils_envs import set_up_envs
-from utils.utils_total3D.utils_others import OR4XCLASSES_dict
-from utils.utils_vis import vis_index_map
+# from utils.utils_total3D.utils_others import OR4XCLASSES_dict
+# from utils.utils_vis import vis_index_map
 from icecream import ic
 
 parser = argparse.ArgumentParser()
@@ -69,7 +69,7 @@ parser.add_argument('--cascadeLevel', type=int, default=0, help='the casacade le
 
 # Rui
 # Device
-parser.add_argument("--local_rank", type=int, default=0)
+# parser.add_argument("--local_rank", type=int, default=0)
 # parser.add_argument("--master_port", type=str, default='8914')
 
 # DEBUG
@@ -185,48 +185,6 @@ if opt.is_master:
     ic(opt.cfg)
 # <<<<<<<<<<<<< A bunch of modularised set-ups
 
-# >>>>>>>>>>>>> DETECTRON setups
-# import detectron2
-# from detectron2.utils.logger import setup_logger
-# from detectron2 import model_zoo
-# from detectron2.structures import BoxMode
-# from detectron2.engine import DefaultPredictor
-# from detectron2.config import get_cfg
-# from detectron2.utils.visualizer import Visualizer,ColorMode
-# from detectron2.evaluation import COCOEvaluator, inference_on_dataset
-# import os.path as osp
-# from detectron2.engine import DefaultTrainer
-# from detectron2.utils.events import EventStorage
-
-# cfg_detectron = get_cfg()
-
-# # detectron_configs = utils_config.load_cfg_from_cfg_file(os.path.join(pwdpath, opt.cfg.MODEL_detectron.config_file))
-# cfg_detectron.merge_from_file(model_zoo.get_config_file("COCO-InstanceSegmentation/mask_rcnn_X_101_32x8d_FPN_3x.yaml"))
-# # cfg_detectron.DATASETS.TRAIN = ("light_train",)
-# # cfg_detectron.DATASETS.TEST = ("light_test", )
-# # cfg_detectron.DATALOADER.NUM_WORKERS = 2
-# cfg_detectron.MODEL.WEIGHTS = model_zoo.get_checkpoint_url("COCO-InstanceSegmentation/mask_rcnn_X_101_32x8d_FPN_3x.yaml")  # Let training initialize from model zoo
-# cfg_detectron.SOLVER.IMS_PER_BATCH = 2
-# # cfg_detectron.SOLVER.BASE_LR = 0.001
-# # cfg_detectron.SOLVER.MAX_ITER = args.iter    
-# cfg_detectron.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE = 512   
-# # if(args.detect_4):
-# cfg_detectron.MODEL.ROI_HEADS.NUM_CLASSES = 45 # OR45: 45 (-1 for unlabelled)
-# # cfg_detectron.MODEL.TENSOR_MASK.MASK_LOSS_WEIGHT = 3
-# # cfg_detectron.SOLVER.WEIGHT_DECAY: 0.0001
-# cfg_detectron.MODEL.ROI_HEADS.NMS_THRESH_TEST: 0.7
-# # cfg_detectron.SOLVER.MOMENTUM: 0.9
-# cfg_detectron.SOLVER.LR_SCHEDULER_NAME="WarmupCosineLR"
-# # cfg_detectron.OUTPUT_DIR=outfiledir+'model_path/'
-# # False to include all empty image
-# cfg_detectron.DATALOADER.FILTER_EMPTY_ANNOTATIONS=False
-# cfg_detectron.INPUT.FORMAT = "RGB"
-
-# cfg_detectron = utils_config.merge_cfg_from_list(cfg_detectron, opt.params)
-# opt.cfg_detectron = cfg_detectron
-
-# <<<<<<<<<<<<< DETECTRON setups
-
 # >>>>>>>>>>>>> MODEL AND OPTIMIZER
 from models_def.model_joint_all import Model_Joint as the_model
 from models_def.model_joint_all_ViT import Model_Joint_ViT as the_model_ViT
@@ -317,9 +275,6 @@ else:
     bin_mean_shift = Bin_Mean_Shift_N(embedding_dims=opt.cfg.MODEL_MATSEG.embed_dims, \
         device=opt.bin_mean_shift_device, invalid_index=opt.invalid_index, if_freeze=opt.cfg.MODEL_MATSEG.if_freeze)
 opt.bin_mean_shift = bin_mean_shift
-
-opt.OR_classes = OR4XCLASSES_dict[opt.cfg.MODEL_LAYOUT_EMITTER.data.OR][1:] # list of OR class names exclusing unlabelled(0)
-
 
 # >>>>>>>>>>>>> DATASET
 from utils.utils_semseg import get_transform_semseg, get_transform_matseg, get_transform_resize
@@ -483,29 +438,14 @@ synchronize()
 # for epoch in list(range(opt.epochIdFineTune+1, opt.cfg.SOLVER.max_epoch)):
 # for epoch_0 in list(range(1, 2) ):
 
-if opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs:
-    assert opt.if_cluster == False
-    obj_nums_dict_file = Path(opt.cfg.DATASET.dataset_list) / 'obj_nums_dict.pickle' # {frame_info: (valid) obj_nums}
-    import pickle
-    if obj_nums_dict_file.exists():
-        with open(obj_nums_dict_file, 'rb') as f:
-            train_obj_dict = pickle.load(f)
-            print(yellow('Existing keys in obj_nums_dict.pickle (%s):'%(str(obj_nums_dict_file))))
-            for key in train_obj_dict:
-                ic(key)
-    else:
-        print(yellow('Empty obj_nums_dict.pickle (%s)'%(str(obj_nums_dict_file))))
-        train_obj_dict = {}
-
 if not opt.if_train:
-    val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift, 'if_register_detectron_only': False}
+    val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift}
     if opt.if_vis:
-        val_params.update({'batch_size_val_vis': batch_size_val_vis, 'detectron_dataset_name': 'vis'})
+        val_params.update({'batch_size_val_vis': batch_size_val_vis})
         with torch.no_grad():
             vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
         synchronize()
     if opt.if_val:
-        val_params.update({'detectron_dataset_name': 'val'})
         with torch.no_grad():
             val_epoch_joint(brdf_loader_val, model, val_params)
 else:
@@ -554,21 +494,6 @@ else:
                 if i % 100 == 0:
                     print(data_batch.keys())
                     print(opt.task_name, 'On average: %.4f iter/s'%((len(tic_list)+1e-6)/(sum(tic_list)+1e-6)))
-                if opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs:
-                    # print(data_batch.keys())
-                    # print(data_batch['boxes_valid_list'])
-                    # print(data_batch['frame_info'])
-                    ic(data_batch['num_valid_boxes'])
-                    frame_info_list = data_batch['frame_info']
-                    boxes_valid_list_list = data_batch['boxes_valid_list']
-                    for frame_info, boxes_valid_list in zip(frame_info_list, boxes_valid_list_list):
-                        frame_key = '%s-%s-%d'%(frame_info['meta_split'], frame_info['scene_name'], frame_info['frame_id'])
-                        if frame_key in train_obj_dict:
-                            continue
-                        else:
-                            if sum(boxes_valid_list) == 0:
-                                print(sum(boxes_valid_list), boxes_valid_list)
-                            train_obj_dict[frame_key] = {'valid_obj_num': sum(boxes_valid_list), 'boxes_valid_list': boxes_valid_list}
                 tic_list.append(time.time()-tic)
                 tic = time.time()
                 continue
@@ -578,16 +503,16 @@ else:
             # synchronize()
             print((tid - tid_start) % opt.eval_every_iter, opt.eval_every_iter)
             if opt.eval_every_iter != -1 and (tid - tid_start) % opt.eval_every_iter == 0:
-                val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift, 'if_register_detectron_only': False}
+                val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift}
                 if opt.if_vis:
-                    val_params.update({'batch_size_val_vis': batch_size_val_vis, 'detectron_dataset_name': 'vis'})
+                    val_params.update({'batch_size_val_vis': batch_size_val_vis})
                     with torch.no_grad():
                         if opt.cfg.DEBUG.if_dump_anything:
                             dump_joint(brdf_loader_val_vis, model, val_params)
                         vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
                     synchronize()                
                 if opt.if_val:
-                    val_params.update({'brdf_dataset_val': brdf_dataset_val, 'detectron_dataset_name': 'val'})
+                    val_params.update({'brdf_dataset_val': brdf_dataset_val})
                     with torch.no_grad():
                         val_epoch_joint(brdf_loader_val, model, val_params)
                 model.train(not cfg.MODEL_SEMSEG.fix_bn)
@@ -623,9 +548,6 @@ else:
 
             time_meters['data_to_gpu'].update(time.time() - ts_iter_start)
             time_meters['ts'] = time.time()
-
-            if 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list or 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-                print('Valid objs num: ', [sum(x) for x in data_batch['boxes_valid_list']], 'Totasl objs num: ', [len(x) for x in data_batch['boxes_valid_list']])
 
             # ======= Forward
             if 'dpt_hybrid' in opt.cfg.MODEL_BRDF.DPT_baseline.model and opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
@@ -687,59 +609,6 @@ else:
                 loss_keys_print.append('loss_matcls-cls')
                 if opt.cfg.MODEL_MATCLS.if_est_sup:
                     loss_keys_print.append('loss_matcls-supcls')
-
-
-            if opt.cfg.MODEL_LAYOUT_EMITTER.enable:
-                if_use_layout_loss = 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'lo' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list
-                if_use_object_loss = 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'ob' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list
-
-                if if_use_layout_loss:
-                    if not opt.cfg.MODEL_LAYOUT_EMITTER.layout.if_freeze:
-                        loss_keys_backward.append('loss_layout-ALL')
-                    loss_keys_print.append('loss_layout-ALL')
-                    loss_keys_print += ['loss_layout-pitch_cls', 
-                        'loss_layout-pitch_reg', 
-                        'loss_layout-roll_cls', 
-                        'loss_layout-roll_reg', 
-                        'loss_layout-lo_ori_cls', 
-                        'loss_layout-lo_ori_reg', 
-                        'loss_layout-lo_centroid', 
-                        'loss_layout-lo_coeffs', 
-                        'loss_layout-lo_corner', ]
-
-                if if_use_object_loss:
-                    loss_keys_backward.append('loss_object-ALL')
-                    loss_keys_print.append('loss_object-ALL')
-                if if_use_layout_loss and if_use_object_loss:
-                    loss_keys_backward.append('loss_joint-ALL')
-                    loss_keys_print.append('loss_joint-ALL')
-
-                if 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'mesh' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
-                    loss_keys_backward.append('loss_mesh-ALL')
-                    loss_keys_print.append('loss_mesh-ALL')
-                    if opt.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'SVRLoss':
-                        for loss_name in ['loss_mesh-chamfer', 'loss_mesh-face', 'loss_mesh-edge', 'loss_mesh-boundary']:
-                            loss_keys_print.append(loss_name)
-                        
-
-                if 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.enable_list and 'em' in opt.cfg.MODEL_LAYOUT_EMITTER.loss_list:
-                    if not opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_freeze:
-                        loss_keys_backward.append('loss_emitter-ALL')
-                    loss_keys_print.append('loss_emitter-ALL')
-                    loss_keys_print += ['loss_emitter-light_ratio', 
-                        'loss_emitter-cell_cls', 
-                        'loss_emitter-cell_axis', 
-                        'loss_emitter-cell_intensity', 
-                        'loss_emitter-cell_lamb'] 
-
-            if opt.cfg.MODEL_DETECTRON.enable:
-                loss_keys_backward.append('loss_detectron-ALL')
-                loss_keys_print += ['loss_detectron-ALL', 
-                    'loss_detectron-cls', 
-                    'loss_detectron-box_reg', 
-                    'loss_detectron-mask', 
-                    'loss_detectron-rpn_cls', 
-                    'loss_detectron-rpn_loc', ]
 
             for loss_key in loss_keys_backward:
                 if loss_key in opt.loss_weight_dict:
@@ -807,55 +676,6 @@ else:
                         else:
                             current_lr = scheduler._get_lr(epoch)[0]
                     writer.add_scalar('training/lr', current_lr, tid)
-            # if opt.is_master:
-
-            # if tid % opt.debug_every_iter == 0:       
-            #     if (opt.cfg.MODEL_MATSEG.if_albedo_pooling or opt.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or opt.cfg.MODEL_MATSEG.if_albedo_pac_pool or opt.cfg.MODEL_MATSEG.if_albedo_safenet) and opt.cfg.MODEL_MATSEG.albedo_pooling_debug:
-            #         if opt.is_master and output_dict['im_trainval_SDR_mask_pooled_mean'] is not None:
-            #             for sample_idx, im_trainval_SDR_mask_pooled_mean in enumerate(output_dict['im_trainval_SDR_mask_pooled_mean']):
-            #                 im_trainval_SDR_mask_pooled_mean = im_trainval_SDR_mask_pooled_mean.detach().cpu().numpy().squeeze().transpose(1, 2, 0)
-            #                 writer.add_image('TRAIN_im_trainval_SDR_debug/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), data_batch['im_trainval_SDR'][sample_idx].numpy().squeeze().transpose(1, 2, 0), tid, dataformats='HWC')
-            #                 writer.add_image('TRAIN_im_trainval_SDR_mask_pooled_mean/%d'%(sample_idx+(tid*opt.cfg.SOLVER.ims_per_batch)), im_trainval_SDR_mask_pooled_mean, tid, dataformats='HWC')
-            #                 logger.info('Added debug pooling sample')
-            
-            # ===== Logging summaries of training samples
-            # if tid % 2000 == 0:
-            #     for sample_idx, (im_single, im_trainval_SDR, im_path) in enumerate(zip(data_batch['im_trainval'], data_batch['im_trainval_SDR'], data_batch['image_path'])):
-            #         # im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
-            #         im_trainval_SDR = im_trainval_SDR.numpy().squeeze().transpose(1, 2, 0)
-            #         if opt.is_master:
-            #             # writer.add_image('TRAIN_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
-            #             writer.add_image('TRAIN_im_trainval_SDR/%d'%sample_idx, im_trainval_SDR, tid, dataformats='HWC')
-            #             writer.add_text('TRAIN_image_name/%d'%sample_idx, im_path, tid)
-            #     if opt.cfg.DATA.load_matseg_gt:
-            #         for sample_idx, (im_single, mat_aggre_map) in enumerate(zip(data_batch['im_matseg_transformed_trainval'], labels_dict['mat_aggre_map_cpu'])):
-            #             im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
-            #             mat_aggre_map = mat_aggre_map.numpy().squeeze()
-            #             if opt.is_master:
-            #                 writer.add_image('TRAIN_matseg_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
-            #                 writer.add_image('TRAIN_matseg_mat_aggre_map_trainval/%d'%sample_idx, vis_index_map(mat_aggre_map), tid, dataformats='HWC')
-            #             logger.info('Logged training mat seg')
-            #     if opt.cfg.DATA.load_semseg_gt and opt.cfg.MODEL_SEMSEG.enable:
-            #         for sample_idx, (im_single, semseg_label, semseg_pred) in enumerate(zip(data_batch['im_semseg_transformed_trainval'], data_batch['semseg_label'], output_dict['semseg_pred'].detach().cpu())):
-            #             im_single = im_single.numpy().squeeze().transpose(1, 2, 0)
-            #             semseg_colors = np.loadtxt(os.path.join(opt.pwdpath, opt.cfg.PATH.semseg_colors_path)).astype('uint8')
-            #             if opt.cfg.MODEL_SEMSEG.wallseg_only:
-            #                 semseg_colors = np.array([[0, 0, 0], [0, 80, 100]], dtype=np.uint8)
-
-            #             semseg_label = np.uint8(semseg_label.numpy().squeeze())
-            #             from utils.utils_vis import colorize
-            #             semseg_label_color = np.array(colorize(semseg_label, semseg_colors).convert('RGB'))
-            #             if opt.is_master:
-            #                 writer.add_image('TRAIN_semseg_im_trainval/%d'%sample_idx, im_single, tid, dataformats='HWC')
-            #                 writer.add_image('TRAIN_semseg_label_trainval/%d'%sample_idx, semseg_label_color, tid, dataformats='HWC')
-
-            #             prediction = np.argmax(semseg_pred.numpy().squeeze(), 0)
-            #             gray_pred = np.uint8(prediction)
-            #             color_pred = np.array(colorize(gray_pred, semseg_colors).convert('RGB'))
-            #             if opt.is_master:
-            #                 writer.add_image('TRAIN_semseg_PRED/%d'%sample_idx, color_pred, tid, dataformats='HWC')
-
-            #             logger.info('Logged training sem seg')
 
             # synchronize()
             if tid % opt.debug_every_iter == 0:
@@ -871,9 +691,3 @@ else:
                 scheduler_others.step(epoch)
             else:
                 scheduler.step(epoch)
-
-
-if opt.cfg.MODEL_LAYOUT_EMITTER.mesh_obj.log_valid_objs:
-    with open(obj_nums_dict_file, 'wb') as f:
-        pickle.dump(train_obj_dict, f)
-    print(white_blue('train_obj_dict dumped to %s'%obj_nums_dict_file))

@@ -1,0 +1,20 @@
+{
+    "include": [
+      "lib", 
+      "train", 
+    ],
+    
+    "exclude": [
+        "**/.git", 
+        "**/.DS_Store", 
+        "**/third-party/**", 
+        "**/packages/**", 
+        "**/data/**", 
+        "**/train/archive/**", 
+        "**/train/external/**", 
+        "**/train/third-parties/**", 
+        "**/train/utils/archive/**", 
+        "**/train/models_def/archive/**",
+        "**/train/models_def/model_dpt/archive/**",
+],
+}

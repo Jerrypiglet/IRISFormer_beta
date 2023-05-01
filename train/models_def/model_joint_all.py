@@ -11,40 +11,10 @@ from torchvision.models import resnet
 from models_def.model_matseg import logit_embedding_to_instance
 
 import models_def.models_brdf as models_brdf # basic model
-import models_def.models_brdf_GMM_feat_transform as models_brdf_GMM_feat_transform
-# import models_def.models_brdf_pac_pool as models_brdf_pac_pool
-# import models_def.models_brdf_pac_conv as models_brdf_pac_conv
-# import models_def.models_brdf_safenet as models_brdf_safenet
 import models_def.models_light as models_light 
-import models_def.models_layout_emitter as models_layout_emitter
-import models_def.models_object_detection as models_object_detection
-import models_def.models_mesh_reconstruction as models_mesh_reconstruction
-import models_def.models_layout_emitter_lightAccu as models_layout_emitter_lightAccu
-import models_def.models_layout_emitter_lightAccuScatter as models_layout_emitter_lightAccuScatter
 import models_def.model_matcls as model_matcls
-# import models_def.model_nvidia.AppGMM as AppGMM
-import models_def.model_nvidia.AppGMM_singleFrame as AppGMM
-import models_def.model_nvidia.ssn.ssn as ssn
-
-from utils.utils_scannet import convert_IntM_from_OR, CamIntrinsic_to_cuda
-
-from SimpleLayout.SimpleSceneTorchBatch import SimpleSceneTorchBatch
-from utils.utils_total3D.utils_OR_layout import get_layout_bdb_sunrgbd
-from utils.utils_total3D.utils_OR_cam import get_rotation_matix_result
 
 from models_def.model_dpt.models import DPTBRDFModel, get_BRDFNet_DPT, get_LightNet_DPT
-from models_def.model_dpt.models_CAv2 import DPTBRDFModel_CAv2, get_BRDFNet_DPT_CAv2
-from models_def.model_dpt.models_SSN import DPTBRDFModel_SSN
-from models_def.model_dpt.models_SSN_yogoUnet_N_layers import DPTBRDFModel_SSN_yogoUnet_N_layers
-from models_def.model_dpt.transforms import Resize as dpt_Resize
-from models_def.model_dpt.transforms import NormalizeImage as dpt_NormalizeImage
-from models_def.model_dpt.transforms import PrepareForNet as dpt_PrepareForNet
-
-from models_def.model_dpt.models_ViT import get_LayoutNet_ViT
-from models_def.model_dpt.blocks_ViT import forward_vit_ViT_encoder
-from torchvision.transforms import Compose
-import cv2
-import time
 
 from icecream import ic
 import torch.utils.checkpoint as cp
@@ -90,15 +60,6 @@ class Model_Joint(nn.Module):
             if self.opt.cfg.MODEL_SEMSEG.load_pretrained_pth:
                 self.load_pretrained_semseg()
 
-        if self.cfg.MODEL_GMM.enable:
-            if self.cfg.MODEL_GMM.appearance_recon.enable:
-                self.MODEL_GMM = AppGMM.AppGMM(self.opt,)
-                # self.MODEL_GMM.set_optical_flow_model(self.opt)
-                cam_K_320x240 = np.array([[288.9354, 0., 160.], [0., 288.9354, 120.], [0., 0.,1.]]) # for 240x320 OR ONLY
-                cam_intrinsic = convert_IntM_from_OR(cam_K_320x240)
-                CamIntrinsic_to_cuda(cam_intrinsic, device='cuda') 
-                self.MODEL_GMM.set_camintrinsic(cam_intrinsic)
-            
         if self.cfg.MODEL_BRDF.enable:
             in_channels = 3
             if self.opt.cfg.MODEL_MATSEG.use_as_input:
@@ -116,107 +77,20 @@ class Model_Joint(nn.Module):
                     # "midas_v21": "dpt_weights/midas_v21-f6b98070.pt",
                     "dpt_base": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_base_path,
                     "dpt_large": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_large_path,
-                    "dpt_large_SSN": 'NA',
                     "dpt_hybrid": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_path,
-                    "dpt_hybrid_SSN": self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_path,
-                    "dpt_hybrid_CAv2": 'NA',
-                    "dpt_base_SSN": 'NA',
-                    "swin": 'NA',
-                    # "dpt_hybrid_kitti": "dpt_weights/dpt_hybrid_kitti-cb926ef4.pt",
-                    # "dpt_hybrid_nyu": "dpt_weights/dpt_hybrid_nyu-2ce69ec7.pt",
                 }
                 
                 model_type = self.opt.cfg.MODEL_BRDF.DPT_baseline.model
                 model_path = str(Path(self.opt.cfg.PATH.pretrained_path) / default_models[model_type]) if default_models[model_type]!='NA' else None
                 if_non_negative = True if self.opt.cfg.MODEL_BRDF.DPT_baseline.modality in ['de'] else False
 
-                if model_type=='swin':
-                    # import sys
-                    # sys.path.insert(0, str(Path(self.opt.cfg.DATASET.swin_path)))
-                    # sys.path.insert(0, str(Path(self.opt.cfg.DATASET.swin_path) / 'mmseg/models'))
-                    # sys.path.insert(0, str(Path(self.opt.cfg.DATASET.swin_path) / 'mmseg/models/backbones'))
-                    # from swin_transformer_import import SwinTransformer
-                    # from decode_heads_import import UPerHead
-                    # from models_def.model_dpt.blocks import Interpolate
-                    # swin_dict = {}
-                    # swin_dict['backbone'] = SwinTransformer(pretrain_img_size=(opt.cfg.DATA.im_height_padded_to, opt.cfg.DATA.im_width_padded_to))
-                    # swin_dict['decoder'] = UPerHead(
-                    #     in_channels=[96, 192, 384, 768],
-                    #     in_index=[0, 1, 2, 3],
-                    #     pool_scales=(1, 2, 3, 6),
-                    #     channels=512,
-                    #     dropout_ratio=0.1,
-                    #     norm_cfg=dict(type='SyncBN' if opt.distributed else 'BN', requires_grad=True),
-                    #     align_corners=False,
-                    #     num_classes=3,
-                    #     if_upsample=True
-                    # )
-                    # self.BRDF_Net = nn.ModuleDict(swin_dict)
-                    import models_def.models_swin as models_swin
-                    from models_def.models_swin import get_LightNet_Swin
-                    self.BRDF_Net = models_swin.SwinBRDFModel(
-                        opt, 
-                        modality = 'al', 
-                        non_negative=False,
-                    )
-                elif model_type=='dpt_hybrid':
+                if model_type=='dpt_hybrid':
                     assert self.opt.cfg.MODEL_BRDF.DPT_baseline.modality == 'enabled', 'only support this mode for now; choose modes in MODEL_BRDF.enable_list'
                     self.BRDF_Net = get_BRDFNet_DPT(
                         opt=opt, 
                         model_path=model_path, 
                         modalities=self.opt.cfg.MODEL_BRDF.enable_list, 
                         backbone="vitb_rn50_384" if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers == -1 else "vitb_rn50_384_N_layers"
-                    )
-                elif model_type=='dpt_hybrid_CAv2':
-                    assert self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.N_layers != -1
-                    assert self.opt.cfg.MODEL_BRDF.DPT_baseline.modality == 'enabled', 'only support this mode for now; choose modes in MODEL_BRDF.enable_list'
-                    self.BRDF_Net = get_BRDFNet_DPT_CAv2(
-                        opt=opt, 
-                        model_path=model_path, 
-                        modalities=self.opt.cfg.MODEL_BRDF.enable_list
-                    )
-                elif model_type=='dpt_hybrid_SSN':
-                    # print(model_path, model_type, self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid_path)
-                    # assert False
-                    skip_keys = []
-                    if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv:
-                        skip_keys += ['scratch.output_conv']
-                    if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_patch_embed_proj:
-                        skip_keys += ['pretrained.model.patch_embed.proj']
-                    if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.keep_N_layers==-1:
-                        self.BRDF_Net = DPTBRDFModel_SSN(
-                            opt=opt, 
-                            modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
-                            path=model_path,
-                            # backbone="vitb_rn50_384",
-                            backbone="vitb_unet_384",
-                            non_negative=if_non_negative,
-                            enable_attention_hooks=False,
-                            skip_keys=skip_keys, 
-                            keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
-                        )
-                    else:
-                        self.BRDF_Net = DPTBRDFModel_SSN_yogoUnet_N_layers(
-                            opt=opt, 
-                            modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
-                            path=model_path,
-                            # backbone="vitb_rn50_384",
-                            backbone="vitb_unet_384_N_layer",
-                            non_negative=if_non_negative,
-                            enable_attention_hooks=False,
-                            skip_keys=skip_keys, 
-                            keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
-                        )
-                elif model_type=='dpt_large_SSN':
-                    self.BRDF_Net = DPTBRDFModel_SSN(
-                        opt=opt, 
-                        modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
-                        path=model_path,
-                        backbone="vitl_unet_384",
-                        non_negative=if_non_negative,
-                        enable_attention_hooks=False,
-                        skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
-                        keep_keys=['pretrained.model.patch_embed.backbone'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_only_restore_backbone else []
                     )
                 elif model_type=='dpt_large':
                     # self.BRDF_Net = DPTBRDFModel(
@@ -255,16 +129,6 @@ class Model_Joint(nn.Module):
                         backbone="vitb16_384"
                     )
 
-                elif model_type=='dpt_base_SSN':
-                    self.BRDF_Net = DPTBRDFModel_SSN(
-                        opt=opt, 
-                        modality=self.opt.cfg.MODEL_BRDF.DPT_baseline.modality, 
-                        path=model_path,
-                        backbone="vitb16_384",
-                        non_negative=if_non_negative,
-                        enable_attention_hooks=False,
-                        skip_keys=['scratch.output_conv'] if self.opt.cfg.MODEL_BRDF.DPT_baseline.if_skip_last_conv else [], 
-                    )
                 else:
                     print(model_type=='dpt_hybrid')
                     assert False, 'Unsupported model_type: %s!'%model_type
@@ -281,29 +145,6 @@ class Model_Joint(nn.Module):
                     self.turn_off_names(['BRDF_Net.pretrained'])
                     freeze_bn_in_module(self.BRDF_Net.pretrained)
 
-                if self.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_freeze_unet:
-                    self.turn_off_names(['BRDF_Net.pretrained.model.patch_embed.unet_backbone']) # patchembed backbone in DPT_hybrid (resnet)
-                    freeze_bn_in_module(self.BRDF_Net.pretrained.model.patch_embed.unet_backbone)
-
-
-                # dpt_normalization = dpt_NormalizeImage(mean=[0.5, 0.5, 0.5], std=[0.5, 0.5, 0.5])
-                # self.dpt_transform = Compose(
-                #     [
-                #         dpt_Resize(
-                #             net_w,
-                #             net_h,
-                #             resize_target=None,
-                #             keep_aspect_ratio=True,
-                #             ensure_multiple_of=32,
-                #             resize_method="minimal",
-                #             image_interpolation_method=cv2.INTER_CUBIC,
-                #         ),
-                #         dpt_normalization,
-                #         dpt_PrepareForNet(),
-                #         ]
-                #         )
-
-
             else:
                 self.if_semseg_matseg_guidance = self.opt.cfg.MODEL_MATSEG.if_guide or self.opt.cfg.MODEL_SEMSEG.if_guide
                 if self.if_semseg_matseg_guidance:
@@ -315,14 +156,6 @@ class Model_Joint(nn.Module):
                     self.decoder_to_use = models_brdf_pac_conv.decoder0_pacconv
                 if self.opt.cfg.MODEL_MATSEG.if_albedo_safenet:
                     self.decoder_to_use = models_brdf_safenet.decoder0_safenet
-                if self.opt.cfg.MODEL_GMM.enable:
-                    if self.opt.cfg.MODEL_GMM.appearance_recon.enable:
-                        self.decoder_to_use = models_brdf.decoder0
-                    if self.opt.cfg.MODEL_GMM.feat_recon.enable:
-                        self.encoder_to_use = models_brdf_GMM_feat_transform.encoder0
-                        self.decoder_to_use = models_brdf_GMM_feat_transform.decoder0
-                    
-
 
                 self.BRDF_Net = nn.ModuleDict({
                         'encoder': self.encoder_to_use(opt, cascadeLevel = self.opt.cascadeLevel, in_channels = in_channels)
@@ -430,94 +263,10 @@ class Model_Joint(nn.Module):
                 self.turn_off_names(['LIGHT_Net'])
                 freeze_bn_in_module(self.LIGHT_Net)
 
-            # if self.cfg.MODEL_BRDF.DPT_baseline.if_freeze_backbone:
-            #         self.turn_off_names(['BRDF_Net.pretrained.model.patch_embed.backbone']) # patchembed backbone in DPT_hybrid (resnet)
-            #         freeze_bn_in_module(self.BRDF_Net.pretrained.model.patch_embed.backbone)
-
-
             if self.cfg.MODEL_LIGHT.load_pretrained_MODEL_LIGHT:
                 self.load_pretrained_MODEL_LIGHT()
-        
-        if self.cfg.MODEL_LAYOUT_EMITTER.enable:
-
-            # the vanilla emitter/layout model: full FC, adapted from Total3D
-            if_vanilla_emitter = 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list and not(self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable)
-            assert not if_vanilla_emitter, 'disabled before introducing layout-DPT'
-            if_layout = 'lo' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list
-
-            if if_layout or if_vanilla_emitter:
-                if self.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.enable:
-                    self.LAYOUT_EMITTER_NET = get_LayoutNet_ViT(
-                        opt=opt, 
-                        modalities=self.cfg.MODEL_LAYOUT_EMITTER.enable_list, 
-                        backbone="vitb_rn50_384_N_layers", 
-                        N_layers_encoder = self.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.dpt_hybrid.N_layers_encoder, 
-                        N_layers_decoder = self.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.dpt_hybrid.N_layers_decoder
-                    )
-                else:
-                    if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder:
-                        self.LAYOUT_EMITTER_NET_encoder = models_brdf.encoder0(opt, cascadeLevel = 0, in_channels = 3, encoder_exclude = ['x5', 'x6'])
-                        if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_freeze:
-                            self.turn_off_names(['LAYOUT_EMITTER_NET_encoder'])
-                            freeze_bn_in_module(self.LAYOUT_EMITTER_NET_encoder)
-
-                    self.LAYOUT_EMITTER_NET_fc = models_layout_emitter.decoder_layout_emitter(opt, if_layout=if_layout, if_emitter_vanilla_fc=if_vanilla_emitter)
-                    if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_freeze:
-                        self.turn_off_names(['LAYOUT_EMITTER_NET_fc'])
-                        freeze_bn_in_module(self.LAYOUT_EMITTER_NET_fc)
-                        if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_freeze_cls_heads:
-                            self.turn_off_names(['LAYOUT_EMITTER_NET_fc'])
-                            freeze_bn_in_module(self.LAYOUT_EMITTER_NET_fc)
-                        
-            if 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-                if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
-                    # --- lightAccuNet
-                    self.EMITTER_LIGHT_ACCU_NET = models_layout_emitter_lightAccu.emitter_lightAccu(opt, envHeight=self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.envHeight, envWidth=self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.envWidth)
-                    if self.cfg.MODEL_LAYOUT_EMITTER.emitter.if_freeze:
-                        self.turn_off_names(['EMITTER_LIGHT_ACCU_NET'])
-                        freeze_bn_in_module(self.EMITTER_LIGHT_ACCU_NET)
-
-                    # --- emitterNet
-                    if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V1':
-                        self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu_(opt)
-                    elif self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V2':
-                        input_channels = 3
-                        if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:                        
-                            if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_learn_feats:
-                                input_channels += self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels # concat of BRDF feats
-                            else:
-                                input_channels += self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels + 3 # +3 for img input
-                        self.EMITTER_NET = models_layout_emitter_lightAccu.decoder_layout_emitter_lightAccu_UNet_V2(opt, input_channels=input_channels)
-                    elif self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version == 'V3':
-                        self.EMITTER_NET = models_layout_emitter_lightAccuScatter.decoder_layout_emitter_lightAccuScatter_UNet_V3(opt)
-
-                    if self.cfg.MODEL_LAYOUT_EMITTER.emitter.if_freeze:
-                        self.turn_off_names(['EMITTER_NET'], exclude_names=['LAYOUT_EMITTER_NET'])
-                        freeze_bn_in_module(self.EMITTER_NET)
-
-                    if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
-                        if not self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_learn_feats:
-                            self.EMITTER_NET_IMG_FEAT_DECODER = self.decoder_to_use(opt, mode=-1, out_channel=self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.img_feats_channels) # same as BRDF decoder; mode==-1 means no activation or postprocessing in the end
-                            if self.cfg.MODEL_LAYOUT_EMITTER.emitter.if_freeze:
-                                self.turn_off_names(['EMITTER_NET_IMG_FEAT_DECODER'])
-                                freeze_bn_in_module(self.EMITTER_NET_IMG_FEAT_DECODER)
-                else:
-                    # self.LAYOUT_EMITTER_NET_fc = models_layout_emitter.decoder_layout_emitter(opt)
-                    pass # already defined  in self.LAYOUT_EMITTER_NET_fc
-
-            if 'ob' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-                # object est model from Total3D
-                self.OBJECT_NET = models_object_detection.Bdb3DNet(opt)
-
-            if 'mesh' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-                self.MESH_NET = models_mesh_reconstruction.DensTMNet(opt)
-                
         if self.cfg.MODEL_MATCLS.enable:
             self.MATCLS_NET = model_matcls.netCS(opt=opt, inChannels=4, base_model=resnet.resnet34, if_est_scale=False, if_est_sup = opt.cfg.MODEL_MATCLS.if_est_sup)
-
-        if self.cfg.MODEL_DETECTRON.enable:
-            from detectron2.modeling import build_model
-            self.DETECTRON = build_model(opt.cfg_detectron)
 
     def freeze_BN(self):
         if self.cfg.MODEL_LIGHT.freeze_BRDF_Net:
@@ -558,37 +307,10 @@ class Model_Joint(nn.Module):
 
         assert not(self.cfg.MODEL_MATSEG.if_guide and self.cfg.MODEL_SEMSEG.if_guide), 'cannot guide from MATSEG and SEMSEG at the same time!'
 
-        if self.cfg.MODEL_GMM.enable:
-            input_dict_GMM = input_dict
-            input_dict_GMM['imgs_ref'] = input_dict['im_fixedscale_SDR'].permute(0, 3, 1, 2)
-            batch_idx = input_dict['batch_idx'][0]
-            if self.cfg.MODEL_GMM.appearance_recon.enable:
-                input_dict_GMM['dmaps_ref'] = input_dict['depthBatch']
-                return_dict_GMM = self.MODEL_GMM.forward(input_dict_GMM, batch_idx, return_dict=True)
-    
-                # sanity check
-                if self.opt.cfg.MODEL_GMM.appearance_recon.sanity_check:
-                    im_resampled_GMM = self.MODEL_GMM.appearance_recon(return_dict_GMM['gamma_update'], input_dict_GMM['imgs_ref'], scale_feat_map=1)
-                    return_dict_GMM['im_resampled_GMM'] = im_resampled_GMM
-                return_dict_GMM = {'output_GMM': return_dict_GMM}
-
-                return_dict.update(return_dict_GMM)
-
         if self.cfg.MODEL_BRDF.enable:
             if self.cfg.MODEL_BRDF.if_freeze:
                 self.BRDF_Net.eval()
             input_dict_extra = {'input_dict_guide': input_dict_guide}
-            if self.cfg.MODEL_GMM.enable and self.cfg.MODEL_GMM.appearance_recon.enable:
-                input_dict_extra.update({'gamma_SSN3D': return_dict['output_GMM']['gamma_update'], 'MODEL_GMM': self.MODEL_GMM})
-
-            if (self.cfg.MODEL_MATSEG.if_albedo_pooling and self.cfg.MODEL_MATSEG.albedo_pooling_from == 'pred') \
-                or self.cfg.MODEL_MATSEG.use_pred_as_input \
-                or self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool or self.cfg.MODEL_MATSEG.if_albedo_pac_conv or self.cfg.MODEL_MATSEG.if_albedo_safenet \
-                or (self.cfg.MODEL_GMM.feat_recon.enable and self.cfg.MODEL_GMM.feat_recon.use_matseg) \
-                or (self.opt.cfg.MODEL_BRDF.DPT_baseline.enable and self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.if_use_SSN):
-
-                return_dict_matseg.update({'instance': input_dict['instance'], 'instance_valid': input_dict['instance_valid'], 'num_mat_masks': input_dict['num_mat_masks_batch']})
-                input_dict_extra.update({'return_dict_matseg': return_dict_matseg})
 
             if self.cfg.MODEL_BRDF.DPT_baseline.enable:
                 return_dict_brdf = self.forward_brdf_DPT_baseline(input_dict, input_dict_extra=input_dict_extra, if_has_gt_BRDF=if_has_gt_BRDF)
@@ -608,99 +330,10 @@ class Model_Joint(nn.Module):
         else:
             return_dict_light = {}
         return_dict.update(return_dict_light)
-
-        if self.cfg.MODEL_LAYOUT_EMITTER.enable:
-            return_dict_layout_emitter = {}
-
-            # --- objects
-            if 'ob' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-                # self.forward_object_net()
-                output_dict = self.OBJECT_NET(input_dict['object_labels']) # {'obj_est_result': {}}
-                return_dict_layout_emitter.update(output_dict)
-
-            # --- meshes
-            if 'mesh' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-                if self.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'SVRLoss': # total3d: models/mgnet/modules/network.py L41
-                    mesh_output = self.MESH_NET(input_dict['mesh_labels'])
-                elif self.cfg.MODEL_LAYOUT_EMITTER.mesh.loss == 'ReconLoss':
-                    # output_dict = self.MESH_NET(input_dict['mesh_labels'])
-                    # if input_dict['mesh-labels']['mask_flag'] == 1:
-                    #     mesh_output = self.mesh_reconstruction(input_dict['mesh-labels']['patch_for_mesh'], input_dict['mesh-labels']['cls_codes_for_mesh'])[0][-1]
-                    #     # convert to SUNRGBD coordinates
-                    #     mesh_output[:, 2, :] *= -1
-                    # else:
-                    #     mesh_output = None
-                    assert False, 'not implemented... yet'
-                output_dict = {'mesh_est_result': mesh_output}
-                return_dict_layout_emitter.update(output_dict)
-
-            # --- layout / emitters
-            if 'lo' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list or 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list:
-                if_vanilla_emitter = 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list and not(self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable)
-                if_layout = 'lo' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list
-
-                # layout w/ wo/ V1 emitters
-                if if_layout or if_vanilla_emitter:
-                    if self.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.enable:
-                        assert self.opt.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline.if_share_encoder_over_modalities
-                        # module_hooks_dict = {}
-                        input_dict_extra = {}
-                        return_dicts = {}
-
-                        # print(input_dict['input_batch_brdf'].shape)
-                        input_dict_extra['shared_encoder_outputs'] = forward_vit_ViT_encoder(
-                            self.opt, self.opt.cfg.MODEL_LAYOUT_EMITTER.layout.ViT_baseline, self.LAYOUT_EMITTER_NET.shared_encoder, 
-                            input_dict['input_batch_brdf'])
-
-                        modalities = ['lo']
-                        for modality in modalities:
-                            return_dicts[modality] = self.LAYOUT_EMITTER_NET[modality].forward(None, input_dict_extra=input_dict_extra)
-                        output_dict = return_dicts['lo']
-                    else:
-                        if self.cfg.MODEL_LAYOUT_EMITTER.layout.if_indept_encoder:
-                            x1, x2, x3, x4, x5, x6, _ = self.LAYOUT_EMITTER_NET_encoder(input_dict['input_batch_brdf'])
-                            encoder_outputs = {'x1': x1, 'x2': x2, 'x3': x3, 'x4': x4, 'x5': x5, 'x6': x6}
-                        else:
-                            encoder_outputs = return_dict_brdf['encoder_outputs']
-                        output_dict = self.LAYOUT_EMITTER_NET_fc(input_feats_dict=encoder_outputs)
-                    
-                    return_dict_layout_emitter.update(output_dict)
-
-                # V2, V3
-                if 'em' in self.cfg.MODEL_LAYOUT_EMITTER.enable_list and self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.enable:
-                    if self.cfg.MODEL_LAYOUT_EMITTER.emitter.if_use_est_layout:
-                        layout_est_result = output_dict['layout_est_result']
-
-                        lo_bdb3D_result, basis_result, coeffs_result, centroid_result = get_layout_bdb_sunrgbd(self.opt.bins_tensor, \
-                            layout_est_result['lo_ori_reg_result'], layout_est_result['lo_ori_cls_result'], \
-                            layout_est_result['lo_centroid_result'], layout_est_result['lo_coeffs_result'], \
-                            if_return_full=True, if_differentiable=self.cfg.MODEL_LAYOUT_EMITTER.emitter.if_differentiable_layout_input)
-                        
-                        cam_R_result = get_rotation_matix_result(self.opt.bins_tensor,
-                            layout_est_result['pitch_cls_result'], layout_est_result['pitch_reg_result'],
-                            layout_est_result['roll_cls_result'], layout_est_result['roll_reg_result'], 
-                            if_differentiable=self.cfg.MODEL_LAYOUT_EMITTER.emitter.if_differentiable_layout_input)
-                        # pre_layout_reindexed = reindex_layout(pre_layout, pre_cam_R)
-
-                        # input_dict.update({'lo_bdb3D_result': lo_bdb3D_result, 'basis_result': basis_result.detach(), 'coeffs_result': coeffs_result, 'centroid_result': centroid_result.detach(), 'cam_R_result': cam_R_result.detach()})
-
-                        input_dict.update({'lo_bdb3D_result': lo_bdb3D_result, 'basis_result': basis_result, 'coeffs_result': coeffs_result, 'centroid_result': centroid_result, 'cam_R_result': cam_R_result})
-
-                    output_dict = self.forward_emitter_lightAccu(input_dict, return_dict_brdf=return_dict_brdf, return_dict_light=return_dict_light)
-                    return_dict_layout_emitter.update(output_dict)
-        else:
-            return_dict_layout_emitter = {}
-        # print(return_dict_layout_emitter.keys()) # dict_keys(['layout_est_result', 'emitter_est_result'])
-        return_dict.update(return_dict_layout_emitter)
         
         if self.cfg.MODEL_MATCLS.enable:
             return_dict_matcls = self.forward_matcls(input_dict)
             return_dict.update(return_dict_matcls)
-
-        if self.cfg.MODEL_DETECTRON.enable:
-            detectron_dict_list = input_dict['detectron_dict_list']
-            detectron_output_list_of_dicts = self.DETECTRON(detectron_dict_list)
-            return_dict.update({'detectron_output_list_of_dicts': detectron_output_list_of_dicts})
 
         return return_dict
 
@@ -840,17 +473,6 @@ class Model_Joint(nn.Module):
         return_dict.update({'albedo_extra_output_dict': {}})
         if 'matseg_affinity' in extra_DPT_return_dict:
             return_dict['albedo_extra_output_dict'].update({'matseg_affinity': extra_DPT_return_dict['matseg_affinity']})
-        if self.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_unet_backbone and self.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_debug_unet:
-            return_dict['albedo_extra_output_dict'].update({'albedo_pred_unet': extra_DPT_return_dict['albedo_pred_unet']})
-
-        if self.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_proj_coef:
-            return_dict['albedo_extra_output_dict'].update({'proj_coef_dict': extra_DPT_return_dict['proj_coef_dict'], 'hooks': extra_DPT_return_dict['hooks']})
-
-        if self.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_affinity:
-            return_dict['albedo_extra_output_dict'].update({'abs_affinity_normalized_by_pixels': extra_DPT_return_dict['abs_affinity_normalized_by_pixels']})
-
-        if self.cfg.MODEL_BRDF.DPT_baseline.if_vis_CA_SSN_gt_matseg:
-            return_dict['albedo_extra_output_dict'].update({'num_mat_masks': extra_DPT_return_dict['num_mat_masks'], 'instance': extra_DPT_return_dict['instance']})
 
         return return_dict
 
@@ -878,25 +500,7 @@ class Model_Joint(nn.Module):
             input_list.append(predict_segmentation.float().unsqueeze(1) / float(self.opt.cfg.MODEL_SEMSEG.semseg_classes))
         
         input_tensor = torch.cat(input_list, 1)
-        if self.opt.cfg.MODEL_GMM.feat_recon.enable and self.opt.cfg.MODEL_GMM.feat_recon.use_matseg:
-            # input_dict_extra.update({'matseg_embedding': input_dict_extra['return_dict_matseg']['embedding']})
-            feats_in_ssn2d = input_dict_extra['return_dict_matseg']['embedding']
-            batch_size, D, H, W = feats_in_ssn2d.shape
-            J = self.opt.cfg.MODEL_GMM.feat_recon.matseg_W * self.opt.cfg.MODEL_GMM.feat_recon.matseg_H
-            abs_affinity, dist_matrix, spixel_features = \
-                ssn.ssn_iter(
-                    feats_in_ssn2d, n_iter=self.opt.cfg.MODEL_GMM.feat_recon.n_iter, 
-                    num_spixels_width=self.opt.cfg.MODEL_GMM.feat_recon.matseg_W, 
-                    num_spixels_height=self.opt.cfg.MODEL_GMM.feat_recon.matseg_H, 
-                    index_add=True) # faster with index_add == True
-            abs_affinity = abs_affinity.view(batch_size, J, H, W)
-            input_dict_extra.update({'matseg_affinity': abs_affinity})
             
-        #     # a = input_dict['semseg_label'].float().unsqueeze(1) / float(self.opt.cfg.MODEL_SEMSEG.semseg_classes)
-        #     # print(torch.max(a), torch.min(a), torch.median(a))
-        #     # print('--', torch.max(input_dict['input_batch_brdf']), torch.min(input_dict['input_batch_brdf']), torch.median(input_dict['input_batch_brdf']))
-        # else:
-        #     input_tensor = input_dict['input_batch_brdf']
         x1, x2, x3, x4, x5, x6, extra_output_dict = self.BRDF_Net['encoder'](input_tensor, input_dict_extra=input_dict_extra)
 
         return_dict = {'encoder_outputs': {'x1': x1, 'x2': x2, 'x3': x3, 'x4': x4, 'x5': x5, 'x6': x6, 'brdf_extra_output_dict': extra_output_dict}}
@@ -906,21 +510,6 @@ class Model_Joint(nn.Module):
             # input_dict_extra = {}
             if input_dict_guide is not None:
                 input_dict_extra.update({'input_dict_guide': input_dict_guide})
-            if self.cfg.MODEL_GMM.enable and self.cfg.MODEL_GMM.appearance_recon.enable:
-                input_dict_extra.update({'gamma_SSN3D': input_dict_extra['gamma_SSN3D'], 'MODEL_GMM': input_dict_extra['MODEL_GMM']})
-            if self.cfg.MODEL_MATSEG.if_albedo_pooling:
-                input_dict_extra.update({'matseg-instance': input_dict['instance'], 'semseg-num_mat_masks_batch': input_dict['num_mat_masks_batch']})
-                input_dict_extra.update({'im_trainval_SDR': input_dict['im_trainval_SDR']})
-                if self.cfg.MODEL_MATSEG.albedo_pooling_from == 'pred':
-                    assert input_dict_extra is not None
-                    assert input_dict_extra['return_dict_matseg'] is not None
-                    input_dict_extra.update({'matseg-logits': input_dict_extra['return_dict_matseg']['logit'], 'matseg-embeddings': input_dict_extra['return_dict_matseg']['embedding'], \
-                        'mat_notlight_mask_cpu': input_dict['mat_notlight_mask_cpu']})
-            if self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool or self.cfg.MODEL_MATSEG.if_albedo_pac_conv or self.cfg.MODEL_MATSEG.if_albedo_safenet:
-                assert input_dict_extra is not None
-                assert input_dict_extra['return_dict_matseg'] is not None
-                input_dict_extra.update({'im_trainval_SDR': input_dict['im_trainval_SDR'], 'mat_notlight_mask_gpu_float': input_dict['mat_notlight_mask_gpu_float']})
-                input_dict_extra.update({'matseg-embeddings': input_dict_extra['return_dict_matseg']['embedding']})
 
             # print(input_dict['segBRDFBatch'].shape, input_dict['segAllBatch'].shape)
             if 'al' in self.cfg.MODEL_BRDF.enable_list:
@@ -1024,219 +613,7 @@ class Model_Joint(nn.Module):
             semsegPred = self.BRDF_Net['semsegDecoder'](input_dict['imBatch'], x1, x2, x3, x4, x5, x6)['x_out']
             return_dict.update({'semseg_pred': semsegPred})
             
-        if self.cfg.MODEL_MATSEG.if_albedo_pooling or self.cfg.MODEL_MATSEG.if_albedo_asso_pool_conv or self.cfg.MODEL_MATSEG.if_albedo_pac_pool or self.cfg.MODEL_MATSEG.if_albedo_safenet:
-            return_dict.update({'im_trainval_SDR_mask_pooled_mean': albedo_output['im_trainval_SDR_mask_pooled_mean']})
-            if 'kernel_list' in albedo_output:
-                return_dict.update({'kernel_list': albedo_output['kernel_list']})
-            if 'embeddings' in albedo_output:
-                return_dict.update({'embeddings': albedo_output['embeddings']})
-            if 'affinity' in albedo_output:
-                return_dict.update({'affinity': albedo_output['affinity'], 'sample_ij': albedo_output['sample_ij']})
-            
-
         return return_dict
-
-    def forward_emitter_lightAccu(self, input_dict, return_dict_brdf={}, return_dict_light={}):
-        if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_light:
-            envmapsBatch = input_dict['envmapsBatch']
-        else:
-            # envmapsBatch = return_dict_light['envmapsPredImage']
-            envmapsBatch = return_dict_light['envmapsPredScaledImage'] # should not assume we have this because this aligns with GT for scale
-
-        if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_GT_brdf:
-            normalBatch = input_dict['normalBatch']
-            depthBatch = input_dict['depthBatch'].squeeze(1)
-        else:
-            normalBatch = return_dict_brdf['normalPred']
-            depthBatch = return_dict_brdf['depthPred'].squeeze(1)
-
-        # cam_K_batch = input_dict['layout_labels']['cam_K']
-        cam_K_batch = input_dict['layout_labels']['cam_K_scaled']
-        if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_use_est_layout:
-            cam_R_batch = input_dict['cam_R_result']
-            layout_batch = input_dict['lo_bdb3D_result']
-            basis_batch, coeffs_batch, centroid_batch = input_dict['basis_result'], input_dict['coeffs_result'], input_dict['centroid_result']
-        else:
-            cam_R_batch = input_dict['layout_labels']['cam_R_gt']
-            if self.opt.cfg.MODEL_LAYOUT_EMITTER.emitter.if_train_with_reindexed_layout:
-                layout_batch = input_dict['layout_labels']['lo_bdb3D_reindexed']
-            else:
-                layout_batch = input_dict['layout_labels']['lo_bdb3D']
-            # basis_batch, coeffs_batch, centroid_batch = {key: gt_dict_lo['lo_bdb3D_full'][key][sample_idx].detach().cpu().numpy() for key in gt_dict_lo['lo_bdb3D_full']}
-            basis_batch = input_dict['layout_labels']['lo_bdb3D_full']['basis'].cuda().float()
-            coeffs_batch = input_dict['layout_labels']['lo_bdb3D_full']['coeffs'].cuda().float()
-            centroid_batch = input_dict['layout_labels']['lo_bdb3D_full']['centroid'].cuda().float()
-
-
-        # print(depthBatch.shape, normalBatch.shape, envmapsBatch.shape, cam_K_batch.shape, cam_R_batch.shape, layout_batch.shape)
-
-        input_dict_light_accu = {'normalPred_lightAccu':normalBatch, 'depthPred_lightAccu': depthBatch, 'envmapsPredImage_lightAccu': envmapsBatch, 'cam_K': cam_K_batch, 'cam_R': cam_R_batch, \
-            'layout': layout_batch, 'basis': basis_batch, 'coeffs': coeffs_batch, 'centroid': centroid_batch, }
-        return_dict_layout_emitter = {'emitter_input': {}, 'emitter_misc': {}}
-
-        # ---- accu lights
-        return_dict_lightAccu = self.EMITTER_LIGHT_ACCU_NET(input_dict_light_accu)
-        envmap_lightAccu_mean = return_dict_lightAccu['envmap_lightAccu_mean'].view(-1, 6, 8, 8, 3).permute(0, 1, 4, 2, 3)
-
-        if self.cfg.MODEL_LIGHT.if_transform_to_LightNet_coords:
-            camx, camy, normalPred = return_dict_lightAccu['camx'], return_dict_lightAccu['camy'], return_dict_lightAccu['normalPred'] # all: torch.Size([B, 3, 120, 160])
-            # print(camx.shape, camy.shape, normalPred.shape)
-            axisPred, lambPred, weightPred = return_dict_light['LightNet_preds']['axisPred'], return_dict_light['LightNet_preds']['lambPred'], return_dict_light['LightNet_preds']['weightPred']
-            segEnvBatch = return_dict_light['LightNet_preds']['segEnvBatch']
-            axisPred_LightNetCoords = axisPred[:, :, 0:1, :, :] * camx.unsqueeze(1) + axisPred[:, :, 1:2, :, :] * camy.unsqueeze(1) + axisPred[:, :, 2:3, :, :] * normalPred.unsqueeze(1) # [B, 12, 3, 120, 160]
-            assert axisPred.shape == axisPred_LightNetCoords.shape
-            envmapsPredImage, _, _, _ = self.non_learnable_layers['output2env'].output2env(axisPred_LightNetCoords, lambPred, weightPred )
-            envmapsPredScaledImage = models_brdf.LSregress(envmapsPredImage.detach() * segEnvBatch.expand_as(input_dict['envmapsBatch'] ),
-                input_dict['envmapsBatch'] * segEnvBatch.expand_as(input_dict['envmapsBatch']), envmapsPredImage )
-            return_dict_layout_emitter['emitter_misc']['envmapsPredScaledImage_LightNetCoords'] = envmapsPredScaledImage
-            return_dict_layout_emitter['emitter_misc']['envmapsPred_LightNetCoords'] = envmapsPredImage
-            return_dict_layout_emitter['emitter_misc']['LightNet_misc'] = {
-                'axisPred': axisPred, 
-                'lambPred': lambPred, 
-                'weightPred': weightPred, 
-                'camx': camx, 
-                'camy': camy, 
-                'normalPred': normalPred, 
-                'segEnvBatch': segEnvBatch, 
-                'axisPred_LightNetCoords': axisPred_LightNetCoords
-            }
-
-            
-        grid_size = self.EMITTER_LIGHT_ACCU_NET.grid_size
-        im_height, im_width = self.opt.cfg.DATA.im_height, self.opt.cfg.DATA.im_width
-
-        V2_input_list = [envmap_lightAccu_mean]
-
-        # ---- sample image features using reproj cell centers
-        if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
-            # ---- get img feats
-            # x1 torch.Size([2, 64, 120, 160])
-            # x2 torch.Size([2, 128, 60, 80])
-            # x3 torch.Size([2, 256, 30, 40])
-            # x4 torch.Size([2, 256, 15, 20])
-            # x5 torch.Size([2, 512, 7, 10])
-            # x6 torch.Size([2, 1024, 7, 10])
-            x1, x2, x3, x4, x5, x6 = return_dict_brdf['encoder_outputs']['x1'], return_dict_brdf['encoder_outputs']['x2'], return_dict_brdf['encoder_outputs']['x3'], \
-                return_dict_brdf['encoder_outputs']['x4'], return_dict_brdf['encoder_outputs']['x5'], return_dict_brdf['encoder_outputs']['x6']
-            if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.sample_BRDF_feats_instead_of_learn_feats:
-                x2_up = F.interpolate(x2, scale_factor=2, mode='bilinear')
-                x3_up = F.interpolate(x3, scale_factor=4, mode='bilinear')
-                x4_up = F.interpolate(x4, scale_factor=8, mode='bilinear')
-                x1234_feat_concat = torch.cat([x1, x2_up, x3_up, x4_up], axis=1)
-                # print(x1234_feat_concat.shape)
-                img_feat_output = F.interpolate(x1234_feat_concat, scale_factor=2, mode='bilinear')
-                # print(x1234_feat_concat.shape)
-                feat_map = img_feat_output.unsqueeze(2) # [B, D, 1, H, W]
-            else:
-                img_feat_output = self.EMITTER_NET_IMG_FEAT_DECODER(input_dict['imBatch'], x1, x2, x3, x4, x5, x6)['x_out'] # [B, 8, 240, 320]
-                feat_map = torch.cat([img_feat_output, input_dict['imBatch']], dim=1).unsqueeze(2) # [B, D+3, 1, H, W]
-            assert img_feat_output.shape[2:]==(im_height, im_width)
-
-
-            # ---- get reprojected cell centers
-            verts_all_Total3D = return_dict_lightAccu['verts_all_Total3D'] # [B, 6, 8, 8, 3, 4]
-            verts_center_all_Total3D = verts_all_Total3D.mean(-1) # [B, 6, 8, 8, 3]
-
-            cam_K_scaled_batch = input_dict['layout_labels']['cam_K_scaled']
-            cam_dict = {'origin': torch.tensor([0., 0., 0.]).cuda(), 'cam_K': cam_K_scaled_batch}
-            cam_axes_batch = cam_R_batch
-
-            simpleSceneTorch = SimpleSceneTorchBatch(cam_dict, im_height=im_height, im_width=im_width)
-            simpleSceneTorch.form_camera(cam_axes_batch)
-            
-            batch_size = verts_center_all_Total3D.shape[0]
-            # -> [B, 384, 2] torch.float32, [B, 384] torch.bool
-            verts_proj, front_flags = simpleSceneTorch.transform_and_proj(verts_center_all_Total3D.reshape(batch_size, -1, 3)) # assuming align_corners=False, meaning the upper-left corner is 0 and lower corner is (W, H)
-            verts_proj[torch.logical_not(front_flags.unsqueeze(-1).repeat(1, 1, 2))] = -100
-
-            feat_height, feat_width = feat_map.shape[-2:]
-            verts_proj_reshape = verts_proj.view(batch_size, 6, grid_size, grid_size, 2) # [B, 6, 8, 8, 2]
-            wh_tensor = torch.tensor([feat_width, feat_height]).reshape(1, 1, 1, 1, 2).cuda().float()
-            verts_proj_reshape_normalized = verts_proj_reshape/wh_tensor * 2. - 1.
-            verts_proj_reshape_normalized_concat = torch.cat([verts_proj_reshape_normalized, torch.zeros(batch_size, 6, grid_size, grid_size, 1).cuda()], -1) # [B, 6, 8, 8, 3]
-
-            # [B, D, 1, H, W], [B, 6, 8, 8, 3] -> [B, D, 6, 8, 8]
-            img_feat_map_sampled = torch.nn.functional.grid_sample(feat_map, verts_proj_reshape_normalized_concat, padding_mode="zeros", align_corners=False)
-            return_dict_layout_emitter['emitter_input']['img_feat_map_sampled'] = img_feat_map_sampled
-
-            V2_input_list.append(img_feat_map_sampled.transpose(1, 2)) # [B, D, 6, 8, 8] -> [B, 6, D, 8, 8]
-
-
-        if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version in ['V1', 'V2']:
-            V2_input_tensor = torch.cat(V2_input_list, 2) #  # [B, 6, D(3), H(grid_size), W(grid_size)]
-            # ic([a.shape for a in V2_input_list])
-            emitter_net_outputs = self.EMITTER_NET(V2_input_tensor)
-            return_dict_layout_emitter.update(emitter_net_outputs)
-
-        elif self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version in ['V3']:
-            # Scatter lights to each emitter
-            scattered_light, emitter_global2localLightNet_trans_matrix = self.EMITTER_LIGHT_ACCU_NET.scatter_light_to_hemisphere(return_dict_lightAccu, if_scatter=True)
-            
-            # ---- Get params to transform cell_axis from LightNet coords -> Total3D coords
-            Total3D_to_LightNet_transform_params = return_dict_lightAccu['Total3D_to_LightNet_transform_params']
-            cam_R_transform_matrix_pre, post_transform_matrix = Total3D_to_LightNet_transform_params['cam_R_transform_matrix_pre'], Total3D_to_LightNet_transform_params['post_transform_matrix']
-            inv_post_transform_matrix_expand = post_transform_matrix.unsqueeze(1).unsqueeze(1).unsqueeze(1).transpose(-1, -2)
-            inv_inv_cam_R_transform_matrix_pre_expand = cam_R_transform_matrix_pre.unsqueeze(1).unsqueeze(1).unsqueeze(1)
-            transform_params_LightNet2Total3D = {'inv_post_transform_matrix_expand': inv_post_transform_matrix_expand, 'inv_inv_cam_R_transform_matrix_pre_expand': inv_inv_cam_R_transform_matrix_pre_expand}
-
-            T_LightNet2Total3D_rightmult = transform_params_LightNet2Total3D['inv_post_transform_matrix_expand'] @ transform_params_LightNet2Total3D['inv_inv_cam_R_transform_matrix_pre_expand']
-
-            # ---- Get the dir meshgrid outside (abs/relative) for all cells
-            emitter_outdirs_meshgrid_global_lightNet = self.EMITTER_LIGHT_ACCU_NET.get_emitter_outdirs_meshgrid(emitter_global2localLightNet_trans_matrix)
-            normal_outside_lightNet = - return_dict_lightAccu['normal_array_lightNet'].unsqueeze(2).unsqueeze(2).unsqueeze(2) # [B, 6, 1, 1, 1, 3]
-            normal_outside_lightNet = normal_outside_lightNet.repeat(1, 1, grid_size**2, 1, 1, 1) # normal inside --negative--> normal outside # [B, ngrids(6*8*8, 1, 1, 3]
-            normal_outside_lightNet = normal_outside_lightNet.view(normal_outside_lightNet.shape[0], 6*grid_size*grid_size, 1, 1, 3) # [B, ngrids, 1, 1, 3]
-
-            emitter_outdirs_meshgrid_global_lightNet_outside = - emitter_outdirs_meshgrid_global_lightNet # flip the hemisphere dirs so that they point to the outside of the wall
-            
-            # ---- LightNet -> Total3D (dirs & normal outside)
-            emitter_outdirs_meshgrid_Total3D_outside_abs = (emitter_outdirs_meshgrid_global_lightNet_outside.unsqueeze(-2) @ T_LightNet2Total3D_rightmult).squeeze(-2) # [B, 384, 8, 16, 3]
-            normal_outside_Total3D = (normal_outside_lightNet.unsqueeze(-2) @ T_LightNet2Total3D_rightmult).squeeze(-2) # [B, 384, 8, 16, 3]            
-            
-            if self.cfg.MODEL_LAYOUT_EMITTER.emitter.relative_dir:
-                emitter_outdirs_meshgrid_Total3D_outside = emitter_outdirs_meshgrid_Total3D_outside_abs - normal_outside_Total3D
-            else:
-                emitter_outdirs_meshgrid_Total3D_outside = emitter_outdirs_meshgrid_Total3D_outside_abs
-
-            # ---- sample env map!
-            if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_envmap_as_input:
-                # -- if not scatter: use_sampled_envmap_as_input
-                input_dict_sampler = {'emitter_outdirs_meshgrid_Total3D_outside': emitter_outdirs_meshgrid_Total3D_outside_abs, \
-                     'transform_R_RAW2Total3D': input_dict['emitter_labels']['transform_R_RAW2Total3D'], \
-                     'im_envmap_ori': input_dict['emitter_labels']['im_envmap_ori']}
-
-                im_envmap_sampled = self.EMITTER_LIGHT_ACCU_NET.sample_envmap(input_dict_sampler) # [B, 3, 384, 8, 16]
-                im_envmap_sampled = im_envmap_sampled.permute(0, 2, 3, 4, 1) # [B, 384, 8, 16, 3]
-                window_mask = (input_dict['emitter_labels']['cell_cls'] == 1).float() # [B, 6, 8, 8]
-                window_mask = window_mask.view(window_mask.shape[0], -1) # [B, 384]
-                window_mask = window_mask.unsqueeze(-1).unsqueeze(-1).unsqueeze(-1)
-                # print(window_mask.shape, im_envmap_sampled.shape, scattered_light.shape)
-                scattered_light = im_envmap_sampled * window_mask + scattered_light * (1-window_mask)
-
-            # ---- run the emitter net!
-            input_dict_lightAccuScatter_UNet_V3 = {'scattered_light': scattered_light, 'emitter_outdirs_meshgrid_Total3D_outside': emitter_outdirs_meshgrid_Total3D_outside}
-            if self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.use_sampled_img_feats_as_input:
-                input_dict_lightAccuScatter_UNet_V3.update({'img_feat_map_sampled': img_feat_map_sampled})
-
-            emitter_net_outputs = self.EMITTER_NET(input_dict_lightAccuScatter_UNet_V3)
-
-            # ---- gather outputs
-            return_dict_layout_emitter.update(emitter_net_outputs)
-            return_dict_layout_emitter['emitter_est_result'].update({'scattered_light': scattered_light})
-
-            return_dict_layout_emitter['emitter_est_result'].update({'envmap_lightAccu': return_dict_lightAccu['envmap_lightAccu'], \
-                'emitter_outdirs_meshgrid_Total3D_outside': emitter_outdirs_meshgrid_Total3D_outside, 'normal_outside_Total3D': normal_outside_Total3D, \
-                'points_backproj': return_dict_lightAccu['points_backproj'], 'depthPred': return_dict_lightAccu['depthPred'], 'T_LightNet2Total3D_rightmult': T_LightNet2Total3D_rightmult})
-        else:
-            raise ValueError('Invalid self.cfg.MODEL_LAYOUT_EMITTER.emitter.light_accu_net.version')
-
-
-        return_dict_layout_emitter['emitter_est_result'].update({'envmap_lightAccu_mean': envmap_lightAccu_mean, 'points_sampled_mask_expanded': return_dict_lightAccu['points_sampled_mask_expanded'], \
-            'emitter_outdirs_meshgrid_Total3D_outside_abs': emitter_outdirs_meshgrid_Total3D_outside_abs, 'normal_outside_Total3D': normal_outside_Total3D})
-
-        return_dict_layout_emitter['emitter_input'].update({'normalPred_lightAccu':normalBatch, 'depthPred_lightAccu': depthBatch, 'envmapsPredImage_lightAccu': envmapsBatch})
-
-        return return_dict_layout_emitter
 
     def forward_LIGHT_Net(self, input_dict, imBatch, albedoInput, depthInput, normalInput, roughInput, ):
         # print(imBatch.shape, albedoInput.shape, depthInput.shape, normalInput.shape, roughInput.shape)

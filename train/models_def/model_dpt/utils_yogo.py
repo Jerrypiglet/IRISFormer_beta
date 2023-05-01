@@ -137,7 +137,6 @@ class Projector(nn.Module):
         # zero-init
         #nn.init.constant_(self.proj_bn.weight, 1)
 
-        # if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.ca_proj_method != 'none':
         self.ff_conv = nn.Sequential(
             conv1x1_1d(output_c, 2 * output_c),
             norm_layer_1d(2 * output_c),
@@ -180,14 +179,6 @@ class Projector(nn.Module):
         proj_coef = self.proj_kq_matmul(proj_q, proj_k) / np.sqrt(C / h)
 
         if_exp = True
-        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg_if_inject_proj_coef:
-            # assert False, 'disabled for now'
-            assert proj_coef_in is not None
-            # print(proj_coef_in[0].sum(0)) # should be all 1s or 0s
-            proj_coef_in = proj_coef_in.flatten(2).transpose(-1, -2).unsqueeze(1).repeat(1, self.head, 1, 1)
-            # print(proj_coef_in.shape, proj_coef.shape) # torch.Size([2, 80, 256, 320]) torch.Size([2, 2, 5120, 80])
-            proj_coef = proj_coef_in
-            if_exp = False
 
         # print('---->', proj_coef[0, 0, :5, 0])
         # print('====>', proj_coef[0, 0, :5, -1])
@@ -222,21 +213,6 @@ class Projector(nn.Module):
         # print(proj_coef.shape) # torch.Size([-1, 2 (head num), 5120, 320]), torch.Size([-1, 2 (head num), 1280, 320]), torch.Size([-1, 2 (head num), 320, 320]), torch.Size([-1, 2 (head num), 80, 320]), 
         # print('---proj_coef', proj_coef.shape)
         
-        if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_SSN.if_transform_feat_in_qkv_if_use_Q_as_proj_coef:
-        # if self.opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.CA.SSN.if_gt_matseg_if_inject_proj_coef:
-            assert False, 'disabled for now'
-            assert proj_coef_in is not None
-            # print('---proj_coef_in', proj_coef_in.shape)
-
-            proj_coef_in = proj_coef_in.flatten(2).transpose(-1, -2).unsqueeze(1).repeat(1, self.head, 1, 1)
-            # proj_coef_in = F.softmax(proj_coef_in / np.sqrt(C / h), dim=3)
-            proj_coef_in = F.softmax(proj_coef_in, dim=3)
-            
-            # print('---proj_coef_in', proj_coef_in.shape)
-            assert proj_coef_in.shape==proj_coef.shape
-            # proj_coef = proj_coef * 0. + proj_coef_in
-            proj_coef = proj_coef * proj_coef_in
-
         # N, h, C/h, L * N, h, L, HW -> N, h, C/h, HW
         # print(tokens_mask.shape, proj_v.shape, proj_coef.shape) # torch.Size([1, 80]) torch.Size([1, 2, 256, 80]) torch.Size([1, 2, 5120, 80])
         # print(tokens_mask)
