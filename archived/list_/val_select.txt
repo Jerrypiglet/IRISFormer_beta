@@ -1,3 +1,0 @@
-mainDiffLight_xml/scene0385_01/im_27.hdr main_xml/scene0385_01/imsemLabel_27.npy
-main_xml/scene0509_00/im_11.hdr main_xml/scene0509_00/imsemLabel_11.npy
-main_xml1/scene0591_02/im_18.hdr main_xml1/scene0591_02/imsemLabel_18.npy

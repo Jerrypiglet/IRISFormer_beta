@@ -1,6 +1,0 @@
-pair_wise_dist_3dgmm.cu
-setup.py
-pdist3dgmm.egg-info/PKG-INFO
-pdist3dgmm.egg-info/SOURCES.txt
-pdist3dgmm.egg-info/dependency_links.txt
-pdist3dgmm.egg-info/top_level.txt
