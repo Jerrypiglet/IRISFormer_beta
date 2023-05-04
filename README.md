@@ -36,9 +36,7 @@ DATASET.dataset_path_local # to the full OpenRooms dataset path
 
 ### Quick start with mini dataset
 
-For quick start on your local machine without downloading full dataset, you can try a mini subset of the dataset (downloadable at). Change `DATASET.dataset_path_mini` to the path, where data should be organized as:
-
-[DATASET.dataset_path_mini_local](https://drive.google.com/drive/folders/1-8RChRrXRO4F1HJv-UgaCucimihc9amy?usp=sharing) and [DATASET.png_path_local](https://drive.google.com/drive/folders/1otm31GBHdmTTsyjbzGRqOLU4eyBwJ63s?usp=sharing)
+For quick start on your local machine without downloading full dataset, you can try a mini subset of the dataset (downloadable at [DATASET.dataset_path_mini_local](https://drive.google.com/drive/folders/1-8RChRrXRO4F1HJv-UgaCucimihc9amy?usp=sharing) and [DATASET.png_path_local](https://drive.google.com/drive/folders/1otm31GBHdmTTsyjbzGRqOLU4eyBwJ63s?usp=sharing)). Change `DATASET.dataset_path_mini_local` and `DATASET.png_path_local` to the paths, where data should be organized as:
 
 ```
 - {DATASET.dataset_path_mini_local} # unzip the first zip to e.g. /data/ruizhu/openrooms_mini; including labels of all modalities but not HDR RGB images
