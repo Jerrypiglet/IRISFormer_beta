@@ -38,8 +38,6 @@ def set_up_envs(opt):
     if opt.cfg.DEBUG.if_fast_BRDF_labels:
         opt.cfg.DATASET.dataset_path_local = opt.cfg.DATASET.dataset_path_local_fast_BRDF
 
-
-
     # if opt.cfg.DEBUG.if_fast_light_labels:
     if opt.cfg.DEBUG.if_test_real:
         opt.cfg.DEBUG.dump_BRDF_offline.path_root_local = '/home/ruizhu/Documents/Projects/semanticInverse/third_parties_outside/VirtualObjectInsertion/BRDF_offline'

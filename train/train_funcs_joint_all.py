@@ -20,6 +20,7 @@ import torchvision.utils as vutils
 import torch.distributed as dist
 import cv2
 from PIL import Image
+from utils.comm import synchronize
 
 from train_funcs_matseg import get_labels_dict_matseg, postprocess_matseg, val_epoch_matseg
 from train_funcs_semseg import get_labels_dict_semseg, postprocess_semseg
@@ -300,6 +301,7 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
 
             # print(loss_dict.keys())
             loss_dict_reduced = reduce_loss_dict(loss_dict, mark=tid, logger=logger) # **average** over multi GPUs
+            synchronize()
             time_meters['ts'] = time.time()
             # logger.info(green('Training timings: ' + time_meters_to_string(time_meters)))
 
@@ -459,7 +461,8 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
                     target = input_dict['mat_label_sup_batch']
                     matcls_meters['pred_labels_sup_list'].update(output.cpu().flatten())
                     matcls_meters['gt_labels_sup_list'].update(target.cpu().flatten())
-
+                    
+    synchronize()
 
     # ======= Metering
         
@@ -532,7 +535,7 @@ def val_epoch_joint(brdf_loader_val, model, params_mis):
                 writer.add_scalar('VAL/BRDF-normal_median_val', brdf_meters['normal_median_error_meter'].get_median(), tid)
                 logger.info('Val result - normal: mean: %.4f, median: %.4f'%(brdf_meters['normal_mean_error_meter'].avg, brdf_meters['normal_median_error_meter'].get_median()))
 
-    # synchronize()
+    synchronize()
     logger.info(red('Evaluation timings: ' + time_meters_to_string(time_meters)))
 
 

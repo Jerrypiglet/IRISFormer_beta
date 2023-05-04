@@ -120,10 +120,6 @@ _C.DATASET.png_path_local = '/data/ruizhu/OR-pngs'
 # _C.DATASET.png_path_local = ''
 _C.DATASET.png_path_cluster = ['/siggraphasia20dataset/pngs', '/local/ruzhu/data/OR-pngs', '/datasets_mount/OR-pngs']
 
-_C.DATASET.swin_path = ''
-_C.DATASET.swin_path_local = '/home/ruizhu/Documents/Projects/semanticInverse/third_parties_outside/Swin-Transformer-Semantic-Segmentation'
-_C.DATASET.swin_path_cluster = ['/ruidata/semanticInverse/third_parties_outside/Swin-Transformer-Semantic-Segmentation', '', '']
-
 _C.DATASET.if_to_memory = False
 _C.DATASET.memory_path = '/dev/shm'
 

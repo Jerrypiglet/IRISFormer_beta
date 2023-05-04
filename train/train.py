@@ -536,7 +536,7 @@ else:
                 check_save(opt, tid, tid, epoch, checkpointer, epochs_saved, opt.checkpoints_path_task, logger)
                 reset_tictoc = True
 
-            # synchronize()
+            synchronize()
 
             # torch.cuda.empty_cache()
 
@@ -568,7 +568,7 @@ else:
             else:
                 optimizer.zero_grad()
             output_dict, loss_dict = forward_joint(True, labels_dict, model, opt, time_meters, tid=tid)
-            # synchronize()
+            synchronize()
             
             # print('=======loss_dict', loss_dict)
             loss_dict_reduced = reduce_loss_dict(loss_dict, mark=tid, logger=logger) # **average** over multi GPUs
@@ -656,7 +656,7 @@ else:
                 optimizer.step()
             time_meters['backward'].update(time.time() - time_meters['ts'])
             time_meters['ts'] = time.time()
-            # synchronize()
+            synchronize()
 
             if opt.is_master:
                 loss_keys_print = [x for x in loss_keys_print if 'ALL' in x] + [x for x in loss_keys_print if 'ALL' not in x]
@@ -691,7 +691,7 @@ else:
                             current_lr = scheduler._get_lr(epoch)[0]
                     writer.add_scalar('training/lr', current_lr, tid)
 
-            # synchronize()
+            synchronize()
             if tid % opt.debug_every_iter == 0:
                 opt.if_vis_debug_pac = False
 
