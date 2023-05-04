@@ -1,6 +1,6 @@
 # IRISFormer-non-official
 
-This is a repo in the work; frequent changes can be expected.
+This is a repo in the works; frequent changes can be expected.
 
 ## Environment
 Tested with conda environment with Python 3.10 and Torch 2.0.0.
@@ -8,6 +8,8 @@ Tested with conda environment with Python 3.10 and Torch 2.0.0.
 ``` bash
 pip install -r requirements.txt
 ```
+
+Training logs will be dumped to `logs`, from which you can launch Tensorboard to monitor the stats ([demo 1](https://i.imgur.com/LL1LCza.jpg), [demo 2](https://i.imgur.com/R1STlmA.jpg))
 
 ## Train BRDF and geometry estimation
 
