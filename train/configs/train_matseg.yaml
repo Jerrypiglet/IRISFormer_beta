@@ -1,0 +1,44 @@
+DATA: 
+  if_pad_to_32x: True
+  # data_read_list: al_ro_no_de
+  data_read_list: al
+  load_brdf_gt: True
+  im_height: 240
+  im_width: 320
+  if_load_png_not_hdr: False
+
+DATASET:
+  num_workers: 16
+
+SOLVER:
+  lr: 0.00001
+  ims_per_batch: 6
+
+TEST:
+  ims_per_batch: 2
+  vis_max_samples: 20
+
+MODEL_BRDF:
+  use_scale_aware_depth: False
+  use_scale_aware_albedo: False
+  DPT_baseline:
+    if_batch_norm: True
+    if_imagenet_backbone: True
+    readout: ignore
+    patch_size: 16
+    if_batch_norm_depth_override: True
+
+MODEL_ALL:
+  enable: True
+  # enable_list: al_ro_no_de
+  enable_list: al
+  ViT_baseline:
+    enable: True
+    if_indept_MLP_heads: True
+    if_indept_MLP_heads_if_layer_norm: True
+    # N_layers_encoder_stage0: 4
+    # N_layers_decoder_stage0: 4
+    N_layers_encoder_stage0: 6
+    N_layers_decoder_stage0: 6
+    if_share_decoder_over_BRDF_modalities: True
+    if_share_pretrained_over_BRDF_modalities: True
