@@ -71,7 +71,33 @@ CUDA_VISIBLE_DEVICES=7 python train/train.py --task_name DATE-train_tmp_mini --i
 
 ## Pre-trained checkpoints and evaluation
 
-[TODO]
+Download checkpoints from [this folder](https://drive.google.com/drive/folders/18xWTUB_63GyzJ_SZrzV9cW2Dvy40rQPf?usp=share_link). Provided checkpoints include:
+
+1. albedo-only model (6 layers) trained on full OR dataset: `20230517-224958--DATE-train_mm1_albedo`
+
+    1.1 albedo-only model (6 layers) trained on full OR dataset, then finetuned on IIW: `20230522-001658--DATE-train_mm1_albedo_finetune_IIW_RESUME20230517-224958`
+
+2. 4 modalities (albedo, roughness, depth, normals) (4 layers) trained on full OR dataset:
+
+Place checkpoints at `Checkpoint/`. Launch one of the following commands; check the log outputs and Tensorboard for loss curves and visualizations at `logs/TASK_NAME` ([demo](https://i.imgur.com/K653psr.jpg)).
+
+### Evaluate model 1. on IIW
+
+[Demo results (without bilateral solver (BS))](https://i.imgur.com/Bddjq5q.jpg). WHDR=0.2645.
+
+``` bash
+iris_eval$ CUDA_VISIBLE_DEVICES=0 python train/train_iiw.py --task_name DATE-train_mm1_albedo_eval_IIW_RESUME20230517-224958 --if_train False --if_val True --if_vis True --eval_every_iter 4000 --config-file train/configs/train_albedo.yaml --resume 20230517-224958--DATE-train_mm1_albedo
+```
+
+### Evaluate model 1.1. on IIW
+
+[Demo results (with bilateral solver (BS))](https://i.imgur.com/KFbF9cx.jpg). WHDR=0.1258.
+
+``` bash
+iris_eval$ CUDA_VISIBLE_DEVICES=0 python train/train_iiw.py --task_name DATE-train_mm1_albedo_finetuned_eval_BS_IIW_RESUME20230522-001658 --if_train False --if_val True --if_vis True --eval_every_iter 4000 --config-file train/configs/train_albedo.yaml --resume 20230522-001658--DATE-train_mm1_albedo_finetune_IIW_RESUME20230517-224958 MODEL_BRDF.if_bilateral True MODEL_BRDF.if_bilateral_albedo_only True
+```
+
+By default we use bilaterial solver (BS) to improve piece-wise smoothness and WHDR score, by appending `MODEL_BRDF.if_bilateral True MODEL_BRDF.if_bilateral_albedo_only True` to the above command. BS will lead to significantly slower inference.
 
 ## Training on Kubernates cluster of UCSD
 

@@ -201,7 +201,7 @@ if opt.distributed: # https://github.com/dougsouza/pytorch-sync-batchnorm-exampl
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 model.to(opt.device)
 
-model.freeze_BN()
+# model.freeze_BN()
 
 if opt.cfg.MODEL_BRDF.load_pretrained_pth:
     model.load_pretrained_MODEL_BRDF(
@@ -287,7 +287,6 @@ else:
     bin_mean_shift = Bin_Mean_Shift_N(embedding_dims=opt.cfg.MODEL_MATSEG.embed_dims, \
         device=opt.bin_mean_shift_device, invalid_index=opt.invalid_index, if_freeze=opt.cfg.MODEL_MATSEG.if_freeze)
 opt.bin_mean_shift = bin_mean_shift
-
 
 # >>>>>>>>>>>>> DATASET
 from utils.utils_semseg import get_transform_semseg, get_transform_matseg, get_transform_resize

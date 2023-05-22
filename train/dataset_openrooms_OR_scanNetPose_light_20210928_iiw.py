@@ -239,7 +239,7 @@ class iiw(data.Dataset):
                 darkerWeight.append(weight )
 
         eqWeight = np.asarray(eqWeight, dtype=np.float32 )
-        eqPoint = np.asarray(eqPoint, dtype=np.long )
+        eqPoint = np.asarray(eqPoint, dtype=np.int64 )
         eqPoint = eqPoint.reshape([-1, 4] )
         darkerWeight = np.asarray(darkerWeight, dtype=np.float32 )
         darkerPoint = np.asarray(darkerPoint, dtype=np.float32 )
@@ -251,7 +251,7 @@ class iiw(data.Dataset):
         eqNum = eqPoint.shape[0]
         if eqNum < self.maxNum:
             gap = self.maxNum - eqNum
-            eqPoint = np.concatenate([eqPoint, np.zeros( (gap, 4), dtype=np.long) ], axis=0 )
+            eqPoint = np.concatenate([eqPoint, np.zeros( (gap, 4), dtype=np.int64) ], axis=0 )
             eqWeight = np.concatenate([eqWeight, np.zeros(gap, dtype=np.float32)], axis=0 )
         elif eqNum > self.maxNum:
             index = np.random.permutation(np.arange(eqNum ) )
@@ -265,7 +265,7 @@ class iiw(data.Dataset):
         darkerNum = darkerPoint.shape[0]
         if darkerNum < self.maxNum:
             gap = self.maxNum - darkerNum
-            darkerPoint = np.concatenate([darkerPoint, np.zeros( (gap, 4), dtype=np.long) ], axis=0 )
+            darkerPoint = np.concatenate([darkerPoint, np.zeros( (gap, 4), dtype=np.int64) ], axis=0 )
             darkerWeight = np.concatenate([darkerWeight, np.zeros(gap, dtype=np.float32)], axis=0 )
         elif darkerNum > self.maxNum:
             index = np.random.permutation(np.arange(darkerNum ) )

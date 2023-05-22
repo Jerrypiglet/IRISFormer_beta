@@ -51,26 +51,26 @@ def postprocess_iiw(input_dict, output_dict, loss_dict, opt, time_meters, eval_m
         eq, darker = input_dict['eq'], input_dict['darker']        
 
         eqLoss, darkerLoss = 0, 0
-        for m in range(0, albedoPred.size(0) ):
-            eqPoint = eq[m]['point'].astype(np.long )
-            eqWeight = eq[m]['weight'].astype(np.float32 )
+        for m in range(0, albedoPred.size(0)):
+            eqPoint = eq[m]['point'].astype(np.int64)
+            eqWeight = eq[m]['weight'].astype(np.float32)
             eqNum = eq[m]['num']
             eqPoint = eqPoint[0:eqNum, :]
             eqWeight = eqWeight[0:eqNum ]
 
-            darkerPoint = darker[m]['point'].astype(np.long )
-            darkerWeight = darker[m]['weight'].astype(np.float32 )
+            darkerPoint = darker[m]['point'].astype(np.int64)
+            darkerWeight = darker[m]['weight'].astype(np.float32)
             darkerNum = darker[m]['num']
             darkerPoint = darkerPoint[0:darkerNum, :]
             darkerWeight = darkerWeight[0:darkerNum ]
             eqL, darkerL = \
                 BatchRankingLoss(albedoPred[m],
                     eqPoint, eqWeight,
-                    darkerPoint, darkerWeight )
+                    darkerPoint, darkerWeight)
             eqLoss += eqL
             darkerLoss += darkerL
 
-        eqLoss = eqLoss / max(albedoPred.size(0 ), 1e-5)
+        eqLoss = eqLoss / max(albedoPred.size(0), 1e-5)
         darkerLoss = darkerLoss / max(albedoPred.size(0), 1e-5)
 
         loss_dict['loss_iiw-eq'] = eqLoss
@@ -90,10 +90,10 @@ def BatchRankingLoss(albedoPred, eqPoint, eqWeight, darkerPoint, darkerWeight):
     reflectLog = torch.log(reflectance + 0.001)
     reflectLog = reflectLog.view(-1)
 
-    eqPoint = Variable(torch.from_numpy(eqPoint ).long() ).cuda( )
-    eqWeight = Variable(torch.from_numpy(eqWeight ).float()  ).cuda( )
-    darkerPoint = Variable(torch.from_numpy(darkerPoint ).long() ).cuda( )
-    darkerWeight = Variable(torch.from_numpy(darkerWeight ).float() ).cuda( )
+    eqPoint = Variable(torch.from_numpy(eqPoint).long()).cuda()
+    eqWeight = Variable(torch.from_numpy(eqWeight).float() ).cuda()
+    darkerPoint = Variable(torch.from_numpy(darkerPoint).long()).cuda()
+    darkerWeight = Variable(torch.from_numpy(darkerWeight).float()).cuda()
 
     # compute the eq loss
     r1, c1, r2, c2 = torch.split(eqPoint, 1, dim=1)
@@ -105,7 +105,7 @@ def BatchRankingLoss(albedoPred, eqPoint, eqWeight, darkerPoint, darkerWeight):
     rf2 = torch.index_select(reflectLog, 0, p2)
     eqWeight = eqWeight.view(-1)
 
-    eqLoss = torch.mean(eqWeight * torch.pow(rf1 - rf2, 2) )
+    eqLoss = torch.mean(eqWeight * torch.pow(rf1 - rf2, 2))
 
     # compute the darker loss
     r1, c1, r2, c2 = torch.split(darkerPoint, 1, dim=1)
@@ -117,7 +117,7 @@ def BatchRankingLoss(albedoPred, eqPoint, eqWeight, darkerPoint, darkerWeight):
     rf2 = torch.index_select(reflectLog, 0, p2)
     darkerWeight = darkerWeight.view(-1)
 
-    darkerLoss = torch.mean(darkerWeight * torch.pow(F.relu(rf2 - rf1 + tau), 2) )
+    darkerLoss = torch.mean(darkerWeight * torch.pow(F.relu(rf2 - rf1 + tau), 2))
 
     return eqLoss, darkerLoss
 

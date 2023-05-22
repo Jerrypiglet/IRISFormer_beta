@@ -4,41 +4,16 @@ from torch.autograd import Variable
 # import models
 import torch.nn.functional as F
 from tqdm import tqdm
-import statistics
 import time
 import torchvision.utils as vutils
-from utils.loss import hinge_embedding_loss, surface_normal_loss, parameter_loss, \
-    class_balanced_cross_entropy_loss
-from utils.match_segmentation import MatchSegmentation
-from utils.utils_vis import vis_index_map, reindex_output_map, vis_disp_colormap, colorize
+from utils.utils_vis import vis_disp_colormap
 from utils.utils_training import reduce_loss_dict, time_meters_to_string
 from utils.utils_misc import *
-from utils.utils_semseg import intersectionAndUnionGPU
 import torchvision.utils as vutils
-import torch.distributed as dist
 import cv2
 from PIL import Image
 
-from train_funcs_matseg import get_labels_dict_matseg, postprocess_matseg, val_epoch_matseg
-from train_funcs_semseg import get_labels_dict_semseg, postprocess_semseg
-from train_funcs_brdf import get_labels_dict_brdf, postprocess_brdf
-from train_funcs_light import get_labels_dict_light, postprocess_light
-from train_funcs_layout_object_emitter import get_labels_dict_layout_emitter, postprocess_layout_object_emitter
-from train_funcs_matcls import get_labels_dict_matcls, postprocess_matcls
 from train_funcs_iiw import get_labels_dict_iiw, postprocess_iiw
-
-from utils.utils_metrics import compute_errors_depth_nyu
-from train_funcs_matcls import getG1IdDict, getRescaledMatFromID
-# from pytorch_lightning.metrics import Precision, Recall, F1, Accuracy
-from pytorch_lightning.metrics import Accuracy
-
-from icecream import ic
-import pickle
-import matplotlib.pyplot as plt
-
-from contextlib import ExitStack, contextmanager
-from skimage.segmentation import mark_boundaries
-from skimage.transform import resize as scikit_resize
 
 from train_funcs_iiw import compute_whdr
 

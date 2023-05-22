@@ -1,6 +1,6 @@
 import torch
-# torch.autograd.set_detect_anomaly(True)
-# torch.backends.cudnn.benchmark = True
+torch.autograd.set_detect_anomaly(True)
+torch.backends.cudnn.benchmark = True
 import numpy as np
 from torch.autograd import Variable
 import torch.optim as optim
@@ -43,8 +43,6 @@ from torch.optim.lr_scheduler import MultiStepLR, ReduceLROnPlateau, StepLR
 
 import utils.utils_config as utils_config
 from utils.utils_envs import set_up_envs
-from utils.utils_total3D.utils_others import OR4XCLASSES_dict
-from utils.utils_vis import vis_index_map
 from icecream import ic
 
 from utils.utils_training import cycle
@@ -80,7 +78,7 @@ parser.add_argument('--cascadeLevel', type=int, default=0, help='the casacade le
 
 # DEBUG
 parser.add_argument('--debug', action='store_true', help='Debug eval')
-
+parser.add_argument('--batch_size_override_vis', type=int, default=-1, help='')
 parser.add_argument('--ifMatMapInput', action='store_true', help='using mask as additional input')
 # parser.add_argument('--ifDataloaderOnly', action='store_true', help='benchmark dataloading overhead')
 parser.add_argument('--if_cluster', action='store_true', help='if using cluster')
@@ -167,7 +165,6 @@ opt = parser.parse_args()
 # os.environ['MASETER_PORT'] = str(nextPort(int(opt.master_port)))
 os.environ['MASETER_PORT'] = str(find_free_port())
 cfg.merge_from_file(opt.config_file)
-# cfg.merge_from_list(opt.params)
 cfg = utils_config.merge_cfg_from_list(cfg, opt.params)
 opt.cfg = cfg
 opt.pwdpath = pwdpath
@@ -175,11 +172,12 @@ opt.pwdpath = pwdpath
 # >>>>>>>>>>>>> A bunch of modularised set-ups
 # opt.gpuId = opt.deviceIds[0]
 semseg_configs = utils_config.load_cfg_from_cfg_file(os.path.join(pwdpath, opt.cfg.MODEL_SEMSEG.config_file))
-semseg_configs = utils_config.merge_cfg_from_list(semseg_configs, opt.params)
+# semseg_configs = utils_config.merge_cfg_from_list(semseg_configs, opt.params)
 opt.semseg_configs = semseg_configs
 
 from utils.utils_envs import set_up_dist
 handle = set_up_dist(opt)
+synchronize()
 
 from utils.utils_envs import set_up_folders
 set_up_folders(opt)
@@ -190,7 +188,6 @@ logger, writer = set_up_logger(opt)
 opt.logger = logger
 set_up_envs(opt)
 opt.cfg.freeze()
-
 
 if opt.is_master:
     ic(opt.cfg)
@@ -210,7 +207,11 @@ if opt.distributed: # https://github.com/dougsouza/pytorch-sync-batchnorm-exampl
     model = torch.nn.SyncBatchNorm.convert_sync_batchnorm(model)
 model.to(opt.device)
 if opt.cfg.MODEL_BRDF.load_pretrained_pth:
-    model.load_pretrained_MODEL_BRDF(opt.cfg.MODEL_BRDF.weights)
+    model.load_pretrained_MODEL_BRDF(
+        if_load_encoder=opt.cfg.MODEL_BRDF.pretrained_if_load_encoder, 
+        if_load_decoder=opt.cfg.MODEL_BRDF.pretrained_if_load_decoder, 
+        if_load_Bs=opt.cfg.MODEL_BRDF.pretrained_if_load_Bs
+    )
 if opt.cfg.MODEL_SEMSEG.enable and opt.cfg.MODEL_SEMSEG.if_freeze:
     # model.turn_off_names(['UNet'])
     model.turn_off_names(['SEMSEG_Net'])
@@ -276,7 +277,7 @@ if opt.cfg.SOLVER.if_warm_up:
 
 ENABLE_MATSEG = opt.cfg.MODEL_MATSEG.enable
 opt.bin_mean_shift_device = opt.device if opt.cfg.MODEL_MATSEG.embed_dims <= 4 else 'cpu'
-opt.batch_size_override_vis = -1
+# opt.batch_size_override_vis = -1
 if ENABLE_MATSEG:
     if opt.cfg.MODEL_MATSEG.embed_dims > 2:
         opt.batch_size_override_vis = 1      
@@ -568,12 +569,13 @@ if not opt.if_train:
     val_params = {'writer': writer, 'logger': logger, 'opt': opt, 'tid': tid, 'bin_mean_shift': bin_mean_shift}
     if opt.if_vis:
         val_params.update({'batch_size_val_vis': batch_size_val_vis})
-        with torch.no_grad():
-            vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
-        synchronize()
-
+        
         with torch.no_grad():
             vis_val_epoch_joint_iiw(iiw_loader_val_vis, model, val_params)
+        synchronize()
+        
+        with torch.no_grad():
+            vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
         synchronize()
 
     if opt.if_val:
@@ -583,8 +585,8 @@ if not opt.if_train:
         with torch.no_grad():
             val_epoch_joint_iiw(iiw_loader_val, model, val_params)
 
-        with torch.no_grad():
-            val_epoch_joint(brdf_loader_val, model, val_params)
+        # with torch.no_grad():
+        #     val_epoch_joint(brdf_loader_val, model, val_params)
 else:
     for epoch_0 in list(range(opt.cfg.SOLVER.max_epoch)):
         epoch = epoch_0 + epoch_start
@@ -615,9 +617,8 @@ else:
 
         count_samples_this_rank = 0
 
-        # for i, data_batch in tqdm(enumerate(iiw_loader_train)):
-        for i, (data_batch_iiw, data_batch) in enumerate(zip(cycle(iiw_loader_train), brdf_loader_train)):
-        # for i, data_batch in tqdm(enumerate(iiw_loader_train)):
+        for i, data_batch_iiw in tqdm(enumerate(iiw_loader_train)):
+        # for i, (data_batch_iiw, data_batch) in enumerate(zip(cycle(iiw_loader_train), brdf_loader_train)):
 
             if cfg.SOLVER.if_test_dataloader:
                 if i % 100 == 0:
@@ -638,14 +639,14 @@ else:
                     val_params.update({'batch_size_val_vis': batch_size_val_vis})
 
                     with torch.no_grad():
-                        if opt.cfg.DEBUG.if_dump_anything:
-                            dump_joint(brdf_loader_val_vis, model, val_params)
-                        vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
-                    synchronize()                
-
-                    with torch.no_grad():
                         vis_val_epoch_joint_iiw(iiw_loader_val_vis, model, val_params)
                     synchronize()
+                    
+                    # with torch.no_grad():
+                    #     if opt.cfg.DEBUG.if_dump_anything:
+                    #         dump_joint(brdf_loader_val_vis, model, val_params)
+                    #     vis_val_epoch_joint(brdf_loader_val_vis, model, val_params)
+                    # synchronize()                
 
                 if opt.if_val:
                     val_params.update({'brdf_dataset_val': brdf_dataset_val})
@@ -655,10 +656,9 @@ else:
                         val_epoch_joint_iiw(iiw_loader_val, model, val_params)
                     synchronize()
 
-                    with torch.no_grad():
-                        val_epoch_joint(brdf_loader_val, model, val_params)
-                    synchronize()
-
+                    # with torch.no_grad():
+                    #     val_epoch_joint(brdf_loader_val, model, val_params)
+                    # synchronize()
 
                 model.train(not cfg.MODEL_SEMSEG.fix_bn)
                 reset_tictoc = True
@@ -869,14 +869,14 @@ else:
                 if opt.is_master and tid % 100 == 0:
                     usage_ratio = print_gpu_usage(handle, logger)
                     writer.add_scalar('training/GPU_usage_ratio', usage_ratio, tid)
-                    writer.add_scalar('training/batch_size_per_gpu', len(data_batch['image_path']), tid)
+                    writer.add_scalar('training/batch_size_per_gpu', len(data_batch_iiw['image_path']), tid)
                     writer.add_scalar('training/gpus', opt.num_gpus, tid)
                     current_lr = optimizer.param_groups[0]['lr']
-                    if opt.cfg.SOLVER.if_warm_up:
-                        if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
-                            current_lr = scheduler_backbone._get_lr(epoch)[0]
-                        else:
-                            current_lr = scheduler._get_lr(epoch)[0]
+                    # if opt.cfg.SOLVER.if_warm_up:
+                    #     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
+                    #         current_lr = scheduler_backbone._get_lr(epoch)[0]
+                    #     else:
+                    #         current_lr = scheduler._get_lr(epoch)[0]
                     writer.add_scalar('training/lr', current_lr, tid)
 
             if tid % opt.debug_every_iter == 0:
@@ -886,9 +886,9 @@ else:
             if tid >= opt.max_iter and opt.max_iter != -1:
                 break
     
-        if opt.cfg.SOLVER.if_warm_up:
-            if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
-                scheduler_backbone.step(epoch)
-                scheduler_others.step(epoch)
-            else:
-                scheduler.step(epoch)
+        # if opt.cfg.SOLVER.if_warm_up:
+        #     if opt.cfg.MODEL_BRDF.DPT_baseline.dpt_hybrid.dual_lr:
+        #         scheduler_backbone.step(epoch)
+        #         scheduler_others.step(epoch)
+        #     else:
+        #         scheduler.step(epoch)
